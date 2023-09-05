@@ -1,0 +1,6 @@
+[submodule "anacal/fpfs"]
+	path = anacal/fpfs
+	url = https://github.com/mr-superonion/FPFS
+[submodule "anacal/impt"]
+	path = anacal/impt
+	url = https://github.com/mr-superonion/imPT
