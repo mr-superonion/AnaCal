@@ -10,6 +10,13 @@ class FPFSMethod:
     sigma_det: float
     rcut: int = field(default=32)
     nnord: int = field(default=4)
+    ratio: float = field(default=1.6)
+    c0: float = field(default=6.0)
+    c2: float = field(default=20.0)
+    alpha: float = field(default=1.0)
+    beta: float = field(default=0.0)
+    snr_min: float = field(default=10.0)
+    noise_rev: bool = True
     method: str = field(default="fpfs", init=False)
     dtype: str = field(default="method", init=False)
 
@@ -33,6 +40,7 @@ class ImageData:
 class FPFSCatalog:
     catalog: np.ndarray
     position: np.ndarray
+    cov_mat: np.ndarray
     rcut: int = field(default=32)
     nnord: int = field(default=4)
     method: str = field(default="fpfs", init=False)

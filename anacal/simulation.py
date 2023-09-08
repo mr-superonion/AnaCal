@@ -134,6 +134,9 @@ def generate_cosmos_gal(record, truncr=5.0, gsparams=None):
         gal_n = _galsim_round_sersic(gal_n, 0.1)
         gal_hlr = record["hlr"][0]
         gal_flux = record["flux"][0]
+
+        gal_q = sparams[3]
+        gal_beta = sparams[7] * galsim.radians
         if truncr <= 0.99:
             btrunc = None
             gal = galsim.Sersic(
@@ -148,6 +151,10 @@ def generate_cosmos_gal(record, truncr=5.0, gsparams=None):
                 trunc=btrunc,
                 gsparams=gsparams,
             )
+        # Apply shears for intrinsic shape.
+        if gal_q < 1.:  # pragma: no branch
+            gal = gal.shear(q=gal_q, beta=gal_beta)
+
     return gal
 
 
