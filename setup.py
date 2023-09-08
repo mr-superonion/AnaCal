@@ -28,5 +28,6 @@ setup(
         "astropy",
         "matplotlib",
         "fitsio",
+        "flax",
     ],
 )
