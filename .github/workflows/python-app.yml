@@ -39,7 +39,7 @@ jobs:
         pip install -U setuptools
         pip install -U flake8 pytest
         pip install -U -r requirements.txt
-        pip install .
+        pip install -e .
 
     - name: Lint with flake8
       run: |
