@@ -9,6 +9,7 @@ from . import plotter
 
 # We need accuracy is below 1e-6
 from jax import config
+
 config.update("jax_enable_x64", True)
 
 __all__ = ["process", "simulation", "dtype", "plotter"]

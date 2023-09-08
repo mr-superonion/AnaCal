@@ -66,10 +66,7 @@ def fpfs_im2cat(data, method):
     sel = (out["fpfs_M00"] + out["fpfs_M20"]) > 0.0
     out = out[sel]
     coords = coords[sel]
-    coords = np.rec.fromarrays(
-        coords.T,
-        dtype=[("fpfs_y", "i4"), ("fpfs_x", "i4")]
-    )
+    coords = np.rec.fromarrays(coords.T, dtype=[("fpfs_y", "i4"), ("fpfs_x", "i4")])
     return dtype.FPFSCatalog(
         catalog=out,
         position=coords,
@@ -96,6 +93,7 @@ def fpfs_cat2shear(data, method):
         e1_est = e1._obs_func(ss) - enoise._obs_func(ss)
         res1_est = res1._obs_func(ss) - rnoise._obs_func(ss)
         return jnp.array([e1_est, res1_est])
+
     e_res = jax.lax.map(func, rfn.structured_to_unstructured(data.catalog))
     return e_res
 

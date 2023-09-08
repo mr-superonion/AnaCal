@@ -48,6 +48,7 @@ def generate_cosmos_gal(record, truncr=5.0, gsparams=None):
     Returns:
         gal:    Galsim galaxy
     """
+
     # record columns:
     # For 'sersicfit', the result is an array of 8 numbers for each:
     #     SERSICFIT[0]: intensity of light profile at the half-light radius.
@@ -152,7 +153,7 @@ def generate_cosmos_gal(record, truncr=5.0, gsparams=None):
                 gsparams=gsparams,
             )
         # Apply shears for intrinsic shape.
-        if gal_q < 1.:  # pragma: no branch
+        if gal_q < 1.0:  # pragma: no branch
             gal = gal.shear(q=gal_q, beta=gal_beta)
 
     return gal
@@ -418,10 +419,12 @@ def make_isolate_sim(
         )
     else:
         raise ValueError("gal_type should cotain 'basic' or 'random'!!")
-    psf_array = psf_obj.shift(
-        0.5 * scale, 0.5 * scale
-    ).drawImage(nx=ngrid_stamp, ny=ngrid_stamp, scale=scale).array
-    nstd_f = 0.
+    psf_array = (
+        psf_obj.shift(0.5 * scale, 0.5 * scale)
+        .drawImage(nx=ngrid_stamp, ny=ngrid_stamp, scale=scale)
+        .array
+    )
+    nstd_f = 0.0
     noise_pow = np.ones((ngrid, ngrid)) * nstd_f**2.0 * ngrid**2.0
 
     return dtype.ImageData(

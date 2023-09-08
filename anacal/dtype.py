@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 # Methods
 
+
 @dataclass(frozen=True)
 class FPFSMethod:
     sigma_as: float
@@ -24,6 +25,7 @@ class FPFSMethod:
 # Data
 # Image
 
+
 @dataclass(frozen=True)
 class ImageData:
     image: np.ndarray
@@ -35,6 +37,7 @@ class ImageData:
 
 
 # Catalog
+
 
 @dataclass(frozen=True)
 class FPFSCatalog:
