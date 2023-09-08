@@ -30,4 +30,7 @@ setup(
         "fitsio",
         "flax",
     ],
+    include_package_data=True,
+    zip_safe=False,
+    url="https://github.com/mr-superonion/AnaCal/",
 )
