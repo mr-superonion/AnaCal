@@ -27,8 +27,8 @@ class FPFSMethod:
 @dataclass(frozen=True)
 class ImageData:
     image: np.ndarray
-    psf: np.ndarray
-    noise_pow: np.ndarray
+    psf: np.ndarray = field(repr=False)
+    noise_pow: np.ndarray = field(repr=False)
     scale: float
     mag_zero: float
     dtype: str = field(default="image", init=False)
@@ -38,9 +38,9 @@ class ImageData:
 
 @dataclass(frozen=True)
 class FPFSCatalog:
-    catalog: np.ndarray
-    position: np.ndarray
-    cov_mat: np.ndarray
+    catalog: np.ndarray = field(repr=False)
+    position: np.ndarray = field(repr=False)
+    cov_mat: np.ndarray = field(repr=False)
     rcut: int = field(default=32)
     nnord: int = field(default=4)
     method: str = field(default="fpfs", init=False)
