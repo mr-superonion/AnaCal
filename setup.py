@@ -1,12 +1,15 @@
 import os
 from setuptools import setup, find_namespace_packages
 
+this_dir = os.path.dirname(os.path.realpath(__file__))
 __version__ = ""
 fname = os.path.join(
-    os.path.dirname(os.path.realpath(__file__)), "anacal", "__version__.py"
+    this_dir, "anacal", "__version__.py"
 )
 with open(fname, "r") as ff:
     exec(ff.read())
+long_description = open(os.path.join(this_dir , "README.md")).read()
+
 
 include_modules = ["fpfs", "impt"]
 include_packages = ["anacal.%s.%s*" % (sub, sub) for sub in include_modules]
@@ -34,4 +37,6 @@ setup(
     include_package_data=True,
     zip_safe=False,
     url="https://github.com/mr-superonion/AnaCal/",
+    long_description=long_description,
+    long_description_content_type='text/markdown',
 )
