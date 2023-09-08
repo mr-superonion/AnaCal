@@ -9,7 +9,7 @@ with open(fname, "r") as ff:
     exec(ff.read())
 
 include_modules = ["fpfs", "impt"]
-include_packages = ["anacal.%s.%s" %(sub, sub) for sub in include_modules]
+include_packages = ["anacal.%s.%s" % (sub, sub) for sub in include_modules]
 setup(
     name="anacal",
     version=__version__,
