@@ -6,7 +6,7 @@ shear_value = 0.03
 thres = shear_value ** 3.
 
 
-def test_noisy_gals():
+def test_sims():
     scale = 0.168
     nx, ny = 64, 64
     psf_obj = galsim.Moffat(
@@ -52,4 +52,4 @@ def test_noisy_gals():
 
 
 if __name__ == "__main__":
-    test_noisy_gals()
+    test_sims()
