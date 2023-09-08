@@ -116,4 +116,3 @@ def measure_shear(data, method):
         return fpfs_cat2shear(data, method)
     else:
         raise ValueError("Do not support method type: %s" % method.method)
-
