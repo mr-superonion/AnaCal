@@ -77,7 +77,7 @@ def fpfs_im2cat(data, method):
 
 
 def fpfs_cat2shear(data, method):
-    e1, enoise, res1, rnoise = impt.fpfs.future.prepare_func_e(
+    e1, enoise1, res1, rnoise1 = impt.fpfs.future.prepare_func_e(
         cov_mat=data.cov_mat,
         ratio=method.ratio,
         c0=method.c0,
@@ -89,10 +89,24 @@ def fpfs_cat2shear(data, method):
         g_comp=1,
     )
 
+    e2, enoise2, res2, rnoise2 = impt.fpfs.future.prepare_func_e(
+        cov_mat=data.cov_mat,
+        ratio=method.ratio,
+        c0=method.c0,
+        c2=method.c2,
+        alpha=method.alpha,
+        beta=method.beta,
+        snr_min=method.snr_min,
+        noise_rev=method.noise_rev,
+        g_comp=2,
+    )
+
     def func(ss):
-        e1_est = e1._obs_func(ss) - enoise._obs_func(ss)
-        res1_est = res1._obs_func(ss) - rnoise._obs_func(ss)
-        return jnp.array([e1_est, res1_est])
+        e1_est = e1._obs_func(ss) - enoise1._obs_func(ss)
+        res1_est = res1._obs_func(ss) - rnoise1._obs_func(ss)
+        e2_est = e2._obs_func(ss) - enoise2._obs_func(ss)
+        res2_est = res2._obs_func(ss) - rnoise2._obs_func(ss)
+        return jnp.array([e1_est, res1_est, e2_est, res2_est])
 
     e_res = jax.lax.map(func, rfn.structured_to_unstructured(data.catalog))
     return e_res
