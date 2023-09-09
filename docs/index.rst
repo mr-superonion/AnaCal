@@ -3,10 +3,9 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-AnaCal: A fast, accurate shear estimator
+AnaCal: Analytic Calibration for Perturbation Estimation
 ======================================
 
-Analytic Calibration for Perturbation Estimation from Galaxy Images.
 
 This framework is devised to bridge various analytic shear estimators that have
 been developed or are anticipated to be created in the future. We intend to

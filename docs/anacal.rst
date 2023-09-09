@@ -1,11 +1,8 @@
-anacal package
+AnaCal package
 ==============
 
-Modules
-----------
-
 .. toctree::
-    :maxdepth: 1
+    :maxdepth: 2
 
     anacal_dtype
 
