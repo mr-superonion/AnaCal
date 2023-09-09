@@ -1,5 +1,6 @@
 # AnaCal
-[![Python App](https://github.com/mr-superonion/AnaCal/actions/workflows/python-app.yml/badge.svg)](https://github.com/mr-superonion/AnaCal/actions/workflows/python-app.yml)
+[![docs](https://readthedocs.org/projects/anacal/badge/?version=latest)](https://anacal.readthedocs.io/en/latest/?badge=latest)
+[![tests](https://github.com/mr-superonion/AnaCal/actions/workflows/python-app.yml/badge.svg)](https://github.com/mr-superonion/AnaCal/actions/workflows/python-app.yml)
 [![pypi](https://github.com/mr-superonion/AnaCal/actions/workflows/pypi.yml/badge.svg)](https://pypi.org/project/anacal/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
