@@ -15,7 +15,9 @@ currently supported analytic shear estimators are:
 
 ## Installation
 Users can clone this repository and install the latest package by
-```
+```shell
+git clone https://github.com/mr-superonion/AnaCal.git
+cd AnaCal
 pip install .
 ```
 or install stable verion from pypi
@@ -24,7 +26,7 @@ pip install anacal
 ```
 
 ## Examples
-Examples can be found [here](./docs/examples).
+Examples can be found [here](https://github.com/mr-superonion/AnaCal/blob/main/docs/examples/).
 
 ## Development
 
