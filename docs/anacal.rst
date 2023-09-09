@@ -1,45 +1,16 @@
 anacal package
 ==============
 
-Submodules
+Modules
 ----------
 
-anacal.dtype module
--------------------
+.. toctree::
+    :maxdepth: 1
 
-.. automodule:: anacal.dtype
-   :members:
-   :undoc-members:
-   :show-inheritance:
+    anacal_dtype
 
-anacal.plotter module
----------------------
+    anacal_process
 
-.. automodule:: anacal.plotter
-   :members:
-   :undoc-members:
-   :show-inheritance:
+    anacal_simulation
 
-anacal.process module
----------------------
-
-.. automodule:: anacal.process
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-anacal.simulation module
-------------------------
-
-.. automodule:: anacal.simulation
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: anacal
-   :members:
-   :undoc-members:
-   :show-inheritance:
+    anacal_plotter
