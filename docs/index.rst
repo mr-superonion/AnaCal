@@ -13,7 +13,8 @@ been developed or are anticipated to be created in the future. We intend to
 develop a suite of analytical shear estimators capable of inferring shear with
 subpercent accuracy, all while maintaining minimal computational time. The
 currently supported analytic shear estimators are:
-+ [FPFS](https://github.com/mr-superonion/FPFS)
+
+* **FPFS**: https://github.com/mr-superonion/FPFS
 
 .. toctree::
     :maxdepth: 2
