@@ -12,7 +12,9 @@ been developed or are anticipated to be created in the future. We intend to
 develop a suite of analytical shear estimators capable of inferring shear with
 subpercent accuracy, all while maintaining minimal computational time. The
 currently supported analytic shear estimators are:
-+ [FPFS](https://github.com/mr-superonion/FPFS)
++ [FPFS](https://github.com/mr-superonion/FPFS): A fixed moments method based
+  on shapelets including analytic correction for selection, detection and noise
+  bias.
 
 ## Installation
 Users can clone this repository and install the latest package by
@@ -29,6 +31,12 @@ pip install anacal
 ## Examples
 Examples can be found [here](https://github.com/mr-superonion/AnaCal/blob/main/docs/examples/).
 
+## Reference
+
++ [Li et. al
+  (2023)](https://ui.adsabs.harvard.edu/abs/2023arXiv230906506L/abstract)
+  introduces the AnaCal framework.
+
 ## Development
 
 Before sending pull request, please make sure that the modified code passed the
@@ -39,5 +47,6 @@ for the tests:
 flake8
 pytest -vv
 ```
+
 
 ----
