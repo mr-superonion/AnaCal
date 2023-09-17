@@ -14,9 +14,9 @@ subpercent accuracy, all while maintaining minimal computational time. The
 currently supported analytic shear estimators are:
 + [FPFS](https://github.com/mr-superonion/FPFS): A fixed moments method based
   on shapelets including analytic correction for selection, detection and noise
-  bias [ref1](https://ui.adsabs.harvard.edu/abs/2018MNRAS.481.4445L/abstract),
+  bias. (see [ref1](https://ui.adsabs.harvard.edu/abs/2018MNRAS.481.4445L/abstract),
   [ref2](https://ui.adsabs.harvard.edu/abs/2021arXiv211001214L/abstract) and
-  [ref3](https://ui.adsabs.harvard.edu/abs/2022arXiv220810522L/abstract).
+  [ref3](https://ui.adsabs.harvard.edu/abs/2022arXiv220810522L/abstract).)
 
 ## Installation
 Users can clone this repository and install the latest package by
