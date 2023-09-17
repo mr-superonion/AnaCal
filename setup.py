@@ -10,6 +10,10 @@ with open(fname, "r") as ff:
     exec(ff.read())
 long_description = open(os.path.join(this_dir , "README.md")).read()
 
+scripts = [
+    "bin/desc_simulate.py",
+    "bin/anacal_configure.sh",
+]
 
 include_modules = ["fpfs", "impt"]
 include_packages = ["anacal.%s.%s*" % (sub, sub) for sub in include_modules]
@@ -20,6 +24,7 @@ setup(
     packages=find_namespace_packages(
         include=include_packages,
     ),
+    scripts=scripts,
     author="Xiangchong Li",
     author_email="mr.superonion@hotmail.com",
     python_requires=">=3.8",
