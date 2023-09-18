@@ -11,7 +11,7 @@ with open(fname, "r") as ff:
 long_description = open(os.path.join(this_dir , "README.md")).read()
 
 scripts = [
-    "bin/desc_simulate.py",
+    "bin/anacal_simulate_image.py",
     "bin/anacal_configure.sh",
 ]
 
