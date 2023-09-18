@@ -5,7 +5,7 @@ import subprocess
 class TestBinExecutables(unittest.TestCase):
     def test_simulate(self):
         subprocess.run(
-            ["desc_simulate.py", "--config", "config_sim_lsst.ini",
+            ["anacal_simulate_image.py", "--config", "config_sim_lsst.ini",
                 "--min_id", "0", "--max_id", "1"],
             capture_output=False,
         )

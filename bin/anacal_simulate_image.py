@@ -16,6 +16,7 @@
 import gc
 import os
 import fpfs
+import fitsio
 import pickle
 import glob
 import schwimmbad
@@ -68,6 +69,7 @@ class Worker:
     def run(self, ifield=0):
         print("Simulating for field: %d" % ifield)
         rng = np.random.RandomState(ifield)
+        scale = 0.2
 
         if self.psf_version == 0:
             # basic test
@@ -77,8 +79,16 @@ class Worker:
                 "star_bleeds": False,
             }
             star_catalog = None
-            psf = make_fixed_psf(psf_type="moffat").shear(e1=0.02, e2=-0.02)
+            psf = make_fixed_psf(psf_type="moffat")  # .shear(e1=0.02, e2=-0.02)
             test_name = "basic"
+            psf_fname = "%s/PSF_%s_32.fits" % (self.img_root, test_name)
+            if not os.path.isfile(psf_fname):
+                psf_data = psf.shift(
+                    0.5 * scale,
+                    0.5 * scale
+                ).drawImage(nx=64, ny=64, scale=scale).array
+                fitsio.write(psf_fname, psf_data)
+
         elif self.psf_version == 1:
             # spatial varying PSF
             kargs = {
@@ -94,6 +104,13 @@ class Worker:
             )
             psf = make_ps_psf(rng=rng, dim=se_dim)
             test_name = "psfvar"
+            psf_fname = "%s/PSF_%s.pkl" % (self.img_root, test_name)
+            if not os.path.isfile(psf_fname):
+                with open(psf_fname, "wb") as f:
+                    pickle.dump(
+                        {"psf": psf},
+                        f,
+                    )
         else:
             raise ValueError("psf_version must be 0 or 1")
 
@@ -131,16 +148,6 @@ class Worker:
                     theta0=self.rot_list[irot],
                     **kargs
                 )
-                # this is only for fixed PSF..
-                psf_fname = "%s/PSF_%s.pkl" % (self.img_root, test_name)
-                if irot == 0 and ishear == 0 and not os.path.isfile(psf_fname):
-                    psf_dim = sim_data["psf_dims"][0]
-                    se_wcs = sim_data["se_wcs"][0]
-                    with open(psf_fname, "wb") as f:
-                        pickle.dump(
-                            {"psf": psf, "psf_dim": psf_dim, "wcs": se_wcs},
-                            f,
-                        )
                 # write galaxy images
                 for band_name in band_list:
                     gal_fname = "%s/image-%05d_g1-%d_rot%d_%s.fits" % (
