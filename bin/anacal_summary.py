@@ -18,10 +18,10 @@ import numpy as np
 import astropy.io.fits as pyfits
 
 from argparse import ArgumentParser
-from configparser import ConfigParser
+from configparser import ConfigParser, ExtendedInterpolation
 
 
-parser = ArgumentParser(description="fpfs procsim")
+parser = ArgumentParser(description="fpfs analysis")
 parser.add_argument(
     "--config",
     required=True,
@@ -30,10 +30,11 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-cparser = ConfigParser()
+cparser = ConfigParser(interpolation=ExtendedInterpolation())
 cparser.read(args.config)
-sum_dir = cparser.get("procsim", "sum_dir")
+sum_dir = cparser.get("files", "sum_dir")
 shear = cparser.getfloat("distortion", "shear_value")
+print(sum_dir)
 
 flist = glob.glob("%s/bin_*.*.fits" % (sum_dir))
 for fname in flist:

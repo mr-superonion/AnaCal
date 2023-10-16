@@ -168,7 +168,7 @@ class Worker:
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="fpfs procsim")
+    parser = ArgumentParser(description="simulate blended images")
     parser.add_argument(
         "--min_id",
         default=0,

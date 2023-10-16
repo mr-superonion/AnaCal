@@ -15,213 +15,14 @@
 #
 
 import os
-import time
-import fpfs
-import jax
-import gc
 import schwimmbad
-import numpy as np
-import astropy.io.fits as pyfits
 from argparse import ArgumentParser
-from configparser import ConfigParser
-
-band_map = {
-    "g": 0,
-    "r": 1,
-    "i": 2,
-    "z": 3,
-    "a": 4,
-}
-
-
-def get_sim_fname(directory, ftype, min_id, max_id, nshear, nrot, band):
-    """Generate filename for simulations
-    Args:
-        ftype (str):    file type ('src' for source, and 'image' for exposure
-        min_id (int):   minimum id
-        max_id (int):   maximum id
-        nshear (int):   number of shear
-        nrot (int):     number of rotations
-        band (str):     'grizy' or 'a'
-    Returns:
-        out (list):     a list of file name
-    """
-    out = [
-        os.path.join(
-            directory, "%s-%05d_g1-%d_rot%d_%s.fits" % (ftype, fid, gid, rid, band)
-        )
-        for fid in range(min_id, max_id)
-        for gid in range(nshear)
-        for rid in range(nrot)
-    ]
-    return out
-
-
-def get_seed_from_fname(fname, band):
-    fid = int(fname.split("image-")[-1].split("_")[0]) + 212
-    rid = int(fname.split("rot")[1][0])
-    bid = band_map[band]
-    return (fid * 2 + rid) * 4 + bid
-
-
-class Worker(object):
-    def __init__(self, config_name):
-        cparser = ConfigParser()
-        cparser.read(config_name)
-        self.imgdir = cparser.get("procsim", "img_dir")
-        self.catdir = cparser.get("procsim", "cat_dir")
-        if not os.path.isdir(self.imgdir):
-            raise FileNotFoundError("Cannot find input images directory!")
-        print("The input directory for galaxy images is %s. " % self.imgdir)
-        if not os.path.isdir(self.catdir):
-            os.makedirs(self.catdir, exist_ok=True)
-        print("The output directory for shear catalogs is %s. " % self.catdir)
-
-        # setup FPFS task
-        self.psf_fname = cparser.get("procsim", "psf_fname")
-        self.sigma_as = cparser.getfloat("FPFS", "sigma_as")
-        self.sigma_det = cparser.getfloat("FPFS", "sigma_det")
-        self.rcut = cparser.getint("FPFS", "rcut")
-        self.nnord = cparser.getint("FPFS", "nnord", fallback=4)
-        if self.nnord not in [4, 6]:
-            raise ValueError(
-                "Only support for nnord= 4 or nnord=6, but your input\
-                    is nnord=%d"
-                % self.nnord
-            )
-
-        # setup survey parameters
-        self.nstd_f = cparser.getfloat("survey", "noise_std")
-        self.ncov_fname = cparser.get(
-            "FPFS", "ncov_fname",
-            fallback="",
-        )
-        if len(self.ncov_fname) == 0 or not os.path.isfile(self.ncov_fname):
-            # estimate and write the noise covariance
-            self.ncov_fname = os.path.join(self.catdir, "cov_matrix.fits")
-        self.magz = cparser.getfloat("survey", "mag_zero")
-        self.band = cparser.get("survey", "band")
-        self.scale = cparser.getfloat("survey", "pixel_scale")
-        ngrid = 2 * self.rcut
-        # By default, we use uncorrelated noise
-        # TODO: enable correlated noise here
-        self.noise_pow = np.ones((ngrid, ngrid)) * self.nstd_f**2.0 * ngrid**2.0
-        return
-
-    def prepare_noise_psf(self, fname):
-        exposure = pyfits.getdata(fname)
-        self.image_nx = exposure.shape[1]
-        psf_array2 = pyfits.getdata(self.psf_fname)
-        npad = (self.image_nx - psf_array2.shape[0]) // 2
-        psf_array3 = np.pad(psf_array2, (npad, npad), mode="constant")
-        if not os.path.isfile(self.ncov_fname):
-            # FPFS noise cov task
-            noise_task = fpfs.image.measure_noise_cov(
-                psf_array2,
-                sigma_arcsec=self.sigma_as,
-                sigma_detect=self.sigma_det,
-                nnord=self.nnord,
-                pix_scale=self.scale,
-            )
-            cov_elem = np.array(noise_task.measure(self.noise_pow))
-            pyfits.writeto(self.ncov_fname, cov_elem, overwrite=True)
-        else:
-            cov_elem = pyfits.getdata(self.ncov_fname)
-        return psf_array2, psf_array3, cov_elem
-
-    def prepare_image(self, fname):
-        gal_array = np.zeros((self.image_nx, self.image_nx))
-        print("processing %s band" % self.band)
-        gal_array = pyfits.getdata(fname)
-        if self.nstd_f > 1e-10:
-            # noise
-            seed = get_seed_from_fname(fname, self.band)
-            rng = np.random.RandomState(seed)
-            print("Using noisy setup with std: %.2f" % self.nstd_f)
-            print("The random seed is %d" % seed)
-            gal_array = gal_array + rng.normal(
-                scale=self.nstd_f,
-                size=gal_array.shape,
-            )
-        else:
-            print("Using noiseless setup")
-        return gal_array
-
-    def process_image(self, gal_array, psf_array2, psf_array3, cov_elem):
-        # measurement task
-        meas_task = fpfs.image.measure_source(
-            psf_array2,
-            sigma_arcsec=self.sigma_as,
-            sigma_detect=self.sigma_det,
-            nnord=self.nnord,
-            pix_scale=self.scale,
-        )
-        print(
-            "The upper limit of Fourier wave number is %s pixels" % (meas_task.klim_pix)
-        )
-
-        std_modes = np.sqrt(np.diagonal(cov_elem))
-        idm00 = fpfs.catalog.indexes["m00"]
-        idv0 = fpfs.catalog.indexes["v0"]
-        # Temp fix for 4th order estimator
-        if self.nnord == 6:
-            idv0 += 1
-        if std_modes[idm00] > 1e-10:
-            thres = 9.5 * std_modes[idm00] * self.scale**2.0
-            thres2 = -1.5 * std_modes[idv0] * self.scale**2.0
-        else:
-            cutmag = self.magz * 0.935
-            thres = 10 ** ((self.magz - cutmag) / 2.5) * self.scale**2.0
-            thres2 = -0.05
-
-        coords = fpfs.image.detect_sources(
-            gal_array,
-            psf_array3,
-            sigmaf=meas_task.sigmaf,
-            sigmaf_det=meas_task.sigmaf_det,
-            thres=thres,
-            thres2=thres2,
-            bound=self.rcut + 5,
-        )
-        print("pre-selected number of sources: %d" % len(coords))
-        out = meas_task.measure(gal_array, coords)
-        out = meas_task.get_results(out)
-        sel = (out["fpfs_M00"] + out["fpfs_M20"]) > 0.0
-        out = out[sel]
-        print("final number of sources: %d" % len(out))
-        coords = coords[sel]
-        coords = np.rec.fromarrays(coords.T, dtype=[("fpfs_y", "i4"), ("fpfs_x", "i4")])
-        return out, coords
-
-    def run(self, fname):
-        out_fname = os.path.join(self.catdir, fname.split("/")[-1])
-        out_fname = out_fname.replace("image-", "src-")
-
-        det_fname = os.path.join(self.catdir, fname.split("/")[-1])
-        det_fname = det_fname.replace("image-", "det-")
-        if os.path.isfile(out_fname) and os.path.isfile(det_fname):
-            print("Already has measurement for this simulation. ")
-            return
-        psf_array2, psf_array3, cov_elem = self.prepare_noise_psf(fname)
-        gal_array = self.prepare_image(fname)
-        start_time = time.time()
-        cat, det = self.process_image(gal_array, psf_array2, psf_array3, cov_elem)
-        jax.clear_backends()
-        del gal_array, psf_array2, psf_array3, cov_elem
-        gc.collect()
-        # Stop the timer
-        end_time = time.time()
-        # Calculate the elapsed time
-        elapsed_time = end_time - start_time
-        # Print the elapsed time
-        print(f"Elapsed time: {elapsed_time} seconds")
-        fpfs.io.save_catalog(det_fname, det, dtype="position", nnord=str(self.nnord))
-        fpfs.io.save_catalog(out_fname, cat, dtype="shape", nnord=str(self.nnord))
-        return
+from configparser import ConfigParser, ExtendedInterpolation
+from fpfs.tasks import ProcessSimulationTask
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser(description="fpfs procsim")
+    parser = ArgumentParser(description="fpfs measurement")
     parser.add_argument(
         "--config",
         required=True,
@@ -257,16 +58,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     pool = schwimmbad.choose_pool(mpi=args.mpi, processes=args.n_cores)
-    worker = Worker(args.config)
-    fname_list = get_sim_fname(
-        worker.imgdir,
-        "image",
-        args.min_id,
-        args.max_id,
-        2,
-        2,
-        worker.band,
-    )
-    for r in pool.map(worker.run, fname_list):
+    worker = ProcessSimulationTask(args.config)
+    refs = list(range(args.min_id, args.max_id))
+    for r in pool.map(worker.run, refs):
         pass
     pool.close()
