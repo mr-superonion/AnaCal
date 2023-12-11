@@ -34,7 +34,6 @@ cparser = ConfigParser(interpolation=ExtendedInterpolation())
 cparser.read(args.config)
 sum_dir = cparser.get("files", "sum_dir")
 shear = cparser.getfloat("distortion", "shear_value")
-print(sum_dir)
 
 flist = glob.glob("%s/bin_*.*.fits" % (sum_dir))
 for fname in flist:
@@ -46,11 +45,18 @@ for fname in flist:
     msk = np.isnan(a[:, 3])
     b = np.average(a, axis=0)
     c = np.std(a, axis=0)
-    print(b[1] / b[3] / shear / 2.0 - 1)
     print(
+        "multiplicative bias:",
+        b[1] / b[3] / shear / 2.0 - 1),
+    print(
+        "1-sigma error:",
         np.std(a[:, 1] / a[:, 3]) / shear / 2.0 / np.sqrt(nsim),
     )
-    print(b[2] / b[3])
     print(
+        "additive bias:",
+        b[2] / b[3]
+    )
+    print(
+        "1-sigma error:",
         np.std(a[:, 2] / a[:, 3]) / np.sqrt(nsim),
     )
