@@ -46,10 +46,7 @@ from lsst.meas.base import SingleFrameMeasurementTask, CatalogCalculationTask
 
 class measDMSimConfig(pexConfig.Config):
     "config"
-    rootDir = pexConfig.Field(dtype=str, default="./", doc="Root Diectory")
-    expPrefix = pexConfig.Field(
-        dtype=str, default="expDir", doc="prefix of input exposure"
-    )
+    expDir = pexConfig.Field(dtype=str, default="./", doc="Root Diectory")
     srcPrefix = pexConfig.Field(
         dtype=str, default="outcomeHSM2", doc="prefiex of output src"
     )
@@ -57,11 +54,6 @@ class measDMSimConfig(pexConfig.Config):
         dtype=bool,
         default=True,
         doc="Whether write outcome",
-    )
-    doAddFP = pexConfig.Field(
-        dtype=bool,
-        default=True,
-        doc="Whether add footprint",
     )
     doDeblend = pexConfig.Field(
         dtype=bool,
@@ -113,7 +105,6 @@ class measDMSimTask(pipeBase.CmdLineTask):
         self.schema = schema
         self.algMetadata = dafBase.PropertyList()
         self.makeSubtask("detection", schema=self.schema)
-        self.schema.addField("ipos", type=np.int32, doc="the position of the stamps")
         if self.config.doDeblend:
             self.makeSubtask("deblend", schema=self.schema)
         self.makeSubtask(
@@ -128,9 +119,8 @@ class measDMSimTask(pipeBase.CmdLineTask):
 
     def measDM(self, prepend):
         # Read galaxy exposure
-        expDir = os.path.join(self.config.rootDir, self.config.expPrefix)
         expfname = "image%s.fits" % (prepend)
-        expfname = os.path.join(expDir, expfname)
+        expfname = os.path.join(self.config.expDir, expfname)
         if not os.path.exists(expfname):
             self.log.info("cannot find the exposure")
             return None
@@ -140,19 +130,17 @@ class measDMSimTask(pipeBase.CmdLineTask):
             self.log.info("exposure doesnot have PSF")
             return None
         # Read sources
-        sourceDir = os.path.join(self.config.rootDir, self.config.srcPrefix)
-        sourceFname = os.path.join(sourceDir, "src%s.fits" % (prepend))
-        if os.path.exists(sourceFname):
-            sources = afwTable.SourceCatalog.readFits(sourceFname)
-        else:
-            sources = self.measureSource(exposure, expfname)
-            if sources is None:
-                self.log.info("Cannot read sources")
-                return None
-            if self.config.doWrite:
-                sources.writeFits(sourceFname)
-
-        return pipeBase.Struct(exposure=exposure, sources=sources)
+        sourceFname = os.path.join(
+            self.config.sourceDir,
+            "src%s.fits" % (prepend),
+        )
+        sources = self.measureSource(exposure, expfname)
+        if sources is None:
+            self.log.info("Cannot read sources")
+            return None
+        if self.config.doWrite:
+            sources.writeFits(sourceFname)
+        return
 
     def measureSource(self, exposure, expfname=None):
         table = afwTable.SourceTable.make(self.schema)

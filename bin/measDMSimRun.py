@@ -50,6 +50,7 @@ class runMeasDMConfig(pexConfig.Config):
     measDMSim = pexConfig.ConfigurableField(
         target=measDMSimTask, doc="Subtask to run measurement"
     )
+
     def setDefaults(self):
         pexConfig.Config.setDefaults(self)
 
@@ -82,12 +83,16 @@ class runMeasDMTask(pipeBase.CmdLineTask):
         """Create an argument parser"""
         parser = pipeBase.ArgumentParser(name=cls._DefaultName)
         return parser
+
     def writeConfig(self, butler, clobber=False, doBackup=False):
         pass
+
     def writeSchemas(self, butler, clobber=False, doBackup=False):
         pass
+
     def writeMetadata(self, ifield):
         pass
+
     def writeEupsVersions(self, butler, clobber=False, doBackup=False):
         pass
 
@@ -169,16 +174,22 @@ class runMeasDMDriverTask(BatchPoolTask):
 
     def writeConfig(self, butler, clobber=False, doBackup=False):
         pass
+
     def writeSchemas(self, butler, clobber=False, doBackup=False):
         pass
+
     def writeMetadata(self, ifield):
         pass
+
     def writeEupsVersions(self, butler, clobber=False, doBackup=False):
         pass
+
     def _getConfigName(self):
         return None
+
     def _getEupsVersionsName(self):
         return None
+
     def _getMetadataName(self):
         return None
 
