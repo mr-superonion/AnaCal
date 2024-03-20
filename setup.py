@@ -1,30 +1,28 @@
 import os
-from setuptools import setup, find_namespace_packages
+from setuptools import setup, find_packages, Extension
+
+ext_modules = []
+ext_modules.append(
+    Extension(
+        "anacal.model",  # Name of the module
+        ["src/model.cpp"],  # Source files
+        include_dirs=["include/"],  # Include directories for header files
+        language="c++",
+        extra_compile_args=["-std=c++11", "-fopenmp", "-O3"],
+        extra_link_args=["-flto", "-fopenmp"],
+    )
+)
 
 this_dir = os.path.dirname(os.path.realpath(__file__))
 __version__ = ""
-fname = os.path.join(
-    this_dir, "anacal", "__version__.py"
-)
+fname = os.path.join(this_dir, "anacal", "__version__.py")
 with open(fname, "r") as ff:
     exec(ff.read())
-long_description = open(os.path.join(this_dir , "README.md")).read()
+long_description = open(os.path.join(this_dir, "README.md")).read()
 
-scripts = [
-    "bin/anacal_simulate_image.py",
-    "bin/anacal_configure.sh",
-]
-
-include_modules = ["fpfs", "impt"]
-include_packages = ["anacal.%s.%s*" % (sub, sub) for sub in include_modules]
-include_packages.append("anacal")
 setup(
     name="anacal",
     version=__version__,
-    packages=find_namespace_packages(
-        include=include_packages,
-    ),
-    scripts=scripts,
     author="Xiangchong Li",
     author_email="mr.superonion@hotmail.com",
     python_requires=">=3.8",
@@ -37,11 +35,12 @@ setup(
         "astropy",
         "matplotlib",
         "fitsio",
-        "flax",
+        "pybind11"
     ],
-    include_package_data=True,
+    packages=find_packages(),
     zip_safe=False,
+    ext_modules=ext_modules,
     url="https://github.com/mr-superonion/AnaCal/",
     long_description=long_description,
-    long_description_content_type='text/markdown',
+    long_description_content_type="text/markdown",
 )
