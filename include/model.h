@@ -1,34 +1,30 @@
 #ifndef MODEL_H
 #define MODEL_H
 
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-#include <pybind11/numpy.h>
-#include <memory>
-#include <complex>
-#include <tuple>
+#include "stdafx.h"
 
-namespace py = pybind11;
 
 class BaseFunc: public std::enable_shared_from_this<BaseFunc> {
 private:
-    double theta = 0.0;
     double gamma1 = 0.0;
     double gamma2 = 0.0;
+    double sin_theta = 0.0;
+    double cos_theta = 1.0;
 
     std::tuple<double, double>
     _transform(
         double kx,
         double ky
     ) const {
-        double cos_theta = std::cos(theta);
-        double sin_theta = std::sin(theta);
-        double kx_rotated = cos_theta * kx - sin_theta * ky;
-        double ky_rotated = sin_theta * kx + cos_theta * ky;
 
-        double kx_sheared = kx_rotated * (1 + gamma1) + ky_rotated * gamma2;
-        double ky_sheared = kx_rotated * gamma2 + ky_rotated * (1 - gamma1);
-        return std::make_tuple(kx_sheared, ky_sheared);
+        // Shearing
+        double kx_sheared = kx * (1 - gamma1) + ky * -gamma2;
+        double ky_sheared = kx * -gamma2 + ky * (1 + gamma1);
+
+        // Rotation
+        double kx_rotated = cos_theta * kx_sheared + sin_theta * ky_sheared;
+        double ky_rotated = -sin_theta * kx_sheared + cos_theta * ky_sheared;
+        return std::make_tuple(kx_rotated, ky_rotated);
     }
 public:
     virtual std::complex<double> fValue(double kx, double ky) const {return 0;}
@@ -47,9 +43,11 @@ public:
         double scale,
         int nx,
         int ny
-    );
+    ) const;
     void set_transform(double theta, double gamma1, double gamma2) {
-        this->theta = theta;
+
+        this->cos_theta = std::cos(theta);
+        this->sin_theta = std::sin(theta);
         this->gamma1 = gamma1;
         this->gamma2 = gamma2;
     }
@@ -106,8 +104,9 @@ public:
 class Gaussian : public BaseFunc {
 private:
     double sigma;
+    double _p0;
 public:
-    Gaussian(double sigma) : sigma(sigma) {}
+    Gaussian(double sigma);
     std::complex<double> fValue(double kx, double ky) const override;
 };
 
@@ -115,8 +114,9 @@ public:
 class GaussianTopHat : public BaseFunc {
 private:
     double d, sigma;
+    double _p0;
 public:
-    GaussianTopHat(double d, double sigma) : d(d), sigma(sigma) {}
+    GaussianTopHat(double d, double sigma);
     std::complex<double> fValue(double kx, double ky) const override;
 };
 

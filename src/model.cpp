@@ -1,39 +1,39 @@
-#include "Model.h"
+#include "model.h"
 
 // Gaussian Profile
+Gaussian::Gaussian(double sigma) : sigma(sigma) {
+    _p0 = 1.0 / (2 * sigma * sigma);
+}
 std::complex<double>
 Gaussian::fValue(double kx, double ky) const {
-    double rpart = std::exp(-(kx*kx + ky*ky) / (2 * sigma * sigma));
+    double rpart = std::exp(-(kx*kx + ky*ky) * _p0 );
     return std::complex<double>(rpart, 0.0);
 }
 
+// Gaussian Tophat
+GaussianTopHat::GaussianTopHat(double d, double sigma) : d(d), sigma(sigma) {
+    _p0 = 1.0 / (std::sqrt(2) * sigma);
+}
 std::complex<double>
 GaussianTopHat::fValue(double kx, double ky) const {
-    double prefactor = 1.0 / (sigma * std::sqrt(2.0 * M_PI));
-    double factorX = prefactor * (
-        std::erf((kx + d) / (std::sqrt(2) * sigma))
-        - std::erf((kx - d) / (std::sqrt(2) * sigma))
-    );
-    double factorY = prefactor * (
-        std::erf((ky + d) / (std::sqrt(2) * sigma))
-        - std::erf((ky - d) / (std::sqrt(2) * sigma))
-    );
-    return std::complex<double>(factorX * factorY, 0.0);
+    double factorX = std::erf((kx + d) * _p0) - std::erf((kx - d) * _p0);
+    double factorY = std::erf((ky + d) * _p0) - std::erf((ky - d) * _p0);
+    return std::complex<double>(factorX * factorY * 0.25, 0.0);
 }
 
 py::array_t<std::complex<double>>
-BaseFunc::draw(double scale, int nx, int ny) {
+BaseFunc::draw(double scale, int nx, int ny) const {
     // Grid dimensions
     int kx_length = nx / 2 + 1;
     int ky_length = ny;
-    int ny2 = ny / 2;
 
     // Prepare output array
-    auto result = py::array_t<std::complex<double>>({kx_length, ky_length});
+    auto result = py::array_t<std::complex<double>>({ky_length, kx_length});
     auto r = result.mutable_unchecked<2>(); // Accessor
 
     double dkx = 2.0 * M_PI / nx / scale;
     double dky = 2.0 * M_PI / ny / scale;
+    int ny2 = ny / 2;
     for (int iy = 0; iy < ky_length; ++iy) {
         double ky = (iy < ny2) ? iy * dky : (iy - ny) * dky ;
 
