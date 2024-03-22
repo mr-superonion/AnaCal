@@ -1,7 +1,9 @@
-from . import sim
 import os
+
 import psutil
 from psutil._common import bytes2human
+
+from . import sim
 
 
 def print_mem(byin):

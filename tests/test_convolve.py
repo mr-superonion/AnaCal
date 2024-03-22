@@ -1,11 +1,12 @@
 import gc
+
 import anacal
 import numpy as np
 
 from tests import mem_used
 
-from .sim import gauss_tophat_kernel_rfft
 from . import mem_used, print_mem
+from .sim import gauss_tophat_kernel_rfft
 
 
 def test_fft(ny=128, nx=64):
