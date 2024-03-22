@@ -36,7 +36,13 @@ def apply_transformations(x, y, theta, gamma1, gamma2):
 
 
 def gauss_kernel_rfft(
-    ny: int, nx: int, sigma: float, klim: float, theta:float, gamma1: float, gamma2: float
+    ny: int,
+    nx: int,
+    sigma: float,
+    klim: float,
+    theta: float,
+    gamma1: float,
+    gamma2: float,
 ):
     """Generates a Gaussian kernel on grids for np.fft.rfft transform
     The kernel is truncated at radius klim.
