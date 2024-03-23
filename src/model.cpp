@@ -1,8 +1,18 @@
-#include "model.h"
+#include "anacal.h"
 
-// Base Model
+
+namespace anacal {
+
+BaseModel::BaseModel(){
+    // Constructor implementation. Can be empty if nothing to initialize.
+}
+std::complex<double>
+BaseModel::fValue(double kx, double ky) const {
+    return 0;
+}
+
 std::tuple<double, double>
-BaseModel::_transform(
+BaseModel::transform(
     double kx,
     double ky
 ) const {
@@ -23,10 +33,9 @@ BaseModel::apply(
     double ky
 ) const {
     double kx_distorted, ky_distorted;
-    std::tie(kx_distorted, ky_distorted) = _transform(kx, ky);
+    std::tie(kx_distorted, ky_distorted) = transform(kx, ky);
     return fValue(kx_distorted, ky_distorted);
 }
-
 
 // Gaussian Profile
 Gaussian::Gaussian(double sigma) : sigma(sigma) {
@@ -42,7 +51,6 @@ Gaussian::fValue(double kx, double ky) const {
 GaussianTopHat::GaussianTopHat(double d, double sigma) : d(d), sigma(sigma) {
     _p0 = 1.0 / (std::sqrt(2) * sigma);
 }
-
 std::complex<double>
 GaussianTopHat::fValue(double kx, double ky) const {
     double factorX = std::erf((kx + d) * _p0) - std::erf((kx - d) * _p0);
@@ -75,7 +83,6 @@ BaseModel::draw(double scale, int nx, int ny) const {
     return result;
 }
 
-
 std::shared_ptr<BaseModel>
 multiply(
     std::shared_ptr<BaseModel> f1,
@@ -97,9 +104,10 @@ divide(
     );
 }
 
-
-PYBIND11_MODULE(model, m) {
-    py::class_<BaseModel, std::shared_ptr<BaseModel>>(m, "BaseModel")
+void pyExportModel(py::module& m) {
+    py::module_ model = m.def_submodule("model", "submodule for models");
+    py::class_<BaseModel, std::shared_ptr<BaseModel>>(model, "BaseModel")
+        .def(py::init<>())
         .def("apply", &BaseModel::apply,
             "Returns the pre-distorted function value at kx, ky",
             py::arg("kx"), py::arg("ky")
@@ -133,15 +141,21 @@ PYBIND11_MODULE(model, m) {
             py::is_operator()
         );
 
-    py::class_<Gaussian, std::shared_ptr<Gaussian>, BaseModel>(m, "Gaussian")
+    py::class_<Gaussian,
+        std::shared_ptr<Gaussian>,
+        BaseModel>(model, "Gaussian")
         .def(py::init<double>(),
             "Gaussian basis function",
             py::arg("sigma")
         );
 
-    py::class_<GaussianTopHat, std::shared_ptr<GaussianTopHat>, BaseModel>(m, "GaussianTopHat")
+    py::class_<GaussianTopHat,
+        std::shared_ptr<GaussianTopHat>,
+        BaseModel>(model, "GaussianTopHat")
         .def(py::init<double, double>(),
             "Gaussian convolved with top-hat basis function",
             py::arg("d"), py::arg("sigma")
         );
+}
+
 }

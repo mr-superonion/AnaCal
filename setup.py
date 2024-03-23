@@ -11,18 +11,8 @@ if conda_prefix:
 ext_modules = []
 ext_modules.append(
     Extension(
-        "anacal.model",  # Name of the module
-        ["src/model.cpp"],  # Source files
-        include_dirs=lib_dirs,  # Include directories for header files
-        language="c++",
-        extra_compile_args=["-std=c++11", "-fopenmp", "-O3"],
-        extra_link_args=["-flto", "-fopenmp"],
-    )
-)
-ext_modules.append(
-    Extension(
-        "anacal.convolve",  # Name of the module
-        ["src/convolve.cpp"],  # Source files
+        "anacal._anacal",  # Name of the module
+        ["src/pybind.cpp", "src/image.cpp", "src/model.cpp"],  # Source files
         include_dirs=lib_dirs,  # Include directories for header files
         libraries=["fftw3"],
         language="c++",
