@@ -31,23 +31,21 @@ namespace anacal {
 
         void set_f(const py::array_t<std::complex<double>>& input);
 
-        void fft ();
+        void fft();
+
         void ifft();
 
-        void filter(
-            const BaseModel& filtermod,
-            const py::array_t<double>& psf
-        );
+        void convolve(const Image& filter_image);
 
-        void filter(
-            const BaseModel& filtermod
-        );
+        void convolve(const BaseModel& filter_model);
 
-        py::array_t<std::complex<double>>
-        draw_f() const;
+        void deconvolve(const Image& filter_image, const double);
 
-        py::array_t<double>
-        draw_r() const;
+        void deconvolve(const BaseModel& filter_model, const double);
+
+        py::array_t<std::complex<double>> draw_f() const;
+
+        py::array_t<double> draw_r() const;
 
         void destroy();
 

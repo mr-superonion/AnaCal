@@ -70,21 +70,33 @@ Image::ifft() {
     return;
 }
 
-void Image::filter(
-    const BaseModel& filtermod,
-    const py::array_t<double>& psf
+void Image::convolve(
+    const Image& filter_image
 ){
-    auto r = psf.unchecked<2>();
+    fftw_complex* r = filter_image.data_f;
+    for (int iy = 0; iy < ky_length; ++iy) {
+        for (int ix = 0; ix < kx_length; ++ix) {
+            int index = iy * kx_length + ix;
+            std::complex<double> val1(data_f[index][0], data_f[index][1]);
+            std::complex<double> val2(r[index][0], r[index][1]);
+            val1 = val1 * val2;
+            data_f[index][0] = val1.real();
+            data_f[index][1] = val1.imag();
+        }
+    }
+}
+
+void Image::convolve(
+    const BaseModel& filter_model
+){
     for (int iy = 0; iy < ky_length; ++iy) {
         double ky = (iy < ny2) ? iy * dky : (iy - ny) * dky ;
         for (int ix = 0; ix < kx_length; ++ix) {
             int index = iy * kx_length + ix;
             double kx = ix * dkx;
-            std::complex<double> fft_val(data_f[index][0], data_f[index][1]);
-            std::complex<double> result = (
-                fft_val * filtermod.apply(
-                    kx=kx, ky=ky
-                ) / r(iy, ix)
+            std::complex<double> val(data_f[index][0], data_f[index][1]);
+            std::complex<double> result = val * filter_model.apply(
+                kx=kx, ky=ky
             );
             data_f[index][0] = result.real();
             data_f[index][1] = result.imag();
@@ -92,17 +104,36 @@ void Image::filter(
     }
 }
 
-void
-Image::filter(
-    const BaseModel& filtermod
+void Image::deconvolve(
+    const Image& filter_image,
+    const double klim
+){
+    fftw_complex* r = filter_image.data_f;
+    for (int iy = 0; iy < ky_length; ++iy) {
+        double ky = (iy < ny2) ? iy * dky : (iy - ny) * dky ;
+        for (int ix = 0; ix < kx_length; ++ix) {
+            int index = iy * kx_length + ix;
+            double kx = ix * dkx;
+            std::complex<double> val1(data_f[index][0], data_f[index][1]);
+            std::complex<double> val2(r[index][0], r[index][1]);
+            val1 = val1 / val2;
+            data_f[index][0] = val1.real();
+            data_f[index][1] = val1.imag();
+        }
+    }
+}
+
+void Image::deconvolve(
+    const BaseModel& filter_model,
+    const double klim
 ){
     for (int iy = 0; iy < ky_length; ++iy) {
         double ky = (iy < ny2) ? iy * dky : (iy - ny) * dky ;
         for (int ix = 0; ix < kx_length; ++ix) {
             int index = iy * kx_length + ix;
             double kx = ix * dkx;
-            std::complex<double> fft_val(data_f[index][0], data_f[index][1]);
-            std::complex<double> result = fft_val * filtermod.apply(
+            std::complex<double> val(data_f[index][0], data_f[index][1]);
+            std::complex<double> result = val / filter_model.apply(
                 kx=kx, ky=ky
             );
             data_f[index][0] = result.real();
@@ -119,8 +150,8 @@ Image::draw_f() const {
     for (ssize_t j = 0; j < ky_length ; ++j) {
         for (ssize_t i = 0; i < kx_length ; ++i) {
             int index = j * kx_length + i;
-            std::complex<double> fft_value(data_f[index][0], data_f[index][1]);
-            r(j, i) = fft_value;
+            std::complex<double> val(data_f[index][0], data_f[index][1]);
+            r(j, i) = val;
         }
     }
     return result;
@@ -178,16 +209,27 @@ void pyExportImage(py::module& m) {
         .def("ifft", &Image::ifft,
             "Conducts backward Fourier Trasform"
         )
-        .def("filter",
-            static_cast<void (Image::*)(
-                const BaseModel&, const py::array_t<double>&)>(&Image::filter),
-            "Filter method with BaseModel and array",
-            py::arg("filtermod"), py::arg("psf")
+        .def("convolve",
+            static_cast<void (Image::*)(const Image&)>(&Image::convolve),
+            "Convolve method with image object",
+            py::arg("filter_image")
         )
-        .def("filter",
-            static_cast<void (Image::*)(const BaseModel&)>(&Image::filter),
-            "Filter method with only BaseModel",
-            py::arg("filtermod")
+        .def("convolve",
+            static_cast<void (Image::*)(const BaseModel&)>(&Image::convolve),
+            "Convolve method with model object",
+            py::arg("filter_model")
+        )
+        .def("deconvolve",
+            static_cast<void (Image::*)(const Image&, double)>(&Image::deconvolve),
+            "Deconvolve method with image object",
+            py::arg("filter_image"),
+            py::arg("klim")
+        )
+        .def("deconvolve",
+            static_cast<void (Image::*)(const BaseModel&, double)>(&Image::deconvolve),
+            "Deconvolve method with model object",
+            py::arg("filter_model"),
+            py::arg("klim")
         )
         .def("draw_r", &Image::draw_r,
             "This function draws the image in configuration space"

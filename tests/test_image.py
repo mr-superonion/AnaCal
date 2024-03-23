@@ -42,7 +42,7 @@ def test_gausstophat(
     img_obj.fft()
     gt_model = anacal.model.GaussianTopHat(d=d, sigma=sigma)
     gt_model.set_transform(theta=theta, gamma1=gamma1, gamma2=gamma2)
-    img_obj.filter(gt_model)
+    img_obj.convolve(filter_model=gt_model)
     img = img_obj.draw_f()
     img2 = gauss_tophat_kernel_rfft(ny, nx, d, sigma, theta, gamma1, gamma2)
     np.testing.assert_almost_equal(img, img2)
@@ -81,7 +81,7 @@ def test_memory(
         img_obj.fft()
         gt_model = anacal.model.GaussianTopHat(d=d, sigma=sigma)
         gt_model.set_transform(theta=theta, gamma1=gamma1, gamma2=gamma2)
-        img_obj.filter(gt_model)
+        img_obj.convolve(filter_model=gt_model)
         img = img_obj.draw_f()
         print_mem(mem_used() - initial_memory_usage)
         del img_obj, img, gt_model, data
