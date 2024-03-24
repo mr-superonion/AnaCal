@@ -4,7 +4,6 @@
 #include "stdafx.h"
 
 namespace anacal {
-
     class BaseModel: public std::enable_shared_from_this<BaseModel> {
     private:
         double gamma1 = 0.0;
@@ -14,30 +13,16 @@ namespace anacal {
 
     public:
         BaseModel();
-        std::tuple<double, double>
-        transform(
-            double kx,
-            double ky
-        ) const;
+        std::tuple<double, double> transform(double, double) const;
 
-        virtual std::complex<double>
-        fValue(double kx, double ky) const;
+        virtual std::complex<double> fValue(double, double) const;
 
-        std::complex<double>
-        apply(
-            double kx,
-            double ky
-        ) const;
+        std::complex<double> apply(double, double) const;
 
         // Draw Image
         py::array_t<std::complex<double>>
-        draw(
-            double scale,
-            int nx,
-            int ny
-        ) const;
+        draw(double, int, int) const;
         void set_transform(double theta, double gamma1, double gamma2) {
-
             this->cos_theta = std::cos(theta);
             this->sin_theta = std::sin(theta);
             this->gamma1 = gamma1;
@@ -97,8 +82,18 @@ namespace anacal {
         double sigma;
         double _p0;
     public:
-        Gaussian(double sigma);
-        std::complex<double> fValue(double kx, double ky) const override;
+        Gaussian(double);
+        std::complex<double> fValue(double, double) const override;
+    };
+
+    /// Gaussian convolved with Tophat Function
+    class CirTopHat : public BaseModel {
+    private:
+        double d;
+        double _p0;
+    public:
+        CirTopHat(double);
+        std::complex<double> fValue(double, double) const override;
     };
 
     /// Gaussian convolved with Tophat Function
@@ -107,8 +102,8 @@ namespace anacal {
         double d, sigma;
         double _p0;
     public:
-        GaussianTopHat(double d, double sigma);
-        std::complex<double> fValue(double kx, double ky) const override;
+        GaussianTopHat(double, double);
+        std::complex<double> fValue(double, double) const override;
     };
 
     void pyExportModel(py::module& m);

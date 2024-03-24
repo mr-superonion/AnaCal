@@ -47,6 +47,17 @@ Gaussian::fValue(double kx, double ky) const {
     return std::complex<double>(rpart, 0.0);
 }
 
+// Circular Tophat
+CirTopHat::CirTopHat(double d) : d(d) {
+    _p0 = d * d;
+}
+std::complex<double>
+CirTopHat::fValue(double kx, double ky) const {
+    double r2 = kx * kx + ky * ky;
+    double rpart = r2 > _p0 ? 0 : 1;
+    return std::complex<double>(rpart, 0.0);
+}
+
 // Gaussian Tophat
 GaussianTopHat::GaussianTopHat(double d, double sigma) : d(d), sigma(sigma) {
     _p0 = 1.0 / (std::sqrt(2) * sigma);
@@ -143,7 +154,8 @@ void pyExportModel(py::module& m) {
 
     py::class_<Gaussian,
         std::shared_ptr<Gaussian>,
-        BaseModel>(model, "Gaussian")
+        BaseModel
+    >(model, "Gaussian")
         .def(py::init<double>(),
             "Gaussian basis function",
             py::arg("sigma")
@@ -151,10 +163,20 @@ void pyExportModel(py::module& m) {
 
     py::class_<GaussianTopHat,
         std::shared_ptr<GaussianTopHat>,
-        BaseModel>(model, "GaussianTopHat")
+        BaseModel
+    >(model, "GaussianTopHat")
         .def(py::init<double, double>(),
             "Gaussian convolved with top-hat basis function",
             py::arg("d"), py::arg("sigma")
+        );
+
+    py::class_<CirTopHat,
+        std::shared_ptr<CirTopHat>,
+        BaseModel
+    >(model, "CirTopHat")
+        .def(py::init<double>(),
+            "Circular top-hat basis function",
+            py::arg("d")
         );
 }
 

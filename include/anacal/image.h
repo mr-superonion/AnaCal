@@ -19,35 +19,27 @@ namespace anacal {
         double* data_r = nullptr;
         fftw_complex* data_f = nullptr;
 
-        Image();
+        Image(int, int, double);
 
-        // Initialize the Convolution object with data array
-        void initialize(
-            int nx,
-            int ny,
-            double scale
-        );
-        void set_r(const py::array_t<double>& input);
+        void set_r(const py::array_t<double>&, bool);
 
-        void set_f(const py::array_t<std::complex<double>>& input);
+        void set_f(const py::array_t<std::complex<double>>&);
 
         void fft();
 
         void ifft();
 
-        void convolve(const Image& filter_image);
+        void filter(const Image&);
 
-        void convolve(const BaseModel& filter_model);
+        void filter(const BaseModel&);
 
-        void deconvolve(const Image& filter_image, const double);
+        void deconvolve(const Image&, double);
 
-        void deconvolve(const BaseModel& filter_model, const double);
+        void deconvolve(const BaseModel&, double);
 
         py::array_t<std::complex<double>> draw_f() const;
 
         py::array_t<double> draw_r() const;
-
-        void destroy();
 
         ~Image();
     };
