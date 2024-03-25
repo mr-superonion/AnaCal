@@ -94,30 +94,10 @@ BaseModel::draw(double scale, int nx, int ny) const {
     return result;
 }
 
-std::shared_ptr<BaseModel>
-multiply(
-    std::shared_ptr<BaseModel> f1,
-    std::shared_ptr<BaseModel> f2
-) {
-    return std::make_shared<MultipliedBaseModel>(
-        f1,
-        f2
-    );
-}
-
-std::shared_ptr<BaseModel>
-divide(
-    std::shared_ptr<BaseModel> numerator,
-    std::shared_ptr<BaseModel> denominator
-) {
-    return std::make_shared<DividedBaseModel>(
-        numerator, denominator
-    );
-}
 
 void pyExportModel(py::module& m) {
     py::module_ model = m.def_submodule("model", "submodule for models");
-    py::class_<BaseModel, std::shared_ptr<BaseModel>>(model, "BaseModel")
+    py::class_<BaseModel>(model, "BaseModel")
         .def(py::init<>())
         .def("apply", &BaseModel::apply,
             "Returns the pre-distorted function value at kx, ky",
@@ -134,46 +114,21 @@ void pyExportModel(py::module& m) {
         .def("draw", &BaseModel::draw,
             "draw the distorted function to ndarray",
             py::arg("scale"), py::arg("nx"), py::arg("ny")
-        )
-        .def("__mul__", [](
-                const std::shared_ptr<BaseModel>& a,
-                const std::shared_ptr<BaseModel>& b
-            ) {
-                return multiply(a, b);
-            },
-            py::is_operator()
-        )
-        .def("__truediv__", [](
-                const std::shared_ptr<BaseModel>& a,
-                const std::shared_ptr<BaseModel>& b
-            ) {
-                return divide(a, b);
-            },
-            py::is_operator()
         );
 
-    py::class_<Gaussian,
-        std::shared_ptr<Gaussian>,
-        BaseModel
-    >(model, "Gaussian")
+    py::class_<Gaussian, BaseModel>(model, "Gaussian")
         .def(py::init<double>(),
             "Gaussian basis function",
             py::arg("sigma")
         );
 
-    py::class_<GaussianTopHat,
-        std::shared_ptr<GaussianTopHat>,
-        BaseModel
-    >(model, "GaussianTopHat")
+    py::class_<GaussianTopHat, BaseModel>(model, "GaussianTopHat")
         .def(py::init<double, double>(),
             "Gaussian convolved with top-hat basis function",
             py::arg("d"), py::arg("sigma")
         );
 
-    py::class_<CirTopHat,
-        std::shared_ptr<CirTopHat>,
-        BaseModel
-    >(model, "CirTopHat")
+    py::class_<CirTopHat, BaseModel>(model, "CirTopHat")
         .def(py::init<double>(),
             "Circular top-hat basis function",
             py::arg("d")

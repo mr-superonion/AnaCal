@@ -4,12 +4,16 @@
 #include "stdafx.h"
 
 namespace anacal {
-    class BaseModel: public std::enable_shared_from_this<BaseModel> {
+    class BaseModel {
     private:
         double gamma1 = 0.0;
         double gamma2 = 0.0;
         double sin_theta = 0.0;
         double cos_theta = 1.0;
+
+        // Preventing copy (implement these if you need copy semantics)
+        BaseModel(const BaseModel&) = delete;
+        BaseModel& operator=(const BaseModel&) = delete;
 
     public:
         BaseModel();
@@ -28,50 +32,11 @@ namespace anacal {
             this->gamma1 = gamma1;
             this->gamma2 = gamma2;
         }
+
+        BaseModel(BaseModel&& other) noexcept = default;
+        BaseModel& operator=(BaseModel&& other) noexcept = default;
+
         virtual ~BaseModel() = default;
-
-    };
-
-    class MultipliedBaseModel : public BaseModel {
-    private:
-        std::shared_ptr<BaseModel> f1;
-        std::shared_ptr<BaseModel> f2;
-    public:
-        MultipliedBaseModel(
-            std::shared_ptr<BaseModel> f1,
-            std::shared_ptr<BaseModel> f2
-        ):
-            f1(f1), f2(f2) {}
-
-        std::complex<double>
-        fValue(
-            double kx,
-            double ky
-        ) const override {
-            return f1->fValue(kx, ky) * f2->fValue(kx, ky);
-        }
-    };
-
-
-    class DividedBaseModel : public BaseModel {
-    private:
-        std::shared_ptr<BaseModel> numerator;
-        std::shared_ptr<BaseModel> denominator;
-    public:
-        DividedBaseModel(
-            std::shared_ptr<BaseModel> numerator,
-            std::shared_ptr<BaseModel> denominator
-        ):
-            numerator(numerator), denominator(denominator) {}
-
-        std::complex<double>
-        fValue(
-            double kx,
-            double ky
-        ) const override {
-            std::complex<double> denomResult = denominator->fValue(kx, ky);
-            return numerator->fValue(kx, ky) / denomResult;
-        }
 
     };
 

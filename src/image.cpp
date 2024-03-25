@@ -21,6 +21,7 @@ Image::Image(
 
     // array
     norm_factor = 1.0 / nx / ny;
+    nx2 = nx / 2;
     ny2 = ny / 2;
     npixels = nx * ny;
     npixels_f = ny * (nx / 2 + 1);
@@ -28,6 +29,8 @@ Image::Image(
     ky_length = ny;
     dkx = 2.0 * M_PI / nx / scale;
     dky = 2.0 * M_PI / ny / scale;
+    xpad = 0;
+    ypad = 0;
 
     data_r = (double*) fftw_malloc(sizeof(double) * npixels);
     data_f = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npixels_f);
@@ -55,6 +58,8 @@ Image::set_r (
     }
     int off_y = (ny - arr_ny) / 2;
     int off_x = (nx - arr_nx) / 2;
+    ypad = off_y;
+    xpad = off_x;
     if (ishift) {
         off_y = off_y + ny /2;
         off_x = off_x + nx /2;
@@ -105,11 +110,85 @@ Image::ifft() {
     return;
 }
 
+void
+Image::rotate90_f() {
+    if (nx != ny) {
+        throw std::runtime_error("Error: cannot do 90 degree rotation, nx!=ny");
+    }
+    // copy data (fourier space)
+    fftw_complex* data = nullptr;
+    data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npixels_f);
+    for (int i =0; i < npixels_f; ++i) {
+        data[i][0] = data_f[i][0];
+        data[i][1] = data_f[i][1];
+    }
+
+    // update data
+    // upper half
+    for (int iy = ny2; iy < ny; ++iy) {
+        int xx = iy - ny2;
+        for (int ix = 0; ix < kx_length; ++ix) {
+            int yy = ny2 - ix;
+            int index = (iy + ny2) % ny * kx_length + ix;
+            int index2 = (yy + ny2) % ny * kx_length + xx;
+            data_f[index][0] = data[index2][0];
+            data_f[index][1] = data[index2][1]; // conjugate
+        }
+    }
+    // lower half
+    for (int iy = 0; iy < ny2; ++iy) {
+        int xx = ny2 - iy;
+        for (int ix = 0; ix < kx_length - 1; ++ix) {
+            int yy = ny2 + ix;
+            int index = (iy + ny2) % ny * kx_length + ix;
+            int index2 = (yy + ny2) % ny * kx_length + xx;
+            data_f[index][0] = data[index2][0];
+            data_f[index][1] = -data[index2][1];
+        }
+    }
+    // lower half with ix = kx_length - 1
+    int ix = kx_length -1;
+    int yy = 0;
+    for (int iy = 0; iy < ny2; ++iy) {
+        int xx = nx2 - iy;
+        int index = (iy + ny2) % ny * kx_length + ix;
+        int index2 = (yy + ny2) % ny * kx_length + xx;
+        data_f[index][0] = data[index2][0];
+        data_f[index][1] = -data[index2][1];
+    }
+    fftw_free(data);
+    data = nullptr;
+}
+
+
+void
+Image::add_image_f(
+    const Image& image
+){
+    fftw_complex* pr = image.data_f;
+    for (int i = 0; i < npixels_f; ++i) {
+        data_f[i][0] = data_f[i][0] + pr[i][0];
+        data_f[i][1] = data_f[i][1] + pr[i][1];
+    }
+}
+
+
+void
+Image::subtract_image_f(
+    const Image& image
+){
+    fftw_complex* pr = image.data_f;
+    for (int i = 0; i < npixels_f; ++i) {
+        data_f[i][0] = data_f[i][0] - pr[i][0];
+        data_f[i][1] = data_f[i][1] - pr[i][1];
+    }
+}
+
 
 void
 Image::filter(
     const BaseModel& filter_model
-){
+) {
     for (int iy = 0; iy < ky_length; ++iy) {
         double ky = ((iy < ny2) ? iy : (iy - ny)) * dky ;
         for (int ix = 0; ix < kx_length; ++ix) {
@@ -129,15 +208,12 @@ Image::filter(
     const Image& filter_image
 ){
     fftw_complex* pr = filter_image.data_f;
-    for (int iy = 0; iy < ky_length; ++iy) {
-        for (int ix = 0; ix < kx_length; ++ix) {
-            int index = iy * kx_length + ix;
-            std::complex<double> val1(data_f[index][0], data_f[index][1]);
-            std::complex<double> val2(pr[index][0], pr[index][1]);
-            val1 = val1 * val2;
-            data_f[index][0] = val1.real();
-            data_f[index][1] = val1.imag();
-        }
+    for (int i = 0; i < npixels_f; ++i) {
+        std::complex<double> val1(data_f[i][0], data_f[i][1]);
+        std::complex<double> val2(pr[i][0], pr[i][1]);
+        val1 = val1 * val2;
+        data_f[i][0] = val1.real();
+        data_f[i][1] = val1.imag();
     }
 }
 
@@ -174,7 +250,7 @@ void
 Image::deconvolve(
     const BaseModel& psf_model,
     double klim
-){
+) {
     double p0 = klim * klim;
     for (int iy = 0; iy < ky_length; ++iy) {
         double ky = ((iy < ny2) ? iy : (iy - ny)) * dky ;
@@ -225,8 +301,8 @@ Image::draw_r() const {
 }
 
 Image::~Image() {
-    fftw_destroy_plan(plan_forward);
-    fftw_destroy_plan(plan_backward);
+    if (plan_forward) fftw_destroy_plan(plan_forward);
+    if (plan_backward) fftw_destroy_plan(plan_backward);
     fftw_free(data_r);
     fftw_free(data_f);
     plan_forward = nullptr;
@@ -259,6 +335,9 @@ pyExportImage(py::module& m) {
         .def("ifft", &Image::ifft,
             "Conducts backward Fourier Trasform"
         )
+        .def("rotate90_f", &Image::rotate90_f,
+            "Rotates the image by 90 degree clockwise in Fourier space"
+        )
         .def("filter",
             static_cast<void (Image::*)(const BaseModel&)>(&Image::filter),
             "Convolve method with model object",
@@ -268,6 +347,16 @@ pyExportImage(py::module& m) {
             static_cast<void (Image::*)(const Image&)>(&Image::filter),
             "Convolve method with image object",
             py::arg("filter_image")
+        )
+        .def("add_image_f",
+            static_cast<void (Image::*)(const Image&)>(&Image::add_image_f),
+            "Adds image in Fourier space",
+            py::arg("image")
+        )
+        .def("subtract_image_f",
+            static_cast<void (Image::*)(const Image&)>(&Image::subtract_image_f),
+            "Subtracts image in Fourier space",
+            py::arg("image")
         )
         .def("deconvolve",
             static_cast<void (Image::*)(

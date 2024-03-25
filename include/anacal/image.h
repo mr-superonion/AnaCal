@@ -9,10 +9,15 @@ namespace anacal {
     private:
         fftw_plan plan_forward = nullptr;
         fftw_plan plan_backward = nullptr;
-        int ny2, npixels, npixels_f;
+        int nx2, ny2, npixels, npixels_f;
         int kx_length, ky_length;
         double dkx, dky;
         double norm_factor;
+        int xpad, ypad;
+
+        // Preventing copy (implement these if you need copy semantics)
+        Image(const Image&) = delete;
+        Image& operator=(const Image&) = delete;
     public:
         int ny, nx;
         double scale=1;
@@ -29,6 +34,10 @@ namespace anacal {
 
         void ifft();
 
+        void add_image_f(const Image&);
+
+        void subtract_image_f(const Image&);
+
         void filter(const Image&);
 
         void filter(const BaseModel&);
@@ -37,9 +46,14 @@ namespace anacal {
 
         void deconvolve(const BaseModel&, double);
 
+        void rotate90_f();
+
         py::array_t<std::complex<double>> draw_f() const;
 
         py::array_t<double> draw_r() const;
+
+        Image(Image&& other) noexcept = default;
+        Image& operator=(Image&& other) noexcept = default;
 
         ~Image();
     };

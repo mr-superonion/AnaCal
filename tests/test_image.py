@@ -2,14 +2,15 @@ import gc
 import time
 
 import anacal
+import fpfs
+import galsim
 import numpy as np
 
 from tests import mem_used
 
-import fpfs
-import galsim
 from . import mem_used, print_mem
 from .sim import gauss_tophat_kernel_rfft
+
 
 def test_set_r(ny=122, nx=64):
     img_obj = anacal.image.Image(nx=nx, ny=ny, scale=1.0)
@@ -17,13 +18,14 @@ def test_set_r(ny=122, nx=64):
     data[16, 16] = 1.0
     img_obj.set_r(data)
     img1 = img_obj.draw_r()
-    assert img1[ny//2, nx//2] == 1
+    assert img1[ny // 2, nx // 2] == 1
     assert np.sum(img1) == 1
     img_obj.set_r(data, ishift=True)
     img2 = img_obj.draw_r()
     assert img2[0, 0] == 1
     assert np.sum(img2) == 1
     return
+
 
 def test_fft(ny=128, nx=64):
     img_obj = anacal.image.Image(nx=nx, ny=ny, scale=1.0)
@@ -32,7 +34,7 @@ def test_fft(ny=128, nx=64):
     img_obj.set_r(data)
     img_obj.fft()
     img_obj.ifft()
-    data2 =  img_obj.draw_r()
+    data2 = img_obj.draw_r()
     np.testing.assert_almost_equal(data, data2)
     return
 
@@ -126,8 +128,39 @@ def test_deconvolve_image(seed=1):
     img_obj.deconvolve(psf_image=dec_obj, klim=task.klim)
     img_obj.ifft()
     img = img_obj.draw_r()
-    obs = img[ngrid//2, ngrid//2] / scale ** 2.0
-    np.testing.assert_almost_equal(obs, mms[0,0], decimal=4)
+    obs = img[ngrid // 2, ngrid // 2] / scale**2.0
+    np.testing.assert_almost_equal(obs, mms[0, 0], decimal=4)
+    return
+
+def test_rotate90():
+    scale = 0.2
+    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=3.0).shear(
+        e1=0.1, e2=-0.02
+    )
+    ngrid = 64
+    nrot = 1
+
+    psf_data = (
+        psf_obj.shift(
+            4.5 * scale, 17 * scale
+        ).shift(0.5 * scale, 0.5 * scale)
+        .drawImage(nx=ngrid, ny=ngrid, scale=scale)
+        .array
+    )
+    psf_data2 = (
+        psf_obj.shift(
+            4.5 * scale, 17 * scale
+        ).rotate(90 * galsim.degrees).shift(0.5 * scale, 0.5 * scale)
+        .drawImage(nx=ngrid, ny=ngrid, scale=scale)
+        .array
+    )
+    dec_obj = anacal.image.Image(nx=ngrid, ny=ngrid, scale=1.0)
+    dec_obj.set_r(psf_data)
+    dec_obj.fft()
+    dec_obj.rotate90_f()
+    dec_obj.ifft()
+    dec_data = dec_obj.draw_r()
+    np.testing.assert_almost_equal(dec_data, psf_data2)
     return
 
 
