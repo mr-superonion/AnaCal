@@ -30,28 +30,51 @@ task = fpfs.image.measure_source(
     det_nrot=det_nrot,
 )
 
+gal_obj = (
+    psf_obj.shift(-3.5, 2) * 2
+    + psf_obj.shift(2, -1) * 4
+    + psf_obj.shift(-2, -0.5) * 4
+    + psf_obj.shift(-3.2, 0.5) * 6
+)
+gal_data = gal_obj.drawImage(nx=ngrid, ny=ngrid, scale=scale).array
+
 
 def test_convolve():
-    gal_obj = (
-        psf_obj.shift(-3.5, 2) * 2
-        + psf_obj.shift(2, -1) * 4
-        + psf_obj.shift(-2, -0.5) * 4
-        + psf_obj.shift(-3.2, 0.5) * 6
-    )
-    gal_data = gal_obj.drawImage(nx=ngrid, ny=ngrid, scale=scale).array
     det_task = anacal.fpfs.FpfsDetect(
         scale=scale,
         sigma_arcsec=sigma_as,
         det_nrot=task.det_nrot,
         klim=task.klim / scale,
     )
+    noise_array = np.zeros((1, 1))
     smooth_data = det_task.smooth_image(
-        gal_array=gal_data, psf_array=psf_data, noise_array=np.zeros((1, 1))
+        gal_array=gal_data,
+        psf_array=psf_data,
+        noise_array=noise_array
     )
     smooth_data2 = smooth(task, gal_data, psf_data)
+    np.testing.assert_almost_equal(smooth_data, smooth_data2)
+    return
+
+def test_convolve_noise():
+    det_task = anacal.fpfs.FpfsDetect(
+        scale=scale,
+        sigma_arcsec=sigma_as,
+        det_nrot=task.det_nrot,
+        klim=task.klim / scale,
+    )
+
+    noise_data = np.random.randn(ngrid, ngrid)
+    smooth_data = det_task.smooth_image(
+        gal_array=gal_data,
+        psf_array=psf_data,
+        noise_array=noise_data
+    )
+    smooth_data2 = smooth(task, gal_data, psf_data, noise_data)
     np.testing.assert_almost_equal(smooth_data, smooth_data2)
     return
 
 
 if __name__ == "__main__":
     test_convolve()
+    test_convolve_noise()
