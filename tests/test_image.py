@@ -6,8 +6,6 @@ import fpfs
 import galsim
 import numpy as np
 
-from tests import mem_used
-
 from . import mem_used, print_mem
 from .sim import gauss_tophat_kernel_rfft
 
@@ -132,25 +130,23 @@ def test_deconvolve_image(seed=1):
     np.testing.assert_almost_equal(obs, mms[0, 0], decimal=4)
     return
 
+
 def test_rotate90():
     scale = 0.2
-    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=3.0).shear(
-        e1=0.1, e2=-0.02
-    )
+    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=3.0).shear(e1=0.1, e2=-0.02)
     ngrid = 64
     nrot = 1
 
     psf_data = (
-        psf_obj.shift(
-            4.5 * scale, 17 * scale
-        ).shift(0.5 * scale, 0.5 * scale)
+        psf_obj.shift(4.5 * scale, 17 * scale)
+        .shift(0.5 * scale, 0.5 * scale)
         .drawImage(nx=ngrid, ny=ngrid, scale=scale)
         .array
     )
     psf_data2 = (
-        psf_obj.shift(
-            4.5 * scale, 17 * scale
-        ).rotate(90 * galsim.degrees).shift(0.5 * scale, 0.5 * scale)
+        psf_obj.shift(4.5 * scale, 17 * scale)
+        .rotate(90 * galsim.degrees)
+        .shift(0.5 * scale, 0.5 * scale)
         .drawImage(nx=ngrid, ny=ngrid, scale=scale)
         .array
     )
