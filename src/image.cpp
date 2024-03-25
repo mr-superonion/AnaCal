@@ -165,7 +165,7 @@ void
 Image::add_image_f(
     const Image& image
 ){
-    fftw_complex* pr = image.data_f;
+    const fftw_complex* pr = image.view_data_f();
     for (int i = 0; i < npixels_f; ++i) {
         data_f[i][0] = data_f[i][0] + pr[i][0];
         data_f[i][1] = data_f[i][1] + pr[i][1];
@@ -177,7 +177,7 @@ void
 Image::subtract_image_f(
     const Image& image
 ){
-    fftw_complex* pr = image.data_f;
+    const fftw_complex* pr = image.view_data_f();
     for (int i = 0; i < npixels_f; ++i) {
         data_f[i][0] = data_f[i][0] - pr[i][0];
         data_f[i][1] = data_f[i][1] - pr[i][1];
@@ -207,41 +207,13 @@ void
 Image::filter(
     const Image& filter_image
 ){
-    fftw_complex* pr = filter_image.data_f;
+    const fftw_complex* pr = filter_image.view_data_f();
     for (int i = 0; i < npixels_f; ++i) {
         std::complex<double> val1(data_f[i][0], data_f[i][1]);
         std::complex<double> val2(pr[i][0], pr[i][1]);
         val1 = val1 * val2;
         data_f[i][0] = val1.real();
         data_f[i][1] = val1.imag();
-    }
-}
-
-
-void
-Image::deconvolve(
-    const Image& psf_image,
-    double klim
-){
-    double p0 = klim * klim;
-    fftw_complex* pr = psf_image.data_f;
-    for (int iy = 0; iy < ky_length; ++iy) {
-        double ky = ((iy < ny2) ? iy : (iy - ny)) * dky ;
-        for (int ix = 0; ix < kx_length; ++ix) {
-            double kx = ix * dkx;
-            double r2 = kx * kx + ky * ky;
-            int index = iy * kx_length + ix;
-            if (r2 > p0) {
-                data_f[index][0] = 0.0;
-                data_f[index][1] = 0.0;
-            } else {
-                std::complex<double> val1(data_f[index][0], data_f[index][1]);
-                std::complex<double> val2(pr[index][0], pr[index][1]);
-                val1 = val1 / val2;
-                data_f[index][0] = val1.real();
-                data_f[index][1] = val1.imag();
-            }
-        }
     }
 }
 
@@ -266,6 +238,34 @@ Image::deconvolve(
                 std::complex<double> result = val / psf_model.apply(kx, ky);
                 data_f[index][0] = result.real();
                 data_f[index][1] = result.imag();
+            }
+        }
+    }
+}
+
+
+void
+Image::deconvolve(
+    const Image& psf_image,
+    double klim
+){
+    double p0 = klim * klim;
+    const fftw_complex* pr = psf_image.view_data_f();
+    for (int iy = 0; iy < ky_length; ++iy) {
+        double ky = ((iy < ny2) ? iy : (iy - ny)) * dky ;
+        for (int ix = 0; ix < kx_length; ++ix) {
+            double kx = ix * dkx;
+            double r2 = kx * kx + ky * ky;
+            int index = iy * kx_length + ix;
+            if (r2 > p0) {
+                data_f[index][0] = 0.0;
+                data_f[index][1] = 0.0;
+            } else {
+                std::complex<double> val1(data_f[index][0], data_f[index][1]);
+                std::complex<double> val2(pr[index][0], pr[index][1]);
+                val1 = val1 / val2;
+                data_f[index][0] = val1.real();
+                data_f[index][1] = val1.imag();
             }
         }
     }

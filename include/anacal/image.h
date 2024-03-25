@@ -14,6 +14,8 @@ namespace anacal {
         double dkx, dky;
         double norm_factor;
         int xpad, ypad;
+        double* data_r = nullptr;
+        fftw_complex* data_f = nullptr;
 
         // Preventing copy (implement these if you need copy semantics)
         Image(const Image&) = delete;
@@ -21,8 +23,6 @@ namespace anacal {
     public:
         int ny, nx;
         double scale=1;
-        double* data_r = nullptr;
-        fftw_complex* data_f = nullptr;
 
         Image(int, int, double);
 
@@ -33,6 +33,10 @@ namespace anacal {
         void fft();
 
         void ifft();
+
+        const double* view_data_r() const {return data_r;}
+
+        const fftw_complex* view_data_f() const {return data_f;}
 
         void add_image_f(const Image&);
 

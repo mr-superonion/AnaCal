@@ -4,23 +4,21 @@
 #include "image.h"
 
 namespace anacal {
-    class Fpfs {
+    class FpfsDetect {
     private:
         // Preventing copy (implement these if you need copy semantics)
-        Fpfs(const Fpfs&) = delete;
-        Fpfs& operator=(const Fpfs&) = delete;
+        FpfsDetect(const FpfsDetect&) = delete;
+        FpfsDetect& operator=(const FpfsDetect&) = delete;
     public:
         double scale = 1.0;
         double sigma_arcsec;
-        int nord = 4;
         int det_nrot = 4;
         double klim;
         double sigma_f;
 
-        Fpfs(
+        FpfsDetect(
             double scale,
             double sigma_arcsec,
-            int nord,
             int det_nrot,
             double klim
         );
@@ -32,10 +30,10 @@ namespace anacal {
             const py::array_t<double>& noise_array
         ) const;
 
-        Fpfs(Fpfs&& other) noexcept = default;
-        Fpfs& operator=(Fpfs&& other) noexcept = default;
+        FpfsDetect(FpfsDetect&& other) noexcept = default;
+        FpfsDetect& operator=(FpfsDetect&& other) noexcept = default;
 
-        ~Fpfs();
+        ~FpfsDetect();
     };
 
     void pyExportFpfs(py::module& m);

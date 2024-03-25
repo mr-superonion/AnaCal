@@ -3,10 +3,9 @@
 
 namespace anacal {
 
-Fpfs::Fpfs(
+FpfsDetect::FpfsDetect(
     double scale,
     double sigma_arcsec,
-    int nord,
     int det_nrot,
     double klim
 ) {
@@ -16,16 +15,14 @@ Fpfs::Fpfs(
 
     this->scale = scale;
     this->sigma_arcsec = sigma_arcsec;
-    this->nord = nord;
     this->det_nrot = det_nrot;
     this->klim = klim;
-    sigma_f = scale / sigma_arcsec;
-    const Gaussian gauss_model(sigma_f);
+    sigma_f = 1.0 / sigma_arcsec;
     return;
 }
 
 py::array_t<double>
-Fpfs::smooth_image(
+FpfsDetect::smooth_image(
     const py::array_t<double>& gal_array,
     const py::array_t<double>& psf_array,
     const py::array_t<double>& noise_array
@@ -35,14 +32,15 @@ Fpfs::smooth_image(
     const ssize_t* shape = gal_array.shape();
     int ny = shape[0];
     int nx = shape[1];
-    Image psf_image(nx, ny, scale);
-    Image gal_image(nx, ny, scale);
     // Galaxy
+    Image gal_image(nx, ny, scale);
     gal_image.set_r(gal_array, false);
     gal_image.fft();
     // Psf
+    Image psf_image(nx, ny, scale);
     psf_image.set_r(psf_array, true);
     psf_image.fft();
+
     gal_image.filter(gauss_model);
     gal_image.deconvolve(psf_image, klim);
 
@@ -64,20 +62,20 @@ Fpfs::smooth_image(
     return gal_conv;
 }
 
-Fpfs::~Fpfs() {
+FpfsDetect::~FpfsDetect() {
 }
 
 
 void
 pyExportFpfs(py::module& m) {
-    py::module_ image = m.def_submodule("image", "submodule for convolution");
-    py::class_<Fpfs>(image, "Fpfs")
-        .def(py::init<double, double, int, int, double>(),
-            "Initialize the Fpfs object using an ndarray",
-            py::arg("scale"), py::arg("sigma_arcsec"), py::arg("nord"),
+    py::module_ fpfs = m.def_submodule("fpfs", "submodule for FPFS shear estimation");
+    py::class_<FpfsDetect>(fpfs, "FpfsDetect")
+        .def(py::init<double, double, int, double>(),
+            "Initialize the FpfsDetect object using an ndarray",
+            py::arg("scale"), py::arg("sigma_arcsec"),
             py::arg("det_nrot"), py::arg("klim")
         )
-        .def("smooth_image", &Fpfs::smooth_image,
+        .def("smooth_image", &FpfsDetect::smooth_image,
             "Sets up the image in configuration space",
             py::arg("gal_array"),
             py::arg("psf_array"),
