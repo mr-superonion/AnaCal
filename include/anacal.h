@@ -2,6 +2,6 @@
 #define MODEL_H
 
 #include "anacal/image.h"
-#include "anacal/convolve.h"
+#include "anacal/fpfs.h"
 
 #endif // MODEL_H

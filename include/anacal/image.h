@@ -1,5 +1,5 @@
-#ifndef ANACAL_CONVOLVE_H
-#define ANACAL_CONVOLVE_H
+#ifndef ANACAL_IMAGE_H
+#define ANACAL_IMAGE_H
 
 #include "model.h"
 #include <fftw3.h>
@@ -61,4 +61,4 @@ namespace anacal {
     void pyExportImage(py::module& m);
 }
 
-#endif // CONVOLVE_H
+#endif // IMAGE_H

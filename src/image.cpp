@@ -47,7 +47,7 @@ Image::set_r (
     const py::array_t<double>& input,
     bool ishift=false
 ) {
-    auto shape = input.shape();
+    const ssize_t* shape = input.shape();
     int arr_ny = shape[0];
     int arr_nx = shape[1];
     if (arr_ny > ny) {
