@@ -62,11 +62,11 @@ def test_convolve_noise(seed=2):
         klim=task.klim / scale,
     )
 
-    noise_data = np.random.randn(ngrid, ngrid)
+    noise_array = np.random.randn(ngrid, ngrid)
     smooth_data = det_task.smooth_image(
-        gal_array=gal_data, psf_array=psf_data, noise_array=noise_data
+        gal_array=gal_data, psf_array=psf_data, noise_array=noise_array
     )
-    smooth_data2 = smooth(task, gal_data, psf_data, noise_data)
+    smooth_data2 = smooth(task, gal_data, psf_data, noise_array)
     np.testing.assert_almost_equal(smooth_data, smooth_data2)
     return
 
@@ -82,7 +82,7 @@ def test_detect():
         det_nrot=task.det_nrot,
         klim=task.klim / scale,
     )
-    noise_array = np.random.randn(1, 1)
+    noise_array = np.random.randn(ngrid, ngrid)
     smooth_data = det_task.smooth_image(
         gal_array=gal_data, psf_array=psf_data, noise_array=noise_array
     )
@@ -106,6 +106,7 @@ def test_detect():
         pthres=pthres,
         pratio=pratio,
         bound=2,
+        noise_array=noise_array,
     )
     np.testing.assert_almost_equal(out1, out2)
     return
