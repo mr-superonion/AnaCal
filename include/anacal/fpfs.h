@@ -30,6 +30,18 @@ namespace anacal {
             const py::array_t<double>& noise_array
         ) const;
 
+        std::vector<std::tuple<int, int, bool>>
+        detect_peaks(
+            const py::array_t<double>& gal_conv,
+            double fthres,
+            double pthres,
+            double pratio,
+            double std_m00,
+            double std_v,
+            int bound
+        ) const;
+
+
         FpfsDetect(FpfsDetect&& other) noexcept = default;
         FpfsDetect& operator=(FpfsDetect&& other) noexcept = default;
 

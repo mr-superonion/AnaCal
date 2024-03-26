@@ -10,11 +10,11 @@ from . import mem_used, print_mem
 from .fpfs import smooth
 
 scale = 0.2
-ngrid = 64
+ngrid = 128
 psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(e1=0.02, e2=-0.02)
 psf_data = (
     psf_obj.shift(0.5 * scale, 0.5 * scale)
-    .drawImage(nx=ngrid // 2, ny=ngrid // 2, scale=scale)
+    .drawImage(nx=32, ny=32, scale=scale)
     .array
 )
 
@@ -56,7 +56,8 @@ def test_convolve():
     np.testing.assert_almost_equal(smooth_data, smooth_data2)
     return
 
-def test_convolve_noise():
+def test_convolve_noise(seed=2):
+    np.random.seed(seed=seed)
     det_task = anacal.fpfs.FpfsDetect(
         scale=scale,
         sigma_arcsec=sigma_as,
