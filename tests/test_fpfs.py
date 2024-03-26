@@ -86,7 +86,7 @@ def test_detect():
     smooth_data = det_task.smooth_image(
         gal_array=gal_data, psf_array=psf_data, noise_array=noise_array
     )
-    out1 = det_task.detect_peaks(
+    out1 = det_task.find_peaks(
         smooth_data,
         fthres=1.0,
         pthres=pthres,

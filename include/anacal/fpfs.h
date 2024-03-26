@@ -31,8 +31,21 @@ namespace anacal {
         ) const;
 
         std::vector<std::tuple<int, int, bool>>
-        detect_peaks(
+        find_peaks(
             const py::array_t<double>& gal_conv,
+            double fthres,
+            double pthres,
+            double pratio,
+            double std_m00,
+            double std_v,
+            int bound
+        ) const;
+
+        std::vector<std::tuple<int, int, bool>>
+        detect_sources(
+            const py::array_t<double>& gal_array,
+            const py::array_t<double>& psf_array,
+            const py::array_t<double>& noise_array,
             double fthres,
             double pthres,
             double pratio,

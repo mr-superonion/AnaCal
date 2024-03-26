@@ -56,17 +56,16 @@ Image::set_r (
     if (arr_nx > nx) {
         throw std::runtime_error("Error: input array's nx too large");
     }
+    if ((ny > arr_ny) || (nx > arr_nx)) {
+        std::fill_n(data_r, ny * nx, 0.0);
+    }
     int off_y = (ny - arr_ny) / 2;
     int off_x = (nx - arr_nx) / 2;
-    ypad = off_y;
-    xpad = off_x;
     if (ishift) {
         off_y = off_y + ny /2;
         off_x = off_x + nx /2;
     }
-
     auto r = input.unchecked<2>();
-    std::fill_n(data_r, ny * nx, 0.0);
     for (ssize_t j = 0; j < arr_ny; ++j) {
         ssize_t jj = (j + off_y) % ny;
         for (ssize_t i = 0; i < arr_nx; ++i) {

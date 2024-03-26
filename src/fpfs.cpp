@@ -64,7 +64,7 @@ FpfsDetect::smooth_image(
 
 
 std::vector<std::tuple<int, int, bool>>
-FpfsDetect::detect_peaks(
+FpfsDetect::find_peaks(
     const py::array_t<double>& gal_conv,
     double fthres,
     double pthres,
@@ -73,8 +73,6 @@ FpfsDetect::detect_peaks(
     double std_v,
     int bound
 ) const {
-    if (gal_conv.ndim() != 2)
-        throw std::runtime_error("Error: Input should be a 2D array");
     auto r = gal_conv.unchecked<2>();
     ssize_t ny = r.shape(0);
     ssize_t nx = r.shape(1);
@@ -127,7 +125,7 @@ pyExportFpfs(py::module& m) {
             py::arg("psf_array"),
             py::arg("noise_array")
         )
-        .def("detect_peaks", &FpfsDetect::detect_peaks,
+        .def("find_peaks", &FpfsDetect::find_peaks,
             "Detects peaks from smoothed images",
             py::arg("gal_conv"),
             py::arg("fthres"),
