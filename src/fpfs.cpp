@@ -86,20 +86,20 @@ FpfsDetect::detect_peaks(
     for (ssize_t j = bound + 1; j < ny - bound; ++j) {
         for (ssize_t i = bound + 1; i < nx - bound; ++i) {
             double c = r(j, i);
+            double thres = pcut + pratio * c;
             bool sel = (
                 (c > fcut) &&
-                (c > r(j-1, i)) &&
-                (c > r(j+1, i)) &&
-                (c > r(j, i-1)) &&
-                (c > r(j, i+1))
+                (c > r(j-1, i) - thres) &&
+                (c > r(j+1, i) - thres) &&
+                (c > r(j, i-1) - thres) &&
+                (c > r(j, i+1) - thres)
             );
-            double thres = pcut + pratio * c;
             if (sel) {
                 bool is_peak = (
-                    (c > r(i-1, j) - thres) &&
-                    (c > r(i+1, j) - thres) &&
-                    (c > r(i, j-1) - thres) &&
-                    (c > r(i, j+1) - thres)
+                    (c > r(j-1, i)) &&
+                    (c > r(j+1, i)) &&
+                    (c > r(j, i-1)) &&
+                    (c > r(j, i+1))
                 );
                 peaks.push_back({j, i, is_peak});
             }

@@ -13,9 +13,7 @@ scale = 0.2
 ngrid = 128
 psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(e1=0.02, e2=-0.02)
 psf_data = (
-    psf_obj.shift(0.5 * scale, 0.5 * scale)
-    .drawImage(nx=32, ny=32, scale=scale)
-    .array
+    psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(nx=32, ny=32, scale=scale).array
 )
 
 nord = 4
@@ -48,13 +46,12 @@ def test_convolve():
     )
     noise_array = np.zeros((1, 1))
     smooth_data = det_task.smooth_image(
-        gal_array=gal_data,
-        psf_array=psf_data,
-        noise_array=noise_array
+        gal_array=gal_data, psf_array=psf_data, noise_array=noise_array
     )
     smooth_data2 = smooth(task, gal_data, psf_data)
     np.testing.assert_almost_equal(smooth_data, smooth_data2)
     return
+
 
 def test_convolve_noise(seed=2):
     np.random.seed(seed=seed)
@@ -67,15 +64,54 @@ def test_convolve_noise(seed=2):
 
     noise_data = np.random.randn(ngrid, ngrid)
     smooth_data = det_task.smooth_image(
-        gal_array=gal_data,
-        psf_array=psf_data,
-        noise_array=noise_data
+        gal_array=gal_data, psf_array=psf_data, noise_array=noise_data
     )
     smooth_data2 = smooth(task, gal_data, psf_data, noise_data)
     np.testing.assert_almost_equal(smooth_data, smooth_data2)
     return
 
 
+def test_detect():
+    pthres = 0.2
+    pratio = 0.05
+    std = 0.4
+
+    det_task = anacal.fpfs.FpfsDetect(
+        scale=scale,
+        sigma_arcsec=sigma_as,
+        det_nrot=task.det_nrot,
+        klim=task.klim / scale,
+    )
+    noise_array = np.random.randn(1, 1)
+    smooth_data = det_task.smooth_image(
+        gal_array=gal_data, psf_array=psf_data, noise_array=noise_array
+    )
+    out1 = det_task.detect_peaks(
+        smooth_data,
+        fthres=1.0,
+        pthres=pthres,
+        pratio=pratio,
+        bound=2,
+        std_m00=std * scale**2.0,
+        std_v=std * scale**2.0,
+    )
+    out1 = np.array(out1)
+
+    cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
+    out2 = task.detect_source(
+        gal_data,
+        psf_data,
+        cov_element,
+        fthres=1.0,
+        pthres=pthres,
+        pratio=pratio,
+        bound=2,
+    )
+    np.testing.assert_almost_equal(out1, out2)
+    return
+
+
 if __name__ == "__main__":
     test_convolve()
     test_convolve_noise()
+    test_detect()
