@@ -28,37 +28,50 @@ FpfsDetect::smooth_image(
     const py::array_t<double>& noise_array
 ) const {
     const Gaussian gauss_model(sigma_f);
-
     const ssize_t* shape = gal_array.shape();
     int ny = shape[0];
     int nx = shape[1];
-    // Galaxy
-    Image gal_image(nx, ny, scale);
-    gal_image.set_r(gal_array, false);
-    gal_image.fft();
-    // Psf
-    Image psf_image(nx, ny, scale);
-    psf_image.set_r(psf_array, true);
-    psf_image.fft();
-
-    gal_image.filter(gauss_model);
-    gal_image.deconvolve(psf_image, klim);
 
     const ssize_t* shape_n = noise_array.shape();
     ssize_t ny_n = shape_n[0];
     ssize_t nx_n = shape_n[1];
-    if ((ny_n == ny) & (nx_n == nx)) {
-        Image noise_image(nx, ny, scale);
-        noise_image.set_r(noise_array, false);
-        noise_image.fft();
-        psf_image.rotate90_f();
-        noise_image.filter(gauss_model);
-        noise_image.deconvolve(psf_image, klim);
-        gal_image.add_image_f(noise_image);
-    }
 
-    gal_image.ifft();
-    py::array_t<double> gal_conv = gal_image.draw_r();
+    // Psf
+    Image cimg(nx, ny, scale);
+    cimg.set_r(psf_array, true);
+    cimg.fft();
+    {
+        py::array_t<std::complex<double>> parr1 = cimg.draw_f();
+        if ((ny_n == ny) & (nx_n == nx)) {
+            cimg.rotate90_f();
+            {
+                py::array_t<std::complex<double>> parr2 = cimg.draw_f();
+
+                cimg.set_r(noise_array, false);
+                cimg.fft();
+                cimg.filter(gauss_model);
+                cimg.deconvolve(parr2, klim);
+            }
+            py::array_t<std::complex<double>> narr = cimg.draw_f();
+
+            // Galaxy
+            cimg.set_r(gal_array, false);
+            cimg.fft();
+
+            cimg.filter(gauss_model);
+            cimg.deconvolve(parr1, klim);
+            cimg.add_image_f(narr);
+        } else {
+            cimg.set_r(gal_array, false);
+            cimg.fft();
+
+            cimg.filter(gauss_model);
+            cimg.deconvolve(parr1, klim);
+        }
+    }
+    // Galaxy
+    cimg.ifft();
+    py::array_t<double> gal_conv = cimg.draw_r();
     return gal_conv;
 }
 

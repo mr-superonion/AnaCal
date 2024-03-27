@@ -2,7 +2,7 @@ import os
 import gc
 import time
 
-import fpfs
+import anacal
 import galsim
 import numpy as np
 
@@ -36,28 +36,29 @@ gal_data = gal_obj.drawImage(nx=nx, ny=ny, scale=scale).array
 
 
 def test_detect():
-    task = fpfs.image.measure_source(
-        psf_data,
-        pix_scale=scale,
+    task = anacal.fpfs.FpfsDetect(
+        scale=scale,
         sigma_arcsec=sigma_as,
-        nord=4,
         det_nrot=4,
+        klim=10.0,
     )
-    cov_element = np.ones((task.ncol, task.ncol)) * std ** 2.0
     print("")
     def func():
         for _ in range(3):
             noise_data = np.random.randn(ny, nx)
-            out1 = task.detect_source(
-                gal_data,
-                psf_data,
-                cov_element,
-                fthres = 1.0,
+            smooth_data = task.smooth_image(
+                gal_array=gal_data, psf_array=psf_data, noise_array=noise_data
+            )
+            out1 = task.find_peaks(
+                smooth_data,
+                fthres=1.0,
                 pthres=pthres,
                 pratio=pratio,
                 bound=2,
+                std_m00=std * scale**2.0,
+                std_v=std * scale**2.0,
             )
-            del noise_data, out1
+            del noise_data, out1, smooth_data
         return
 
     initial_memory_usage = mem_used()

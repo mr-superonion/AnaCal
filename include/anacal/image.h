@@ -20,6 +20,8 @@ namespace anacal {
         // Preventing copy (implement these if you need copy semantics)
         Image(const Image&) = delete;
         Image& operator=(const Image&) = delete;
+
+        void _rotate90_f(int);
     public:
         int ny, nx;
         double scale=1;
@@ -38,19 +40,21 @@ namespace anacal {
 
         const fftw_complex* view_data_f() const {return data_f;}
 
-        void add_image_f(const Image&);
+        void add_image_f(const py::array_t<std::complex<double>>&);
 
-        void subtract_image_f(const Image&);
+        void subtract_image_f(const py::array_t<std::complex<double>>&);
 
-        void filter(const Image&);
+        void filter(const py::array_t<std::complex<double>>&);
 
         void filter(const BaseModel&);
 
-        void deconvolve(const Image&, double);
+        void deconvolve(const py::array_t<std::complex<double>>&, double);
 
         void deconvolve(const BaseModel&, double);
 
         void rotate90_f();
+
+        void irotate90_f();
 
         py::array_t<std::complex<double>> draw_f() const;
 

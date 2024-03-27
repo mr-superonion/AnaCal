@@ -123,7 +123,7 @@ def test_deconvolve_image(seed=1):
     img_obj.fft()
     gt_model = anacal.model.Gaussian(sigma=task.sigmaf)
     img_obj.filter(filter_model=gt_model)
-    img_obj.deconvolve(psf_image=dec_obj, klim=task.klim)
+    img_obj.deconvolve(psf_image=dec_obj.draw_f(), klim=task.klim)
     img_obj.ifft()
     img = img_obj.draw_r()
     obs = img[ngrid // 2, ngrid // 2] / scale**2.0

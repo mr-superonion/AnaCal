@@ -110,10 +110,7 @@ Image::ifft() {
 }
 
 void
-Image::rotate90_f() {
-    if (nx != ny) {
-        throw std::runtime_error("Error: cannot do 90 degree rotation, nx!=ny");
-    }
+Image::_rotate90_f(int flip) {
     // copy data (fourier space)
     fftw_complex* data = nullptr;
     data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npixels_f);
@@ -131,7 +128,7 @@ Image::rotate90_f() {
             int index = (iy + ny2) % ny * kx_length + ix;
             int index2 = (yy + ny2) % ny * kx_length + xx;
             data_f[index][0] = data[index2][0];
-            data_f[index][1] = data[index2][1]; // conjugate
+            data_f[index][1] = data[index2][1] * flip;
         }
     }
     // lower half
@@ -142,7 +139,7 @@ Image::rotate90_f() {
             int index = (iy + ny2) % ny * kx_length + ix;
             int index2 = (yy + ny2) % ny * kx_length + xx;
             data_f[index][0] = data[index2][0];
-            data_f[index][1] = -data[index2][1];
+            data_f[index][1] = -data[index2][1] * flip;
         }
     }
     // lower half with ix = kx_length - 1
@@ -153,7 +150,7 @@ Image::rotate90_f() {
         int index = (iy + ny2) % ny * kx_length + ix;
         int index2 = (yy + ny2) % ny * kx_length + xx;
         data_f[index][0] = data[index2][0];
-        data_f[index][1] = -data[index2][1];
+        data_f[index][1] = -data[index2][1] * flip;
     }
     fftw_free(data);
     data = nullptr;
@@ -161,25 +158,43 @@ Image::rotate90_f() {
 
 
 void
+Image::rotate90_f() {
+    Image::_rotate90_f(1);
+}
+
+
+void
+Image::irotate90_f() {
+    Image::_rotate90_f(-1);
+}
+
+
+void
 Image::add_image_f(
-    const Image& image
+    const py::array_t<std::complex<double>>& image
 ){
-    const fftw_complex* pr = image.view_data_f();
-    for (int i = 0; i < npixels_f; ++i) {
-        data_f[i][0] = data_f[i][0] + pr[i][0];
-        data_f[i][1] = data_f[i][1] + pr[i][1];
+    auto r = image.unchecked<2>();
+    for (ssize_t j = 0; j < ky_length ; ++j) {
+        for (ssize_t i = 0; i < kx_length ; ++i) {
+            int index = j * kx_length + i;
+            data_f[index][0] = data_f[index][0] + r(j, i).real();
+            data_f[index][1] = data_f[index][1] + r(j, i).imag();
+        }
     }
 }
 
 
 void
 Image::subtract_image_f(
-    const Image& image
+    const py::array_t<std::complex<double>>& image
 ){
-    const fftw_complex* pr = image.view_data_f();
-    for (int i = 0; i < npixels_f; ++i) {
-        data_f[i][0] = data_f[i][0] - pr[i][0];
-        data_f[i][1] = data_f[i][1] - pr[i][1];
+    auto r = image.unchecked<2>();
+    for (ssize_t j = 0; j < ky_length ; ++j) {
+        for (ssize_t i = 0; i < kx_length ; ++i) {
+            int index = j * kx_length + i;
+            data_f[index][0] = data_f[index][0] - r(j, i).real();
+            data_f[index][1] = data_f[index][1] - r(j, i).imag();
+        }
     }
 }
 
@@ -204,15 +219,17 @@ Image::filter(
 
 void
 Image::filter(
-    const Image& filter_image
+    const py::array_t<std::complex<double>>& filter_image
 ){
-    const fftw_complex* pr = filter_image.view_data_f();
-    for (int i = 0; i < npixels_f; ++i) {
-        std::complex<double> val1(data_f[i][0], data_f[i][1]);
-        std::complex<double> val2(pr[i][0], pr[i][1]);
-        val1 = val1 * val2;
-        data_f[i][0] = val1.real();
-        data_f[i][1] = val1.imag();
+    auto r = filter_image.unchecked<2>();
+    for (ssize_t j = 0; j < ky_length ; ++j) {
+        for (ssize_t i = 0; i < kx_length ; ++i) {
+            int index = j * kx_length + i;
+            std::complex<double> val1(data_f[index][0], data_f[index][1]);
+            val1 = val1 * r(j, i);
+            data_f[index][0] = val1.real();
+            data_f[index][1] = val1.imag();
+        }
     }
 }
 
@@ -242,34 +259,31 @@ Image::deconvolve(
     }
 }
 
-
 void
 Image::deconvolve(
-    const Image& psf_image,
+    const py::array_t<std::complex<double>>& psf_image,
     double klim
 ){
     double p0 = klim * klim;
-    const fftw_complex* pr = psf_image.view_data_f();
-    for (int iy = 0; iy < ky_length; ++iy) {
-        double ky = ((iy < ny2) ? iy : (iy - ny)) * dky ;
-        for (int ix = 0; ix < kx_length; ++ix) {
-            double kx = ix * dkx;
+    auto rd = psf_image.unchecked<2>();
+    for (int j = 0; j < ky_length; ++j) {
+        double ky = ((j < ny2) ? j : (j - ny)) * dky ;
+        for (int i = 0; i < kx_length; ++i) {
+            double kx = i * dkx;
             double r2 = kx * kx + ky * ky;
-            int index = iy * kx_length + ix;
+            int index = j * kx_length + i;
             if (r2 > p0) {
                 data_f[index][0] = 0.0;
                 data_f[index][1] = 0.0;
             } else {
                 std::complex<double> val1(data_f[index][0], data_f[index][1]);
-                std::complex<double> val2(pr[index][0], pr[index][1]);
-                val1 = val1 / val2;
+                val1 = val1 / rd(j, i);
                 data_f[index][0] = val1.real();
                 data_f[index][1] = val1.imag();
             }
         }
     }
 }
-
 
 py::array_t<std::complex<double>>
 Image::draw_f() const {
@@ -335,7 +349,10 @@ pyExportImage(py::module& m) {
             "Conducts backward Fourier Trasform"
         )
         .def("rotate90_f", &Image::rotate90_f,
-            "Rotates the image by 90 degree clockwise in Fourier space"
+            "Rotates the image by 90 degree anti-clockwise"
+        )
+        .def("irotate90_f", &Image::rotate90_f,
+            "Rotates the image by 90 degree clockwise"
         )
         .def("filter",
             static_cast<void (Image::*)(const BaseModel&)>(&Image::filter),
@@ -343,23 +360,26 @@ pyExportImage(py::module& m) {
             py::arg("filter_model")
         )
         .def("filter",
-            static_cast<void (Image::*)(const Image&)>(&Image::filter),
+            static_cast<void (Image::*)(const py::array_t<std::complex<double>>&)>
+            (&Image::filter),
             "Convolve method with image object",
             py::arg("filter_image")
         )
         .def("add_image_f",
-            static_cast<void (Image::*)(const Image&)>(&Image::add_image_f),
+            static_cast<void (Image::*)(const py::array_t<std::complex<double>>&)>
+            (&Image::add_image_f),
             "Adds image in Fourier space",
             py::arg("image")
         )
         .def("subtract_image_f",
-            static_cast<void (Image::*)(const Image&)>(&Image::subtract_image_f),
+            static_cast<void (Image::*)(const py::array_t<std::complex<double>>&)>
+            (&Image::subtract_image_f),
             "Subtracts image in Fourier space",
             py::arg("image")
         )
         .def("deconvolve",
             static_cast<void (Image::*)(
-                const Image&, double
+                const py::array_t<std::complex<double>>&, double
             )>(&Image::deconvolve),
             "Defilter method with image object",
             py::arg("psf_image"),
