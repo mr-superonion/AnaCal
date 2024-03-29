@@ -3,54 +3,51 @@
 
 namespace anacal {
 
-FpfsDetect::FpfsDetect(
+FpfsImage::FpfsImage(
+    int nx,
+    int ny,
     double scale,
     double sigma_arcsec,
-    int det_nrot,
-    double klim
-) {
+    double klim,
+    const py::array_t<double>& psf_array
+): cimg(nx, ny, scale), psf_array(psf_array) {
     if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
         throw std::runtime_error("Error: wrong sigma_arcsec");
     }
-
+    this->nx = nx;
+    this->ny = ny;
     this->scale = scale;
     this->sigma_arcsec = sigma_arcsec;
-    this->det_nrot = det_nrot;
     this->klim = klim;
     sigma_f = 1.0 / sigma_arcsec;
     return;
 }
 
-py::array_t<double>
-FpfsDetect::smooth_image(
-    const py::array_t<double>& gal_array,
-    const py::array_t<double>& psf_array,
-    const py::array_t<double>& noise_array
-) const {
-    const Gaussian gauss_model(sigma_f);
-    const ssize_t* shape = gal_array.shape();
-    int ny = shape[0];
-    int nx = shape[1];
 
+py::array_t<double>
+FpfsImage::smooth_image(
+    const py::array_t<double>& gal_array,
+    const py::array_t<double>& noise_array
+) {
+    const Gaussian gauss_model(sigma_f);
     const ssize_t* shape_n = noise_array.shape();
     ssize_t ny_n = shape_n[0];
     ssize_t nx_n = shape_n[1];
 
     // Psf
-    Image cimg(nx, ny, scale);
     cimg.set_r(psf_array, true);
     cimg.fft();
     {
-        py::array_t<std::complex<double>> parr1 = cimg.draw_f();
-        if ((ny_n == ny) & (nx_n == nx)) {
+        const py::array_t<std::complex<double>> parr1 = cimg.draw_f();
+        if ((ny_n == ny) && (nx_n == nx)) {
             cimg.rotate90_f();
             {
-                py::array_t<std::complex<double>> parr2 = cimg.draw_f();
+                const py::array_t<std::complex<double>> parr2 = cimg.draw_f();
 
                 cimg.set_r(noise_array, false);
                 cimg.fft();
-                cimg.filter(gauss_model);
                 cimg.deconvolve(parr2, klim);
+                cimg.filter(gauss_model);
             }
             py::array_t<std::complex<double>> narr = cimg.draw_f();
 
@@ -58,15 +55,15 @@ FpfsDetect::smooth_image(
             cimg.set_r(gal_array, false);
             cimg.fft();
 
-            cimg.filter(gauss_model);
             cimg.deconvolve(parr1, klim);
+            cimg.filter(gauss_model);
             cimg.add_image_f(narr);
         } else {
             cimg.set_r(gal_array, false);
             cimg.fft();
 
-            cimg.filter(gauss_model);
             cimg.deconvolve(parr1, klim);
+            cimg.filter(gauss_model);
         }
     }
     // Galaxy
@@ -77,7 +74,7 @@ FpfsDetect::smooth_image(
 
 
 std::vector<std::tuple<int, int, bool>>
-FpfsDetect::find_peaks(
+FpfsImage::find_peaks(
     const py::array_t<double>& gal_conv,
     double fthres,
     double pthres,
@@ -85,7 +82,7 @@ FpfsDetect::find_peaks(
     double std_m00,
     double std_v,
     int bound
-) const {
+) {
     auto r = gal_conv.unchecked<2>();
     ssize_t ny = r.shape(0);
     ssize_t nx = r.shape(1);
@@ -119,26 +116,65 @@ FpfsDetect::find_peaks(
     return peaks;
 }
 
-FpfsDetect::~FpfsDetect() {
+
+py::array_t<double>
+FpfsImage::measure_sources(
+    const py::array_t<double>& gal_array,
+    const py::array_t<std::complex<double>>& filter_image,
+    const std::vector<std::tuple<int, int, bool>>& det
+) {
+    ssize_t ndim = filter_image.ndim();
+    if ( ndim != 3) {
+        throw std::runtime_error("Error: Input must be 3-dimensional.");
+    }
+    ssize_t ncol = filter_image.shape()[0];
+    ssize_t nrow = det.size();
+
+    py::array_t<double> src({nrow, ncol});
+    auto src_mut = src.mutable_unchecked<2>();
+
+    cimg.set_r(psf_array, false);
+    cimg.fft();
+    const py::array_t<std::complex<double>> parr = cimg.draw_f();
+    const double ratio = 1.0 / scale / scale;
+    for (ssize_t j = 0; j < nrow; ++j) {
+        const auto& elem = det[j];
+        int y = std::get<0>(elem);
+        int x = std::get<1>(elem);
+        cimg.set_r(gal_array, x, y);
+        cimg.fft();
+        cimg.deconvolve(parr, klim);
+        const py::array_t<double> meas = cimg.measure(filter_image);
+        auto row = meas.unchecked<1>();
+        for (ssize_t i = 0; i < ncol; ++i) {
+            src_mut(j, i) = row(i) * ratio;
+        }
+    }
+    return src;
+}
+
+
+FpfsImage::~FpfsImage() {
 }
 
 
 void
 pyExportFpfs(py::module& m) {
     py::module_ fpfs = m.def_submodule("fpfs", "submodule for FPFS shear estimation");
-    py::class_<FpfsDetect>(fpfs, "FpfsDetect")
-        .def(py::init<double, double, int, double>(),
-            "Initialize the FpfsDetect object using an ndarray",
+    py::class_<FpfsImage>(fpfs, "FpfsImage")
+        .def(py::init<int, int, double, double, double, py::array_t<double>>(),
+            "Initialize the FpfsImage object using an ndarray",
+            py::arg("nx"), py::arg("ny"),
             py::arg("scale"), py::arg("sigma_arcsec"),
-            py::arg("det_nrot"), py::arg("klim")
+            py::arg("klim"),
+            py::arg("psf_array")
         )
-        .def("smooth_image", &FpfsDetect::smooth_image,
+        .def("smooth_image", &FpfsImage::smooth_image,
             "Smooths the image after PSF deconvolution",
             py::arg("gal_array"),
-            py::arg("psf_array"),
             py::arg("noise_array")
         )
-        .def("find_peaks", &FpfsDetect::find_peaks,
+        .def("find_peaks", &FpfsImage::find_peaks,
             "Detects peaks from smoothed images",
             py::arg("gal_conv"),
             py::arg("fthres"),
@@ -147,7 +183,12 @@ pyExportFpfs(py::module& m) {
             py::arg("std_m00"),
             py::arg("std_v"),
             py::arg("bound")
+        )
+        .def("measure_sources", &FpfsImage::measure_sources,
+            "measure source properties using filter at the position of det",
+            py::arg("gal_array"),
+            py::arg("filter_image"),
+            py::arg("det")
         );
 }
-
 }

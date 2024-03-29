@@ -1,13 +1,13 @@
-import os
 import gc
+import os
 import time
 
 import fpfs
 import galsim
 import numpy as np
+from memory_profiler import memory_usage
 
 from . import mem_used, print_mem
-from memory_profiler import memory_usage
 
 ny = 5000
 nx = 5000
@@ -18,13 +18,9 @@ std = 0.4
 
 scale = 0.2
 sigma_as = 0.55
-psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
-    e1=0.02, e2=-0.02
-)
+psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(e1=0.02, e2=-0.02)
 psf_data = (
-    psf_obj.shift(0.5 * scale, 0.5 * scale)
-    .drawImage(nx=64, ny=64, scale=scale)
-    .array
+    psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(nx=64, ny=64, scale=scale).array
 )
 gal_obj = (
     psf_obj.shift(-3.5, 2) * 2
@@ -36,6 +32,7 @@ gal_data = gal_obj.drawImage(nx=nx, ny=ny, scale=scale).array
 
 
 def test_detect():
+    initial_memory_usage = mem_used()
     task = fpfs.image.measure_source(
         psf_data,
         pix_scale=scale,
@@ -43,8 +40,9 @@ def test_detect():
         nord=4,
         det_nrot=4,
     )
-    cov_element = np.ones((task.ncol, task.ncol)) * std ** 2.0
+    cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
     print("")
+
     def func():
         for _ in range(3):
             noise_data = np.random.randn(ny, nx)
@@ -52,7 +50,7 @@ def test_detect():
                 gal_data,
                 psf_data,
                 cov_element,
-                fthres = 1.0,
+                fthres=1.0,
                 pthres=pthres,
                 pratio=pratio,
                 bound=2,
@@ -60,7 +58,6 @@ def test_detect():
             del noise_data, out1
         return
 
-    initial_memory_usage = mem_used()
     print_mem(initial_memory_usage)
     t0 = time.time()
     func()
@@ -69,11 +66,12 @@ def test_detect():
 
     peak_memory_usage = max(memory_usage(proc=(func,)))
     print("Peak Mem:", peak_memory_usage, "M")
-    del task
+    del task, cov_element
     gc.collect()
     final_memory_usage = mem_used()
     print_mem(final_memory_usage - initial_memory_usage)
     return
+
 
 if __name__ == "__main__":
     test_detect()

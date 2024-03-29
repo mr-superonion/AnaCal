@@ -4,31 +4,34 @@
 #include "image.h"
 
 namespace anacal {
-    class FpfsDetect {
+    class FpfsImage {
     private:
         // Preventing copy (implement these if you need copy semantics)
-        FpfsDetect(const FpfsDetect&) = delete;
-        FpfsDetect& operator=(const FpfsDetect&) = delete;
+        FpfsImage(const FpfsImage&) = delete;
+        FpfsImage& operator=(const FpfsImage&) = delete;
+        Image cimg;
     public:
         double scale = 1.0;
         double sigma_arcsec;
-        int det_nrot = 4;
         double klim;
         double sigma_f;
+        int nx, ny;
+        const py::array_t<double> psf_array;
 
-        FpfsDetect(
+        FpfsImage(
+            int nx,
+            int ny,
             double scale,
             double sigma_arcsec,
-            int det_nrot,
-            double klim
+            double klim,
+            const py::array_t<double>& psf_array
         );
 
         py::array_t<double>
         smooth_image(
             const py::array_t<double>& gal_array,
-            const py::array_t<double>& psf_array,
             const py::array_t<double>& noise_array
-        ) const;
+        );
 
         std::vector<std::tuple<int, int, bool>>
         find_peaks(
@@ -39,12 +42,18 @@ namespace anacal {
             double std_m00,
             double std_v,
             int bound
-        ) const;
+        );
+
+        py::array_t<double>
+        measure_sources(
+            const py::array_t<double>& gal_array,
+            const py::array_t<std::complex<double>>& filter_image,
+            const std::vector<std::tuple<int, int, bool>>& det
+        );
 
         std::vector<std::tuple<int, int, bool>>
         detect_sources(
             const py::array_t<double>& gal_array,
-            const py::array_t<double>& psf_array,
             const py::array_t<double>& noise_array,
             double fthres,
             double pthres,
@@ -52,13 +61,13 @@ namespace anacal {
             double std_m00,
             double std_v,
             int bound
-        ) const;
+        );
 
 
-        FpfsDetect(FpfsDetect&& other) noexcept = default;
-        FpfsDetect& operator=(FpfsDetect&& other) noexcept = default;
+        FpfsImage(FpfsImage&& other) noexcept = default;
+        FpfsImage& operator=(FpfsImage&& other) noexcept = default;
 
-        ~FpfsDetect();
+        ~FpfsImage();
     };
 
     void pyExportFpfs(py::module& m);

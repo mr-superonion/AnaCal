@@ -12,7 +12,7 @@ from .fpfs import smooth
 scale = 0.2
 ngrid = 128
 psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(e1=0.02, e2=-0.02)
-psf_data = (
+psf_array = (
     psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(nx=32, ny=32, scale=scale).array
 )
 
@@ -21,7 +21,7 @@ det_nrot = 4
 sigma_as = 0.53
 
 task = fpfs.image.measure_source(
-    psf_data,
+    psf_array,
     pix_scale=scale,
     sigma_arcsec=sigma_as,
     nord=nord,
@@ -38,35 +38,35 @@ gal_data = gal_obj.drawImage(nx=ngrid, ny=ngrid, scale=scale).array
 
 
 def test_convolve():
-    det_task = anacal.fpfs.FpfsDetect(
+    det_task = anacal.fpfs.FpfsImage(
+        nx=ngrid,
+        ny=ngrid,
         scale=scale,
         sigma_arcsec=sigma_as,
-        det_nrot=task.det_nrot,
         klim=task.klim / scale,
+        psf_array=psf_array,
     )
     noise_array = np.zeros((1, 1))
-    smooth_data = det_task.smooth_image(
-        gal_array=gal_data, psf_array=psf_data, noise_array=noise_array
-    )
-    smooth_data2 = smooth(task, gal_data, psf_data)
+    smooth_data = det_task.smooth_image(gal_array=gal_data, noise_array=noise_array)
+    smooth_data2 = smooth(task, gal_data, psf_array)
     np.testing.assert_almost_equal(smooth_data, smooth_data2)
     return
 
 
 def test_convolve_noise(seed=2):
     np.random.seed(seed=seed)
-    det_task = anacal.fpfs.FpfsDetect(
+    det_task = anacal.fpfs.FpfsImage(
+        nx=ngrid,
+        ny=ngrid,
         scale=scale,
         sigma_arcsec=sigma_as,
-        det_nrot=task.det_nrot,
         klim=task.klim / scale,
+        psf_array=psf_array,
     )
 
     noise_array = np.random.randn(ngrid, ngrid)
-    smooth_data = det_task.smooth_image(
-        gal_array=gal_data, psf_array=psf_data, noise_array=noise_array
-    )
-    smooth_data2 = smooth(task, gal_data, psf_data, noise_array)
+    smooth_data = det_task.smooth_image(gal_array=gal_data, noise_array=noise_array)
+    smooth_data2 = smooth(task, gal_data, psf_array, noise_array)
     np.testing.assert_almost_equal(smooth_data, smooth_data2)
     return
 
@@ -76,16 +76,16 @@ def test_detect():
     pratio = 0.05
     std = 0.4
 
-    det_task = anacal.fpfs.FpfsDetect(
+    det_task = anacal.fpfs.FpfsImage(
+        nx=ngrid,
+        ny=ngrid,
         scale=scale,
         sigma_arcsec=sigma_as,
-        det_nrot=task.det_nrot,
         klim=task.klim / scale,
+        psf_array=psf_array,
     )
     noise_array = np.random.randn(ngrid, ngrid)
-    smooth_data = det_task.smooth_image(
-        gal_array=gal_data, psf_array=psf_data, noise_array=noise_array
-    )
+    smooth_data = det_task.smooth_image(gal_array=gal_data, noise_array=noise_array)
     out1 = det_task.find_peaks(
         smooth_data,
         fthres=1.0,
@@ -100,7 +100,7 @@ def test_detect():
     cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
     out2 = task.detect_source(
         gal_data,
-        psf_data,
+        psf_array,
         cov_element,
         fthres=1.0,
         pthres=pthres,

@@ -16,7 +16,14 @@ ext_modules.append(
         include_dirs=lib_dirs,  # Include directories for header files
         libraries=["fftw3"],
         language="c++",
-        extra_compile_args=["-std=c++11", "-fopenmp", "-O3"],
+        extra_compile_args=[
+            "-Wall",
+            "-Wextra",
+            "-Wdeprecated-declarations",
+            "-std=c++11",
+            "-fopenmp",
+            "-O3",
+        ],
         extra_link_args=["-flto", "-fopenmp"],
     )
 )

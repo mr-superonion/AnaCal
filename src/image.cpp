@@ -78,6 +78,36 @@ Image::set_r (
 
 
 void
+Image::set_r (
+    const py::array_t<double>& input,
+    int x,
+    int y
+) {
+    auto r = input.unchecked<2>();
+    ssize_t arr_ny = r.shape(0);
+    ssize_t arr_nx = r.shape(1);
+    ssize_t ybeg = y - ny2;
+    ssize_t yend = ybeg + ny;
+    ssize_t xbeg = x - nx2;
+    ssize_t xend = xbeg + nx;
+    if (
+        (xbeg < 0) || (ybeg < 0) ||
+        (xend > arr_nx) || (yend > arr_ny)
+    ) {
+        throw std::runtime_error("Error: Too close to boundary");
+    }
+    ssize_t index = 0;
+    for (ssize_t j = ybeg; j < yend; ++j) {
+        for (ssize_t i = xbeg; i < xend; ++i) {
+            data_r[index] = r(j, i);
+            index += 1;
+        }
+    }
+    return;
+}
+
+
+void
 Image::set_f(
     const py::array_t<std::complex<double>>& input
 ) {
@@ -108,6 +138,7 @@ Image::ifft() {
     }
     return;
 }
+
 
 void
 Image::_rotate90_f(int flip) {
@@ -172,11 +203,11 @@ Image::irotate90_f() {
 void
 Image::add_image_f(
     const py::array_t<std::complex<double>>& image
-){
+) {
     auto r = image.unchecked<2>();
     for (ssize_t j = 0; j < ky_length ; ++j) {
         for (ssize_t i = 0; i < kx_length ; ++i) {
-            int index = j * kx_length + i;
+            ssize_t index = j * kx_length + i;
             data_f[index][0] = data_f[index][0] + r(j, i).real();
             data_f[index][1] = data_f[index][1] + r(j, i).imag();
         }
@@ -187,11 +218,11 @@ Image::add_image_f(
 void
 Image::subtract_image_f(
     const py::array_t<std::complex<double>>& image
-){
+) {
     auto r = image.unchecked<2>();
     for (ssize_t j = 0; j < ky_length ; ++j) {
         for (ssize_t i = 0; i < kx_length ; ++i) {
-            int index = j * kx_length + i;
+            ssize_t index = j * kx_length + i;
             data_f[index][0] = data_f[index][0] - r(j, i).real();
             data_f[index][1] = data_f[index][1] - r(j, i).imag();
         }
@@ -203,10 +234,10 @@ void
 Image::filter(
     const BaseModel& filter_model
 ) {
-    for (int iy = 0; iy < ky_length; ++iy) {
+    for (ssize_t iy = 0; iy < ky_length; ++iy) {
         double ky = ((iy < ny2) ? iy : (iy - ny)) * dky ;
-        for (int ix = 0; ix < kx_length; ++ix) {
-            int index = iy * kx_length + ix;
+        for (ssize_t ix = 0; ix < kx_length; ++ix) {
+            ssize_t index = iy * kx_length + ix;
             double kx = ix * dkx;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
             std::complex<double> result = val * filter_model.apply(kx, ky);
@@ -220,7 +251,7 @@ Image::filter(
 void
 Image::filter(
     const py::array_t<std::complex<double>>& filter_image
-){
+) {
     auto r = filter_image.unchecked<2>();
     for (ssize_t j = 0; j < ky_length ; ++j) {
         for (ssize_t i = 0; i < kx_length ; ++i) {
@@ -231,6 +262,46 @@ Image::filter(
             data_f[index][1] = val1.imag();
         }
     }
+}
+
+
+py::array_t<double>
+Image::measure(
+    const py::array_t<std::complex<double>>& filter_image
+) const {
+    const ssize_t* shape = filter_image.shape();
+    ssize_t nz = shape[0];
+    ssize_t ny = shape[1];
+    ssize_t nx = shape[2];
+    if ((ny != ky_length) || (nx != kx_length)) {
+        throw std::runtime_error("Error: input filter shape not correct");
+    }
+
+    auto src = py::array_t<double>(nz);
+    auto s = src.mutable_unchecked<1>();
+    for (ssize_t z = 0; z < nz; z++) {
+        s(z) = 0.0;
+    }
+
+    auto r = filter_image.unchecked<3>();
+    for (ssize_t j = 0; j < ky_length; ++j) {
+        ssize_t ji = j * kx_length;
+        for (ssize_t i = -1; i < 1; ++i) {
+            ssize_t index = ji + (i + kx_length) % kx_length;
+            std::complex<double> val(data_f[index][0], data_f[index][1]);
+            for (ssize_t z = 0; z < nz; ++z) {
+                s(z) = s(z) + (r(z, j, i) * val).real();
+            }
+        }
+        for (ssize_t i = 1; i < kx_length - 1; ++i) {
+            ssize_t index = ji + i;
+            std::complex<double> val(data_f[index][0], data_f[index][1]);
+            for (ssize_t z = 0; z < nz; ++z) {
+                s(z) = s(z) + (r(z, j, i) * val).real() * 2.0;
+            }
+        }
+    }
+    return src;
 }
 
 
@@ -259,11 +330,12 @@ Image::deconvolve(
     }
 }
 
+
 void
 Image::deconvolve(
     const py::array_t<std::complex<double>>& psf_image,
     double klim
-){
+) {
     double p0 = klim * klim;
     auto rd = psf_image.unchecked<2>();
     for (int j = 0; j < ky_length; ++j) {
@@ -284,6 +356,7 @@ Image::deconvolve(
         }
     }
 }
+
 
 py::array_t<std::complex<double>>
 Image::draw_f() const {
@@ -313,6 +386,7 @@ Image::draw_r() const {
     return result;
 }
 
+
 Image::~Image() {
     if (plan_forward) fftw_destroy_plan(plan_forward);
     if (plan_backward) fftw_destroy_plan(plan_backward);
@@ -333,10 +407,18 @@ pyExportImage(py::module& m) {
             "Initialize the Convolution object using an ndarray",
             py::arg("nx"), py::arg("ny"), py::arg("scale")
         )
-        .def("set_r", &Image::set_r,
+        .def("set_r",
+            static_cast<void (Image::*)(const py::array_t<double>&, bool)>(&Image::set_r),
             "Sets up the image in configuration space",
             py::arg("input"),
             py::arg("ishift")=false
+        )
+        .def("set_r",
+            static_cast<void (Image::*)(const py::array_t<double>&, int, int)>(&Image::set_r),
+            "Sets up the image in configuration space",
+            py::arg("input"),
+            py::arg("x"),
+            py::arg("y")
         )
         .def("set_f", &Image::set_f,
             "Sets up the image in Fourier space",
@@ -363,6 +445,10 @@ pyExportImage(py::module& m) {
             static_cast<void (Image::*)(const py::array_t<std::complex<double>>&)>
             (&Image::filter),
             "Convolve method with image object",
+            py::arg("filter_image")
+        )
+        .def("measure", &Image::measure,
+            "Meausure moments using filter image",
             py::arg("filter_image")
         )
         .def("add_image_f",
