@@ -132,10 +132,7 @@ class FpfsTask(object):
         # the following two assumes pixel_scale = 1
         self.sigmaf = float(self.pix_scale / sigma_arcsec)
         logging.info("Order of the shear estimator: nord=%d" % self.nord)
-        logging.info(
-            "Shapelet kernel in configuration space: sigma= %.4f arcsec"
-            % (sigma_arcsec)
-        )
+        logging.info("Shapelet kernel in configuration space: sigma= %.4f arcsec" % (sigma_arcsec))
         # effective nyquest wave number
         self.klim_pix = get_klim(
             psf_pow=psf_pow,
@@ -185,9 +182,7 @@ class FpfsTask(object):
         return coords
 
 
-def gauss_kernel_rfft(
-    ny: int, nx: int, sigma: float, klim: float, return_grid: bool = False
-):
+def gauss_kernel_rfft(ny: int, nx: int, sigma: float, klim: float, return_grid: bool = False):
     """Generates a Gaussian kernel on grids for np.fft.rfft transform
     The kernel is truncated at radius klim.
 
@@ -230,9 +225,7 @@ def shapelets2d_func(ngrid: int, nord: int, sigma: float, klim: float):
     """
 
     mord = nord
-    gaufunc, (yfunc, xfunc) = gauss_kernel_rfft(
-        ngrid, ngrid, sigma, klim, return_grid=True
-    )
+    gaufunc, (yfunc, xfunc) = gauss_kernel_rfft(ngrid, ngrid, sigma, klim, return_grid=True)
     rfunc = np.sqrt(xfunc**2.0 + yfunc**2.0)  # radius
     r2_over_sigma2 = (rfunc / sigma) ** 2.0
     ny, nx = gaufunc.shape
@@ -251,9 +244,9 @@ def shapelets2d_func(ngrid: int, nord: int, sigma: float, klim: float):
     chi = np.zeros((nord + 1, mord + 1, ny, nx), dtype=np.complex128)
     for n in range(2, nord + 1):
         for m in range(mord + 1):
-            lfunc[n, m, :, :] = (2.0 + (m - 1.0 - r2_over_sigma2) / n) * lfunc[
-                n - 1, m, :, :
-            ] - (1.0 + (m - 1.0) / n) * lfunc[n - 2, m, :, :]
+            lfunc[n, m, :, :] = (2.0 + (m - 1.0 - r2_over_sigma2) / n) * lfunc[n - 1, m, :, :] - (
+                1.0 + (m - 1.0) / n
+            ) * lfunc[n - 2, m, :, :]
     for nn in range(nord + 1):
         for mm in range(nn, -1, -2):
             c1 = (nn - abs(mm)) // 2
@@ -322,9 +315,7 @@ def detlets2d(
     psi (ndarray):  2d detlets basis in shape of [det_nrot,3,ngrid,ngrid]
     """
     # Gaussian Kernel
-    gauss_ker, (k2grid, k1grid) = gauss_kernel_rfft(
-        ngrid, ngrid, sigma, klim, return_grid=True
-    )
+    gauss_ker, (k2grid, k1grid) = gauss_kernel_rfft(ngrid, ngrid, sigma, klim, return_grid=True)
     # for inverse Fourier transform
     gauss_ker = gauss_ker / ngrid**2.0
     # for shear response

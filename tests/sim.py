@@ -11,10 +11,7 @@ def tophat(x):
 
 
 def gaussian_top_hat_convolution_1D(d, sigma, values):
-    return 0.5 * (
-        erf((values + d) / (np.sqrt(2) * sigma))
-        - erf((values - d) / (np.sqrt(2) * sigma))
-    )
+    return 0.5 * (erf((values + d) / (np.sqrt(2) * sigma)) - erf((values - d) / (np.sqrt(2) * sigma)))
 
 
 def gaussian_top_hat_convolution_2D(d, sigma, x, y):
@@ -24,9 +21,7 @@ def gaussian_top_hat_convolution_2D(d, sigma, x, y):
 
 
 def apply_transformations(x, y, theta, gamma1, gamma2):
-    rotation_matrix = np.array(
-        [[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]]
-    )
+    rotation_matrix = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
     shear_matrix = np.array([[1 - gamma1, -gamma2], [-gamma2, 1 + gamma1]])
     tm = np.dot(rotation_matrix, shear_matrix)
 

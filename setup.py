@@ -1,5 +1,4 @@
 import os
-
 from setuptools import Extension, find_packages, setup
 import pybind11
 
@@ -56,7 +55,6 @@ setup(
     ],
     packages=find_packages(where="python"),
     package_dir={"": "python"},
-    zip_safe=False,
     ext_modules=ext_modules,
     url="https://github.com/mr-superonion/AnaCal/",
     long_description=long_description,

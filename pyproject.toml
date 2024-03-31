@@ -1,3 +1,28 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=38", "pybind11>=2.2", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[flake8]
+max-line-length = 110
+ignore = [
+    "N801", "N803", "N816", "W503", "W504", "E731", "E203", "E303"
+]
+exclude = [
+  ".git",
+  "__pycache__",
+  "docs",
+  "build",
+  "dist",
+]
+
+[tool.black]
+line-length = 110
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 110
+
+[tool.pytest.ini_options]
+testpaths = ["./tests"]
+addopts = "-vv -s"

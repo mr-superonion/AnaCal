@@ -8,14 +8,8 @@ def test_fpfs_measure():
     scale = 0.2
     ngrid = 1024
     ngrid2 = 32
-    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
-        e1=0.02, e2=-0.02
-    )
-    psf_data = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale)
-        .drawImage(nx=ngrid2, ny=ngrid2, scale=scale)
-        .array
-    )
+    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(e1=0.02, e2=-0.02)
+    psf_data = psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(nx=ngrid2, ny=ngrid2, scale=scale).array
 
     nord = 4
     det_nrot = 4

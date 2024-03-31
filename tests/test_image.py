@@ -68,20 +68,12 @@ def test_gausstophat(
 def test_deconvolve_image(seed=1):
     rcut = 32
     scale = 0.2
-    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
-        e1=0.02, e2=-0.02
-    )
+    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(e1=0.02, e2=-0.02)
     ngrid = 64
     nrot = 1
 
-    psf_data = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale)
-        .drawImage(nx=ngrid, ny=ngrid, scale=scale)
-        .array
-    )
-    psf_data = psf_data[
-        ngrid // 2 - rcut : ngrid // 2 + rcut, ngrid // 2 - rcut : ngrid // 2 + rcut
-    ]
+    psf_data = psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(nx=ngrid, ny=ngrid, scale=scale).array
+    psf_data = psf_data[ngrid // 2 - rcut : ngrid // 2 + rcut, ngrid // 2 - rcut : ngrid // 2 + rcut]
     gname = "g1-0"
     gal_data = fpfs.simulation.make_isolate_sim(
         gal_type="mixed",
