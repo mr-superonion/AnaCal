@@ -1,5 +1,4 @@
 import gc
-import os
 import time
 
 import fpfs

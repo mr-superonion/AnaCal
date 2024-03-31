@@ -16,6 +16,10 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
 
     steps:
     - name: Git checkout currect repo
@@ -23,22 +27,39 @@ jobs:
       with:
         submodules: 'recursive'
 
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v4
+    - name: Git checkout FPFS repo
+      uses: actions/checkout@v3
       with:
-        python-version: "3.10"
+        repository: mr-superonion/FPFS
+        path: FPFS
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+        channels: conda-forge
+        channel-priority: strict
+        show-channel-urls: true
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -U setuptools flake8 pytest
-        pip install -U -r requirements.txt
-        pip install -e .
+        conda config --set always_yes yes
+        conda install mamba
+        mamba install -c conda-forge pytest black
+        mamba install --file requirements.txt -c conda-forge
+        cd FPFS
+        git checkout hard_cut
+        pip install . --user
 
-    - name: Lint with flake8
+        cd ..
+        pip install . --user
+
+    - name: Lint with black
+      shell: bash -l {0}
       run: |
-        flake8 anacal
+        black python/anacal
 
     - name: Test with pytest
+      shell: bash -l {0}
       run: |
-        pytest -vv
+        pytest

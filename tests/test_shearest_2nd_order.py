@@ -3,9 +3,10 @@ import anacal
 import galsim
 import pytest
 import numpy as np
-import jax.numpy as jnp
+
 
 ngrid = 64
+
 
 def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=12):
     psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
@@ -69,7 +70,7 @@ def do_test(scale, seed, rcut, gcomp):
     # Run as an exposure
     mms = mtask.run(
         gal_array=gal_data,
-        det = coords,
+        det=coords,
     )
     mms = mtask.get_results(mms)
     ells = anacal.fpfs.catalog.m2e(mms, const=8)
@@ -79,11 +80,11 @@ def do_test(scale, seed, rcut, gcomp):
     assert np.abs(g2_est - g2) < 3e-5
 
     # run as a list
-    gal_list = [gal_data[:, i* ngrid: (i+1)*ngrid] for i in range(nrot)]
+    gal_list = [gal_data[:, i * ngrid: (i + 1) * ngrid] for i in range(nrot)]
     psf_list = [psf_data] * nrot
     mms = mtask.run(
         gal_array=gal_data,
-        det = coords,
+        det=coords,
     )
     mms2 = np.vstack([
         mtask.run(
@@ -99,4 +100,3 @@ def do_test(scale, seed, rcut, gcomp):
 def test_shear_estimation(seed):
     do_test(0.168, seed, 32, "g1")
     return
-

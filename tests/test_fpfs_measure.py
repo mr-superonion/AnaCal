@@ -1,12 +1,7 @@
-import gc
-import time
-
 import anacal
 import fpfs
 import galsim
 import numpy as np
-
-from . import mem_used, print_mem
 
 
 def test_fpfs_measure():

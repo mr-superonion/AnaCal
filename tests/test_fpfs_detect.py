@@ -1,13 +1,8 @@
-import gc
-import math
-import time
-
 import anacal
 import fpfs
 import galsim
 import numpy as np
 
-from . import mem_used, print_mem
 from .fpfs import smooth
 
 scale = 0.2

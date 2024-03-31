@@ -1,7 +1,5 @@
 from ctypes import Array
 
-import numpy as np
-
 from . import FpfsImage
 from .util import FpfsTask
 

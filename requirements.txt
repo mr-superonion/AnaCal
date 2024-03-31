@@ -1,8 +1,8 @@
+pip
 fitsio
-flake8
 galsim
 matplotlib
-numpy
 pytest
 schwimmbad
+numpy
 scipy
