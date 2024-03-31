@@ -47,7 +47,7 @@ jobs:
       run: |
         conda config --set always_yes yes
         conda install mamba
-        mamba install pytest black -c conda-forge
+        mamba install pytest black memory_profiler -c conda-forge
         mamba install --file requirements.txt -c conda-forge
         python -m pip install --upgrade pip
         pip install -U setuptools
