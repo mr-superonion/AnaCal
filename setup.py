@@ -1,6 +1,7 @@
 import os
-from setuptools import Extension, find_packages, setup
+
 import pybind11
+from setuptools import Extension, find_packages, setup
 
 conda_prefix = os.environ.get("CONDA_PREFIX")
 include_dirs = []
@@ -44,12 +45,10 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "numpy",
-        "schwimmbad",
         "jax>=0.4.9",
         "jaxlib>=0.4.9",
         "galsim",
         "astropy",
-        "matplotlib",
         "fitsio",
         "pybind11",
     ],

@@ -1,8 +1,8 @@
 pip
+jax
+jaxlib
 stackvana
 fitsio
 galsim
 matplotlib
-pytest
-schwimmbad
 numpy
