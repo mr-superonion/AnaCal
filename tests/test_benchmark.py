@@ -14,7 +14,7 @@ nx = 5000
 pthres = 0.2
 pratio = 0.05
 std = 0.4
-det_nrot=4
+det_nrot = 4
 bound = 40
 
 scale = 0.2

@@ -1,9 +1,8 @@
-import fpfs
 import anacal
+import fpfs
 import galsim
-import pytest
 import numpy as np
-
+import pytest
 
 ngrid = 64
 
@@ -80,18 +79,15 @@ def do_test(scale, seed, rcut, gcomp):
     assert np.abs(g2_est - g2) < 3e-5
 
     # run as a list
-    gal_list = [gal_data[:, i * ngrid: (i + 1) * ngrid] for i in range(nrot)]
+    gal_list = [gal_data[:, i * ngrid : (i + 1) * ngrid] for i in range(nrot)]
     psf_list = [psf_data] * nrot
     mms = mtask.run(
         gal_array=gal_data,
         det=coords,
     )
-    mms2 = np.vstack([
-        mtask.run(
-            gal_array=gal_list[i],
-            psf_array=psf_list[i]
-        ) for i in range(nrot)
-    ])
+    mms2 = np.vstack(
+        [mtask.run(gal_array=gal_list[i], psf_array=psf_list[i]) for i in range(nrot)]
+    )
     np.testing.assert_almost_equal(mms, mms2)
     return
 

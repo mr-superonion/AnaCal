@@ -52,11 +52,7 @@ def test_fpfs_measure():
         sigma_arcsec=sigma_as,
         det_nrot=det_nrot,
     )
-    src1 = mtask.run(
-        gal_array=gal_data,
-        det=out1
-    )
-
+    src1 = mtask.run(gal_array=gal_data, det=out1)
 
     task = fpfs.image.measure_source(
         psf_data,
