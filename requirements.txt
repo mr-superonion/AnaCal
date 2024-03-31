@@ -1,8 +1,8 @@
 pip
+stackvana
 fitsio
 galsim
 matplotlib
 pytest
 schwimmbad
 numpy
-scipy

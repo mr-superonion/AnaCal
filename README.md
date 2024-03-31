@@ -23,7 +23,8 @@ Users can clone this repository and install the latest package by
 ```shell
 git clone https://github.com/mr-superonion/AnaCal.git
 cd AnaCal
-pip install .
+conda install -c conda-forge --file requirements.txt
+pip install . --user
 ```
 or install stable verion from pypi
 ```
