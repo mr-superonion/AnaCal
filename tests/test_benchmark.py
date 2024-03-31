@@ -3,7 +3,6 @@ import os
 import time
 
 import anacal
-import fpfs
 import galsim
 import numpy as np
 from memory_profiler import memory_usage
@@ -31,7 +30,7 @@ gal_obj = (
 )
 gal_data = gal_obj.drawImage(nx=nx, ny=ny, scale=scale).array
 
-tt = fpfs.image.measure_source(
+tt = anacal.fpfs.FpfsMeasure(
     psf_data,
     pix_scale=scale,
     sigma_arcsec=sigma_as,
@@ -42,42 +41,40 @@ tt = fpfs.image.measure_source(
 
 def test_detect():
     initial_memory_usage = mem_used()
-    task = anacal.fpfs.FpfsImage(
+    dtask = anacal.fpfs.FpfsImage(
         nx=nx,
         ny=ny,
         scale=scale,
         sigma_arcsec=sigma_as,
         klim=10.0,
         psf_array=psf_data,
+        use_estimate=False,
+    )
+    mtask = anacal.fpfs.FpfsImage(
+        nx=64,
+        ny=64,
+        scale=scale,
+        sigma_arcsec=sigma_as,
+        klim=tt.klim / scale,
+        psf_array=psf_data,
+        use_estimate=False,
     )
     print("")
 
     def func():
         noise_data = np.random.randn(ny, nx)
-        smooth_data = task.smooth_image(gal_array=gal_data, noise_array=noise_data)
-        out1 = task.find_peaks(
-            smooth_data,
+        det = dtask.detect_source(
+            gal_array=gal_data,
             fthres=1.0,
             pthres=pthres,
             pratio=pratio,
             bound=32,
             std_m00=std * scale**2.0,
             std_v=std * scale**2.0,
+            noise_array=noise_data,
         )[0:30000]
-        mtask = anacal.fpfs.FpfsImage(
-            nx=64,
-            ny=64,
-            scale=scale,
-            sigma_arcsec=sigma_as,
-            klim=tt.klim / scale,
-            psf_array=psf_data,
-        )
-        src1 = mtask.measure_sources(
-            gal_data,
-            filter_image=tt.bfunc,
-            det=out1
-        )
-        del noise_data, out1, smooth_data, src1
+        src = mtask.measure_source(gal_data, filter_image=tt.bfunc, det=det)
+        del noise_data, det, src
         return
 
     print_mem(initial_memory_usage)
@@ -88,7 +85,7 @@ def test_detect():
 
     peak_memory_usage = max(memory_usage(proc=(func,)))
     print("Peak Mem:", peak_memory_usage, "M")
-    del task
+    del dtask, mtask
     gc.collect()
     final_memory_usage = mem_used()
     print_mem(final_memory_usage - initial_memory_usage)

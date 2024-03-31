@@ -11,7 +11,7 @@ from .sim import gauss_tophat_kernel_rfft
 
 
 def test_set_r(ny=122, nx=64):
-    img_obj = anacal.image.Image(nx=nx, ny=ny, scale=1.0)
+    img_obj = anacal.image.Image(nx=nx, ny=ny, scale=1.0, use_estimate=True)
     data = np.zeros((32, 32))
     data[16, 16] = 1.0
     img_obj.set_r(data)

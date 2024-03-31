@@ -1,4 +1,5 @@
 import gc
+import math
 import time
 
 import anacal
@@ -46,8 +47,7 @@ def test_convolve():
         klim=task.klim / scale,
         psf_array=psf_array,
     )
-    noise_array = np.zeros((1, 1))
-    smooth_data = det_task.smooth_image(gal_array=gal_data, noise_array=noise_array)
+    smooth_data = det_task.smooth_image(gal_array=gal_data, noise_array=None)
     smooth_data2 = smooth(task, gal_data, psf_array)
     np.testing.assert_almost_equal(smooth_data, smooth_data2)
     return
@@ -85,15 +85,15 @@ def test_detect():
         psf_array=psf_array,
     )
     noise_array = np.random.randn(ngrid, ngrid)
-    smooth_data = det_task.smooth_image(gal_array=gal_data, noise_array=noise_array)
-    out1 = det_task.find_peaks(
-        smooth_data,
+    out1 = det_task.detect_source(
+        gal_array=gal_data,
         fthres=1.0,
         pthres=pthres,
         pratio=pratio,
         bound=2,
         std_m00=std * scale**2.0,
         std_v=std * scale**2.0,
+        noise_array=noise_array,
     )
     out1 = np.array(out1)
 

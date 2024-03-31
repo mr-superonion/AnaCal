@@ -10,6 +10,7 @@ namespace anacal {
         FpfsImage(const FpfsImage&) = delete;
         FpfsImage& operator=(const FpfsImage&) = delete;
         Image cimg;
+        double fft_ratio;
     public:
         double scale = 1.0;
         double sigma_arcsec;
@@ -24,17 +25,18 @@ namespace anacal {
             double scale,
             double sigma_arcsec,
             double klim,
-            const py::array_t<double>& psf_array
+            const py::array_t<double>& psf_array,
+            bool use_estimate=false
         );
 
         py::array_t<double>
         smooth_image(
             const py::array_t<double>& gal_array,
-            const py::array_t<double>& noise_array
+            const std::optional<py::array_t<double>>& noise_array=std::nullopt
         );
 
         std::vector<std::tuple<int, int, bool>>
-        find_peaks(
+        find_peak(
             const py::array_t<double>& gal_conv,
             double fthres,
             double pthres,
@@ -44,25 +46,26 @@ namespace anacal {
             int bound
         );
 
-        py::array_t<double>
-        measure_sources(
-            const py::array_t<double>& gal_array,
-            const py::array_t<std::complex<double>>& filter_image,
-            const std::vector<std::tuple<int, int, bool>>& det
-        );
-
         std::vector<std::tuple<int, int, bool>>
-        detect_sources(
+        detect_source(
             const py::array_t<double>& gal_array,
-            const py::array_t<double>& noise_array,
             double fthres,
             double pthres,
             double pratio,
             double std_m00,
             double std_v,
-            int bound
+            int bound,
+            const std::optional<py::array_t<double>>& noise_array=std::nullopt
         );
 
+        py::array_t<double>
+        measure_source(
+            const py::array_t<double>& gal_array,
+            const py::array_t<std::complex<double>>& filter_image,
+            const std::optional<py::array_t<double>>& psf_array=std::nullopt,
+            const std::optional<std::vector<std::tuple<int, int, bool>>>& det=std::nullopt,
+            bool do_rotate=false
+        );
 
         FpfsImage(FpfsImage&& other) noexcept = default;
         FpfsImage& operator=(FpfsImage&& other) noexcept = default;

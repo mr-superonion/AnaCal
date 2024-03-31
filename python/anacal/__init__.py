@@ -1,1 +1,2 @@
-from ._anacal import fpfs, image, model
+from . import _anacal, fpfs
+from ._anacal import image, model

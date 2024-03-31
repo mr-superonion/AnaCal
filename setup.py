@@ -20,7 +20,7 @@ ext_modules.append(
             "-Wall",
             "-Wextra",
             "-Wdeprecated-declarations",
-            "-std=c++11",
+            "-std=c++17",
             "-fopenmp",
             "-O3",
         ],

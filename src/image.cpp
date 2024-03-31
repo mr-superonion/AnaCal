@@ -6,7 +6,8 @@ namespace anacal {
 Image::Image(
     int nx,
     int ny,
-    double scale
+    double scale,
+    bool use_estimate
 ) {
     if (ny % 2 != 0) {
         throw std::runtime_error("ny is not divisible by 2");
@@ -31,13 +32,14 @@ Image::Image(
     dky = 2.0 * M_PI / ny / scale;
     xpad = 0;
     ypad = 0;
+    unsigned fftw_flag = use_estimate ? FFTW_ESTIMATE : FFTW_MEASURE;
 
     data_r = (double*) fftw_malloc(sizeof(double) * npixels);
     data_f = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npixels_f);
     memset(data_r, 0, sizeof(double) * npixels);
     memset(data_f, 0, sizeof(fftw_complex) * npixels_f);
-    plan_forward = fftw_plan_dft_r2c_2d(ny, nx, data_r, data_f, FFTW_ESTIMATE);
-    plan_backward = fftw_plan_dft_c2r_2d(ny, nx, data_f, data_r, FFTW_ESTIMATE);
+    plan_forward = fftw_plan_dft_r2c_2d(ny, nx, data_r, data_f, fftw_flag);
+    plan_backward = fftw_plan_dft_c2r_2d(ny, nx, data_f, data_r, fftw_flag);
     return;
 }
 
@@ -403,9 +405,10 @@ void
 pyExportImage(py::module& m) {
     py::module_ image = m.def_submodule("image", "submodule for convolution");
     py::class_<Image>(image, "Image")
-        .def(py::init<int, int, double>(),
+        .def(py::init<int, int, double, bool>(),
             "Initialize the Convolution object using an ndarray",
-            py::arg("nx"), py::arg("ny"), py::arg("scale")
+            py::arg("nx"), py::arg("ny"), py::arg("scale"),
+            py::arg("use_estimate")=false
         )
         .def("set_r",
             static_cast<void (Image::*)(const py::array_t<double>&, bool)>(&Image::set_r),

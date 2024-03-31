@@ -9,8 +9,9 @@ FpfsImage::FpfsImage(
     double scale,
     double sigma_arcsec,
     double klim,
-    const py::array_t<double>& psf_array
-): cimg(nx, ny, scale), psf_array(psf_array) {
+    const py::array_t<double>& psf_array,
+    bool use_estimate
+): cimg(nx, ny, scale, use_estimate), psf_array(psf_array) {
     if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
         throw std::runtime_error("Error: wrong sigma_arcsec");
     }
@@ -20,6 +21,7 @@ FpfsImage::FpfsImage(
     this->sigma_arcsec = sigma_arcsec;
     this->klim = klim;
     sigma_f = 1.0 / sigma_arcsec;
+    fft_ratio = 1.0 / scale / scale;
     return;
 }
 
@@ -27,30 +29,27 @@ FpfsImage::FpfsImage(
 py::array_t<double>
 FpfsImage::smooth_image(
     const py::array_t<double>& gal_array,
-    const py::array_t<double>& noise_array
+    const std::optional<py::array_t<double>>& noise_array
 ) {
     const Gaussian gauss_model(sigma_f);
-    const ssize_t* shape_n = noise_array.shape();
-    ssize_t ny_n = shape_n[0];
-    ssize_t nx_n = shape_n[1];
 
     // Psf
     cimg.set_r(psf_array, true);
     cimg.fft();
     {
         const py::array_t<std::complex<double>> parr1 = cimg.draw_f();
-        if ((ny_n == ny) && (nx_n == nx)) {
+        if (noise_array.has_value()) {
             cimg.rotate90_f();
             {
                 const py::array_t<std::complex<double>> parr2 = cimg.draw_f();
 
-                cimg.set_r(noise_array, false);
+                cimg.set_r(*noise_array, false);
                 cimg.fft();
                 cimg.deconvolve(parr2, klim);
-                cimg.filter(gauss_model);
             }
-            py::array_t<std::complex<double>> narr = cimg.draw_f();
+            cimg.filter(gauss_model);
 
+            const py::array_t<std::complex<double>> narr = cimg.draw_f();
             // Galaxy
             cimg.set_r(gal_array, false);
             cimg.fft();
@@ -74,7 +73,7 @@ FpfsImage::smooth_image(
 
 
 std::vector<std::tuple<int, int, bool>>
-FpfsImage::find_peaks(
+FpfsImage::find_peak(
     const py::array_t<double>& gal_conv,
     double fthres,
     double pthres,
@@ -117,28 +116,66 @@ FpfsImage::find_peaks(
 }
 
 
+std::vector<std::tuple<int, int, bool>>
+FpfsImage::detect_source(
+    const py::array_t<double>& gal_array,
+    double fthres,
+    double pthres,
+    double pratio,
+    double std_m00,
+    double std_v,
+    int bound,
+    const std::optional<py::array_t<double>>& noise_array
+) {
+
+    py::array_t<double> gal_conv = smooth_image(
+        gal_array,
+        noise_array
+    );
+    auto catalog = find_peak(
+        gal_conv,
+        fthres,
+        pthres,
+        pratio,
+        std_m00,
+        std_v,
+        bound
+    );
+    return catalog;
+}
+
 py::array_t<double>
-FpfsImage::measure_sources(
+FpfsImage::measure_source(
     const py::array_t<double>& gal_array,
     const py::array_t<std::complex<double>>& filter_image,
-    const std::vector<std::tuple<int, int, bool>>& det
+    const std::optional<py::array_t<double>>& psf_array,
+    const std::optional<std::vector<std::tuple<int, int, bool>>>& det,
+    bool do_rotate
 ) {
     ssize_t ndim = filter_image.ndim();
     if ( ndim != 3) {
         throw std::runtime_error("Error: Input must be 3-dimensional.");
     }
+    const std::vector<std::tuple<int, int, bool>>
+        det_default = {{ny/2, nx/2, false}};
+
+
     ssize_t ncol = filter_image.shape()[0];
-    ssize_t nrow = det.size();
+    const auto& det_use = det.has_value() ? *det : det_default;
+    ssize_t nrow = det_use.size();
 
     py::array_t<double> src({nrow, ncol});
-    auto src_mut = src.mutable_unchecked<2>();
+    auto src_m = src.mutable_unchecked<2>();
 
-    cimg.set_r(psf_array, false);
+    const auto& psf_use = psf_array.has_value() ? *psf_array : this->psf_array;
+    cimg.set_r(psf_use, false);
     cimg.fft();
+    if (do_rotate){
+        cimg.rotate90_f();
+    }
     const py::array_t<std::complex<double>> parr = cimg.draw_f();
-    const double ratio = 1.0 / scale / scale;
     for (ssize_t j = 0; j < nrow; ++j) {
-        const auto& elem = det[j];
+        const auto& elem = det_use[j];
         int y = std::get<0>(elem);
         int x = std::get<1>(elem);
         cimg.set_r(gal_array, x, y);
@@ -147,7 +184,7 @@ FpfsImage::measure_sources(
         const py::array_t<double> meas = cimg.measure(filter_image);
         auto row = meas.unchecked<1>();
         for (ssize_t i = 0; i < ncol; ++i) {
-            src_mut(j, i) = row(i) * ratio;
+            src_m(j, i) = row(i) * fft_ratio;
         }
     }
     return src;
@@ -162,19 +199,21 @@ void
 pyExportFpfs(py::module& m) {
     py::module_ fpfs = m.def_submodule("fpfs", "submodule for FPFS shear estimation");
     py::class_<FpfsImage>(fpfs, "FpfsImage")
-        .def(py::init<int, int, double, double, double, py::array_t<double>>(),
+        .def(py::init<int, int, double, double, double,
+            py::array_t<double>, bool>(),
             "Initialize the FpfsImage object using an ndarray",
             py::arg("nx"), py::arg("ny"),
             py::arg("scale"), py::arg("sigma_arcsec"),
             py::arg("klim"),
-            py::arg("psf_array")
+            py::arg("psf_array"),
+            py::arg("use_estimate")=false
         )
         .def("smooth_image", &FpfsImage::smooth_image,
             "Smooths the image after PSF deconvolution",
             py::arg("gal_array"),
-            py::arg("noise_array")
+            py::arg("noise_array")=py::none()
         )
-        .def("find_peaks", &FpfsImage::find_peaks,
+        .def("find_peak", &FpfsImage::find_peak,
             "Detects peaks from smoothed images",
             py::arg("gal_conv"),
             py::arg("fthres"),
@@ -184,11 +223,24 @@ pyExportFpfs(py::module& m) {
             py::arg("std_v"),
             py::arg("bound")
         )
-        .def("measure_sources", &FpfsImage::measure_sources,
+        .def("detect_source", &FpfsImage::detect_source,
+            "Detect galaxy candidates from image",
+            py::arg("gal_array"),
+            py::arg("fthres"),
+            py::arg("pthres"),
+            py::arg("pratio"),
+            py::arg("std_m00"),
+            py::arg("std_v"),
+            py::arg("bound"),
+            py::arg("noise_array")=py::none()
+        )
+        .def("measure_source", &FpfsImage::measure_source,
             "measure source properties using filter at the position of det",
             py::arg("gal_array"),
             py::arg("filter_image"),
-            py::arg("det")
+            py::arg("psf_array")=py::none(),
+            py::arg("det")=py::none(),
+            py::arg("do_rotate")=false
         );
 }
 }

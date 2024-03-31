@@ -26,7 +26,12 @@ namespace anacal {
         int ny, nx;
         double scale=1;
 
-        Image(int, int, double);
+        Image(
+            int nx,
+            int ny,
+            double scale,
+            bool use_estimate=false
+        );
 
         void set_r(const py::array_t<double>&, bool);
 
