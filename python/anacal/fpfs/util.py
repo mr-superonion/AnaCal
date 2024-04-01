@@ -2,6 +2,7 @@ import logging
 import math
 
 import numpy as np
+from numpy.typing import NDArray
 
 logging.basicConfig(
     format="%(asctime)s %(message)s",
@@ -110,6 +111,7 @@ class FpfsTask(object):
         name_s, _ = get_shapelets_col_names(nord)
         name_d = get_det_col_names(det_nrot)
         name_a = name_s + name_d
+        self.di = {element: index for index, element in enumerate(name_a)}
 
         self.ncol = len(name_a)
         self.ndet = len(name_d)
@@ -118,7 +120,9 @@ class FpfsTask(object):
         self.det_nrot = det_nrot
         self.sigma_arcsec = sigma_arcsec
         if sigma_arcsec <= 0.0 or sigma_arcsec > 5.0:
-            raise ValueError("sigma_arcsec should be positive and less than 5 arcsec")
+            raise ValueError(
+                "sigma_arcsec should be positive and less than 5 arcsec"
+            )
         self.ngrid = psf_array.shape[0]
 
         # Preparing PSF
@@ -132,7 +136,10 @@ class FpfsTask(object):
         # the following two assumes pixel_scale = 1
         self.sigmaf = float(self.pix_scale / sigma_arcsec)
         logging.info("Order of the shear estimator: nord=%d" % self.nord)
-        logging.info("Shapelet kernel in configuration space: sigma= %.4f arcsec" % (sigma_arcsec))
+        logging.info(
+            "Shapelet kernel in configuration space: sigma= %.4f arcsec"
+            % (sigma_arcsec)
+        )
         # effective nyquest wave number
         self.klim_pix = get_klim(
             psf_pow=psf_pow,
@@ -144,6 +151,17 @@ class FpfsTask(object):
 
         self.prepare_fpfs_bases()
         return
+
+    def get_stds(self, cov_mat):
+
+        std_modes = np.sqrt(np.diagonal(cov_mat))
+        std_m00 = std_modes[self.di["m00"]]
+        std_v = np.average(
+            np.array(
+                [std_modes[self.di["v%d" % _]] for _ in range(self.det_nrot)]
+            )
+        )
+        return std_m00, std_v
 
     def prepare_fpfs_bases(self):
         """This fucntion prepare the FPFS bases (shapelets and detectlets)"""
@@ -182,7 +200,10 @@ class FpfsTask(object):
         return coords
 
 
-def gauss_kernel_rfft(ny: int, nx: int, sigma: float, klim: float, return_grid: bool = False):
+def gauss_kernel_rfft(
+    ny: int, nx: int, sigma: float,
+    klim: float, return_grid: bool = False
+):
     """Generates a Gaussian kernel on grids for np.fft.rfft transform
     The kernel is truncated at radius klim.
 
@@ -302,7 +323,7 @@ def detlets2d(
     klim: float,
     det_nrot: int,
 ):
-    """Generates shapelets function in Fourier space, chi00 are normalized to 1.
+    """Generates shapelets function in Fourier space, chi00 are normalized to 1
     This function only supports square stamps: ny=nx=ngrid.
 
     Args:
@@ -315,7 +336,9 @@ def detlets2d(
     psi (ndarray):  2d detlets basis in shape of [det_nrot,3,ngrid,ngrid]
     """
     # Gaussian Kernel
-    gauss_ker, (k2grid, k1grid) = gauss_kernel_rfft(ngrid, ngrid, sigma, klim, return_grid=True)
+    gauss_ker, (k2grid, k1grid) = gauss_kernel_rfft(
+        ngrid, ngrid, sigma, klim, return_grid=True,
+    )
     # for inverse Fourier transform
     gauss_ker = gauss_ker / ngrid**2.0
     # for shear response
@@ -339,7 +362,7 @@ def detlets2d(
     return psi, name_d
 
 
-def get_klim(psf_pow, sigma: float, thres: float = 1e-20) -> float:
+def get_klim(psf_pow: NDArray, sigma: float, thres: float = 1e-20) -> float:
     """Gets klim, the region outside klim is supressed by the shaplet Gaussian
     kernel in FPFS shear estimation method; therefore we set values in this
     region to zeros
@@ -353,10 +376,29 @@ def get_klim(psf_pow, sigma: float, thres: float = 1e-20) -> float:
     klim (float):           the limit radius
     """
     ngrid = psf_pow.shape[0]
-    gaussian, (y, x) = gauss_kernel_rfft(ngrid, ngrid, sigma, np.pi, return_grid=True)
+    gaussian, (y, x) = gauss_kernel_rfft(
+        ngrid, ngrid, sigma, np.pi, return_grid=True,
+    )
     r = np.sqrt(x**2.0 + y**2.0)  # radius
     mask = gaussian / psf_pow < thres
     dk = 2.0 * math.pi / ngrid
     klim_pix = round(float(np.min(r[mask]) / dk))
     klim_pix = min(max(klim_pix, ngrid // 5), ngrid // 2 - 1)
     return klim_pix
+
+def truncate_square(arr: NDArray, rcut: int) -> None:
+    """Truncate the input array with square
+
+    Args:
+    arr (ndarray):      image array
+    rcut (int):         radius of the square (width / 2)
+    """
+    if len(arr.shape) != 2 or arr.shape[0] != arr.shape[1]:
+        raise ValueError("Input array must be a 2D square array")
+
+    ngrid = arr.shape[0]
+    arr[: ngrid // 2 - rcut, :] = 0
+    arr[ngrid // 2 + rcut :, :] = 0
+    arr[:, : ngrid // 2 - rcut] = 0
+    arr[:, ngrid // 2 + rcut :] = 0
+    return

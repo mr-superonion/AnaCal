@@ -12,24 +12,11 @@
 # GNU General Public License for more details.
 #
 # python lib
-import fitsio
 import jax
 import jax.numpy as jnp
 import numpy as np
-import numpy.lib.recfunctions as rfn
 
 from .util import get_det_col_names, get_shapelets_col_names
-
-
-def read_catalog(fname):
-    x = fitsio.read(fname)
-    if x.dtype.names is not None:
-        x = rfn.structured_to_unstructured(
-            x,
-            dtype=np.float64,
-            copy=True,
-        )
-    return jnp.array(x)
 
 
 def ssfunc1(x, mu, sigma):
@@ -139,22 +126,7 @@ def gaussian(x, mu, sigma):
     return jnp.exp(exponent)
 
 
-def cosh_inv(x, mu, sigma):
-    """Returns the 1/cosh function value at x.
-
-    Args:
-    x (array):      Points at which to evaluate the Gaussian function.
-    mu (float):     Mean of the Gaussian distribution.
-    sigma (float):  Standard deviation of the Gaussian distribution.
-
-    Returns:
-    array:          The values of the 1/cosh function at each point in x.
-    """
-    t = x / sigma - mu
-    return 1.0 / jnp.cosh(t)
-
-
-class catalog_base(object):
+class CatalogBase(object):
     def __init__(
         self,
         ratio: float = 1.81,
@@ -178,9 +150,8 @@ class catalog_base(object):
         name_s, _ = get_shapelets_col_names(nord)
         name_d = get_det_col_names(det_nrot)
         name_a = name_s + name_d
-        self.di = {}
-        for index, element in enumerate(name_a):
-            self.di[element] = index
+        self.di = {element: index for index, element in enumerate(name_a)}
+
         self.ncol = len(name_a)
         self.ndet = len(name_d)
         self.name_shapelets = name_s
@@ -199,7 +170,9 @@ class catalog_base(object):
             + cov_mat[self.di["m00"], self.di["m20"]]
             + cov_mat[self.di["m20"], self.di["m00"]]
         )
-        std_v = jnp.average(jnp.array([std_modes[self.di["v%d" % _]] for _ in range(det_nrot)]))
+        std_v = jnp.average(
+            jnp.array([std_modes[self.di["v%d" % _]] for _ in range(det_nrot)])
+        )
 
         # control steepness
         if sigma_m00 is None:
@@ -305,7 +278,10 @@ class catalog_base(object):
         # (M00 + M20) / M00 > r2_min
         r2l = x[self.di["m00"]] * (1.0 - self.r2_min) + x[self.di["m20"]]
         w2l = ssfunc2(r2l, self.sigma_r2, self.sigma_r2)
-        # r2_2 = (x[self.di["m00"]] + x[self.di["m20"]]) / (x[self.di["m00"]] + self.C0)
+        # r2_2 = (
+        #     x[self.di["m00"]] + x[self.di["m20"]]) / (x[self.di["m00"]]
+        #     + self.C0
+        # )
         # w2l = w2l * jnp.exp(r2_2)
 
         # selection on size (upper limit)
@@ -511,7 +487,7 @@ class catalog_base(object):
         return result
 
 
-class FpfsCatalog(catalog_base):
+class FpfsCatalog(CatalogBase):
     def __init__(
         self,
         ratio: float = 1.81,
@@ -562,7 +538,7 @@ class FpfsCatalog(catalog_base):
         return e2
 
 
-class Fpfs4Catalog(catalog_base):
+class Fpfs4Catalog(CatalogBase):
     def __init__(
         self,
         ratio=1.81,

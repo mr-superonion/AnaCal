@@ -129,6 +129,7 @@ class FpfsMeasure(FpfsTask):
         gal_array: NDArray,
         psf_array=None,
         det=None,
+        do_rotate=False,
     ):
         """This function detects galaxy from image
 
@@ -142,4 +143,5 @@ class FpfsMeasure(FpfsTask):
             filter_image=self.bfunc,
             psf_array=psf_array,
             det=det,
+            do_rotate=do_rotate,
         )
