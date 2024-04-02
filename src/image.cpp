@@ -7,7 +7,8 @@ Image::Image(
     int nx,
     int ny,
     double scale,
-    bool use_estimate
+    bool use_estimate,
+    unsigned int mode
 ) {
     if (ny % 2 != 0) {
         throw std::runtime_error("ny is not divisible by 2");
@@ -19,6 +20,10 @@ Image::Image(
     this->nx = nx;
     this->ny = ny;
     this->scale = scale;
+    this->mode = mode;
+    // mode = 1: only initialize configuration space
+    // mode = 2: only initialize Fourier space
+    // mode = 3: initialize both spaces and forward and backward operations
 
     // array
     norm_factor = 1.0 / nx / ny;
@@ -34,12 +39,18 @@ Image::Image(
     ypad = 0;
     unsigned fftw_flag = use_estimate ? FFTW_ESTIMATE : FFTW_MEASURE;
 
-    data_r = (double*) fftw_malloc(sizeof(double) * npixels);
-    data_f = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npixels_f);
-    memset(data_r, 0, sizeof(double) * npixels);
-    memset(data_f, 0, sizeof(fftw_complex) * npixels_f);
-    plan_forward = fftw_plan_dft_r2c_2d(ny, nx, data_r, data_f, fftw_flag);
-    plan_backward = fftw_plan_dft_c2r_2d(ny, nx, data_f, data_r, fftw_flag);
+    if (mode & 1) {
+        data_r = (double*) fftw_malloc(sizeof(double) * npixels);
+        memset(data_r, 0, sizeof(double) * npixels);
+    }
+    if (mode & 2) {
+        data_f = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npixels_f);
+        memset(data_f, 0, sizeof(fftw_complex) * npixels_f);
+    }
+    if (mode == 3) {
+        plan_forward = fftw_plan_dft_r2c_2d(ny, nx, data_r, data_f, fftw_flag);
+        plan_backward = fftw_plan_dft_c2r_2d(ny, nx, data_f, data_r, fftw_flag);
+    }
     return;
 }
 
@@ -49,6 +60,7 @@ Image::set_r (
     const py::array_t<double>& input,
     bool ishift=false
 ) {
+    assert_mode(this->mode & 1);
     const ssize_t* shape = input.shape();
     int arr_ny = shape[0];
     int arr_nx = shape[1];
@@ -85,6 +97,7 @@ Image::set_r (
     int x,
     int y
 ) {
+    assert_mode(this->mode & 1);
     auto r = input.unchecked<2>();
     ssize_t arr_ny = r.shape(0);
     ssize_t arr_nx = r.shape(1);
@@ -113,6 +126,7 @@ void
 Image::set_f(
     const py::array_t<std::complex<double>>& input
 ) {
+    assert_mode(this->mode & 2);
     auto r = input.unchecked<2>();
     for (ssize_t j = 0; j < ky_length ; ++j) {
         for (ssize_t i = 0; i < kx_length ; ++i) {
@@ -126,7 +140,78 @@ Image::set_f(
 
 
 void
+Image::set_noise_f(
+    unsigned int seed,
+    double noise_std
+) {
+    assert_mode(this->mode & 2);
+    double std_f = noise_std * std::sqrt(nx * ny / 2.0);
+    std::mt19937 engine(seed);
+    std::normal_distribution<double> dist(0.0, std_f);
+    for (ssize_t j = 0; j < ky_length; ++j) {
+        ssize_t ji = j * kx_length;
+        for (ssize_t i = 0; i < kx_length; ++i) {
+            ssize_t index = ji + i;
+            data_f[index][0] = dist(engine);
+            data_f[index][1] = dist(engine);
+        }
+    }
+}
+
+
+void
+Image::set_noise_f(
+    unsigned int seed,
+    double noise_std,
+    const BaseModel& filter_model
+) {
+    assert_mode(this->mode & 2);
+    double std_f = noise_std * std::sqrt(nx * ny / 2.0);
+    std::mt19937 engine(seed);
+    std::normal_distribution<double> dist(0.0, std_f);
+    double power_sum = 0.0;
+
+    for (ssize_t j = 0; j < ky_length; ++j) {
+        ssize_t ji = j * kx_length;
+        double ky = ((j < ny2) ? j : (j - ny)) * dky ;
+        for (ssize_t i = -1; i < 1; ++i) {
+            ssize_t ii = (i + kx_length) % kx_length;
+            ssize_t index = ji + ii;
+            double kx = ii * dkx;
+            std::complex<double> val(dist(engine), dist(engine));
+            std::complex<double> res = filter_model.apply(kx, ky);
+            power_sum = power_sum + (std::conj(res) * res).real();
+            res = res * val;
+            data_f[index][0] = res.real();
+            data_f[index][1] = res.imag();
+
+        }
+        for (ssize_t i = 1; i < kx_length - 1; ++i) {
+            ssize_t index = ji + i;
+            double kx = i * dkx;
+            std::complex<double> val(dist(engine), dist(engine));
+            std::complex<double> res = filter_model.apply(kx, ky);
+            power_sum = power_sum + (std::conj(res) * res).real() * 2.0;
+            res = res * val;
+            data_f[index][0] = res.real();
+            data_f[index][1] = res.imag();
+        }
+    }
+    double rescale = std::sqrt(nx * ny / power_sum);
+    for (ssize_t j = 0; j < ky_length ; ++j) {
+        ssize_t ji = j * kx_length;
+        for (ssize_t i = 0; i < kx_length ; ++i) {
+            int index = ji + i;
+            data_f[index][0] = data_f[index][0] * rescale;
+            data_f[index][1] = data_f[index][1] * rescale;
+        }
+    }
+}
+
+
+void
 Image::fft() {
+    assert_mode(this->mode == 3);
     fftw_execute(plan_forward);
     return;
 }
@@ -134,6 +219,7 @@ Image::fft() {
 
 void
 Image::ifft() {
+    assert_mode(this->mode == 3);
     fftw_execute(plan_backward);
     for (ssize_t i = 0; i < npixels; ++i){
         data_r[i] = data_r[i] * norm_factor;
@@ -144,6 +230,7 @@ Image::ifft() {
 
 void
 Image::_rotate90_f(int flip) {
+    assert_mode(this->mode & 2);
     // copy data (fourier space)
     fftw_complex* data = nullptr;
     data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npixels_f);
@@ -154,33 +241,33 @@ Image::_rotate90_f(int flip) {
 
     // update data
     // upper half
-    for (int iy = ny2; iy < ny; ++iy) {
-        int xx = iy - ny2;
-        for (int ix = 0; ix < kx_length; ++ix) {
-            int yy = ny2 - ix;
-            int index = (iy + ny2) % ny * kx_length + ix;
+    for (int j = ny2; j < ny; ++j) {
+        int xx = j - ny2;
+        for (int i = 0; i < kx_length; ++i) {
+            int yy = ny2 - i;
+            int index = (j + ny2) % ny * kx_length + i;
             int index2 = (yy + ny2) % ny * kx_length + xx;
             data_f[index][0] = data[index2][0];
             data_f[index][1] = data[index2][1] * flip;
         }
     }
     // lower half
-    for (int iy = 0; iy < ny2; ++iy) {
-        int xx = ny2 - iy;
-        for (int ix = 0; ix < kx_length - 1; ++ix) {
-            int yy = ny2 + ix;
-            int index = (iy + ny2) % ny * kx_length + ix;
+    for (int j = 0; j < ny2; ++j) {
+        int xx = ny2 - j;
+        for (int i = 0; i < kx_length - 1; ++i) {
+            int yy = ny2 + i;
+            int index = (j + ny2) % ny * kx_length + i;
             int index2 = (yy + ny2) % ny * kx_length + xx;
             data_f[index][0] = data[index2][0];
             data_f[index][1] = -data[index2][1] * flip;
         }
     }
-    // lower half with ix = kx_length - 1
-    int ix = kx_length -1;
+    // lower half with i = kx_length - 1
+    int i = kx_length -1;
     int yy = 0;
-    for (int iy = 0; iy < ny2; ++iy) {
-        int xx = nx2 - iy;
-        int index = (iy + ny2) % ny * kx_length + ix;
+    for (int j = 0; j < ny2; ++j) {
+        int xx = nx2 - j;
+        int index = (j + ny2) % ny * kx_length + i;
         int index2 = (yy + ny2) % ny * kx_length + xx;
         data_f[index][0] = data[index2][0];
         data_f[index][1] = -data[index2][1] * flip;
@@ -192,12 +279,14 @@ Image::_rotate90_f(int flip) {
 
 void
 Image::rotate90_f() {
+    assert_mode(this->mode & 2);
     Image::_rotate90_f(1);
 }
 
 
 void
 Image::irotate90_f() {
+    assert_mode(this->mode & 2);
     Image::_rotate90_f(-1);
 }
 
@@ -206,6 +295,7 @@ void
 Image::add_image_f(
     const py::array_t<std::complex<double>>& image
 ) {
+    assert_mode(this->mode & 2);
     auto r = image.unchecked<2>();
     for (ssize_t j = 0; j < ky_length ; ++j) {
         for (ssize_t i = 0; i < kx_length ; ++i) {
@@ -221,6 +311,7 @@ void
 Image::subtract_image_f(
     const py::array_t<std::complex<double>>& image
 ) {
+    assert_mode(this->mode & 2);
     auto r = image.unchecked<2>();
     for (ssize_t j = 0; j < ky_length ; ++j) {
         for (ssize_t i = 0; i < kx_length ; ++i) {
@@ -236,11 +327,12 @@ void
 Image::filter(
     const BaseModel& filter_model
 ) {
-    for (ssize_t iy = 0; iy < ky_length; ++iy) {
-        double ky = ((iy < ny2) ? iy : (iy - ny)) * dky ;
-        for (ssize_t ix = 0; ix < kx_length; ++ix) {
-            ssize_t index = iy * kx_length + ix;
-            double kx = ix * dkx;
+    assert_mode(this->mode & 2);
+    for (ssize_t j = 0; j < ky_length; ++j) {
+        double ky = ((j < ny2) ? j : (j - ny)) * dky ;
+        for (ssize_t i = 0; i < kx_length; ++i) {
+            ssize_t index = j * kx_length + i;
+            double kx = i * dkx;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
             std::complex<double> result = val * filter_model.apply(kx, ky);
             data_f[index][0] = result.real();
@@ -254,6 +346,7 @@ void
 Image::filter(
     const py::array_t<std::complex<double>>& filter_image
 ) {
+    assert_mode(this->mode & 2);
     auto r = filter_image.unchecked<2>();
     for (ssize_t j = 0; j < ky_length ; ++j) {
         for (ssize_t i = 0; i < kx_length ; ++i) {
@@ -271,6 +364,7 @@ py::array_t<double>
 Image::measure(
     const py::array_t<std::complex<double>>& filter_image
 ) const {
+    assert_mode(this->mode & 2);
     const ssize_t* shape = filter_image.shape();
     ssize_t nz = shape[0];
     ssize_t ny = shape[1];
@@ -312,13 +406,14 @@ Image::deconvolve(
     const BaseModel& psf_model,
     double klim
 ) {
+    assert_mode(this->mode & 2);
     double p0 = klim * klim;
-    for (int iy = 0; iy < ky_length; ++iy) {
-        double ky = ((iy < ny2) ? iy : (iy - ny)) * dky ;
-        for (int ix = 0; ix < kx_length; ++ix) {
-            double kx = ix * dkx;
+    for (int j = 0; j < ky_length; ++j) {
+        double ky = ((j < ny2) ? j : (j - ny)) * dky ;
+        for (int i = 0; i < kx_length; ++i) {
+            double kx = i * dkx;
             double r2 = kx * kx + ky * ky;
-            int index = iy * kx_length + ix;
+            int index = j * kx_length + i;
             if (r2 > p0) {
                 data_f[index][0] = 0.0;
                 data_f[index][1] = 0.0;
@@ -338,6 +433,7 @@ Image::deconvolve(
     const py::array_t<std::complex<double>>& psf_image,
     double klim
 ) {
+    assert_mode(this->mode & 2);
     double p0 = klim * klim;
     auto rd = psf_image.unchecked<2>();
     for (int j = 0; j < ky_length; ++j) {
@@ -362,6 +458,7 @@ Image::deconvolve(
 
 py::array_t<std::complex<double>>
 Image::draw_f() const {
+    assert_mode(this->mode & 2);
     // Prepare data_fput array
     auto result = py::array_t<std::complex<double>>({ky_length, kx_length});
     auto r = result.mutable_unchecked<2>(); // Accessor
@@ -378,6 +475,7 @@ Image::draw_f() const {
 
 py::array_t<double>
 Image::draw_r() const {
+    assert_mode(this->mode & 1);
     auto result = py::array_t<double>({ny, nx});
     auto r = result.mutable_unchecked<2>();
     for (ssize_t j = 0; j < ny; ++j) {
@@ -405,10 +503,11 @@ void
 pyExportImage(py::module& m) {
     py::module_ image = m.def_submodule("image", "submodule for convolution");
     py::class_<Image>(image, "Image")
-        .def(py::init<int, int, double, bool>(),
+        .def(py::init<int, int, double, bool, unsigned int>(),
             "Initialize the Convolution object using an ndarray",
             py::arg("nx"), py::arg("ny"), py::arg("scale"),
-            py::arg("use_estimate")=false
+            py::arg("use_estimate")=false,
+            py::arg("mode")=3
         )
         .def("set_r",
             static_cast<void (Image::*)(const py::array_t<double>&, bool)>(&Image::set_r),
@@ -417,7 +516,8 @@ pyExportImage(py::module& m) {
             py::arg("ishift")=false
         )
         .def("set_r",
-            static_cast<void (Image::*)(const py::array_t<double>&, int, int)>(&Image::set_r),
+            static_cast<void (Image::*)(const py::array_t<double>&, int, int)>
+            (&Image::set_r),
             "Sets up the image in configuration space",
             py::arg("input"),
             py::arg("x"),
@@ -426,6 +526,21 @@ pyExportImage(py::module& m) {
         .def("set_f", &Image::set_f,
             "Sets up the image in Fourier space",
             py::arg("input")
+        )
+        .def("set_noise_f",
+            static_cast<void (Image::*)(unsigned int, double)>
+            (&Image::set_noise_f),
+            "Sets up the noise image in Fourier space",
+            py::arg("seed"),
+            py::arg("noise_std")
+        )
+        .def("set_noise_f",
+            static_cast<void (Image::*)(unsigned int, double, const BaseModel&)>
+            (&Image::set_noise_f),
+            "Sets up the noise image in Fourier space",
+            py::arg("seed"),
+            py::arg("noise_std"),
+            py::arg("filter_model")
         )
         .def("fft", &Image::fft,
             "Conducts forward Fourier Trasform"
@@ -440,7 +555,8 @@ pyExportImage(py::module& m) {
             "Rotates the image by 90 degree clockwise"
         )
         .def("filter",
-            static_cast<void (Image::*)(const BaseModel&)>(&Image::filter),
+            static_cast<void (Image::*)(const BaseModel&)>
+            (&Image::filter),
             "Convolve method with model object",
             py::arg("filter_model")
         )

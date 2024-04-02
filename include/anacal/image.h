@@ -20,8 +20,17 @@ namespace anacal {
         // Preventing copy (implement these if you need copy semantics)
         Image(const Image&) = delete;
         Image& operator=(const Image&) = delete;
+        unsigned int mode;
 
         void _rotate90_f(int);
+
+        void assert_mode(unsigned int condition) const {
+            if (condition==0) {
+                throw std::runtime_error(
+                    "Error: The Image object has a wrong mode."
+                );
+            }
+        }
     public:
         int ny, nx;
         double scale=1;
@@ -30,7 +39,8 @@ namespace anacal {
             int nx,
             int ny,
             double scale,
-            bool use_estimate=false
+            bool use_estimate=false,
+            unsigned int mode=3
         );
 
         void set_r(const py::array_t<double>&, bool);
@@ -38,6 +48,10 @@ namespace anacal {
         void set_r(const py::array_t<double>&, int, int);
 
         void set_f(const py::array_t<std::complex<double>>&);
+
+        void set_noise_f(unsigned int, double);
+
+        void set_noise_f(unsigned int, double, const BaseModel&);
 
         void fft();
 

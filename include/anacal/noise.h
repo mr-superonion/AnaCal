@@ -4,28 +4,22 @@
 #include "image.h"
 
 namespace anacal {
-    class FpfsImage {
+    class NoiseImage {
     private:
         // Preventing copy (implement these if you need copy semantics)
-        FpfsImage(const FpfsImage&) = delete;
-        FpfsImage& operator=(const FpfsImage&) = delete;
+        NoiseImage(const NoiseImage&) = delete;
+        NoiseImage& operator=(const NoiseImage&) = delete;
         Image cimg;
-        double fft_ratio;
-        const py::array_t<double> psf_array;
+        double std_f;
     public:
         double scale = 1.0;
-        double sigma_arcsec;
-        double klim;
-        double sigma_f;
         int nx, ny;
 
-        FpfsImage(
+        NoiseImage(
             int nx,
             int ny,
             double scale,
-            double sigma_arcsec,
-            double klim,
-            const py::array_t<double>& psf_array,
+            double noise_std,
             bool use_estimate=false
         );
 
@@ -67,13 +61,13 @@ namespace anacal {
             bool do_rotate=false
         );
 
-        FpfsImage(FpfsImage&& other) noexcept = default;
-        FpfsImage& operator=(FpfsImage&& other) noexcept = default;
+        NoiseImage(NoiseImage&& other) noexcept = default;
+        NoiseImage& operator=(NoiseImage&& other) noexcept = default;
 
-        ~FpfsImage();
+        ~NoiseImage();
     };
 
-    void pyExportFpfs(py::module& m);
+    void pyExportNoise(py::module& m);
 }
 
 #endif // FPFS_H

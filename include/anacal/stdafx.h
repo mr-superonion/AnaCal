@@ -7,7 +7,10 @@
 #include <complex>
 #include <tuple>
 #include <cmath>
+#include <random>
 #include <iostream>
 
-
 namespace py = pybind11;
+
+constexpr double one_over_sqrt2 = 0.7071067811865475;
+
