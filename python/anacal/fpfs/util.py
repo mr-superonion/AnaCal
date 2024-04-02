@@ -1,14 +1,9 @@
-import logging
 import math
 
 import numpy as np
 from numpy.typing import NDArray
 
-logging.basicConfig(
-    format="%(asctime)s %(message)s",
-    datefmt="%Y/%m/%d %H:%M:%S --- ",
-    level=logging.INFO,
-)
+from ..base import AnacalBase
 
 
 def get_shapelets_col_names(nord: int) -> tuple[list, list]:
@@ -86,7 +81,7 @@ def get_det_col_names(det_nrot: int) -> list[str]:
     return name_d
 
 
-class FpfsTask(object):
+class FpfsTask(AnacalBase):
     """A base class for measurement
 
     Args:
@@ -96,6 +91,7 @@ class FpfsTask(object):
     nord (int):             the highest order of Shapelets radial
                             components [default: 4]
     det_nrot (int):         number of rotation in the detection kernel
+    verbose (bool):         whether print out INFO
     """
 
     def __init__(
@@ -105,7 +101,9 @@ class FpfsTask(object):
         sigma_arcsec: float,
         nord: int = 4,
         det_nrot: int = 8,
+        verbose: bool = False,
     ) -> None:
+        super().__init__(verbose)
         self.psf_array = psf_array
         self.nord = nord
         name_s, _ = get_shapelets_col_names(nord)
@@ -120,9 +118,7 @@ class FpfsTask(object):
         self.det_nrot = det_nrot
         self.sigma_arcsec = sigma_arcsec
         if sigma_arcsec <= 0.0 or sigma_arcsec > 5.0:
-            raise ValueError(
-                "sigma_arcsec should be positive and less than 5 arcsec"
-            )
+            raise ValueError("sigma_arcsec should be positive and less than 5 arcsec")
         self.ngrid = psf_array.shape[0]
 
         # Preparing PSF
@@ -135,11 +131,8 @@ class FpfsTask(object):
 
         # the following two assumes pixel_scale = 1
         self.sigmaf = float(self.pix_scale / sigma_arcsec)
-        logging.info("Order of the shear estimator: nord=%d" % self.nord)
-        logging.info(
-            "Shapelet kernel in configuration space: sigma= %.4f arcsec"
-            % (sigma_arcsec)
-        )
+        self.logger.info("Order of the shear estimator: nord=%d" % self.nord)
+        self.logger.info("Shapelet kernel in configuration space: sigma= %.4f arcsec" % (sigma_arcsec))
         # effective nyquest wave number
         self.klim_pix = get_klim(
             psf_pow=psf_pow,
@@ -147,20 +140,14 @@ class FpfsTask(object):
             thres=1e-20,
         )  # in pixel units
         self.klim = float(self.klim_pix * self._dk)
-        logging.info("Maximum |k| is %.3f" % (self.klim))
-
+        self.logger.info("Maximum |k| is %.3f" % (self.klim))
         self.prepare_fpfs_bases()
         return
 
     def get_stds(self, cov_mat):
-
         std_modes = np.sqrt(np.diagonal(cov_mat))
         std_m00 = std_modes[self.di["m00"]]
-        std_v = np.average(
-            np.array(
-                [std_modes[self.di["v%d" % _]] for _ in range(self.det_nrot)]
-            )
-        )
+        std_v = np.average(np.array([std_modes[self.di["v%d" % _]] for _ in range(self.det_nrot)]))
         return std_m00, std_v
 
     def prepare_fpfs_bases(self):
@@ -200,10 +187,7 @@ class FpfsTask(object):
         return coords
 
 
-def gauss_kernel_rfft(
-    ny: int, nx: int, sigma: float,
-    klim: float, return_grid: bool = False
-):
+def gauss_kernel_rfft(ny: int, nx: int, sigma: float, klim: float, return_grid: bool = False):
     """Generates a Gaussian kernel on grids for np.fft.rfft transform
     The kernel is truncated at radius klim.
 
@@ -246,7 +230,13 @@ def shapelets2d_func(ngrid: int, nord: int, sigma: float, klim: float):
     """
 
     mord = nord
-    gaufunc, (yfunc, xfunc) = gauss_kernel_rfft(ngrid, ngrid, sigma, klim, return_grid=True)
+    gaufunc, (yfunc, xfunc) = gauss_kernel_rfft(
+        ngrid,
+        ngrid,
+        sigma,
+        klim,
+        return_grid=True,
+    )
     rfunc = np.sqrt(xfunc**2.0 + yfunc**2.0)  # radius
     r2_over_sigma2 = (rfunc / sigma) ** 2.0
     ny, nx = gaufunc.shape
@@ -337,7 +327,11 @@ def detlets2d(
     """
     # Gaussian Kernel
     gauss_ker, (k2grid, k1grid) = gauss_kernel_rfft(
-        ngrid, ngrid, sigma, klim, return_grid=True,
+        ngrid,
+        ngrid,
+        sigma,
+        klim,
+        return_grid=True,
     )
     # for inverse Fourier transform
     gauss_ker = gauss_ker / ngrid**2.0
@@ -377,7 +371,11 @@ def get_klim(psf_pow: NDArray, sigma: float, thres: float = 1e-20) -> float:
     """
     ngrid = psf_pow.shape[0]
     gaussian, (y, x) = gauss_kernel_rfft(
-        ngrid, ngrid, sigma, np.pi, return_grid=True,
+        ngrid,
+        ngrid,
+        sigma,
+        np.pi,
+        return_grid=True,
     )
     r = np.sqrt(x**2.0 + y**2.0)  # radius
     mask = gaussian / psf_pow < thres
@@ -385,6 +383,7 @@ def get_klim(psf_pow: NDArray, sigma: float, thres: float = 1e-20) -> float:
     klim_pix = round(float(np.min(r[mask]) / dk))
     klim_pix = min(max(klim_pix, ngrid // 5), ngrid // 2 - 1)
     return klim_pix
+
 
 def truncate_square(arr: NDArray, rcut: int) -> None:
     """Truncate the input array with square
