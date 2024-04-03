@@ -19,7 +19,10 @@ def setup_custom_logger(verbose: bool = False):
     logger.setLevel(level)
 
     if not logger.handlers:
-        formatter = logging.Formatter(fmt="%(asctime)s %(message)s", datefmt="%Y/%m/%d %H:%M:%S --- ")
+        formatter = logging.Formatter(
+            fmt="%(asctime)s %(message)s",
+            datefmt="%Y/%m/%d %H:%M:%S --- ",
+        )
         handler = logging.StreamHandler()
         handler.setFormatter(formatter)
         handler.setLevel(level)

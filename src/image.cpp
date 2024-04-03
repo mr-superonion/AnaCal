@@ -211,7 +211,7 @@ Image::set_noise_f(
         ssize_t ji = j * kx_length;
         for (ssize_t i = 0; i < kx_length; ++i) {
             ssize_t index = ji + i;
-            double ff = std::sqrt(r(j, i).real());
+            double ff = std::sqrt(std::abs(r(j, i).real()));
             data_f[index][0] = dist(engine) * ff;
             data_f[index][1] = dist(engine) * ff;
         }

@@ -33,10 +33,14 @@ simulate_noise(
     const py::array_t<double>& correlation,
     int nx,
     int ny,
-    double scale
+    double scale,
+    bool do_rotate=false
 ) {
     Image image(nx, ny, scale);
     image.set_noise_f(seed, correlation);
+    if (do_rotate){
+        image.rotate90_f();
+    }
     image.ifft();
     py::array_t<double> result = image.draw_r();
     return result;
@@ -85,14 +89,15 @@ pyExportNoise(py::module& m) {
     );
     noise.def("simulate_noise",
         py::overload_cast
-        <unsigned int, const py::array_t<double>&, int, int, double>
+        <unsigned int, const py::array_t<double>&, int, int, double, bool>
             (&simulate_noise),
         "simulate noise in configuration space",
         py::arg("seed"),
         py::arg("correlation"),
         py::arg("nx"),
         py::arg("ny"),
-        py::arg("scale")
+        py::arg("scale"),
+        py::arg("do_rotate")=false
     );
     noise.def("simulate_noise_correlation",
         py::overload_cast
