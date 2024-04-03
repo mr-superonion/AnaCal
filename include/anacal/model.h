@@ -71,6 +71,16 @@ namespace anacal {
         std::complex<double> fValue(double, double) const override;
     };
 
+    /// Gaussian convolved with Tophat Function
+    class GaussianTopHat2 : public BaseModel {
+    private:
+        double d, sigma;
+        double _p0;
+    public:
+        GaussianTopHat2(double, double);
+        std::complex<double> fValue(double, double) const override;
+    };
+
     void pyExportModel(py::module& m);
 }
 #endif

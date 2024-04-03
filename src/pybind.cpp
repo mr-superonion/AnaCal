@@ -7,6 +7,6 @@ namespace anacal {
         pyExportModel(m);
         pyExportImage(m);
         pyExportFpfs(m);
-
+        pyExportNoise(m);
     }
 }

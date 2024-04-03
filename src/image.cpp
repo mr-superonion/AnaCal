@@ -58,7 +58,7 @@ Image::Image(
 void
 Image::set_r (
     const py::array_t<double>& input,
-    bool ishift=false
+    bool ishift
 ) {
     assert_mode(this->mode & 1);
     const ssize_t* shape = input.shape();
@@ -90,6 +90,19 @@ Image::set_r (
     return;
 }
 
+void
+Image::set_delta_r (bool ishift) {
+    std::fill_n(data_r, ny * nx, 0.0);
+    if (ishift){
+        data_r[0] = 1.0;
+    } else {
+        ssize_t jj = ny / 2;
+        ssize_t ii = nx / 2;
+        data_r[jj * nx + ii] = 1.0;
+    }
+    return;
+}
+
 
 void
 Image::set_r (
@@ -109,13 +122,14 @@ Image::set_r (
         (xbeg < 0) || (ybeg < 0) ||
         (xend > arr_nx) || (yend > arr_ny)
     ) {
-        throw std::runtime_error("Error: Too close to boundary");
+        throw std::runtime_error(
+            "Error: Stamp is too close to exposure boundary"
+        );
     }
-    ssize_t index = 0;
     for (ssize_t j = ybeg; j < yend; ++j) {
+        int ji = (j - ybeg) * nx;
         for (ssize_t i = xbeg; i < xend; ++i) {
-            data_r[index] = r(j, i);
-            index += 1;
+            data_r[ji + i - xbeg] = r(j, i);
         }
     }
     return;
@@ -129,13 +143,28 @@ Image::set_f(
     assert_mode(this->mode & 2);
     auto r = input.unchecked<2>();
     for (ssize_t j = 0; j < ky_length ; ++j) {
+        int ji = j * kx_length;
         for (ssize_t i = 0; i < kx_length ; ++i) {
-            int index = j * kx_length + i;
+            int index = ji + i;
             data_f[index][0] = r(j, i).real();
             data_f[index][1] = r(j, i).imag();
         }
     }
     return;
+}
+
+
+void
+Image::set_delta_f() {
+    assert_mode(this->mode & 2);
+    for (ssize_t j = 0; j < ky_length; ++j) {
+        ssize_t ji = j * kx_length;
+        for (ssize_t i = 0; i < kx_length; ++i) {
+            ssize_t index = ji + i;
+            data_f[index][0] = 1.0;
+            data_f[index][1] = 0.0;
+        }
+    }
 }
 
 
@@ -154,6 +183,37 @@ Image::set_noise_f(
             ssize_t index = ji + i;
             data_f[index][0] = dist(engine);
             data_f[index][1] = dist(engine);
+        }
+    }
+}
+
+
+void
+Image::set_noise_f(
+    unsigned int seed,
+    const py::array_t<double>& correlation
+) {
+
+    assert_mode(this->mode & 2);
+
+    py::array_t<std::complex<double>> ps = compute_fft(
+        nx,
+        ny,
+        correlation,
+        true
+    );
+    auto r = ps.unchecked<2>();
+
+    std::mt19937 engine(seed);
+    double std_f = std::sqrt(nx * ny / 2.0);
+    std::normal_distribution<double> dist(0.0, std_f);
+    for (ssize_t j = 0; j < ky_length; ++j) {
+        ssize_t ji = j * kx_length;
+        for (ssize_t i = 0; i < kx_length; ++i) {
+            ssize_t index = ji + i;
+            double ff = std::sqrt(r(j, i).real());
+            data_f[index][0] = dist(engine) * ff;
+            data_f[index][1] = dist(engine) * ff;
         }
     }
 }
@@ -474,13 +534,25 @@ Image::draw_f() const {
 
 
 py::array_t<double>
-Image::draw_r() const {
+Image::draw_r(bool ishift) const {
     assert_mode(this->mode & 1);
     auto result = py::array_t<double>({ny, nx});
     auto r = result.mutable_unchecked<2>();
-    for (ssize_t j = 0; j < ny; ++j) {
-        for (ssize_t i = 0; i < nx; ++i) {
-            r(j, i) = data_r[j * nx + i];
+    if (ishift) {
+        for (ssize_t j = 0; j < ny; ++j) {
+            ssize_t jj = (j + ny2) % ny;
+            ssize_t ji = jj * nx;
+            for (ssize_t i = 0; i < nx; ++i) {
+                ssize_t ii = (i + nx2) % nx;
+                r(j, i) = data_r[ji + ii];
+            }
+        }
+    } else {
+        for (ssize_t j = 0; j < ny; ++j) {
+            ssize_t ji = j * nx;
+            for (ssize_t i = 0; i < nx; ++i) {
+                r(j, i) = data_r[ji + i];
+            }
         }
     }
     return result;
@@ -530,14 +602,21 @@ pyExportImage(py::module& m) {
         .def("set_noise_f",
             static_cast<void (Image::*)(unsigned int, double)>
             (&Image::set_noise_f),
-            "Sets up the noise image in Fourier space",
+            "Sets up white noise image in Fourier space",
             py::arg("seed"),
             py::arg("noise_std")
         )
         .def("set_noise_f",
+            static_cast<void (Image::*)(unsigned int, const py::array_t<double>&)>
+            (&Image::set_noise_f),
+            "Sets up noise image in Fourier space using correlation function",
+            py::arg("seed"),
+            py::arg("correlation")
+        )
+        .def("set_noise_f",
             static_cast<void (Image::*)(unsigned int, double, const BaseModel&)>
             (&Image::set_noise_f),
-            "Sets up the noise image in Fourier space",
+            "Sets up noise image in Fourier space using model",
             py::arg("seed"),
             py::arg("noise_std"),
             py::arg("filter_model")
@@ -599,11 +678,26 @@ pyExportImage(py::module& m) {
             py::arg("klim")
         )
         .def("draw_r", &Image::draw_r,
-            "This function draws the image in configuration space"
+            "This function draws the image in configuration space",
+            py::arg("ishift")=false
         )
         .def("draw_f", &Image::draw_f,
             "This function draws the image's real fft"
         );
+}
+
+py::array_t<std::complex<double>>
+compute_fft(
+    int nx,
+    int ny,
+    const py::array_t<double>& data_in,
+    bool ishift
+) {
+    Image image(nx, ny, 1.0);
+    image.set_r(data_in, ishift);
+    image.fft();
+    py::array_t<std::complex<double>> data_out = image.draw_f();
+    return data_out;
 }
 
 }

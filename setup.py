@@ -14,7 +14,10 @@ ext_modules = []
 ext_modules.append(
     Extension(
         "anacal._anacal",  # Name of the module
-        ["src/pybind.cpp", "src/image.cpp", "src/model.cpp", "src/fpfs.cpp"],
+        [
+            "src/pybind.cpp", "src/image.cpp", "src/model.cpp", "src/fpfs.cpp",
+            "src/noise.cpp"
+         ],
         include_dirs=lib_dirs,  # Include directories for header files
         libraries=["fftw3"],
         language="c++",

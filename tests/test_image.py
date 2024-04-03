@@ -32,8 +32,10 @@ def test_fft(ny=128, nx=64):
     img_obj.set_r(data)
     img_obj.fft()
     img_obj.ifft()
-    data2 = img_obj.draw_r()
+    data2 = img_obj.draw_r(False)
     np.testing.assert_almost_equal(data, data2)
+    data3 = img_obj.draw_r(True)
+    np.testing.assert_almost_equal(np.fft.fftshift(data2), data3)
     return
 
 

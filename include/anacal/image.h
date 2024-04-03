@@ -43,23 +43,25 @@ namespace anacal {
             unsigned int mode=3
         );
 
-        void set_r(const py::array_t<double>&, bool);
+        void set_r(const py::array_t<double>&, bool ishift=false);
 
         void set_r(const py::array_t<double>&, int, int);
 
+        void set_delta_r(bool ishift=false);
+
         void set_f(const py::array_t<std::complex<double>>&);
 
+        void set_delta_f();
+
         void set_noise_f(unsigned int, double);
+
+        void set_noise_f(unsigned int, const py::array_t<double>&);
 
         void set_noise_f(unsigned int, double, const BaseModel&);
 
         void fft();
 
         void ifft();
-
-        const double* view_data_r() const {return data_r;}
-
-        const fftw_complex* view_data_f() const {return data_f;}
 
         void add_image_f(const py::array_t<std::complex<double>>&);
 
@@ -81,13 +83,21 @@ namespace anacal {
 
         py::array_t<std::complex<double>> draw_f() const;
 
-        py::array_t<double> draw_r() const;
+        py::array_t<double> draw_r(bool ishift=false) const;
 
         Image(Image&& other) noexcept = default;
         Image& operator=(Image&& other) noexcept = default;
 
         ~Image();
     };
+
+    py::array_t<std::complex<double>>
+    compute_fft(
+        int nx,
+        int ny,
+        const py::array_t<double>& data_in,
+        bool ishift=false
+    );
 
     void pyExportImage(py::module& m);
 }

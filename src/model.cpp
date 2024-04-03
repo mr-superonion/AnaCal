@@ -69,6 +69,18 @@ GaussianTopHat::fValue(double kx, double ky) const {
     return std::complex<double>(factorX * factorY * 0.25, 0.0);
 }
 
+// Gaussian Tophat
+GaussianTopHat2::GaussianTopHat2(double d, double sigma) : d(d), sigma(sigma) {
+    _p0 = 1.0 / (std::sqrt(2) * sigma);
+}
+std::complex<double>
+GaussianTopHat2::fValue(double kx, double ky) const {
+    double factorX = std::erf((kx + d) * _p0) - std::erf((kx - d) * _p0);
+    double factorY = std::erf((ky + d) * _p0) - std::erf((ky - d) * _p0);
+    double result = factorX * factorY * 0.25;
+    return std::complex<double>(result * result, 0.0);
+}
+
 py::array_t<std::complex<double>>
 BaseModel::draw(double scale, int nx, int ny) const {
     // Grid dimensions
@@ -125,6 +137,12 @@ void pyExportModel(py::module& m) {
     py::class_<GaussianTopHat, BaseModel>(model, "GaussianTopHat")
         .def(py::init<double, double>(),
             "Gaussian convolved with top-hat basis function",
+            py::arg("d"), py::arg("sigma")
+        );
+
+    py::class_<GaussianTopHat2, BaseModel>(model, "GaussianTopHat2")
+        .def(py::init<double, double>(),
+            "Square ofGaussian convolved with top-hat basis function",
             py::arg("d"), py::arg("sigma")
         );
 

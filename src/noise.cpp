@@ -3,55 +3,107 @@
 
 namespace anacal {
 
-NoiseImage::NoiseImage(
+py::array_t<double>
+simulate_noise(
+    unsigned int seed,
+    double noise_std,
     int nx,
     int ny,
-    double scale,
-    double noise_std,
-    bool use_estimate
-): cimg(nx, ny, scale, use_estimate) {
-    this->nx = nx;
-    this->ny = ny;
-    this->scale = scale;
-    std_f = std::sqrt(nx * ny / 2.0) * noise_std;
-    return;
-}
-
-
-NoiseImage::update_noise(
-    unsigned int seed,
-    const BaseModel filter_model,
+    double scale
 ) {
+
     std::mt19937 engine(seed);
-    std::normal_distribution<double> dist(0.0, std_f);
+    std::normal_distribution<double> dist(0.0, noise_std);
+
+    auto result = py::array_t<double>({ny, nx});
+    auto r = result.mutable_unchecked<2>();
+
+    for (ssize_t j = 0; j < ny; ++j) {
+        for (ssize_t i = 0; i < nx; ++i) {
+            r(j, i) = dist(engine);
+        }
+    }
+    return result;
 }
 
 
-py::array_t<double>&
-NoiseImage::draw_r() const {
-    return this->cimg.draw_r();
+py::array_t<double>
+simulate_noise(
+    unsigned int seed,
+    const py::array_t<double>& correlation,
+    int nx,
+    int ny,
+    double scale
+) {
+    Image image(nx, ny, scale);
+    image.set_noise_f(seed, correlation);
+    image.ifft();
+    py::array_t<double> result = image.draw_r();
+    return result;
 }
 
-py::array_t<std::complex<double>>&
-NoiseImage::draw_f() const {
-    return this->cimg.draw_f();
-}
 
-
-
-NoiseImage::~NoiseImage() {
+py::array_t<double>
+simulate_noise_correlation(
+    double noise_std,
+    const BaseModel& corr_model,
+    int nx,
+    int ny,
+    double scale
+) {
+    Image image(nx, ny, scale);
+    image.set_delta_f();
+    image.filter(corr_model);
+    image.ifft();
+    // shift to center
+    py::array_t<double> result = image.draw_r(true);
+    auto r = result.mutable_unchecked<2>();
+    double ratio = noise_std * noise_std / r(ny / 2, nx / 2);
+    for (ssize_t j = 0; j < ny; ++j) {
+        for (ssize_t i = 0; i < nx; ++i) {
+            r(j, i) = r(j, i) * ratio;
+        }
+    }
+    return result;
 }
 
 
 void
 pyExportNoise(py::module& m) {
-    py::module_ fpfs = m.def_submodule("fpfs", "submodule for FPFS shear estimation");
-    py::class_<NoiseImage>(fpfs, "NoiseImage")
-        .def(py::init<int, int, double, bool>(),
-            "Initialize the NoiseImage object using an ndarray",
-            py::arg("nx"), py::arg("ny"),
-            py::arg("scale"), py::arg("sigma_arcsec"),
-            py::arg("use_estimate")=false
-        );
+    py::module_ noise = m.def_submodule(
+        "noise", "submodule for noise simulation"
+    );
+    noise.def("simulate_noise",
+        py::overload_cast<unsigned int, double, int, int, double>
+            (&simulate_noise),
+        "simulate noise in configuration space",
+        py::arg("seed"),
+        py::arg("noise_std"),
+        py::arg("nx"),
+        py::arg("ny"),
+        py::arg("scale")
+    );
+    noise.def("simulate_noise",
+        py::overload_cast
+        <unsigned int, const py::array_t<double>&, int, int, double>
+            (&simulate_noise),
+        "simulate noise in configuration space",
+        py::arg("seed"),
+        py::arg("correlation"),
+        py::arg("nx"),
+        py::arg("ny"),
+        py::arg("scale")
+    );
+    noise.def("simulate_noise_correlation",
+        py::overload_cast
+        <double, const BaseModel&, int, int, double>
+            (&simulate_noise_correlation),
+        "simulate noise in configuration space",
+        py::arg("noise_std"),
+        py::arg("corr_model"),
+        py::arg("nx"),
+        py::arg("ny"),
+        py::arg("scale")
+    );
 }
 }
