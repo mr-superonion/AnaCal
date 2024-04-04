@@ -53,8 +53,6 @@ namespace anacal {
 
         void set_delta_f();
 
-        void set_noise_f(unsigned int, double);
-
         void set_noise_f(unsigned int, const py::array_t<double>&);
 
         void fft();

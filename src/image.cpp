@@ -171,50 +171,6 @@ Image::set_delta_f() {
 void
 Image::set_noise_f(
     unsigned int seed,
-    double noise_std
-) {
-    assert_mode(this->mode & 2);
-    double std_f = noise_std * std::sqrt(nx * ny / 2.0);
-    std::mt19937 engine(seed);
-    std::normal_distribution<double> dist(0.0, std_f);
-
-    for (ssize_t j = 0; j < ky_length; ++j) {
-        ssize_t ji = j * kx_length;
-        for (ssize_t i = 0; i < kx_length; ++i) {
-            ssize_t index = ji + i;
-            data_f[index][0] = dist(engine);
-            data_f[index][1] = dist(engine);
-        }
-    }
-
-    // k=0
-    data_f[0][0] = std::sqrt(2.0) * dist(engine);
-    data_f[0][1] = 0.0;
-
-    for (ssize_t j = 1; j < ny2; ++j) {
-        ssize_t j2 = -j + ny;
-        {
-            ssize_t i = 0;
-            ssize_t index = j * kx_length + i;
-            ssize_t index2 = j2 * kx_length + i;
-            data_f[index][0] = data_f[index2][0];
-            data_f[index][1] = -data_f[index2][1];
-        }
-
-        {
-            ssize_t i = kx_length - 1;
-            ssize_t index = j * kx_length + i;
-            ssize_t index2 = j2 * kx_length + i;
-            data_f[index][0] = data_f[index2][0];
-            data_f[index][1] = -data_f[index2][1];
-        }
-    }
-}
-
-
-void
-Image::set_noise_f(
-    unsigned int seed,
     const py::array_t<double>& correlation
 ) {
 
@@ -241,10 +197,30 @@ Image::set_noise_f(
         }
     }
 
-    // k=0
-    double ff = std::sqrt(2.0 * std::abs(r(0, 0)));
-    data_f[0][0] = ff * dist(engine);
-    data_f[0][1] = 0.0;
+    {
+        // k = (0, 0)
+        double ff = std::sqrt(2.0 * std::abs(r(0, 0)));
+        data_f[0][0] = ff * dist(engine);
+        data_f[0][1] = 0.0;
+
+        // k = (0, ny / 2)
+        // F(0, ny / 2)  = F(0, -ny / 2)
+        // F(0, ny / 2)  = F(0, -ny / 2) *
+        ssize_t i = 0;
+        ssize_t j = ny2;
+        ssize_t index = j * kx_length + i;
+        data_f[index][0] = ff * dist(engine);
+        data_f[index][1] = 0.0;
+
+        // k = (nx / 2, 0)
+        // F(nx / 2, 0)  = F(-nx / 2, 0)
+        // F(nx / 2, 0)  = F(-nx / 2, 0) *
+        i = nx2;
+        j = 0;
+        index = j * kx_length + i;
+        data_f[index][0] = ff * dist(engine);
+        data_f[index][1] = 0.0;
+    }
 
     for (ssize_t j = 1; j < ny2; ++j) {
         ssize_t j2 = -j + ny;
@@ -257,7 +233,7 @@ Image::set_noise_f(
         }
 
         {
-            ssize_t i = kx_length - 1;
+            ssize_t i = nx2;
             ssize_t index = j * kx_length + i;
             ssize_t index2 = j2 * kx_length + i;
             data_f[index][0] = data_f[index2][0];
@@ -596,13 +572,6 @@ pyExportImage(py::module& m) {
         .def("set_f", &Image::set_f,
             "Sets up the image in Fourier space",
             py::arg("input")
-        )
-        .def("set_noise_f",
-            static_cast<void (Image::*)(unsigned int, double)>
-            (&Image::set_noise_f),
-            "Sets up white noise image in Fourier space",
-            py::arg("seed"),
-            py::arg("noise_std")
         )
         .def("set_noise_f",
             static_cast<void (Image::*)(unsigned int, const py::array_t<double>&)>

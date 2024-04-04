@@ -4,8 +4,40 @@ import numpy as np
 import pytest
 
 
+def rfft2_to_fft2(rfft2_output, original_shape):
+    """
+    Transforms the output of np.fft.rfft2 (real input FFT) into the format
+    of np.fft.fft2 (full complex FFT), given the original shape of the data.
+
+    Parameters:
+    rfft2_output: Output of np.fft.rfft2.
+    original_shape: Shape of the original 2D data before FFT.
+
+    Returns:
+        A numpy array with the same shape and content that would have been
+        obtained using np.fft.fft2 on the original real data.
+    """
+    # Create an empty array with the original shape for the full FFT result
+    full_fft = np.zeros(original_shape, dtype=np.complex128)
+
+    # The first half (positive frequencies) can be copied directly
+    full_fft[:, :rfft2_output.shape[1]] = rfft2_output
+
+    # For the negative frequencies (excluding DC and Nyquist if even-sized
+    # signal)
+    for x in range(1, original_shape[0]):
+        for y in range(1, original_shape[1] - rfft2_output.shape[1]):
+            full_fft[-x, -y] = np.conj(rfft2_output[x, y])
+
+    # Handle the Nyquist frequency for even-sized signals
+    if original_shape[1] % 2 == 0:
+        full_fft[:, -1] = np.conj(full_fft[:, 1])
+
+    return full_fft
+
+
 @pytest.mark.parametrize("noise_std", [0.1, 0.2, 0.5])
-def test_noise_sim(noise_std):
+def test_noise_sim_correlated(noise_std):
     ngrid = 32
     scale = 0.2
     d = np.pi * 0.8 / scale
@@ -35,6 +67,8 @@ def test_noise_sim(noise_std):
     )
     np.testing.assert_allclose(np.std(noise_array), noise_std, rtol=1e-3)
     np.testing.assert_allclose(0.0, np.average(noise_array), atol=1e-3, rtol=0)
+    noise_imag = rfft2_to_fft2(noise_array, (ngrid2, ngrid2)).imag
+    np.testing.assert_almost_equal(noise_imag, 0.0)
 
     noise_array2 = anacal.noise.simulate_noise(
         seed=seed,
@@ -51,6 +85,8 @@ def test_noise_sim(noise_std):
         fpfs.image.util.rotate90(noise_array)[1:, 1:],
         noise_array2[1:, 1:],
     )
+    noise_imag = rfft2_to_fft2(noise_array2, (ngrid2, ngrid2)).imag
+    np.testing.assert_almost_equal(noise_imag, 0.0)
     return
 
 
