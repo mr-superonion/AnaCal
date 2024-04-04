@@ -7,7 +7,7 @@ import pytest
 ngrid = 64
 
 
-def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=12):
+def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=4):
     psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(e1=0.02, e2=-0.02)
 
     psf_data = (
@@ -87,10 +87,30 @@ def do_test(scale, seed, rcut, gcomp):
         [mtask.run(gal_array=gal_list[i], psf_array=psf_list[i]) for i in range(nrot)]
     )
     np.testing.assert_almost_equal(mms, mms2)
+
+    # Or in each case, simulate nrot galaxies
+    n_tests = 10
+    gal_list = [gal_data] * n_tests
+    psf_list = [psf_data] * n_tests
+    mms = np.vstack(
+        [
+            mtask.run(
+                gal_array=gal_list[i],
+                det=coords,
+                psf_array=psf_list[i]
+            ) for i in range(n_tests)
+        ]
+    )
+    mms = mtask.get_results(mms)
+    ells = anacal.fpfs.catalog.m2e(mms, const=8)
+    g1_est = np.average(ells["fpfs_e1"]) / np.average(ells["fpfs_R1E"])
+    g2_est = np.average(ells["fpfs_e2"]) / np.average(ells["fpfs_R2E"])
+    assert np.abs(g1_est - g1) < 3e-5
+    assert np.abs(g2_est - g2) < 3e-5
     return
 
 
 @pytest.mark.parametrize("seed", [12, 23, 42])
 def test_shear_estimation(seed):
-    do_test(0.168, seed, 32, "g1")
+    do_test(0.2, seed, 32, "g1")
     return
