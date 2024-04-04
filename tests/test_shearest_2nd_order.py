@@ -10,8 +10,14 @@ ngrid = 64
 def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=12):
     psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(e1=0.02, e2=-0.02)
 
-    psf_data = psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(nx=ngrid, ny=ngrid, scale=scale).array
-    psf_data = psf_data[ngrid // 2 - rcut : ngrid // 2 + rcut, ngrid // 2 - rcut : ngrid // 2 + rcut]
+    psf_data = (
+        psf_obj.shift(0.5 * scale, 0.5 * scale)
+        .drawImage(nx=ngrid, ny=ngrid, scale=scale)
+        .array
+    )
+    psf_data = psf_data[
+        ngrid // 2 - rcut : ngrid // 2 + rcut, ngrid // 2 - rcut : ngrid // 2 + rcut
+    ]
     gname = "%s-0" % gcomp
     gal_data = fpfs.simulation.make_isolate_sim(
         gal_type="mixed",
@@ -77,7 +83,9 @@ def do_test(scale, seed, rcut, gcomp):
         gal_array=gal_data,
         det=coords,
     )
-    mms2 = np.vstack([mtask.run(gal_array=gal_list[i], psf_array=psf_list[i]) for i in range(nrot)])
+    mms2 = np.vstack(
+        [mtask.run(gal_array=gal_list[i], psf_array=psf_list[i]) for i in range(nrot)]
+    )
     np.testing.assert_almost_equal(mms, mms2)
     return
 

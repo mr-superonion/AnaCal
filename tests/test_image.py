@@ -74,8 +74,14 @@ def test_deconvolve_image(seed=1):
     ngrid = 64
     nrot = 1
 
-    psf_data = psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(nx=ngrid, ny=ngrid, scale=scale).array
-    psf_data = psf_data[ngrid // 2 - rcut : ngrid // 2 + rcut, ngrid // 2 - rcut : ngrid // 2 + rcut]
+    psf_data = (
+        psf_obj.shift(0.5 * scale, 0.5 * scale)
+        .drawImage(nx=ngrid, ny=ngrid, scale=scale)
+        .array
+    )
+    psf_data = psf_data[
+        ngrid // 2 - rcut : ngrid // 2 + rcut, ngrid // 2 - rcut : ngrid // 2 + rcut
+    ]
     gname = "g1-0"
     gal_data = fpfs.simulation.make_isolate_sim(
         gal_type="mixed",

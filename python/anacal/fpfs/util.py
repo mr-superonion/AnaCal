@@ -132,7 +132,9 @@ class FpfsTask(AnacalBase):
         # the following two assumes pixel_scale = 1
         self.sigmaf = float(self.pix_scale / sigma_arcsec)
         self.logger.info("Order of the shear estimator: nord=%d" % self.nord)
-        self.logger.info("Shapelet kernel in configuration space: sigma= %.4f arcsec" % (sigma_arcsec))
+        self.logger.info(
+            "Shapelet kernel in configuration space: sigma= %.4f arcsec" % (sigma_arcsec)
+        )
         # effective nyquest wave number
         self.klim_pix = get_klim(
             psf_pow=psf_pow,
@@ -147,7 +149,9 @@ class FpfsTask(AnacalBase):
     def get_stds(self, cov_mat):
         std_modes = np.sqrt(np.diagonal(cov_mat))
         std_m00 = std_modes[self.di["m00"]]
-        std_v = np.average(np.array([std_modes[self.di["v%d" % _]] for _ in range(self.det_nrot)]))
+        std_v = np.average(
+            np.array([std_modes[self.di["v%d" % _]] for _ in range(self.det_nrot)])
+        )
         return std_m00, std_v
 
     def prepare_fpfs_bases(self):
@@ -187,7 +191,9 @@ class FpfsTask(AnacalBase):
         return coords
 
 
-def gauss_kernel_rfft(ny: int, nx: int, sigma: float, klim: float, return_grid: bool = False):
+def gauss_kernel_rfft(
+    ny: int, nx: int, sigma: float, klim: float, return_grid: bool = False
+):
     """Generates a Gaussian kernel on grids for np.fft.rfft transform
     The kernel is truncated at radius klim.
 
@@ -255,9 +261,9 @@ def shapelets2d_func(ngrid: int, nord: int, sigma: float, klim: float):
     chi = np.zeros((nord + 1, mord + 1, ny, nx), dtype=np.complex128)
     for n in range(2, nord + 1):
         for m in range(mord + 1):
-            lfunc[n, m, :, :] = (2.0 + (m - 1.0 - r2_over_sigma2) / n) * lfunc[n - 1, m, :, :] - (
-                1.0 + (m - 1.0) / n
-            ) * lfunc[n - 2, m, :, :]
+            lfunc[n, m, :, :] = (2.0 + (m - 1.0 - r2_over_sigma2) / n) * lfunc[
+                n - 1, m, :, :
+            ] - (1.0 + (m - 1.0) / n) * lfunc[n - 2, m, :, :]
     for nn in range(nord + 1):
         for mm in range(nn, -1, -2):
             c1 = (nn - abs(mm)) // 2

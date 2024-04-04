@@ -2,26 +2,18 @@
 requires = ["setuptools", "pybind11", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[flake8]
-max-line-length = 110
-ignore = [
-    "N801", "N803", "N816", "W503", "W504", "E731", "E203", "E303"
-]
-exclude = [
-  ".git",
-  "__pycache__",
-  "docs",
-  "build",
-  "dist",
-]
+[tool.flake8]
+ignore = ["N801", "N803", "N816", "W503", "W504", "E731", "E203", "E303"]
+exclude = [".git", "__pycache__", "docs", "build", "dist"]
+max-line-length = 90
 
 [tool.black]
-line-length = 110
+line-length = 90
 target-version = ["py311"]
 
 [tool.isort]
 profile = "black"
-line_length = 110
+line_length = 90
 
 [tool.pytest.ini_options]
 testpaths = ["./tests"]

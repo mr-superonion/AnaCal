@@ -170,7 +170,9 @@ class CatalogBase(object):
             + cov_mat[self.di["m00"], self.di["m20"]]
             + cov_mat[self.di["m20"], self.di["m00"]]
         )
-        std_v = jnp.average(jnp.array([std_modes[self.di["v%d" % _]] for _ in range(det_nrot)]))
+        std_v = jnp.average(
+            jnp.array([std_modes[self.di["v%d" % _]] for _ in range(det_nrot)])
+        )
 
         # control steepness
         if sigma_m00 is None:
