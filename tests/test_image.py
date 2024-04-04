@@ -143,13 +143,13 @@ def test_rotate90():
         .drawImage(nx=ngrid, ny=ngrid, scale=scale)
         .array
     )
-    dec_obj = anacal.image.Image(nx=ngrid, ny=ngrid, scale=1.0)
-    dec_obj.set_r(psf_data)
-    dec_obj.fft()
-    dec_obj.rotate90_f()
-    dec_obj.ifft()
-    dec_data = dec_obj.draw_r()
-    np.testing.assert_almost_equal(dec_data, psf_data2)
+    imobj = anacal.image.Image(nx=ngrid, ny=ngrid, scale=1.0)
+    imobj.set_r(psf_data)
+    imobj.fft()
+    imobj.rotate90_f()
+    imobj.ifft()
+    psf_rot = imobj.draw_r()
+    np.testing.assert_almost_equal(psf_rot, psf_data2)
     return
 
 

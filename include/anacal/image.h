@@ -57,8 +57,6 @@ namespace anacal {
 
         void set_noise_f(unsigned int, const py::array_t<double>&);
 
-        void set_noise_f(unsigned int, double, const BaseModel&);
-
         void fft();
 
         void ifft();

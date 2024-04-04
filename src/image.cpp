@@ -177,6 +177,7 @@ Image::set_noise_f(
     double std_f = noise_std * std::sqrt(nx * ny / 2.0);
     std::mt19937 engine(seed);
     std::normal_distribution<double> dist(0.0, std_f);
+
     for (ssize_t j = 0; j < ky_length; ++j) {
         ssize_t ji = j * kx_length;
         for (ssize_t i = 0; i < kx_length; ++i) {
@@ -211,59 +212,33 @@ Image::set_noise_f(
         ssize_t ji = j * kx_length;
         for (ssize_t i = 0; i < kx_length; ++i) {
             ssize_t index = ji + i;
-            double ff = std::sqrt(std::abs(r(j, i).real()));
-            data_f[index][0] = dist(engine) * ff;
-            data_f[index][1] = dist(engine) * ff;
+            double ff = std::sqrt(std::abs(r(j, i)));
+            data_f[index][0] = ff * dist(engine);
+            data_f[index][1] = ff * dist(engine);
         }
     }
-}
 
+    // k=0
+    double ff = std::sqrt(2.0 * std::abs(r(0, 0)));
+    data_f[0][0] = ff * dist(engine);
+    data_f[0][1] = 0.0;
 
-void
-Image::set_noise_f(
-    unsigned int seed,
-    double noise_std,
-    const BaseModel& filter_model
-) {
-    assert_mode(this->mode & 2);
-    double std_f = noise_std * std::sqrt(nx * ny / 2.0);
-    std::mt19937 engine(seed);
-    std::normal_distribution<double> dist(0.0, std_f);
-    double power_sum = 0.0;
-
-    for (ssize_t j = 0; j < ky_length; ++j) {
-        ssize_t ji = j * kx_length;
-        double ky = ((j < ny2) ? j : (j - ny)) * dky ;
-        for (ssize_t i = -1; i < 1; ++i) {
-            ssize_t ii = (i + kx_length) % kx_length;
-            ssize_t index = ji + ii;
-            double kx = ii * dkx;
-            std::complex<double> val(dist(engine), dist(engine));
-            std::complex<double> res = filter_model.apply(kx, ky);
-            power_sum = power_sum + (std::conj(res) * res).real();
-            res = res * val;
-            data_f[index][0] = res.real();
-            data_f[index][1] = res.imag();
-
+    for (ssize_t j = 1; j < ny2; ++j) {
+        ssize_t j2 = -j + ny;
+        {
+            ssize_t i = 0;
+            ssize_t index = j * kx_length + i;
+            ssize_t index2 = j2 * kx_length + i;
+            data_f[index][0] = data_f[index2][0];
+            data_f[index][1] = -data_f[index2][1];
         }
-        for (ssize_t i = 1; i < kx_length - 1; ++i) {
-            ssize_t index = ji + i;
-            double kx = i * dkx;
-            std::complex<double> val(dist(engine), dist(engine));
-            std::complex<double> res = filter_model.apply(kx, ky);
-            power_sum = power_sum + (std::conj(res) * res).real() * 2.0;
-            res = res * val;
-            data_f[index][0] = res.real();
-            data_f[index][1] = res.imag();
-        }
-    }
-    double rescale = std::sqrt(nx * ny / power_sum);
-    for (ssize_t j = 0; j < ky_length ; ++j) {
-        ssize_t ji = j * kx_length;
-        for (ssize_t i = 0; i < kx_length ; ++i) {
-            int index = ji + i;
-            data_f[index][0] = data_f[index][0] * rescale;
-            data_f[index][1] = data_f[index][1] * rescale;
+
+        {
+            ssize_t i = kx_length - 1;
+            ssize_t index = j * kx_length + i;
+            ssize_t index2 = j2 * kx_length + i;
+            data_f[index][0] = data_f[index2][0];
+            data_f[index][1] = -data_f[index2][1];
         }
     }
 }
@@ -612,14 +587,6 @@ pyExportImage(py::module& m) {
             "Sets up noise image in Fourier space using correlation function",
             py::arg("seed"),
             py::arg("correlation")
-        )
-        .def("set_noise_f",
-            static_cast<void (Image::*)(unsigned int, double, const BaseModel&)>
-            (&Image::set_noise_f),
-            "Sets up noise image in Fourier space using model",
-            py::arg("seed"),
-            py::arg("noise_std"),
-            py::arg("filter_model")
         )
         .def("fft", &Image::fft,
             "Conducts forward Fourier Trasform"
