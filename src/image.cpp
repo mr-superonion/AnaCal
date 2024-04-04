@@ -186,6 +186,29 @@ Image::set_noise_f(
             data_f[index][1] = dist(engine);
         }
     }
+
+    // k=0
+    data_f[0][0] = std::sqrt(2.0) * dist(engine);
+    data_f[0][1] = 0.0;
+
+    for (ssize_t j = 1; j < ny2; ++j) {
+        ssize_t j2 = -j + ny;
+        {
+            ssize_t i = 0;
+            ssize_t index = j * kx_length + i;
+            ssize_t index2 = j2 * kx_length + i;
+            data_f[index][0] = data_f[index2][0];
+            data_f[index][1] = -data_f[index2][1];
+        }
+
+        {
+            ssize_t i = kx_length - 1;
+            ssize_t index = j * kx_length + i;
+            ssize_t index2 = j2 * kx_length + i;
+            data_f[index][0] = data_f[index2][0];
+            data_f[index][1] = -data_f[index2][1];
+        }
+    }
 }
 
 
