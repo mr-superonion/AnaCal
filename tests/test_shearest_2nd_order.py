@@ -94,11 +94,8 @@ def do_test(scale, seed, rcut, gcomp):
     psf_list = [psf_data] * n_tests
     mms = np.vstack(
         [
-            mtask.run(
-                gal_array=gal_list[i],
-                det=coords,
-                psf_array=psf_list[i]
-            ) for i in range(n_tests)
+            mtask.run(gal_array=gal_list[i], det=coords, psf_array=psf_list[i])
+            for i in range(n_tests)
         ]
     )
     mms = mtask.get_results(mms)
