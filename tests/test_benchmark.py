@@ -33,10 +33,10 @@ gal_data = gal_obj.drawImage(nx=nx, ny=ny, scale=scale).array
 
 
 def test_detect():
+    print("")
     initial_memory_usage = mem_used()
 
     def func():
-        print("")
         noise_data = np.random.randn(ny, nx)
         dtask = anacal.fpfs.FpfsDetect(
             nx=nx,

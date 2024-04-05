@@ -44,6 +44,10 @@ def test_noise_sim_correlated(noise_std):
     sigma = 1.0 / 3.0 / scale
     seed = 2
     gt_model = anacal.model.GaussianTopHat(d=d, sigma=sigma)
+    theta = np.pi / 20
+    gamma1 = 0.1
+    gamma2 = -0.3
+    gt_model.set_transform(theta=theta, gamma1=gamma1, gamma2=gamma2)
     corr_array = anacal.noise.simulate_noise_correlation(
         noise_std=noise_std,
         corr_model=gt_model,
@@ -57,7 +61,7 @@ def test_noise_sim_correlated(noise_std):
         noise_std**2.0,
     )
 
-    ngrid2 = 1024
+    ngrid2 = 2048
     noise_array = anacal.noise.simulate_noise(
         seed=seed,
         correlation=corr_array,
