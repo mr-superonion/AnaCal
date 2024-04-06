@@ -199,15 +199,18 @@ Image::set_noise_f(
 
     {
         // k = (0, 0)
-        double ff = std::sqrt(2.0 * std::abs(r(0, 0)));
+        ssize_t i = 0;
+        ssize_t j = 0;
+        double ff = std::sqrt(2.0 * std::abs(r(i, j)));
         data_f[0][0] = ff * dist(engine);
         data_f[0][1] = 0.0;
 
         // k = (0, ny / 2)
         // F(0, ny / 2)  = F(0, -ny / 2)
         // F(0, ny / 2)  = F(0, -ny / 2) *
-        ssize_t i = 0;
-        ssize_t j = ny2;
+        i = 0;
+        j = ny2;
+        ff = std::sqrt(2.0 * std::abs(r(i, j)));
         ssize_t index = j * kx_length + i;
         data_f[index][0] = ff * dist(engine);
         data_f[index][1] = 0.0;
@@ -217,6 +220,7 @@ Image::set_noise_f(
         // F(nx / 2, 0)  = F(-nx / 2, 0) *
         i = nx2;
         j = 0;
+        ff = std::sqrt(2.0 * std::abs(r(i, j)));
         index = j * kx_length + i;
         data_f[index][0] = ff * dist(engine);
         data_f[index][1] = 0.0;
