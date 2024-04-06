@@ -63,9 +63,21 @@ simulate_noise_correlation(
     py::array_t<double> result = image.draw_r(true);
     auto r = result.mutable_unchecked<2>();
     double ratio = noise_std * noise_std / r(ny / 2, nx / 2);
+    ssize_t nx2 = nx / 2;
+    ssize_t ny2 = ny / 2;
+    ssize_t rcut = std::min(nx2, ny2) - 2;
+    ssize_t rcut2 = rcut * rcut;
     for (ssize_t j = 0; j < ny; ++j) {
+        ssize_t y = j - ny2;
         for (ssize_t i = 0; i < nx; ++i) {
-            r(j, i) = r(j, i) * ratio;
+            ssize_t x = i - nx2;
+            ssize_t rr = x * x + y * y;
+            if (rr < rcut2) {
+                r(j, i) = r(j, i) * ratio;
+            } else {
+                r(j, i) = 0.0;
+            }
+
         }
     }
     return result;

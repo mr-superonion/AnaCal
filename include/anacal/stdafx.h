@@ -9,6 +9,7 @@
 #include <cmath>
 #include <random>
 #include <iostream>
+#include <algorithm>
 
 namespace py = pybind11;
 
