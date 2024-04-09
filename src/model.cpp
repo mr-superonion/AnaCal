@@ -11,7 +11,7 @@ BaseModel::fValue(double kx, double ky) const {
     return 0;
 }
 
-std::tuple<double, double>
+std::pair<double, double>
 BaseModel::transform(
     double kx,
     double ky
@@ -24,7 +24,7 @@ BaseModel::transform(
     // Rotation
     double kx_rotated = cos_theta * kx_sheared + sin_theta * ky_sheared;
     double ky_rotated = -sin_theta * kx_sheared + cos_theta * ky_sheared;
-    return std::make_tuple(kx_rotated, ky_rotated);
+    return std::make_pair(kx_rotated, ky_rotated);
 }
 
 std::complex<double>
@@ -32,8 +32,9 @@ BaseModel::apply(
     double kx,
     double ky
 ) const {
-    double kx_distorted, ky_distorted;
-    std::tie(kx_distorted, ky_distorted) = transform(kx, ky);
+    std::pair<double, double> _t = transform(kx, ky);
+    double kx_distorted = _t.first;
+    double ky_distorted = _t.second;
     return fValue(kx_distorted, ky_distorted);
 }
 
@@ -69,7 +70,7 @@ GaussianTopHat::fValue(double kx, double ky) const {
     return std::complex<double>(factorX * factorY * 0.25, 0.0);
 }
 
-// Gaussian Tophat
+// Sqare of Gaussian Tophat
 GaussianTopHat2::GaussianTopHat2(double d, double sigma) : d(d), sigma(sigma) {
     _p0 = 1.0 / (std::sqrt(2) * sigma);
 }

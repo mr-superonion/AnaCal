@@ -1,3 +1,4 @@
+import numpy as np
 from numpy.typing import NDArray
 
 from . import FpfsImage
@@ -42,6 +43,7 @@ class FpfsDetect(FpfsTask):
             sigma_arcsec=self.sigma_arcsec,
             klim=self.klim / self.pix_scale,
             psf_array=self.psf_array,
+            use_estimate=True,
         )
         self.nx = nx
         self.ny = ny
@@ -121,6 +123,7 @@ class FpfsMeasure(FpfsTask):
             sigma_arcsec=self.sigma_arcsec,
             klim=self.klim / self.pix_scale,
             psf_array=self.psf_array,
+            use_estimate=True,
         )
         return
 
@@ -138,9 +141,11 @@ class FpfsMeasure(FpfsTask):
         psf_array (ndarray|None): psf image data
         det (list|None): detection catalog
         """
+
+        bfunc = np.transpose(self.bfunc, (1, 2, 0))
         return self.mtask.measure_source(
             gal_array=gal_array,
-            filter_image=self.bfunc,
+            filter_image=bfunc,
             psf_array=psf_array,
             det=det,
             do_rotate=do_rotate,

@@ -404,9 +404,9 @@ Image::measure(
 ) const {
     assert_mode(this->mode & 2);
     const ssize_t* shape = filter_image.shape();
-    ssize_t nz = shape[0];
-    ssize_t ny = shape[1];
-    ssize_t nx = shape[2];
+    ssize_t ny = shape[0];
+    ssize_t nx = shape[1];
+    ssize_t nz = shape[2];
     if ((ny != ky_length) || (nx != kx_length)) {
         throw std::runtime_error("Error: input filter shape not correct");
     }
@@ -417,21 +417,21 @@ Image::measure(
         s(z) = 0.0;
     }
 
-    auto r = filter_image.unchecked<3>();
+    auto fr = filter_image.unchecked<3>();
     for (ssize_t j = 0; j < ky_length; ++j) {
         ssize_t ji = j * kx_length;
         for (ssize_t i = -1; i < 1; ++i) {
             ssize_t index = ji + (i + kx_length) % kx_length;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
             for (ssize_t z = 0; z < nz; ++z) {
-                s(z) = s(z) + (r(z, j, i) * val).real();
+                s(z) = s(z) + (fr(j, i, z) * val).real();
             }
         }
         for (ssize_t i = 1; i < kx_length - 1; ++i) {
             ssize_t index = ji + i;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
             for (ssize_t z = 0; z < nz; ++z) {
-                s(z) = s(z) + (r(z, j, i) * val).real() * 2.0;
+                s(z) = s(z) + (fr(j, i, z) * val).real() * 2.0;
             }
         }
     }
@@ -556,7 +556,7 @@ pyExportImage(py::module& m) {
         .def(py::init<int, int, double, bool, unsigned int>(),
             "Initialize the Convolution object using an ndarray",
             py::arg("nx"), py::arg("ny"), py::arg("scale"),
-            py::arg("use_estimate")=false,
+            py::arg("use_estimate")=true,
             py::arg("mode")=3
         )
         .def("set_r",

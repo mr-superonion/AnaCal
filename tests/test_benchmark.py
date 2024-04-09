@@ -19,9 +19,11 @@ bound = 40
 
 scale = 0.2
 sigma_as = 0.55
-psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(e1=0.02, e2=-0.02)
+psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0) \
+    .shear(e1=0.02, e2=-0.02)
 psf_data = (
-    psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(nx=64, ny=64, scale=scale).array
+    psf_obj.shift(0.5 * scale, 0.5 * scale).
+    drawImage(nx=64, ny=64, scale=scale).array
 )
 gal_obj = (
     psf_obj.shift(-3.5, 2) * 2
@@ -38,6 +40,7 @@ def test_detect():
 
     def func():
         noise_data = np.random.randn(ny, nx)
+        t0 = time.time()
         dtask = anacal.fpfs.FpfsDetect(
             nx=nx,
             ny=ny,
@@ -46,6 +49,8 @@ def test_detect():
             sigma_arcsec=sigma_as,
             det_nrot=det_nrot,
         )
+        t1 = time.time()
+        print("Detection Time: ", t1 - t0)
         det = dtask.run(
             gal_array=gal_data,
             fthres=1.0,
@@ -66,14 +71,13 @@ def test_detect():
             gal_array=gal_data,
             det=det,
         )
+        t2 = time.time()
+        print("Final Time: ", t2 - t0)
         del noise_data, det, src, dtask, mtask
         return
 
     print_mem(initial_memory_usage)
-    t0 = time.time()
     func()
-    t1 = time.time()
-    print("Time: ", t1 - t0)
 
     peak_memory_usage = max(memory_usage(proc=(func,)))
     print("Peak Mem:", peak_memory_usage, "M")

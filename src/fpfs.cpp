@@ -160,7 +160,7 @@ FpfsImage::measure_source(
         det_default = {{ny/2, nx/2, false}};
 
 
-    ssize_t ncol = filter_image.shape()[0];
+    ssize_t ncol = filter_image.shape()[ndim - 1];
     const auto& det_use = det.has_value() ? *det : det_default;
     ssize_t nrow = det_use.size();
 
@@ -206,7 +206,7 @@ pyExportFpfs(py::module& m) {
             py::arg("scale"), py::arg("sigma_arcsec"),
             py::arg("klim"),
             py::arg("psf_array"),
-            py::arg("use_estimate")=false
+            py::arg("use_estimate")=true
         )
         .def("smooth_image", &FpfsImage::smooth_image,
             "Smooths the image after PSF deconvolution",

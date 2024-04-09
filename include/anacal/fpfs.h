@@ -26,7 +26,7 @@ namespace anacal {
             double sigma_arcsec,
             double klim,
             const py::array_t<double>& psf_array,
-            bool use_estimate=false
+            bool use_estimate=true
         );
 
         py::array_t<double>

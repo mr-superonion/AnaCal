@@ -39,7 +39,7 @@ namespace anacal {
             int nx,
             int ny,
             double scale,
-            bool use_estimate=false,
+            bool use_estimate=true,
             unsigned int mode=3
         );
 

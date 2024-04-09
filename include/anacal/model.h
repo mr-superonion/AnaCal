@@ -15,9 +15,9 @@ namespace anacal {
         BaseModel(const BaseModel&) = delete;
         BaseModel& operator=(const BaseModel&) = delete;
 
+        std::pair<double, double> transform(double, double) const;
     public:
         BaseModel();
-        std::tuple<double, double> transform(double, double) const;
 
         virtual std::complex<double> fValue(double, double) const;
 
