@@ -325,42 +325,18 @@ class CatalogBase(object):
         return 0.0
 
     def _we1(self, x):
-        return self._wsel(x) * self._e1(x) * self._wdet(x)
-
-    def _we2(self, x):
-        return self._wsel(x) * self._e2(x) * self._wdet(x)
-
-    def _we1_sharp(self, x):
         e1 = self._wsel(x) * self._e1(x)
         w = self._wdet(x)
         return ssfunc2(w, 0.12, 0.04) * e1
 
-    def _we2_sharp(self, x):
+    def _we2(self, x):
         e2 = self._wsel(x) * self._e2(x)
         w = self._wdet(x)
         return ssfunc2(w, 0.12, 0.04) * e2
 
-    def _measure_g1(self, x):
-        e1, linear_func = jax.linearize(
-            self._we1,
-            x,
-        )
-        dmm_dg1 = self._dg1(x)
-        de1_dg1 = linear_func(dmm_dg1)
-        return jnp.hstack([e1, de1_dg1])
-
-    def _measure_g2(self, x):
-        e2, linear_func = jax.linearize(
-            self._we2,
-            x,
-        )
-        dmm_dg2 = self._dg2(x)
-        de2_dg2 = linear_func(dmm_dg2)
-        return jnp.hstack([e2, de2_dg2])
-
     def _measure_g1_renoise(self, x, y=0.0):
         e1, linear_func = jax.linearize(
-            self._we1_sharp,
+            self._we1,
             x,
         )
         dmm_dg1 = self._dg1(x - y * 2.0)
@@ -369,24 +345,12 @@ class CatalogBase(object):
 
     def _measure_g2_renoise(self, x, y=0.0):
         e2, linear_func = jax.linearize(
-            self._we2_sharp,
+            self._we2,
             x,
         )
         dmm_dg2 = self._dg2(x - y * 2.0)
         de2_dg2 = linear_func(dmm_dg2)
         return jnp.hstack([e2, de2_dg2])
-
-    def _noisebias(self, func, x):
-        hessian = jax.jacfwd(jax.jacrev(func))(x)
-        out = (
-            jnp.tensordot(
-                hessian,
-                self.cov_mat,
-                axes=[[-2, -1], [-2, -1]],
-            )
-            / 2.0
-        )
-        return out
 
     def measure_g1_renoise(self, src, noise=None):
         """This function meausres the first component of shear using
@@ -444,46 +408,6 @@ class CatalogBase(object):
                 out_axes=0,
             )
             result = func(src, noise)
-        return result
-
-    def measure_g1_denoise(self, src, noise_rev=False):
-        """This function meausres the first component of shear using
-        denoise method to revise noise bias.
-
-        Args:
-        src (ndarray):      source catalog
-        noise_rev (bool):   whether to noise bias correction
-
-        Returns:
-        result (ndarray):   ellipticity and shear response (first component)
-        """
-        src = jnp.atleast_2d(src)
-        func = self._measure_g1
-        if not noise_rev:
-            func2 = lambda x: func(x) - self._noisebias(func, x)
-        else:
-            func2 = func
-        result = jax.lax.map(func2, src)
-        return result
-
-    def measure_g2_denoise(self, src, noise_rev=False):
-        """This function meausres the second component of shear using
-        denoise method to revise noise bias.
-
-        Args:
-        src (ndarray):      source catalog
-        noise_rev (bool):   whether to noise bias correction
-
-        Returns:
-        result (ndarray):   ellipticity and shear response (second component)
-        """
-        src = jnp.atleast_2d(src)
-        func = self._measure_g2
-        if not noise_rev:
-            func2 = lambda x: func(x) - self._noisebias(func, x)
-        else:
-            func2 = func
-        result = jax.lax.map(func2, src)
         return result
 
 
