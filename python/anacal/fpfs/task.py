@@ -59,7 +59,8 @@ class FpfsDetect(FpfsTask):
         std_m00: float,
         std_v: float,
         noise_array: NDArray | None = None,
-    ):
+        wdet_cut: float = 0.0,
+    ) -> NDArray:
         """This function detects galaxy from image
 
         Args:
@@ -73,7 +74,7 @@ class FpfsDetect(FpfsTask):
         noise_array (ndarray|None): noise array
 
         Returns:
-            detection galaxy catalog
+            galaxy detection catalog
         """
         ny, nx = gal_array.shape
         assert ny == self.ny
@@ -87,6 +88,7 @@ class FpfsDetect(FpfsTask):
             std_m00=std_m00 * self.pix_scale**2.0,
             std_v=std_v * self.pix_scale**2.0,
             noise_array=noise_array,
+            wdet_cut=wdet_cut,
         )
 
 
@@ -133,13 +135,17 @@ class FpfsMeasure(FpfsTask):
         psf_array=None,
         det=None,
         do_rotate=False,
-    ):
+    ) -> NDArray:
         """This function detects galaxy from image
 
         Args:
         gal_array (ndarray): galaxy image data
         psf_array (ndarray|None): psf image data
         det (list|None): detection catalog
+        do_rotate (bool): whether do rotation
+
+        Returns:
+            galaxy measurement catalog
         """
 
         bfunc = np.transpose(self.bfunc, (1, 2, 0))

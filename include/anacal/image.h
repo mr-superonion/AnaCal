@@ -95,6 +95,14 @@ namespace anacal {
         bool ishift=false
     );
 
+    py::array_t<std::complex<double>>
+    deconvolve_filter(
+        const py::array_t<std::complex<double>>& filter_image,
+        const py::array_t<std::complex<double>>& parr,
+        double scale,
+        double klim
+    );
+
     void pyExportImage(py::module& m);
 }
 

@@ -2,9 +2,11 @@ import anacal
 import fpfs
 import galsim
 import numpy as np
+import pytest
 
 
-def test_fpfs_measure():
+@pytest.mark.parametrize("seed", [1, 43, 162])
+def test_fpfs_measure(seed):
     scale = 0.2
     ngrid = 1024
     ngrid2 = 32
@@ -27,8 +29,8 @@ def test_fpfs_measure():
     det_nrot = 4
     sigma_as = 0.53
     bound = 16
-
-    gal_data = np.random.randn(ngrid, ngrid)
+    rng = np.random.RandomState(seed)
+    gal_data = rng.randn(ngrid, ngrid)
 
     pthres = 0.2
     pratio = 0.05

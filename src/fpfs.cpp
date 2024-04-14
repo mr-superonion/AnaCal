@@ -80,7 +80,8 @@ FpfsImage::find_peak(
     double pratio,
     double std_m00,
     double std_v,
-    int bound
+    int bound,
+    double wdet_cut
 ) {
     auto r = gal_conv.unchecked<2>();
     ssize_t ny = r.shape(0);
@@ -88,18 +89,25 @@ FpfsImage::find_peak(
 
     double fcut = fthres * std_m00;
     double pcut = pthres * std_v;
+    double sigma_v = fpfs_cut_sigma_ratio * std_v;
 
     std::vector<std::tuple<int, int, bool>> peaks;
     for (ssize_t j = bound + 1; j < ny - bound; ++j) {
         for (ssize_t i = bound + 1; i < nx - bound; ++i) {
             double c = r(j, i);
             double thres = pcut + pratio * c;
+            double d1 = c - r(j, i+1);
+            double d2 = c - r(j+1, i);
+            double d3 = c - r(j, i-1);
+            double d4 = c - r(j-1, i);
+            double s1 = imath::ssfunc2(d1, sigma_v - thres, sigma_v);
+            double s2 = imath::ssfunc2(d2, sigma_v - thres, sigma_v);
+            double s3 = imath::ssfunc2(d3, sigma_v - thres, sigma_v);
+            double s4 = imath::ssfunc2(d4, sigma_v - thres, sigma_v);
+            double wdet = s1 * s2 * s3 * s4;
             bool sel = (
                 (c > fcut) &&
-                (c > r(j-1, i) - thres) &&
-                (c > r(j+1, i) - thres) &&
-                (c > r(j, i-1) - thres) &&
-                (c > r(j, i+1) - thres)
+                (wdet > wdet_cut)
             );
             if (sel) {
                 bool is_peak = (
@@ -125,7 +133,8 @@ FpfsImage::detect_source(
     double std_m00,
     double std_v,
     int bound,
-    const std::optional<py::array_t<double>>& noise_array
+    const std::optional<py::array_t<double>>& noise_array,
+    double wdet_cut
 ) {
 
     py::array_t<double> gal_conv = smooth_image(
@@ -139,7 +148,8 @@ FpfsImage::detect_source(
         pratio,
         std_m00,
         std_v,
-        bound
+        bound,
+        wdet_cut
     );
     return catalog;
 }
@@ -156,35 +166,43 @@ FpfsImage::measure_source(
     if ( ndim != 3) {
         throw std::runtime_error("Error: Input must be 3-dimensional.");
     }
-    const std::vector<std::tuple<int, int, bool>>
-        det_default = {{ny/2, nx/2, false}};
 
 
-    ssize_t ncol = filter_image.shape()[ndim - 1];
-    const auto& det_use = det.has_value() ? *det : det_default;
-    ssize_t nrow = det_use.size();
-
-    py::array_t<double> src({nrow, ncol});
-    auto src_m = src.mutable_unchecked<2>();
-
-    const auto& psf_use = psf_array.has_value() ? *psf_array : this->psf_array;
+    const py::array_t<double>&
+        psf_use = psf_array.has_value() ? *psf_array : this->psf_array;
     cimg.set_r(psf_use, false);
     cimg.fft();
     if (do_rotate){
         cimg.rotate90_f();
     }
     const py::array_t<std::complex<double>> parr = cimg.draw_f();
+    const py::array_t<std::complex<double>> fimg = deconvolve_filter(
+        filter_image,
+        parr,
+        scale,
+        klim
+    );
+
+    ssize_t ncol = filter_image.shape()[ndim - 1];
+    const std::vector<std::tuple<int, int, bool>>
+        det_default = {{ny/2, nx/2, false}};
+    const std::vector<std::tuple<int, int, bool>>&
+        det_use = det.has_value() ? *det : det_default;
+    ssize_t nrow = det_use.size();
+
+    py::array_t<double> src({nrow, ncol});
+    auto src_r = src.mutable_unchecked<2>();
     for (ssize_t j = 0; j < nrow; ++j) {
         const auto& elem = det_use[j];
         int y = std::get<0>(elem);
         int x = std::get<1>(elem);
         cimg.set_r(gal_array, x, y);
         cimg.fft();
-        cimg.deconvolve(parr, klim);
-        const py::array_t<double> meas = cimg.measure(filter_image);
-        auto row = meas.unchecked<1>();
+        /* cimg.deconvolve(parr, klim); */
+        py::array_t<double> row = cimg.measure(fimg);
+        auto row_r = row.unchecked<1>();
         for (ssize_t i = 0; i < ncol; ++i) {
-            src_m(j, i) = row(i) * fft_ratio;
+            src_r(j, i) = row_r(i) * fft_ratio;
         }
     }
     return src;
@@ -200,7 +218,7 @@ pyExportFpfs(py::module& m) {
     py::module_ fpfs = m.def_submodule("fpfs", "submodule for FPFS shear estimation");
     py::class_<FpfsImage>(fpfs, "FpfsImage")
         .def(py::init<int, int, double, double, double,
-            py::array_t<double>, bool>(),
+            const py::array_t<double>&, bool>(),
             "Initialize the FpfsImage object using an ndarray",
             py::arg("nx"), py::arg("ny"),
             py::arg("scale"), py::arg("sigma_arcsec"),
@@ -221,7 +239,8 @@ pyExportFpfs(py::module& m) {
             py::arg("pratio"),
             py::arg("std_m00"),
             py::arg("std_v"),
-            py::arg("bound")
+            py::arg("bound"),
+            py::arg("wdet_cut")=0.0
         )
         .def("detect_source", &FpfsImage::detect_source,
             "Detect galaxy candidates from image",
@@ -232,7 +251,8 @@ pyExportFpfs(py::module& m) {
             py::arg("std_m00"),
             py::arg("std_v"),
             py::arg("bound"),
-            py::arg("noise_array")=py::none()
+            py::arg("noise_array")=py::none(),
+            py::arg("wdet_cut")=0.0
         )
         .def("measure_source", &FpfsImage::measure_source,
             "measure source properties using filter at the position of det",

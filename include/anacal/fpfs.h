@@ -2,8 +2,11 @@
 #define ANACAL_FPFS_H
 
 #include "image.h"
+#include "../imath.h"
 
 namespace anacal {
+    inline constexpr double fpfs_cut_sigma_ratio = 1.6;
+
     class FpfsImage {
     private:
         // Preventing copy (implement these if you need copy semantics)
@@ -43,7 +46,8 @@ namespace anacal {
             double pratio,
             double std_m00,
             double std_v,
-            int bound
+            int bound,
+            double wdet_cut=0.0
         );
 
         std::vector<std::tuple<int, int, bool>>
@@ -55,7 +59,8 @@ namespace anacal {
             double std_m00,
             double std_v,
             int bound,
-            const std::optional<py::array_t<double>>& noise_array=std::nullopt
+            const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+            double wdet_cut=0.0
         );
 
         py::array_t<double>
@@ -76,4 +81,4 @@ namespace anacal {
     void pyExportFpfs(py::module& m);
 }
 
-#endif // FPFS_H
+#endif // ANACAL_FPFS_H

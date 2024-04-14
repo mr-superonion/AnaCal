@@ -5,4 +5,4 @@ namespace anacal {
     void pyExportNoise(py::module& m);
 }
 
-#endif // NOISE_H
+#endif // ANACAL_NOISE_H

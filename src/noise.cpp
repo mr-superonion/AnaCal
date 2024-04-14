@@ -8,8 +8,7 @@ simulate_noise(
     unsigned int seed,
     double noise_std,
     int nx,
-    int ny,
-    double scale
+    int ny
 ) {
 
     std::mt19937 engine(seed);
@@ -90,14 +89,13 @@ pyExportNoise(py::module& m) {
         "noise", "submodule for noise simulation"
     );
     noise.def("simulate_noise",
-        py::overload_cast<unsigned int, double, int, int, double>
+        py::overload_cast<unsigned int, double, int, int>
             (&simulate_noise),
         "simulate noise in configuration space",
         py::arg("seed"),
         py::arg("noise_std"),
         py::arg("nx"),
-        py::arg("ny"),
-        py::arg("scale")
+        py::arg("ny")
     );
     noise.def("simulate_noise",
         py::overload_cast

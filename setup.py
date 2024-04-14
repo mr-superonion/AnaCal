@@ -27,10 +27,12 @@ ext_modules.append(
         extra_compile_args=[
             "-Wall",
             "-Wextra",
+            "-Werror",
             "-Wdeprecated-declarations",
             "-std=c++17",
             "-fopenmp",
             "-O3",
+            "-fvisibility=hidden",
         ],
         extra_link_args=["-flto", "-fopenmp"],
     )

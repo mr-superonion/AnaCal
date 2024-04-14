@@ -83,4 +83,4 @@ namespace anacal {
 
     void pyExportModel(py::module& m);
 }
-#endif
+#endif // ANACAL_MODEL_H

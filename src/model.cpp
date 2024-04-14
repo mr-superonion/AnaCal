@@ -7,7 +7,7 @@ BaseModel::BaseModel(){
     // Constructor implementation. Can be empty if nothing to initialize.
 }
 std::complex<double>
-BaseModel::fValue(double kx, double ky) const {
+BaseModel::fValue(double, double) const {
     return 0;
 }
 

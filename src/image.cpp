@@ -141,6 +141,10 @@ Image::set_f(
     const py::array_t<std::complex<double>>& input
 ) {
     assert_mode(this->mode & 2);
+    const ssize_t* shape = input.shape();
+    if ((shape[0] != ky_length) || (shape[1] != kx_length)) {
+        throw std::runtime_error("Error: input filter shape not correct");
+    }
     auto r = input.unchecked<2>();
     for (ssize_t j = 0; j < ky_length ; ++j) {
         int ji = j * kx_length;
@@ -403,39 +407,40 @@ Image::measure(
     const py::array_t<std::complex<double>>& filter_image
 ) const {
     assert_mode(this->mode & 2);
-    const ssize_t* shape = filter_image.shape();
-    ssize_t ny = shape[0];
-    ssize_t nx = shape[1];
-    ssize_t nz = shape[2];
-    if ((ny != ky_length) || (nx != kx_length)) {
+    if ((filter_image.shape()[0] != ky_length) ||
+        (filter_image.shape()[1] != kx_length)
+    ) {
         throw std::runtime_error("Error: input filter shape not correct");
     }
 
-    auto src = py::array_t<double>(nz);
-    auto s = src.mutable_unchecked<1>();
-    for (ssize_t z = 0; z < nz; z++) {
-        s(z) = 0.0;
+    int ncol = filter_image.shape()[2];
+
+    py::array_t<double> meas(ncol);
+    auto meas_r = meas.mutable_unchecked<1>();
+    for (ssize_t z = 0; z < ncol; z++) {
+        meas_r(z) = 0.0;
     }
 
     auto fr = filter_image.unchecked<3>();
     for (ssize_t j = 0; j < ky_length; ++j) {
         ssize_t ji = j * kx_length;
         for (ssize_t i = -1; i < 1; ++i) {
-            ssize_t index = ji + (i + kx_length) % kx_length;
+            ssize_t ii = (i + kx_length) % kx_length;
+            ssize_t index = ji + ii;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
-            for (ssize_t z = 0; z < nz; ++z) {
-                s(z) = s(z) + (fr(j, i, z) * val).real();
+            for (ssize_t z = 0; z < ncol; ++z) {
+                meas_r(z) = meas_r(z) + (fr(j, ii, z) * val).real();
             }
         }
         for (ssize_t i = 1; i < kx_length - 1; ++i) {
             ssize_t index = ji + i;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
-            for (ssize_t z = 0; z < nz; ++z) {
-                s(z) = s(z) + (fr(j, i, z) * val).real() * 2.0;
+            for (ssize_t z = 0; z < ncol; ++z) {
+                meas_r(z) = meas_r(z) + (fr(j, i, z) * val).real() * 2.0;
             }
         }
     }
-    return src;
+    return meas;
 }
 
 
@@ -476,10 +481,11 @@ Image::deconvolve(
     auto rd = psf_image.unchecked<2>();
     for (int j = 0; j < ky_length; ++j) {
         double ky = ((j < ny2) ? j : (j - ny)) * dky ;
+        int ji = j * kx_length;
         for (int i = 0; i < kx_length; ++i) {
             double kx = i * dkx;
             double r2 = kx * kx + ky * ky;
-            int index = j * kx_length + i;
+            int index = ji + i;
             if (r2 > p0) {
                 data_f[index][0] = 0.0;
                 data_f[index][1] = 0.0;
@@ -549,9 +555,90 @@ Image::~Image() {
 }
 
 
+py::array_t<std::complex<double>>
+compute_fft(
+    int nx,
+    int ny,
+    const py::array_t<double>& data_in,
+    bool ishift
+) {
+    Image image(nx, ny, 1.0);
+    image.set_r(data_in, ishift);
+    image.fft();
+    py::array_t<std::complex<double>> data_out = image.draw_f();
+    return data_out;
+}
+
+py::array_t<std::complex<double>>
+deconvolve_filter(
+    const py::array_t<std::complex<double>>& filter_image,
+    const py::array_t<std::complex<double>>& parr,
+    double scale,
+    double klim
+) {
+
+    int nky = filter_image.shape()[0];
+    int nkx = filter_image.shape()[1];
+
+    if (nky % 2 != 0) {
+        throw std::runtime_error("nky is not divisible by 2");
+    }
+    if (parr.shape()[0] != nky) {
+        throw std::runtime_error("filter_image and parr have different shape");
+    }
+    if (parr.shape()[1] != nkx) {
+        throw std::runtime_error("filter_image and parr have different shape");
+    }
+
+    int ncol = filter_image.shape()[2];
+    double dky = 2.0 * M_PI / nky / scale;
+    double dkx = 2.0 * M_PI / (2 * (nkx - 1)) / scale;
+
+    double p0 = klim * klim;
+    auto f_r = filter_image.unchecked<3>();
+    auto p_r = parr.unchecked<2>();
+
+    py::array_t<std::complex<double>> output({nky, nkx, ncol});
+    auto o_r = output.mutable_unchecked<3>();
+    for (int j = 0; j < nky; ++j) {
+        double ky = ((j < nky / 2) ? j : (j - nky)) * dky ;
+        for (int i = 0; i < nkx; ++i) {
+            double kx = i * dkx;
+            double r2 = kx * kx + ky * ky;
+            if (r2 > p0) {
+                for (int icol = 0; icol < ncol; icol++) {
+                    o_r(j, i, icol) = 0;
+                }
+            } else {
+                std::complex<double> val = 1.0 / p_r(j, i);
+                for (int icol = 0; icol < ncol; icol++) {
+                    o_r(j, i, icol) = f_r(j, i, icol) * val;
+                }
+            }
+        }
+    }
+    return output;
+}
+
 void
 pyExportImage(py::module& m) {
     py::module_ image = m.def_submodule("image", "submodule for convolution");
+    image.def(
+        "compute_fft", &compute_fft,
+        "Compute the FFT of the image",
+        py::arg("nx"),
+        py::arg("ny"),
+        py::arg("data_in"),
+        py::arg("ishift")
+    );
+    image.def(
+        "deconvolve_filter", &deconvolve_filter,
+        "Deconvolve the filter (defined in Fourier space)",
+        py::arg("filter_image"),
+        py::arg("parr"),
+        py::arg("scale"),
+        py::arg("klim")
+    );
     py::class_<Image>(image, "Image")
         .def(py::init<int, int, double, bool, unsigned int>(),
             "Initialize the Convolution object using an ndarray",
@@ -647,20 +734,6 @@ pyExportImage(py::module& m) {
         .def("draw_f", &Image::draw_f,
             "This function draws the image's real fft"
         );
-}
-
-py::array_t<std::complex<double>>
-compute_fft(
-    int nx,
-    int ny,
-    const py::array_t<double>& data_in,
-    bool ishift
-) {
-    Image image(nx, ny, 1.0);
-    image.set_r(data_in, ishift);
-    image.fft();
-    py::array_t<std::complex<double>> data_out = image.draw_f();
-    return data_out;
 }
 
 }

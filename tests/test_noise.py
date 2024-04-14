@@ -96,7 +96,6 @@ def test_noise_sim_correlated(noise_std):
 
 @pytest.mark.parametrize("noise_std", [0.1, 0.2, 0.5])
 def test_noise_sim_white(noise_std):
-    scale = 0.2
     seed = 1
     ngrid2 = 1024
     noise_array = anacal.noise.simulate_noise(
@@ -104,7 +103,6 @@ def test_noise_sim_white(noise_std):
         noise_std=noise_std,
         nx=ngrid2,
         ny=ngrid2,
-        scale=scale,
     )
     np.testing.assert_allclose(np.std(noise_array), noise_std, rtol=1e-3)
     np.testing.assert_allclose(0.0, np.average(noise_array), atol=1e-3, rtol=0)
