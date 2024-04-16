@@ -450,21 +450,40 @@ Image::deconvolve(
     double klim
 ) {
     assert_mode(this->mode & 2);
-    double p0 = klim * klim;
+    double klim_sq = klim * klim;
+
+    // Test the value at k=0 is real
+    std::complex<double> fp_0 = psf_model.apply(0, 0);
+    double v_test = fp_0.imag();
+    if ((v_test < 0 ? -v_test : v_test) > 1e-10) {
+        throw std::runtime_error(
+            "Input PSF model is not real in configuration space"
+        );
+    }
+    // minimum value allowed for deconvolution
+    double min_deconv_value = min_deconv_ratio * fp_0.real();
+
     for (int j = 0; j < ky_length; ++j) {
         double ky = ((j < ny2) ? j : (j - ny)) * dky ;
         for (int i = 0; i < kx_length; ++i) {
             double kx = i * dkx;
             double r2 = kx * kx + ky * ky;
             int index = j * kx_length + i;
-            if (r2 > p0) {
+            if (r2 > klim_sq) {
                 data_f[index][0] = 0.0;
                 data_f[index][1] = 0.0;
             } else {
                 std::complex<double> val(data_f[index][0], data_f[index][1]);
-                std::complex<double> result = val / psf_model.apply(kx, ky);
-                data_f[index][0] = result.real();
-                data_f[index][1] = result.imag();
+                std::complex<double> fp_k = psf_model.apply(kx, ky);
+                double abs_kval = std::abs(fp_k);
+                if (abs_kval < min_deconv_value) {
+                    data_f[index][0] = val.real() / min_deconv_value;
+                    data_f[index][1] = val.imag() / min_deconv_value;
+                } else {
+                    std::complex<double> result = val / fp_k;
+                    data_f[index][0] = result.real();
+                    data_f[index][1] = result.imag();
+                }
             }
         }
     }
@@ -477,23 +496,40 @@ Image::deconvolve(
     double klim
 ) {
     assert_mode(this->mode & 2);
-    double p0 = klim * klim;
+    double klim_sq = klim * klim;
     auto rd = psf_image.unchecked<2>();
+
+    // Test the value at k=0 is real
+    double v_test = rd(0, 0).imag();
+    if ((v_test < 0 ? -v_test : v_test) > 1e-10) {
+        throw std::runtime_error(
+            "Input PSF image is not real in configuration space"
+        );
+    }
+    // minimum value allowed for deconvolution
+    double min_deconv_value = min_deconv_ratio * rd(0, 0).real();
+
     for (int j = 0; j < ky_length; ++j) {
-        double ky = ((j < ny2) ? j : (j - ny)) * dky ;
+        double ky = ((j < ny2) ? j : (j - ny)) * dky;
         int ji = j * kx_length;
         for (int i = 0; i < kx_length; ++i) {
             double kx = i * dkx;
             double r2 = kx * kx + ky * ky;
             int index = ji + i;
-            if (r2 > p0) {
+            if (r2 > klim_sq) {
                 data_f[index][0] = 0.0;
                 data_f[index][1] = 0.0;
             } else {
-                std::complex<double> val1(data_f[index][0], data_f[index][1]);
-                val1 = val1 / rd(j, i);
-                data_f[index][0] = val1.real();
-                data_f[index][1] = val1.imag();
+                std::complex<double> val(data_f[index][0], data_f[index][1]);
+                double abs_kval = std::abs(rd(j, i));
+                if (abs_kval < min_deconv_value) {
+                    data_f[index][0] = val.real() / min_deconv_value;
+                    data_f[index][1] = val.imag() / min_deconv_value;
+                } else {
+                    val = val / rd(j, i);
+                    data_f[index][0] = val.real();
+                    data_f[index][1] = val.imag();
+                }
             }
         }
     }
@@ -598,6 +634,16 @@ deconvolve_filter(
     auto f_r = filter_image.unchecked<3>();
     auto p_r = parr.unchecked<2>();
 
+    // Test the value at k=0 is real
+    double v_test = p_r(0, 0).imag();
+    if ((v_test < 0 ? -v_test : v_test) > 1e-10) {
+        throw std::runtime_error(
+            "Input PSF image is not real in configuration space"
+        );
+    }
+    // minimum value allowed for deconvolution
+    double min_deconv_value = min_deconv_ratio * p_r(0, 0).real();
+
     py::array_t<std::complex<double>> output({nky, nkx, ncol});
     auto o_r = output.mutable_unchecked<3>();
     for (int j = 0; j < nky; ++j) {
@@ -610,7 +656,13 @@ deconvolve_filter(
                     o_r(j, i, icol) = 0;
                 }
             } else {
-                std::complex<double> val = 1.0 / p_r(j, i);
+                std::complex<double> val;
+                double abs_kval = std::abs(p_r(j, i));
+                if (abs_kval < min_deconv_value) {
+                    val = 1.0 / min_deconv_value;
+                } else {
+                    val = 1.0 / p_r(j, i);
+                }
                 for (int icol = 0; icol < ncol; icol++) {
                     o_r(j, i, icol) = f_r(j, i, icol) * val;
                 }

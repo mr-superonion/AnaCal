@@ -31,5 +31,8 @@ def setup_custom_logger(verbose: bool = False):
 
 
 class AnacalBase(object):
-    def __init__(self, verbose):
-        self.logger = setup_custom_logger(verbose)
+    def __init__(self, verbose, logger=None):
+        if logger is None:
+            self.logger = setup_custom_logger(verbose)
+        else:
+            self.logger = logger

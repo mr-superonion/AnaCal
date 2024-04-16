@@ -5,6 +5,8 @@
 #include <fftw3.h>
 
 namespace anacal {
+    inline constexpr double min_deconv_ratio = 1e-5;
+
     class Image {
     private:
         fftw_plan plan_forward = nullptr;

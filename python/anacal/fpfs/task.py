@@ -27,6 +27,7 @@ class FpfsDetect(FpfsTask):
         sigma_arcsec: float,
         nord: int = 4,
         det_nrot: int = 8,
+        klim_thres: float = 1e-20,
     ) -> None:
         super().__init__(
             psf_array=psf_array,
@@ -34,6 +35,7 @@ class FpfsDetect(FpfsTask):
             nord=nord,
             pix_scale=pix_scale,
             det_nrot=det_nrot,
+            klim_thres=klim_thres,
         )
 
         self.dtask = FpfsImage(
@@ -110,6 +112,7 @@ class FpfsMeasure(FpfsTask):
         sigma_arcsec: float,
         nord: int = 4,
         det_nrot: int = 8,
+        klim_thres: float = 1e-20,
     ) -> None:
         super().__init__(
             psf_array=psf_array,
@@ -117,6 +120,7 @@ class FpfsMeasure(FpfsTask):
             nord=nord,
             pix_scale=pix_scale,
             det_nrot=det_nrot,
+            klim_thres=klim_thres,
         )
         self.mtask = FpfsImage(
             nx=self.ngrid,

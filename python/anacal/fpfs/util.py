@@ -101,6 +101,7 @@ class FpfsTask(AnacalBase):
         sigma_arcsec: float,
         nord: int = 4,
         det_nrot: int = 8,
+        klim_thres: float = 1e-20,
         verbose: bool = False,
     ) -> None:
         super().__init__(verbose)
@@ -139,7 +140,7 @@ class FpfsTask(AnacalBase):
         self.klim_pix = get_klim(
             psf_pow=psf_pow,
             sigma=self.sigmaf / np.sqrt(2.0),
-            thres=1e-20,
+            klim_thres=klim_thres,
         )  # in pixel units
         self.klim = float(self.klim_pix * self._dk)
         self.logger.info("Maximum |k| is %.3f" % (self.klim))
@@ -362,7 +363,11 @@ def detlets2d(
     return psi, name_d
 
 
-def get_klim(psf_pow: NDArray, sigma: float, thres: float = 1e-20) -> float:
+def get_klim(
+    psf_pow: NDArray,
+    sigma: float,
+    klim_thres: float = 1e-20,
+) -> float:
     """Gets klim, the region outside klim is supressed by the shaplet Gaussian
     kernel in FPFS shear estimation method; therefore we set values in this
     region to zeros
@@ -370,7 +375,7 @@ def get_klim(psf_pow: NDArray, sigma: float, thres: float = 1e-20) -> float:
     Args:
     psf_pow (ndarray):      PSF's Fourier power (rfft)
     sigma (float):          one sigma of Gaussian Fourier power (pixel scale=1)
-    thres (float):          the threshold for a tuncation on Gaussian
+    klim_thres (float):          the threshold for a tuncation on Gaussian
                                 [default: 1e-20]
     Returns:
     klim (float):           the limit radius
@@ -384,7 +389,7 @@ def get_klim(psf_pow: NDArray, sigma: float, thres: float = 1e-20) -> float:
         return_grid=True,
     )
     r = np.sqrt(x**2.0 + y**2.0)  # radius
-    mask = gaussian / psf_pow < thres
+    mask = gaussian / psf_pow < klim_thres
     dk = 2.0 * math.pi / ngrid
     klim_pix = round(float(np.min(r[mask]) / dk))
     klim_pix = min(max(klim_pix, ngrid // 5), ngrid // 2 - 1)
