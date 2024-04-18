@@ -4,6 +4,7 @@ from numpy.typing import NDArray
 from . import FpfsImage, Image
 from .util import FpfsTask
 
+
 class FpfsDetect(FpfsTask):
     """A base class for measurement
 

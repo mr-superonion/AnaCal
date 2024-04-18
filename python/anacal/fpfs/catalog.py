@@ -15,8 +15,10 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+from numpy.typing import NDArray
 
 from .util import get_det_col_names, get_shapelets_col_names
+from . import fpfs_cut_sigma_ratio
 
 
 def ssfunc1(x, mu, sigma):
@@ -91,7 +93,7 @@ def gaussian(x, mu, sigma):
 class CatalogBase(object):
     def __init__(
         self,
-        ratio: float = 1.81,
+        cov_mat: NDArray,
         snr_min: float = 12.0,
         r2_min: float = 0.05,
         r2_max: float = 2.0,
@@ -101,12 +103,8 @@ class CatalogBase(object):
         beta: float = 0.83,
         pthres: float = 0.0,
         pratio: float = 0.02,
-        cov_mat=None,
-        sigma_m00: float | None = None,
-        sigma_r2: float | None = None,
-        sigma_v: float | None = None,
         nord: int = 4,
-        det_nrot: int = 8,
+        det_nrot: int = 4,
     ):
         self.nord = nord
         name_s, _ = get_shapelets_col_names(nord)
@@ -120,9 +118,6 @@ class CatalogBase(object):
         self.name_detect = name_d
         self.det_nrot = det_nrot
 
-        if cov_mat is None:
-            # cov_mat = jnp.eye(self.ncol)
-            cov_mat = jnp.zeros((self.ncol, self.ncol))
         self.cov_mat = cov_mat
         std_modes = np.sqrt(np.diagonal(cov_mat))
         std_m00 = std_modes[self.di["m00"]]
@@ -136,19 +131,11 @@ class CatalogBase(object):
             jnp.array([std_modes[self.di["v%d" % _]] for _ in range(det_nrot)])
         )
 
+        ratio = fpfs_cut_sigma_ratio
         # control steepness
-        if sigma_m00 is None:
-            self.sigma_m00 = ratio * std_m00
-        else:
-            self.sigma_m00 = sigma_m00
-        if sigma_r2 is None:
-            self.sigma_r2 = ratio * std_m20
-        else:
-            self.sigma_r2 = sigma_r2
-        if sigma_v is None:
-            self.sigma_v = ratio * std_v
-        else:
-            self.sigma_v = sigma_v
+        self.sigma_m00 = ratio * std_m00
+        self.sigma_r2 = ratio * std_m20
+        self.sigma_v = ratio * std_v
 
         # selection thresholds
         self.m00_min = snr_min * std_m00
@@ -376,7 +363,7 @@ class CatalogBase(object):
 class FpfsCatalog(CatalogBase):
     def __init__(
         self,
-        ratio: float = 1.81,
+        cov_mat: NDArray,
         snr_min: float = 12.0,
         r2_min: float = 0.05,
         r2_max: float = 2.0,
@@ -386,15 +373,10 @@ class FpfsCatalog(CatalogBase):
         beta: float = 0.83,
         pthres: float = 0.0,
         pratio: float = 0.02,
-        cov_mat=None,
-        sigma_m00: float | None = None,
-        sigma_r2: float | None = None,
-        sigma_v: float | None = None,
-        det_nrot: int = 8,
+        det_nrot: int = 4,
     ):
         nord = 4
         super().__init__(
-            ratio=ratio,
             snr_min=snr_min,
             r2_min=r2_min,
             r2_max=r2_max,
@@ -405,9 +387,6 @@ class FpfsCatalog(CatalogBase):
             pthres=pthres,
             pratio=pratio,
             cov_mat=cov_mat,
-            sigma_m00=sigma_m00,
-            sigma_r2=sigma_r2,
-            sigma_v=sigma_v,
             nord=nord,
             det_nrot=det_nrot,
         )

@@ -216,6 +216,7 @@ FpfsImage::~FpfsImage() {
 void
 pyExportFpfs(py::module& m) {
     py::module_ fpfs = m.def_submodule("fpfs", "submodule for FPFS shear estimation");
+    fpfs.attr("fpfs_cut_sigma_ratio") = fpfs_cut_sigma_ratio;
     py::class_<FpfsImage>(fpfs, "FpfsImage")
         .def(py::init<int, int, double, double, double,
             const py::array_t<double>&, bool>(),
