@@ -85,12 +85,12 @@ class FpfsTask(AnacalBase):
     """A base class for measurement
 
     Args:
-    psf_array (ndarray):    an average PSF image used to initialize the task
-    pix_scale (float):      pixel scale in arcsec
-    sigma_arcsec (float):   Shapelet kernel size
-    nord (int):             the highest order of Shapelets radial
-                            components [default: 4]
-    det_nrot (int):         number of rotation in the detection kernel
+    psf_array (ndarray): an average PSF image used to initialize the task
+    pix_scale (float): pixel scale in arcsec
+    sigma_arcsec (float): Shapelet kernel size
+    nord (int): the highest order of Shapelets radial components [default: 4]
+    det_nrot (int): number of rotation in the detection kernel
+    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
     verbose (bool):         whether print out INFO
     """
 
@@ -100,12 +100,11 @@ class FpfsTask(AnacalBase):
         pix_scale: float,
         sigma_arcsec: float,
         nord: int = 4,
-        det_nrot: int = 8,
+        det_nrot: int = 4,
         klim_thres: float = 1e-20,
         verbose: bool = False,
     ) -> None:
         super().__init__(verbose)
-        self.psf_array = psf_array
         self.nord = nord
         name_s, _ = get_shapelets_col_names(nord)
         name_d = get_det_col_names(det_nrot)
@@ -119,7 +118,7 @@ class FpfsTask(AnacalBase):
         self.det_nrot = det_nrot
         self.sigma_arcsec = sigma_arcsec
         if sigma_arcsec <= 0.0 or sigma_arcsec > 5.0:
-            raise ValueError("sigma_arcsec should be positive and less than 5 arcsec")
+            raise ValueError("sigma_arcsec should be positive and < 5 arcsec")
         self.ngrid = psf_array.shape[0]
 
         # Preparing PSF
@@ -134,7 +133,8 @@ class FpfsTask(AnacalBase):
         self.sigmaf = float(self.pix_scale / sigma_arcsec)
         self.logger.info("Order of the shear estimator: nord=%d" % self.nord)
         self.logger.info(
-            "Shapelet kernel in configuration space: sigma= %.4f arcsec" % (sigma_arcsec)
+            "Shapelet kernel in configuration space: sigma= %.4f arcsec"
+            % (sigma_arcsec)
         )
         # effective nyquest wave number
         self.klim_pix = get_klim(
@@ -291,10 +291,10 @@ def shapelets2d(ngrid: int, nord: int, sigma: float, klim: float):
     [only support square stamps: ny=nx=ngrid]
 
     Args:
-    ngrid (int):    number of pixels in x and y direction
-    nord (int):     radial order of the shaplets
-    sigma (float):  scale of shapelets in Fourier space
-    klim (float):   upper limit of |k|
+    ngrid (int): number of pixels in x and y direction
+    nord (int): radial order of the shaplets
+    sigma (float): scale of shapelets in Fourier space
+    klim (float): upper limit of |k|
 
     Returns:
     chi_2 (ndarray): 2d shapelet basis w/ shape [n,ngrid,ngrid]
@@ -324,13 +324,13 @@ def detlets2d(
     This function only supports square stamps: ny=nx=ngrid.
 
     Args:
-    ngrid (int):        number of pixels in x and y direction
-    sigma (float):      radius of shapelets in Fourier space
-    klim (float):       upper limit of |k|
-    det_nrot (int):     number of rotation in the detection kernel
+    ngrid (int): number of pixels in x and y direction
+    sigma (float): radius of shapelets in Fourier space
+    klim (float): upper limit of |k|
+    det_nrot (int): number of rotation in the detection kernel
 
     Returns:
-    psi (ndarray):  2d detlets basis in shape of [det_nrot,3,ngrid,ngrid]
+    psi (ndarray): 2d detlets basis in shape of [det_nrot,3,ngrid,ngrid]
     """
     # Gaussian Kernel
     gauss_ker, (k2grid, k1grid) = gauss_kernel_rfft(
@@ -373,12 +373,12 @@ def get_klim(
     region to zeros
 
     Args:
-    psf_pow (ndarray):      PSF's Fourier power (rfft)
-    sigma (float):          one sigma of Gaussian Fourier power (pixel scale=1)
-    klim_thres (float):          the threshold for a tuncation on Gaussian
-                                [default: 1e-20]
+    psf_pow (ndarray): PSF's Fourier power (rfft)
+    sigma (float): one sigma of Gaussian Fourier power (pixel scale=1)
+    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+
     Returns:
-    klim (float):           the limit radius
+    klim (float): the limit radius
     """
     ngrid = psf_pow.shape[0]
     gaussian, (y, x) = gauss_kernel_rfft(
@@ -400,8 +400,8 @@ def truncate_square(arr: NDArray, rcut: int) -> None:
     """Truncate the input array with square
 
     Args:
-    arr (ndarray):      image array
-    rcut (int):         radius of the square (width / 2)
+    arr (ndarray): image array
+    rcut (int): radius of the square (width / 2)
     """
     if len(arr.shape) != 2 or arr.shape[0] != arr.shape[1]:
         raise ValueError("Input array must be a 2D square array")

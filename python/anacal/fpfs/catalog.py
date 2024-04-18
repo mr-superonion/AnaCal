@@ -23,12 +23,12 @@ def ssfunc1(x, mu, sigma):
     """Returns the C2 smooth step weight funciton
 
     Args:
-    x (ndarray):    input data vector
-    mu (float):     center of the cut
-    sigma (float):  half width of the selection function
+    x (ndarray): input data vector
+    mu (float): center of the cut
+    sigma (float): half width of the selection function
 
     Returns:
-    out (ndarray):  the weight funciton
+    out (ndarray): the weight funciton
     """
 
     def _func(t):
@@ -42,12 +42,12 @@ def ssfunc2(x, mu, sigma):
     """Returns the C2 smooth step weight funciton
 
     Args:
-    x (ndarray):    input data vector
-    mu (float):     center of the cut
-    sigma (float):  half width of the selection function
+    x (ndarray): input data vector
+    mu (float): center of the cut
+    sigma (float): half width of the selection function
 
     Returns:
-    out (ndarray):  the weight funciton
+    out (ndarray): the weight funciton
     """
 
     def _func(t):
@@ -57,54 +57,16 @@ def ssfunc2(x, mu, sigma):
     return jnp.piecewise(t, [t < 0, (t >= 0) & (t <= 1), t > 1], [0.0, _func, 1.0])
 
 
-def ssfunc3(x, mu, sigma):
-    """Returns the C2 smooth step weight funciton
-
-    Args:
-    x (ndarray):    input data vector
-    mu (float):     center of the cut
-    sigma (float):  half width of the selection function
-
-    Returns:
-    out (ndarray):  the weight funciton
-    """
-
-    def _func(t):
-        return -20 * t**7.0 + 70 * t**6.0 - 84 * t**5.0 + 35 * t**4.0
-
-    t = (x - mu) / sigma / 2.0 + 0.5
-    return jnp.piecewise(t, [t < 0, (t >= 0) & (t <= 1), t > 1], [0.0, _func, 1.0])
-
-
-def sbfunc1(x, mu, sigma):
-    """Returns the C2 smooth bump weight funciton
-
-    Args:
-    x (ndarray):    input data vector
-    mu (float):     center of the cut
-    sigma (float):  half width of the selection function
-
-    Returns:
-    out (ndarray):  the weight funciton
-    """
-
-    def _func(t):
-        return (1 - t**2.0) ** 2.0
-
-    t = (x - mu) / sigma
-    return jnp.piecewise(t, [t < -1, (t >= -1) & (t <= 1), t > 1], [0.0, _func, 0.0])
-
-
 def sigmoid(x, mu, sigma):
     """Returns the sigmoid step weight funciton
 
     Args:
-    x (ndarray):    input data vector
-    mu (float):     center shift
-    sigma (float):  half width of the selection function
+    x (ndarray): input data vector
+    mu (float): center shift
+    sigma (float): half width of the selection function
 
     Returns:
-    out (ndarray):  the weight funciton
+    out (ndarray): the weight funciton
     """
     t = x / sigma - mu
     # mu is not divided by sigma so that f(0) is independent of sigma
@@ -115,12 +77,12 @@ def gaussian(x, mu, sigma):
     """Returns the normalized Gaussian function value at x.
 
     Args:
-    x (array):      Points at which to evaluate the Gaussian function.
-    mu (float):     Mean of the Gaussian distribution.
-    sigma (float):  Standard deviation of the Gaussian distribution.
+    x (array): Points at which to evaluate the Gaussian function.
+    mu (float): Mean of the Gaussian distribution.
+    sigma (float): Standard deviation of the Gaussian distribution.
 
     Returns:
-    array:          The values of the Gaussian function at each point in x.
+    array: The values of the Gaussian function at each point in x.
     """
     exponent = -0.5 * ((x - mu) / sigma) ** 2
     return jnp.exp(exponent)
@@ -357,11 +319,11 @@ class CatalogBase(object):
         renoise method to revise noise bias.
 
         Args:
-        src (ndarray):      source catalog
-        noise (ndarray):    noise catalog
+        src (ndarray): source catalog
+        noise (ndarray): noise catalog
 
         Returns:
-        result (ndarray):   ellipticity and shear response (first component)
+        result (ndarray): ellipticity and shear response (first component)
         """
         src = jnp.atleast_2d(src)
         if noise is None:
@@ -386,11 +348,11 @@ class CatalogBase(object):
         renoise method to revise noise bias.
 
         Args:
-        src (ndarray):      source catalog
-        noise (ndarray):    noise catalog
+        src (ndarray): source catalog
+        noise (ndarray): noise catalog
 
         Returns:
-        result (ndarray):   ellipticity and shear response (second component)
+        result (ndarray): ellipticity and shear response (second component)
         """
         src = jnp.atleast_2d(src)
         if noise is None:
@@ -462,70 +424,18 @@ class FpfsCatalog(CatalogBase):
         return e2
 
 
-class Fpfs4Catalog(CatalogBase):
-    def __init__(
-        self,
-        ratio=1.81,
-        snr_min=12.0,
-        r2_min=0.05,
-        r2_max=2.0,
-        c0=2.55,
-        c2=25.6,
-        alpha=0.27,
-        beta=0.83,
-        pthres=0.0,
-        pratio=0.02,
-        cov_mat=None,
-        sigma_m00=None,
-        sigma_r2=None,
-        sigma_v=None,
-    ):
-        nord = 6
-        super().__init__(
-            ratio=ratio,
-            snr_min=snr_min,
-            r2_min=r2_min,
-            r2_max=r2_max,
-            c0=c0,
-            c2=c2,
-            alpha=alpha,
-            beta=beta,
-            pthres=pthres,
-            pratio=pratio,
-            cov_mat=cov_mat,
-            sigma_m00=sigma_m00,
-            sigma_r2=sigma_r2,
-            sigma_v=sigma_v,
-            nord=nord,
-        )
-        return
-
-    def _e1(self, x):
-        # ellipticity1
-        e1 = x[self.di["m42c"]] / self._denom(x)
-        return e1
-
-    def _e2(self, x):
-        # ellipticity2
-        e2 = x[self.di["m42s"]] / self._denom(x)
-        return e2
-
-
 def m2e(mm, const=1.0, nn=None):
     """Estimates FPFS ellipticities from fpfs moments
 
     Args:
-    mm (ndarray):
-        FPFS moments
-    const (float):
-        the weight constant [default:1]
-    nn (ndarray):
-        noise covaraince elements [default: None]
+    mm (ndarray): FPFS moments
+    const (float): the weight constant [default:1]
+    nn (ndarray): noise covaraince elements [default: None]
 
     Returns:
     out (ndarray):
-        an array of [FPFS ellipticities, FPFS ellipticity response, FPFS
-        flux, size and FPFS selection response]
+        an array of [FPFS ellipticities, FPFS ellipticity response, FPFS flux,
+        size and FPFS selection response]
     """
 
     # ellipticity, q-ellipticity, sizes, e^2, eq
