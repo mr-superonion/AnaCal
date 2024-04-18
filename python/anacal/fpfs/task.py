@@ -14,8 +14,10 @@ class FpfsDetect(FpfsTask):
     psf_array (NDArray): an average PSF image used to initialize the task
     pix_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
+    cov_matrix (NDArray): covariance matrix of Fpfs basis modes
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel [default: 8]
+    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
     """
 
     def __init__(
@@ -25,6 +27,7 @@ class FpfsDetect(FpfsTask):
         psf_array: NDArray,
         pix_scale: float,
         sigma_arcsec: float,
+        cov_matrix: NDArray,
         nord: int = 4,
         det_nrot: int = 4,
         klim_thres: float = 1e-20,
@@ -49,6 +52,8 @@ class FpfsDetect(FpfsTask):
         )
         self.nx = nx
         self.ny = ny
+
+        self.std_m00, self.std_v = self.get_stds(cov_matrix)
         return
 
     def run(
@@ -58,8 +63,6 @@ class FpfsDetect(FpfsTask):
         pthres: float,
         pratio: float,
         bound: int,
-        std_m00: float,
-        std_v: float,
         noise_array: NDArray | None = None,
         wdet_cut: float = 0.0,
     ) -> NDArray:
@@ -71,8 +74,6 @@ class FpfsDetect(FpfsTask):
         pthres (float): peak threshold
         pratio (float): peak flux ratio
         bound (int): minimum distance to boundary
-        std_m00 (float): standard deviation of m00 measurement error
-        std_v (float): standard deviation of v measurement error
         noise_array (NDArray|None): pure noise image
         wdet_cut (float): lower limit of the detection weight
 
@@ -88,8 +89,8 @@ class FpfsDetect(FpfsTask):
             pthres=pthres,
             pratio=pratio,
             bound=bound,
-            std_m00=std_m00 * self.pix_scale**2.0,
-            std_v=std_v * self.pix_scale**2.0,
+            std_m00=self.std_m00 * self.pix_scale**2.0,
+            std_v=self.std_v * self.pix_scale**2.0,
             noise_array=noise_array,
             wdet_cut=wdet_cut,
         )
@@ -104,6 +105,7 @@ class FpfsMeasure(FpfsTask):
     sigma_arcsec (float): Shapelet kernel size
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
+    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
     """
 
     def __init__(
@@ -172,6 +174,7 @@ class FpfsNoiseCov(FpfsTask):
     sigma_arcsec (float): Shapelet kernel size
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
+    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
 
     NOTE: The current version of Anacal.Fpfs only uses two elements of the
     covariance matrix. The full matrix will be useful in the future.

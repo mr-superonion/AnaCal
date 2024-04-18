@@ -36,12 +36,22 @@ def test_fpfs_measure(seed):
     pratio = 0.05
     std = 0.4
 
+    task = fpfs.image.measure_source(
+        psf_data,
+        pix_scale=scale,
+        sigma_arcsec=sigma_as,
+        nord=nord,
+        det_nrot=det_nrot,
+    )
+    cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
+
     dtask = anacal.fpfs.FpfsDetect(
         nx=ngrid,
         ny=ngrid,
         psf_array=psf_data,
         pix_scale=scale,
         sigma_arcsec=sigma_as,
+        cov_matrix=cov_element,
         det_nrot=det_nrot,
     )
     out1 = dtask.run(
@@ -50,8 +60,6 @@ def test_fpfs_measure(seed):
         pthres=pthres,
         pratio=pratio,
         bound=bound,
-        std_m00=std,
-        std_v=std,
         noise_array=None,
     )
     mtask = anacal.fpfs.FpfsMeasure(
@@ -62,17 +70,8 @@ def test_fpfs_measure(seed):
     )
     src1 = mtask.run(gal_array=gal_data, det=out1)
 
-    task = fpfs.image.measure_source(
-        psf_data,
-        pix_scale=scale,
-        sigma_arcsec=sigma_as,
-        nord=nord,
-        det_nrot=det_nrot,
-    )
-
     np.testing.assert_almost_equal(mtask.bfunc.real, task.bfunc.real)
     np.testing.assert_almost_equal(mtask.bfunc.imag, task.bfunc.imag)
-    cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
     out2 = task.detect_source(
         gal_data,
         psf_data,
@@ -89,4 +88,4 @@ def test_fpfs_measure(seed):
 
 
 if __name__ == "__main__":
-    test_fpfs_measure()
+    test_fpfs_measure(10)

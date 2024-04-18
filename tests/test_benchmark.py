@@ -43,11 +43,14 @@ def test_detect():
     def func():
         noise_data = np.random.randn(ny, nx)
         t0 = time.time()
+
+        cov_element = np.ones((21, 21)) * std**2.0
         dtask = anacal.fpfs.FpfsDetect(
             nx=nx,
             ny=ny,
             psf_array=psf_data,
             pix_scale=scale,
+            cov_matrix=cov_element,
             sigma_arcsec=sigma_as,
             det_nrot=det_nrot,
         )
@@ -59,8 +62,6 @@ def test_detect():
             pthres=pthres,
             pratio=pratio,
             bound=bound,
-            std_m00=std,
-            std_v=std,
             noise_array=noise_data,
         )[0:30000]
         mtask = anacal.fpfs.FpfsMeasure(
