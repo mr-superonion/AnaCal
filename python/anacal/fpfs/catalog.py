@@ -17,7 +17,7 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
-from . import fpfs_cut_sigma_ratio
+from . import fpfs_cut_sigma_ratio, fpfs_det_sigma2
 from .util import get_det_col_names, get_shapelets_col_names
 
 
@@ -105,8 +105,9 @@ class CatalogBase(object):
         c2: float = 25.6,
         alpha: float = 0.27,
         beta: float = 0.83,
-        pthres: float = 0.0,
-        pratio: float = 0.02,
+        pthres: float = 0.8,
+        pratio: float = 0.0,
+        pthres2: float = 0.12,
         nord: int = 4,
         det_nrot: int = 4,
     ):
@@ -155,6 +156,7 @@ class CatalogBase(object):
         # detection threshold
         self.pcut = pthres * std_v
         self.pratio = pratio
+        self.pthres2 = pthres2
         self.prepare_dg1_mat()
         self.prepare_dg2_mat()
         return
@@ -280,12 +282,12 @@ class CatalogBase(object):
     def _we1(self, x):
         e1 = self._wsel(x) * self._e1(x)
         w = self._wdet(x)
-        return ssfunc2(w, 0.12, 0.04) * e1
+        return ssfunc2(w, self.pthres2, fpfs_det_sigma2) * e1
 
     def _we2(self, x):
         e2 = self._wsel(x) * self._e2(x)
         w = self._wdet(x)
-        return ssfunc2(w, 0.12, 0.04) * e2
+        return ssfunc2(w, self.pthres2, fpfs_det_sigma2) * e2
 
     def _measure_g1_renoise(self, x, y=0.0):
         e1, linear_func = jax.linearize(
@@ -375,8 +377,9 @@ class FpfsCatalog(CatalogBase):
         c2: float = 25.6,
         alpha: float = 0.27,
         beta: float = 0.83,
-        pthres: float = 0.0,
-        pratio: float = 0.02,
+        pthres: float = 0.8,
+        pratio: float = 0.0,
+        pthres2: float = 0.12,
         det_nrot: int = 4,
     ):
         nord = 4
@@ -390,6 +393,7 @@ class FpfsCatalog(CatalogBase):
             beta=beta,
             pthres=pthres,
             pratio=pratio,
+            pthres2=pthres2,
             cov_mat=cov_mat,
             nord=nord,
             det_nrot=det_nrot,

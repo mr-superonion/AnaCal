@@ -42,6 +42,7 @@ def test_catalog():
         beta=beta,
         pthres=pthres,
         pratio=pratio,
+        pthres2=0.12,
         det_nrot=det_nrot,
     )
 

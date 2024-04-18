@@ -59,6 +59,7 @@ def test_fpfs_measure(seed):
         fthres=1.0,
         pthres=pthres,
         pratio=pratio,
+        pthres2=anacal.fpfs.fpfs_det_sigma2,
         bound=bound,
         noise_array=None,
     )

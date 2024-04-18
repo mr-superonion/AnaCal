@@ -1,4 +1,4 @@
-from .._anacal.fpfs import FpfsImage, fpfs_cut_sigma_ratio
+from .._anacal.fpfs import FpfsImage, fpfs_cut_sigma_ratio, fpfs_det_sigma2
 from .._anacal.image import Image
 from . import util
 from .catalog import FpfsCatalog

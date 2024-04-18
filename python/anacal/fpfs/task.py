@@ -150,9 +150,9 @@ class FpfsDetect(FpfsTask):
         fthres: float,
         pthres: float,
         pratio: float,
+        pthres2: float,
         bound: int,
         noise_array: NDArray | None = None,
-        wdet_cut: float = 0.0,
     ) -> NDArray:
         """This function detects galaxy from image
 
@@ -161,9 +161,9 @@ class FpfsDetect(FpfsTask):
         fthres (float): flux threshold
         pthres (float): peak threshold
         pratio (float): peak flux ratio
+        pthres2 (float): second pooling layer peak threshold
         bound (int): minimum distance to boundary
         noise_array (NDArray|None): pure noise image
-        wdet_cut (float): lower limit of the detection weight
 
         Returns:
             galaxy detection catalog
@@ -177,10 +177,10 @@ class FpfsDetect(FpfsTask):
             pthres=pthres,
             pratio=pratio,
             bound=bound,
+            pthres2=pthres2,
             std_m00=self.std_m00 * self.pix_scale**2.0,
             std_v=self.std_v * self.pix_scale**2.0,
             noise_array=noise_array,
-            wdet_cut=wdet_cut,
         )
 
 

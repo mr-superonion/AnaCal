@@ -6,6 +6,7 @@
 
 namespace anacal {
     inline constexpr double fpfs_cut_sigma_ratio = 1.6;
+    inline constexpr double fpfs_det_sigma2 = 0.04;
 
     class FpfsImage {
     private:
@@ -44,10 +45,10 @@ namespace anacal {
             double fthres,
             double pthres,
             double pratio,
+            double pthres2,
             double std_m00,
             double std_v,
-            int bound,
-            double wdet_cut=0.0
+            int bound
         );
 
         std::vector<std::tuple<int, int, bool>>
@@ -56,11 +57,11 @@ namespace anacal {
             double fthres,
             double pthres,
             double pratio,
+            double pthres2,
             double std_m00,
             double std_v,
             int bound,
-            const std::optional<py::array_t<double>>& noise_array=std::nullopt,
-            double wdet_cut=0.0
+            const std::optional<py::array_t<double>>& noise_array=std::nullopt
         );
 
         py::array_t<double>

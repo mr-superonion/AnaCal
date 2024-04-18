@@ -78,10 +78,10 @@ FpfsImage::find_peak(
     double fthres,
     double pthres,
     double pratio,
+    double pthres2,
     double std_m00,
     double std_v,
-    int bound,
-    double wdet_cut
+    int bound
 ) {
     auto r = gal_conv.unchecked<2>();
     ssize_t ny = r.shape(0);
@@ -90,6 +90,8 @@ FpfsImage::find_peak(
     double fcut = fthres * std_m00;
     double pcut = pthres * std_v;
     double sigma_v = fpfs_cut_sigma_ratio * std_v;
+
+    double wdet_cut = pthres2 - fpfs_det_sigma2;
 
     std::vector<std::tuple<int, int, bool>> peaks;
     for (ssize_t j = bound + 1; j < ny - bound; ++j) {
@@ -130,11 +132,11 @@ FpfsImage::detect_source(
     double fthres,
     double pthres,
     double pratio,
+    double pthres2,
     double std_m00,
     double std_v,
     int bound,
-    const std::optional<py::array_t<double>>& noise_array,
-    double wdet_cut
+    const std::optional<py::array_t<double>>& noise_array
 ) {
 
     py::array_t<double> gal_conv = smooth_image(
@@ -146,10 +148,10 @@ FpfsImage::detect_source(
         fthres,
         pthres,
         pratio,
+        pthres2,
         std_m00,
         std_v,
-        bound,
-        wdet_cut
+        bound
     );
     return catalog;
 }
@@ -217,6 +219,7 @@ void
 pyExportFpfs(py::module& m) {
     py::module_ fpfs = m.def_submodule("fpfs", "submodule for FPFS shear estimation");
     fpfs.attr("fpfs_cut_sigma_ratio") = fpfs_cut_sigma_ratio;
+    fpfs.attr("fpfs_det_sigma2") = fpfs_det_sigma2;
     py::class_<FpfsImage>(fpfs, "FpfsImage")
         .def(py::init<int, int, double, double, double,
             const py::array_t<double>&, bool>(),
@@ -238,10 +241,10 @@ pyExportFpfs(py::module& m) {
             py::arg("fthres"),
             py::arg("pthres"),
             py::arg("pratio"),
+            py::arg("pthres2"),
             py::arg("std_m00"),
             py::arg("std_v"),
-            py::arg("bound"),
-            py::arg("wdet_cut")=0.0
+            py::arg("bound")
         )
         .def("detect_source", &FpfsImage::detect_source,
             "Detect galaxy candidates from image",
@@ -249,11 +252,11 @@ pyExportFpfs(py::module& m) {
             py::arg("fthres"),
             py::arg("pthres"),
             py::arg("pratio"),
+            py::arg("pthres2"),
             py::arg("std_m00"),
             py::arg("std_v"),
             py::arg("bound"),
-            py::arg("noise_array")=py::none(),
-            py::arg("wdet_cut")=0.0
+            py::arg("noise_array")=py::none()
         )
         .def("measure_source", &FpfsImage::measure_source,
             "measure source properties using filter at the position of det",
