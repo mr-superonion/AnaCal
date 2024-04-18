@@ -5,6 +5,94 @@ from . import FpfsImage, Image
 from .util import FpfsTask
 
 
+class FpfsNoiseCov(FpfsTask):
+    """A class to measure FPFS noise covariance of basis modes
+
+    Args:
+    psf_array (NDArray): an average PSF image used to initialize the task
+    pix_scale (float): pixel scale in arcsec
+    sigma_arcsec (float): Shapelet kernel size
+    nord (int): the highest order of Shapelets radial components [default: 4]
+    det_nrot (int): number of rotation in the detection kernel
+    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+
+    NOTE: The current version of Anacal.Fpfs only uses two elements of the
+    covariance matrix. The full matrix will be useful in the future.
+    """
+
+    def __init__(
+        self,
+        psf_array: NDArray,
+        pix_scale: float,
+        sigma_arcsec: float,
+        nord: int = 4,
+        det_nrot: int = 4,
+        klim_thres: float = 1e-20,
+    ) -> None:
+        super().__init__(
+            psf_array=psf_array,
+            sigma_arcsec=sigma_arcsec,
+            nord=nord,
+            pix_scale=pix_scale,
+            det_nrot=det_nrot,
+            klim_thres=klim_thres,
+        )
+
+        # Preparing PSF
+        psf_f = np.fft.rfft2(psf_array)
+        self.psf_pow = (np.abs(psf_f) ** 2.0).astype(np.float64)
+        return
+
+    def measure(self, variance, noise_pf=None):
+        """Estimates covariance of measurement error
+
+        Args:
+        variance (float): noise variance
+        noise_pf (NDArray|None): power spectrum (assuming homogeneous) of noise
+
+        Return:
+        cov_matrix (NDArray): covariance matrix of FPFS basis modes
+        """
+        if noise_pf is not None:
+            if noise_pf.shape == (self.ngrid, self.ngrid // 2 + 1):
+                # rfft
+                noise_pf = np.array(noise_pf, dtype=np.float64)
+            elif noise_pf.shape == (self.ngrid, self.ngrid):
+                # fft
+                noise_pf = np.fft.ifftshift(noise_pf)
+                noise_pf = np.array(
+                    noise_pf[:, : self.ngrid // 2 + 1], dtype=np.float64
+                )
+            else:
+                raise ValueError("noise power not in correct shape")
+        else:
+            ss = (self.ngrid, self.ngrid // 2 + 1)
+            noise_pf = np.ones(ss)
+        norm_factor = variance * self.ngrid**2.0 / noise_pf[0, 0]
+        noise_pf = noise_pf * norm_factor
+
+        img_obj = Image(nx=self.ngrid, ny=self.ngrid, scale=self.pix_scale)
+        img_obj.set_f(noise_pf)
+        img_obj.deconvolve(
+            psf_image=self.psf_pow,
+            klim=self.klim / self.pix_scale,
+        )
+        noise_pf_deconv = img_obj.draw_f().real
+
+        _w = np.ones(self.psf_pow.shape) * 2.0
+        _w[:, 0] = 1.0
+        _w[:, -1] = 1.0
+        cov_matrix = (
+            np.tensordot(
+                self.bfunc * (_w * noise_pf_deconv)[np.newaxis, :, :],
+                np.conjugate(self.bfunc),
+                axes=((1, 2), (1, 2)),
+            ).real
+            / self.pix_scale**4.0
+        )
+        return cov_matrix
+
+
 class FpfsDetect(FpfsTask):
     """A base class for measurement
 
@@ -139,9 +227,9 @@ class FpfsMeasure(FpfsTask):
     def run(
         self,
         gal_array: NDArray,
-        psf_array=None,
-        det=None,
-        do_rotate=False,
+        psf_array: NDArray | None = None,
+        det: NDArray | None = None,
+        do_rotate: bool = False,
     ) -> NDArray:
         """This function detects galaxy from image
 
@@ -163,91 +251,3 @@ class FpfsMeasure(FpfsTask):
             det=det,
             do_rotate=do_rotate,
         )
-
-
-class FpfsNoiseCov(FpfsTask):
-    """A class to measure FPFS noise covariance of basis modes
-
-    Args:
-    psf_array (NDArray): an average PSF image used to initialize the task
-    pix_scale (float): pixel scale in arcsec
-    sigma_arcsec (float): Shapelet kernel size
-    nord (int): the highest order of Shapelets radial components [default: 4]
-    det_nrot (int): number of rotation in the detection kernel
-    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
-
-    NOTE: The current version of Anacal.Fpfs only uses two elements of the
-    covariance matrix. The full matrix will be useful in the future.
-    """
-
-    def __init__(
-        self,
-        psf_array: NDArray,
-        pix_scale: float,
-        sigma_arcsec: float,
-        nord: int = 4,
-        det_nrot: int = 4,
-        klim_thres: float = 1e-20,
-    ) -> None:
-        super().__init__(
-            psf_array=psf_array,
-            sigma_arcsec=sigma_arcsec,
-            nord=nord,
-            pix_scale=pix_scale,
-            det_nrot=det_nrot,
-            klim_thres=klim_thres,
-        )
-
-        # Preparing PSF
-        psf_f = np.fft.rfft2(psf_array)
-        self.psf_pow = (np.abs(psf_f) ** 2.0).astype(np.float64)
-        return
-
-    def measure(self, variance, noise_pf=None):
-        """Estimates covariance of measurement error
-
-        Args:
-        variance (float): noise variance
-        noise_pf (NDArray|None): power spectrum (assuming homogeneous) of noise
-
-        Return:
-        cov_matrix (NDArray): covariance matrix of FPFS basis modes
-        """
-        if noise_pf is not None:
-            if noise_pf.shape == (self.ngrid, self.ngrid // 2 + 1):
-                # rfft
-                noise_pf = np.array(noise_pf, dtype=np.float64)
-            elif noise_pf.shape == (self.ngrid, self.ngrid):
-                # fft
-                noise_pf = np.fft.ifftshift(noise_pf)
-                noise_pf = np.array(
-                    noise_pf[:, : self.ngrid // 2 + 1], dtype=np.float64
-                )
-            else:
-                raise ValueError("noise power not in correct shape")
-        else:
-            ss = (self.ngrid, self.ngrid // 2 + 1)
-            noise_pf = np.ones(ss)
-        norm_factor = variance * self.ngrid**2.0 / noise_pf[0, 0]
-        noise_pf = noise_pf * norm_factor
-
-        img_obj = Image(nx=self.ngrid, ny=self.ngrid, scale=self.pix_scale)
-        img_obj.set_f(noise_pf)
-        img_obj.deconvolve(
-            psf_image=self.psf_pow,
-            klim=self.klim / self.pix_scale,
-        )
-        noise_pf_deconv = img_obj.draw_f().real
-
-        _w = np.ones(self.psf_pow.shape) * 2.0
-        _w[:, 0] = 1.0
-        _w[:, -1] = 1.0
-        cov_matrix = (
-            np.tensordot(
-                self.bfunc * (_w * noise_pf_deconv)[np.newaxis, :, :],
-                np.conjugate(self.bfunc),
-                axes=((1, 2), (1, 2)),
-            ).real
-            / self.pix_scale**4.0
-        )
-        return cov_matrix
