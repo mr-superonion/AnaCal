@@ -5,7 +5,7 @@ import numpy as np
 
 
 def test_noise_covariance():
-    variance = 0.22 ** 2.0
+    variance = 0.22**2.0
     sigma_as = 0.55
     nord = 4
     det_nrot = 4
@@ -29,9 +29,7 @@ def test_noise_covariance():
     # NOTE: this is the power function of noise not the noise power spectrum!!
     # Namely, it is the expectation of the power of the Fourier transform of
     # noise images
-    noise_pow = (
-        np.ones((ngrid, ngrid)) * variance * ngrid**2.0
-    )
+    noise_pow = np.ones((ngrid, ngrid)) * variance * ngrid**2.0
     cov_elem = noise_task.measure(noise_pow)
     noise_task2 = anacal.fpfs.FpfsNoiseCov(
         psf_array,

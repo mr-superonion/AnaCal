@@ -151,7 +151,9 @@ class FpfsTask(AnacalBase):
         std_modes = np.sqrt(np.diagonal(cov_mat))
         std_m00 = std_modes[self.di["m00"]]
         std_v = np.average(
-            np.array([std_modes[self.di["v%d" % _]] for _ in range(self.det_nrot)])
+            np.array(
+                [std_modes[self.di["v%d" % _]] for _ in range(self.det_nrot)]
+            )
         )
         return std_m00, std_v
 
@@ -257,7 +259,9 @@ def shapelets2d_func(ngrid: int, nord: int, sigma: float, klim: float):
     # Set up Laguerre polynomials
     lfunc = np.zeros((nord + 1, mord + 1, ny, nx), dtype=np.float64)
     lfunc[0, :, :, :] = 1.0
-    lfunc[1, :, :, :] = 1.0 - r2_over_sigma2 + np.arange(mord + 1)[None, :, None, None]
+    lfunc[1, :, :, :] = (
+        1.0 - r2_over_sigma2 + np.arange(mord + 1)[None, :, None, None]
+    )
     #
     chi = np.zeros((nord + 1, mord + 1, ny, nx), dtype=np.complex128)
     for n in range(2, nord + 1):
@@ -409,7 +413,7 @@ def truncate_square(arr: NDArray, rcut: int) -> None:
     ngrid2 = ngrid // 2
     assert rcut < ngrid2 - 1
     arr[: ngrid2 - rcut, :] = 0
-    arr[ngrid2 + rcut + 1:, :] = 0
+    arr[ngrid2 + rcut + 1 :, :] = 0
     arr[:, : ngrid2 - rcut] = 0
-    arr[:, ngrid2 + rcut + 1:] = 0
+    arr[:, ngrid2 + rcut + 1 :] = 0
     return

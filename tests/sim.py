@@ -70,7 +70,13 @@ def gauss_kernel_rfft(
 
 
 def gauss_tophat_kernel_rfft(
-    ny: int, nx: int, d: float, sigma: float, theta: float, gamma1: float, gamma2: float
+    ny: int,
+    nx: int,
+    d: float,
+    sigma: float,
+    theta: float,
+    gamma1: float,
+    gamma2: float,
 ):
     """
     Args:

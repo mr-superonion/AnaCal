@@ -21,7 +21,7 @@ def rfft2_to_fft2(rfft2_output, original_shape):
     full_fft = np.zeros(original_shape, dtype=np.complex128)
 
     # The first half (positive frequencies) can be copied directly
-    full_fft[:, :rfft2_output.shape[1]] = rfft2_output
+    full_fft[:, : rfft2_output.shape[1]] = rfft2_output
 
     # For the negative frequencies (excluding DC and Nyquist if even-sized
     # signal)

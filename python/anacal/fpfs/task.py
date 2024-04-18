@@ -218,16 +218,13 @@ class FpfsNoiseCov(FpfsTask):
                 # fft
                 noise_pf = np.fft.ifftshift(noise_pf)
                 noise_pf = np.array(
-                    noise_pf[:, : self.ngrid // 2 + 1],
-                    dtype=np.float64
+                    noise_pf[:, : self.ngrid // 2 + 1], dtype=np.float64
                 )
             else:
                 raise ValueError("noise power not in correct shape")
         else:
             ss = (self.ngrid, self.ngrid // 2 + 1)
-            noise_pf = (
-                np.ones(ss)
-            )
+            noise_pf = np.ones(ss)
         norm_factor = variance * self.ngrid**2.0 / noise_pf[0, 0]
         noise_pf = noise_pf * norm_factor
 

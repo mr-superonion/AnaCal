@@ -17,8 +17,8 @@ import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
-from .util import get_det_col_names, get_shapelets_col_names
 from . import fpfs_cut_sigma_ratio
+from .util import get_det_col_names, get_shapelets_col_names
 
 
 def ssfunc1(x, mu, sigma):
@@ -37,7 +37,9 @@ def ssfunc1(x, mu, sigma):
         return -2.0 * t**3.0 + 3 * t**2.0
 
     t = (x - mu) / sigma / 2.0 + 0.5
-    return jnp.piecewise(t, [t < 0, (t >= 0) & (t <= 1), t > 1], [0.0, _func, 1.0])
+    return jnp.piecewise(
+        t, [t < 0, (t >= 0) & (t <= 1), t > 1], [0.0, _func, 1.0]
+    )
 
 
 def ssfunc2(x, mu, sigma):
@@ -56,7 +58,9 @@ def ssfunc2(x, mu, sigma):
         return 6 * t**5.0 - 15 * t**4.0 + 10 * t**3.0
 
     t = (x - mu) / sigma / 2.0 + 0.5
-    return jnp.piecewise(t, [t < 0, (t >= 0) & (t <= 1), t > 1], [0.0, _func, 1.0])
+    return jnp.piecewise(
+        t, [t < 0, (t >= 0) & (t <= 1), t > 1], [0.0, _func, 1.0]
+    )
 
 
 def sigmoid(x, mu, sigma):

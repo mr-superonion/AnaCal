@@ -8,7 +8,9 @@ ngrid = 64
 
 
 def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=4):
-    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(e1=0.02, e2=-0.02)
+    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
+        e1=0.02, e2=-0.02
+    )
 
     psf_data = (
         psf_obj.shift(0.5 * scale, 0.5 * scale)
@@ -16,7 +18,8 @@ def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=4):
         .array
     )
     psf_data = psf_data[
-        ngrid // 2 - rcut : ngrid // 2 + rcut, ngrid // 2 - rcut : ngrid // 2 + rcut
+        ngrid // 2 - rcut : ngrid // 2 + rcut,
+        ngrid // 2 - rcut : ngrid // 2 + rcut,
     ]
     gname = "%s-0" % gcomp
     gal_data = fpfs.simulation.make_isolate_sim(
@@ -53,7 +56,9 @@ def do_test(scale, seed, rcut, gcomp):
         raise ValueError("gcomp should be g1 or g2")
 
     nrot = 12
-    gal_data, psf_data, coords = simulate_gal_psf(scale, seed, rcut, gcomp, nrot)
+    gal_data, psf_data, coords = simulate_gal_psf(
+        scale, seed, rcut, gcomp, nrot
+    )
     nord = 4
     det_nrot = 4
     mtask = anacal.fpfs.FpfsMeasure(
@@ -84,7 +89,10 @@ def do_test(scale, seed, rcut, gcomp):
         det=coords,
     )
     mms2 = np.vstack(
-        [mtask.run(gal_array=gal_list[i], psf_array=psf_list[i]) for i in range(nrot)]
+        [
+            mtask.run(gal_array=gal_list[i], psf_array=psf_list[i])
+            for i in range(nrot)
+        ]
     )
     np.testing.assert_almost_equal(mms, mms2)
 

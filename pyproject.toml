@@ -5,15 +5,15 @@ build-backend = "setuptools.build_meta"
 [tool.flake8]
 ignore = ["N801", "N803", "N816", "W503", "W504", "E731", "E203", "E303"]
 exclude = [".git", "__pycache__", "docs", "build", "dist"]
-max-line-length = 90
+max-line-length = 80
 
 [tool.black]
-line-length = 90
+line-length = 80
 target-version = ["py311"]
 
 [tool.isort]
 profile = "black"
-line_length = 90
+line_length = 80
 
 [tool.pytest.ini_options]
 testpaths = ["./tests"]

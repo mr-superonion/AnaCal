@@ -1,6 +1,6 @@
 import numpy as np
-from fpfs.catalog import fpfs_catalog
 from anacal.fpfs import FpfsCatalog
+from fpfs.catalog import fpfs_catalog
 
 
 def test_catalog():
@@ -14,7 +14,7 @@ def test_catalog():
     c0 = 5.0
     c2 = 22.74
     alpha = 1.0
-    beta = 0.
+    beta = 0.0
     pthres = 0.8
     pratio = 0.00
 

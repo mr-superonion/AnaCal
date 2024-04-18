@@ -7,9 +7,13 @@ from .fpfs import smooth
 
 scale = 0.2
 ngrid = 128
-psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(e1=0.02, e2=-0.02)
+psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
+    e1=0.02, e2=-0.02
+)
 psf_array = (
-    psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(nx=32, ny=32, scale=scale).array
+    psf_obj.shift(0.5 * scale, 0.5 * scale)
+    .drawImage(nx=32, ny=32, scale=scale)
+    .array
 )
 
 nord = 4
@@ -60,7 +64,9 @@ def test_convolve_noise(seed=2):
     )
 
     noise_array = np.random.randn(ngrid, ngrid)
-    smooth_data = det_task.smooth_image(gal_array=gal_data, noise_array=noise_array)
+    smooth_data = det_task.smooth_image(
+        gal_array=gal_data, noise_array=noise_array
+    )
     smooth_data2 = smooth(task, gal_data, psf_array, noise_array)
     np.testing.assert_almost_equal(smooth_data, smooth_data2)
     return

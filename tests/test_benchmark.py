@@ -19,11 +19,13 @@ bound = 40
 
 scale = 0.2
 sigma_as = 0.55
-psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0) \
-    .shear(e1=0.02, e2=-0.02)
+psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
+    e1=0.02, e2=-0.02
+)
 psf_data = (
-    psf_obj.shift(0.5 * scale, 0.5 * scale).
-    drawImage(nx=64, ny=64, scale=scale).array
+    psf_obj.shift(0.5 * scale, 0.5 * scale)
+    .drawImage(nx=64, ny=64, scale=scale)
+    .array
 )
 gal_obj = (
     psf_obj.shift(-3.5, 2) * 2
