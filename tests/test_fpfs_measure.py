@@ -38,7 +38,7 @@ def test_fpfs_measure(seed):
 
     task = fpfs.image.measure_source(
         psf_data,
-        pixel_scale=scale,
+        pix_scale=scale,
         sigma_arcsec=sigma_as,
         nord=nord,
         det_nrot=det_nrot,
