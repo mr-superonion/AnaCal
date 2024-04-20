@@ -109,7 +109,7 @@ def test_deconvolve_image(seed=1):
     # test shear estimation
     task = fpfs.image.measure_source(
         psf_data,
-        pix_scale=scale,
+        pixel_scale=scale,
         sigma_arcsec=0.53,
         nord=nord,
         det_nrot=det_nrot,

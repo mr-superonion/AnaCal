@@ -86,18 +86,18 @@ class FpfsTask(AnacalBase):
 
     Args:
     psf_array (ndarray): an average PSF image used to initialize the task
-    pix_scale (float): pixel scale in arcsec
+    pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
     klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
-    verbose (bool):         whether print out INFO
+    verbose (bool): whether print out INFO
     """
 
     def __init__(
         self,
         psf_array,
-        pix_scale: float,
+        pixel_scale: float,
         sigma_arcsec: float,
         nord: int = 4,
         det_nrot: int = 4,
@@ -126,11 +126,11 @@ class FpfsTask(AnacalBase):
         psf_pow = (np.abs(psf_f) ** 2.0).astype(np.float64)
 
         # A few import scales
-        self.pix_scale = pix_scale
+        self.pixel_scale = pixel_scale
         self._dk = 2.0 * np.pi / self.ngrid  # assuming pixel scale is 1
 
         # the following two assumes pixel_scale = 1
-        self.sigmaf = float(self.pix_scale / sigma_arcsec)
+        self.sigmaf = float(self.pixel_scale / sigma_arcsec)
         self.logger.info("Order of the shear estimator: nord=%d" % self.nord)
         self.logger.info(
             "Shapelet kernel in configuration space: sigma= %.4f arcsec"
@@ -201,15 +201,15 @@ def gauss_kernel_rfft(
     The kernel is truncated at radius klim.
 
     Args:
-    ny (int):    		    grid size in y-direction
-    nx (int):    		    grid size in x-direction
-    sigma (float):		    scale of Gaussian in Fourier space (pixel scale=1)
-    klim (float):           upper limit of k
-    return_grid (bool):     return grids or not
+    ny (int): grid size in y-direction
+    nx (int): grid size in x-direction
+    sigma (float): scale of Gaussian in Fourier space (pixel scale=1)
+    klim (float): upper limit of k
+    return_grid (bool): return grids or not
 
     Returns:
-    out (ndarray):          Gaussian on grids
-    ygrid, xgrid (typle):   grids for [y, x] axes, if return_grid
+    out (ndarray): Gaussian on grids
+    ygrid, xgrid (typle): grids for [y, x] axes, if return_grid
     """
     x = np.fft.rfftfreq(nx, 1 / np.pi / 2.0)
     y = np.fft.fftfreq(ny, 1 / np.pi / 2.0)
@@ -229,13 +229,13 @@ def shapelets2d_func(ngrid: int, nord: int, sigma: float, klim: float):
     [only support square stamps: ny=nx=ngrid]
 
     Args:
-    ngrid (int):    number of pixels in x and y direction
-    nord (int):     radial order of the shaplets
-    sigma (float):  scale of shapelets in Fourier space
-    klim (float):   upper limit of |k|
+    ngrid (int): number of pixels in x and y direction
+    nord (int): radial order of the shaplets
+    sigma (float): scale of shapelets in Fourier space
+    klim (float): upper limit of |k|
 
     Returns:
-    chi (ndarray):  2d shapelet basis
+    chi (ndarray): 2d shapelet basis
     """
 
     mord = nord
@@ -302,7 +302,7 @@ def shapelets2d(ngrid: int, nord: int, sigma: float, klim: float):
 
     Returns:
     chi_2 (ndarray): 2d shapelet basis w/ shape [n,ngrid,ngrid]
-    name_s (list):   A list of shaplet names
+    name_s (list): A list of shaplet names
     """
     name_s, ind_s = get_shapelets_col_names(nord)
     # generate the complex shaplet functions

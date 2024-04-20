@@ -63,7 +63,7 @@ def do_test(scale, seed, rcut, gcomp):
     det_nrot = 4
     mtask = anacal.fpfs.FpfsMeasure(
         psf_array=psf_data,
-        pix_scale=scale,
+        pixel_scale=scale,
         sigma_arcsec=0.53,
         nord=nord,
         det_nrot=det_nrot,

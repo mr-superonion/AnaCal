@@ -49,7 +49,7 @@ def test_detect():
             nx=nx,
             ny=ny,
             psf_array=psf_data,
-            pix_scale=scale,
+            pixel_scale=scale,
             cov_matrix=cov_element,
             sigma_arcsec=sigma_as,
             det_nrot=det_nrot,
@@ -67,7 +67,7 @@ def test_detect():
         )[0:30000]
         mtask = anacal.fpfs.FpfsMeasure(
             psf_array=psf_data,
-            pix_scale=scale,
+            pixel_scale=scale,
             sigma_arcsec=sigma_as,
             det_nrot=det_nrot,
         )

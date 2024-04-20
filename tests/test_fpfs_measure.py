@@ -38,7 +38,7 @@ def test_fpfs_measure(seed):
 
     task = fpfs.image.measure_source(
         psf_data,
-        pix_scale=scale,
+        pixel_scale=scale,
         sigma_arcsec=sigma_as,
         nord=nord,
         det_nrot=det_nrot,
@@ -49,7 +49,7 @@ def test_fpfs_measure(seed):
         nx=ngrid,
         ny=ngrid,
         psf_array=psf_data,
-        pix_scale=scale,
+        pixel_scale=scale,
         sigma_arcsec=sigma_as,
         cov_matrix=cov_element,
         det_nrot=det_nrot,
@@ -65,7 +65,7 @@ def test_fpfs_measure(seed):
     )
     mtask = anacal.fpfs.FpfsMeasure(
         psf_array=psf_data,
-        pix_scale=scale,
+        pixel_scale=scale,
         sigma_arcsec=sigma_as,
         det_nrot=det_nrot,
     )

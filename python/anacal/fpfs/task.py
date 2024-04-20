@@ -10,7 +10,7 @@ class FpfsNoiseCov(FpfsTask):
 
     Args:
     psf_array (NDArray): an average PSF image used to initialize the task
-    pix_scale (float): pixel scale in arcsec
+    pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
@@ -23,7 +23,7 @@ class FpfsNoiseCov(FpfsTask):
     def __init__(
         self,
         psf_array: NDArray,
-        pix_scale: float,
+        pixel_scale: float,
         sigma_arcsec: float,
         nord: int = 4,
         det_nrot: int = 4,
@@ -33,7 +33,7 @@ class FpfsNoiseCov(FpfsTask):
             psf_array=psf_array,
             sigma_arcsec=sigma_arcsec,
             nord=nord,
-            pix_scale=pix_scale,
+            pixel_scale=pixel_scale,
             det_nrot=det_nrot,
             klim_thres=klim_thres,
         )
@@ -71,11 +71,11 @@ class FpfsNoiseCov(FpfsTask):
         norm_factor = variance * self.ngrid**2.0 / noise_pf[0, 0]
         noise_pf = noise_pf * norm_factor
 
-        img_obj = Image(nx=self.ngrid, ny=self.ngrid, scale=self.pix_scale)
+        img_obj = Image(nx=self.ngrid, ny=self.ngrid, scale=self.pixel_scale)
         img_obj.set_f(noise_pf)
         img_obj.deconvolve(
             psf_image=self.psf_pow,
-            klim=self.klim / self.pix_scale,
+            klim=self.klim / self.pixel_scale,
         )
         noise_pf_deconv = img_obj.draw_f().real
 
@@ -88,7 +88,7 @@ class FpfsNoiseCov(FpfsTask):
                 np.conjugate(self.bfunc),
                 axes=((1, 2), (1, 2)),
             ).real
-            / self.pix_scale**4.0
+            / self.pixel_scale**4.0
         )
         return cov_matrix
 
@@ -100,7 +100,7 @@ class FpfsDetect(FpfsTask):
     nx (int): number of grids in x
     ny (int): number of grids in y
     psf_array (NDArray): an average PSF image used to initialize the task
-    pix_scale (float): pixel scale in arcsec
+    pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
     cov_matrix (NDArray): covariance matrix of Fpfs basis modes
     nord (int): the highest order of Shapelets radial components [default: 4]
@@ -113,7 +113,7 @@ class FpfsDetect(FpfsTask):
         nx: int,
         ny: int,
         psf_array: NDArray,
-        pix_scale: float,
+        pixel_scale: float,
         sigma_arcsec: float,
         cov_matrix: NDArray,
         nord: int = 4,
@@ -124,7 +124,7 @@ class FpfsDetect(FpfsTask):
             psf_array=psf_array,
             sigma_arcsec=sigma_arcsec,
             nord=nord,
-            pix_scale=pix_scale,
+            pixel_scale=pixel_scale,
             det_nrot=det_nrot,
             klim_thres=klim_thres,
         )
@@ -132,9 +132,9 @@ class FpfsDetect(FpfsTask):
         self.dtask = FpfsImage(
             nx=nx,
             ny=ny,
-            scale=self.pix_scale,
+            scale=self.pixel_scale,
             sigma_arcsec=self.sigma_arcsec,
-            klim=self.klim / self.pix_scale,
+            klim=self.klim / self.pixel_scale,
             psf_array=psf_array,
             use_estimate=True,
         )
@@ -178,8 +178,8 @@ class FpfsDetect(FpfsTask):
             pratio=pratio,
             bound=bound,
             pthres2=pthres2,
-            std_m00=self.std_m00 * self.pix_scale**2.0,
-            std_v=self.std_v * self.pix_scale**2.0,
+            std_m00=self.std_m00 * self.pixel_scale**2.0,
+            std_v=self.std_v * self.pixel_scale**2.0,
             noise_array=noise_array,
         )
 
@@ -189,7 +189,7 @@ class FpfsMeasure(FpfsTask):
 
     Args:
     psf_array (NDArray): an average PSF image used to initialize the task
-    pix_scale (float): pixel scale in arcsec
+    pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
@@ -199,7 +199,7 @@ class FpfsMeasure(FpfsTask):
     def __init__(
         self,
         psf_array: NDArray,
-        pix_scale: float,
+        pixel_scale: float,
         sigma_arcsec: float,
         nord: int = 4,
         det_nrot: int = 4,
@@ -209,16 +209,16 @@ class FpfsMeasure(FpfsTask):
             psf_array=psf_array,
             sigma_arcsec=sigma_arcsec,
             nord=nord,
-            pix_scale=pix_scale,
+            pixel_scale=pixel_scale,
             det_nrot=det_nrot,
             klim_thres=klim_thres,
         )
         self.mtask = FpfsImage(
             nx=self.ngrid,
             ny=self.ngrid,
-            scale=self.pix_scale,
+            scale=self.pixel_scale,
             sigma_arcsec=self.sigma_arcsec,
-            klim=self.klim / self.pix_scale,
+            klim=self.klim / self.pixel_scale,
             psf_array=psf_array,
             use_estimate=True,
         )

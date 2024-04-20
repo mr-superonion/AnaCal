@@ -22,7 +22,7 @@ sigma_as = 0.53
 
 task = fpfs.image.measure_source(
     psf_array,
-    pix_scale=scale,
+    pixel_scale=scale,
     sigma_arcsec=sigma_as,
     nord=nord,
     det_nrot=det_nrot,

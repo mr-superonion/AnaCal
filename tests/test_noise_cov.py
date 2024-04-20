@@ -23,7 +23,7 @@ def test_noise_covariance():
         psf_array,
         sigma_arcsec=sigma_as,
         nord=nord,
-        pix_scale=pixel_scale,
+        pixel_scale=pixel_scale,
         det_nrot=det_nrot,
     )
     # NOTE: this is the power function of noise not the noise power spectrum!!

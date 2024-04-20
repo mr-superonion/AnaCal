@@ -3,6 +3,7 @@ from .._anacal.image import Image
 from . import util
 from .catalog import FpfsCatalog
 from .task import FpfsDetect, FpfsMeasure, FpfsNoiseCov
+from .configure import FpfsConfig
 
 __all__ = [
     "util",
@@ -11,4 +12,5 @@ __all__ = [
     "FpfsMeasure",
     "FpfsCatalog",
     "FpfsNoiseCov",
+    "FpfsConfig",
 ]
