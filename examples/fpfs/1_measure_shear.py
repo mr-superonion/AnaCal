@@ -16,7 +16,7 @@ psf_array = fitsio.read("PSF_Fixed.fits")
 # Preparing
 if noise_variance <= 0:
     raise ValueError(
-        "Noise variance should be positive, even though",
+        "To enable detection, noise variance should be positive, even though",
         "image is noiseless.",
     )
 ngrid = fpfs_config.rcut * 2
@@ -24,47 +24,47 @@ if not psf_array.shape == (ngrid, ngrid):
     raise ValueError("psf arry has a wrong shape")
 ny, nx = gal_array.shape
 if fpfs_config.noise_rev:
-    noise_array = np.random.RandomState(seed).normal(
-        scale=np.sqrt(noise_variance),
-        size=(ny, nx),
-    )
+    if noise_array is None:
+        raise ValueError("noise_rev is True, but no noise_array found")
 else:
-    noise_array = None
+    if noise_array is not None:
+        raise ValueError("noise_rev is False, noise_array should be None")
 
 # Shapelet Covariance matrix
-noise_task = anacal.fpfs.FpfsNoiseCov(
-    psf_array=psf_array,
-    pixel_scale=pixel_scale,
-    sigma_arcsec=fpfs_config.sigma_arcsec,
-    nord=fpfs_config.nord,
-    det_nrot=fpfs_config.det_nrot,
-    klim_thres=fpfs_config.klim_thres,
-)
-cov_matrix = noise_task.measure(variance=noise_variance)
-print(np.diag(cov_matrix))
-del noise_task
+if cov_matrix is None:
+    noise_task = anacal.fpfs.FpfsNoiseCov(
+        psf_array=psf_array,
+        pixel_scale=pixel_scale,
+        sigma_arcsec=fpfs_config.sigma_arcsec,
+        nord=fpfs_config.nord,
+        det_nrot=fpfs_config.det_nrot,
+        klim_thres=fpfs_config.klim_thres,
+    )
+    cov_matrix = noise_task.measure(variance=noise_variance)
+    del noise_task
 
 # Detection
-dtask = anacal.fpfs.FpfsDetect(
-    nx=ny,
-    ny=nx,
-    psf_array=psf_array,
-    pixel_scale=pixel_scale,
-    sigma_arcsec=fpfs_config.sigma_arcsec,
-    cov_matrix=cov_matrix,
-    det_nrot=fpfs_config.det_nrot,
-    klim_thres=fpfs_config.klim_thres,
-)
-coords = dtask.run(
-    gal_array=gal_array,
-    fthres=8.5,
-    pthres=fpfs_config.pthres,
-    pratio=fpfs_config.pratio,
-    pthres2=fpfs_config.pthres2,
-    bound=fpfs_config.bound,
-    noise_array=noise_array,
-)
-del dtask
+if coords is None:
+    dtask = anacal.fpfs.FpfsDetect(
+        nx=ny,
+        ny=nx,
+        psf_array=psf_array,
+        pixel_scale=pixel_scale,
+        sigma_arcsec=fpfs_config.sigma_arcsec,
+        cov_matrix=cov_matrix,
+        det_nrot=fpfs_config.det_nrot,
+        klim_thres=fpfs_config.klim_thres,
+    )
+    coords = dtask.run(
+        gal_array=gal_array,
+        fthres=8.5,
+        pthres=fpfs_config.pthres,
+        pratio=fpfs_config.pratio,
+        pthres2=fpfs_config.pthres2,
+        bound=fpfs_config.bound,
+        noise_array=noise_array,
+    )
+    del dtask
 
 mtask = anacal.fpfs.FpfsMeasure(
     psf_array=psf_array,

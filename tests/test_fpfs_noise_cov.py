@@ -41,4 +41,5 @@ def test_noise_covariance():
     )
     cov_elem2 = noise_task2.measure(variance=variance)
     np.testing.assert_allclose(cov_elem, cov_elem2, atol=1e-6, rtol=0)
+    np.testing.assert_allclose(np.diag(cov_elem), np.diag(cov_elem2), rtol=1e-6)
     return
