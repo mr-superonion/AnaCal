@@ -91,7 +91,10 @@ FpfsImage::find_peak(
     double pcut = pthres * std_v;
     double sigma_v = fpfs_cut_sigma_ratio * std_v;
 
-    double wdet_cut = pthres2 - fpfs_det_sigma2;
+    double wdet_cut = pthres2 - fpfs_det_sigma2 - 0.02;
+    if (std::fabs(wdet_cut) < 1e-10) {
+        wdet_cut = 0.0;
+    }
     if (wdet_cut < 0.0) {
         throw std::runtime_error(
             "FPFS Error: The second pooling threshold pthres2 is too small."
