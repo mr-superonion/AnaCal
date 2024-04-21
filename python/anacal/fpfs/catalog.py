@@ -18,7 +18,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from . import fpfs_cut_sigma_ratio, fpfs_det_sigma2
-from .util import get_det_col_names, get_shapelets_col_names
+from .base import get_det_col_names, get_shapelets_col_names
 
 
 def ssfunc1(x, mu, sigma):

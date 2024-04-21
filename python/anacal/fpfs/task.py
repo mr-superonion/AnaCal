@@ -2,7 +2,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from . import FpfsImage, Image
-from .util import FpfsTask
+from .base import FpfsTask
 
 
 class FpfsNoiseCov(FpfsTask):

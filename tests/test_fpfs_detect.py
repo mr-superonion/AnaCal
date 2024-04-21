@@ -110,6 +110,7 @@ def test_detect():
         bound=2,
         noise_array=noise_array,
     )
+    assert out1.shape == out2.shape
     np.testing.assert_almost_equal(out1, out2)
     return
 

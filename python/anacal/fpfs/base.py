@@ -411,9 +411,10 @@ def truncate_square(arr: NDArray, rcut: int) -> None:
         raise ValueError("Input array must be a 2D square array")
     ngrid = arr.shape[0]
     ngrid2 = ngrid // 2
-    assert rcut < ngrid2 - 1
-    arr[: ngrid2 - rcut, :] = 0
-    arr[ngrid2 + rcut + 1 :, :] = 0
-    arr[:, : ngrid2 - rcut] = 0
-    arr[:, ngrid2 + rcut + 1 :] = 0
+    assert rcut < ngrid2, "truncation radius too large."
+    if rcut < ngrid2 - 1:
+        arr[: ngrid2 - rcut, :] = 0
+        arr[ngrid2 + rcut + 1 :, :] = 0
+        arr[:, : ngrid2 - rcut] = 0
+        arr[:, ngrid2 + rcut + 1 :] = 0
     return

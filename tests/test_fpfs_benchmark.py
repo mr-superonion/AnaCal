@@ -61,7 +61,7 @@ def test_detect():
             fthres=1.0,
             pthres=pthres,
             pratio=pratio,
-            pthres2=anacal.fpfs.fpfs_det_sigma2,
+            pthres2=anacal.fpfs.fpfs_det_sigma2 + 0.01,
             bound=bound,
             noise_array=noise_data,
         )[0:30000]
