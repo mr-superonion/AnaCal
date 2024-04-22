@@ -89,7 +89,11 @@ def test_fpfs_measure(seed):
     psf_data2 = np.zeros((1, 1, ngrid2, ngrid2))
     psf_data2[0, 0] = psf_data
     grid_psf = anacal.psf.GridPsf(
-        x0=0, y0=0, dx=ngrid, dy=ngrid, model_array=psf_data2,
+        x0=0,
+        y0=0,
+        dx=ngrid,
+        dy=ngrid,
+        model_array=psf_data2,
     )
     src3 = mtask.run(gal_array=gal_data, psf_obj=grid_psf, det=out1)
     np.testing.assert_almost_equal(src1, src3, decimal=5)
