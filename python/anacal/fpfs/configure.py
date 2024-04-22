@@ -21,7 +21,7 @@ class FpfsConfig(BaseModel):
     )
     nord: int = Field(
         default=4,
-        description="""Whether do noise bias correction.
+        description="""Maximum radial number `n` to use for the shapelet basis
         """,
     )
     det_nrot: int = Field(
@@ -74,21 +74,21 @@ class FpfsConfig(BaseModel):
     )
     c0: float = Field(
         default=5.0,
-        description="""weighting parameter for m00 for ellipticity definition.
+        description="""Weighting parameter for m00 for ellipticity definition.
         """,
     )
     c2: float = Field(
         default=22.0,
-        description="""weighting parameter for m20 for ellipticity definition.
+        description="""Weighting parameter for m20 for ellipticity definition.
         """,
     )
     alpha: float = Field(
         default=1.0,
-        description="""power parameter for m00 for ellipticity definition.
+        description="""Power parameter for m00 for ellipticity definition.
         """,
     )
     beta: float = Field(
         default=0.0,
-        description="""power parameter for m20 for ellipticity definition.
+        description="""Power parameter for m20 for ellipticity definition.
         """,
     )
