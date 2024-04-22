@@ -228,6 +228,7 @@ class FpfsMeasure(FpfsTask):
         self,
         gal_array: NDArray,
         psf_array: NDArray | None = None,
+        psf_obj=None,
         det: NDArray | None = None,
         do_rotate: bool = False,
     ) -> NDArray:
@@ -244,10 +245,20 @@ class FpfsMeasure(FpfsTask):
         """
 
         bfunc = np.transpose(self.bfunc, (1, 2, 0))
-        return self.mtask.measure_source(
-            gal_array=gal_array,
-            filter_image=bfunc,
-            psf_array=psf_array,
-            det=det,
-            do_rotate=do_rotate,
-        )
+        if psf_obj is not None:
+            out = self.mtask.measure_source(
+                gal_array=gal_array,
+                filter_image=bfunc,
+                psf_obj=psf_obj,
+                det=det,
+                do_rotate=do_rotate,
+            )
+        else:
+            out = self.mtask.measure_source(
+                gal_array=gal_array,
+                filter_image=bfunc,
+                psf_array=psf_array,
+                det=det,
+                do_rotate=do_rotate,
+            )
+        return out
