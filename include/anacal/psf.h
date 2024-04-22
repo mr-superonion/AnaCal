@@ -10,7 +10,7 @@ namespace anacal {
 
         BasePsf(BasePsf&& other) noexcept = default;
         BasePsf& operator=(BasePsf&& other) noexcept = default;
-
+        virtual py::array_t<double> draw(double, double) const;
         virtual ~BasePsf() = default;
 
     };

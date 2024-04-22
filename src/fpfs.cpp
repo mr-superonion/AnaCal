@@ -208,8 +208,55 @@ FpfsImage::measure_source(
         int x = std::get<1>(elem);
         cimg.set_r(gal_array, x, y);
         cimg.fft();
-        /* cimg.deconvolve(parr, klim); */
         py::array_t<double> row = cimg.measure(fimg);
+        auto row_r = row.unchecked<1>();
+        for (ssize_t i = 0; i < ncol; ++i) {
+            src_r(j, i) = row_r(i) * fft_ratio;
+        }
+    }
+    return src;
+}
+
+py::array_t<double>
+FpfsImage::measure_source(
+    const py::array_t<double>& gal_array,
+    const py::array_t<std::complex<double>>& filter_image,
+    const BasePsf& psf_obj,
+    const std::optional<std::vector<std::tuple<int, int, bool>>>& det,
+    bool do_rotate
+) {
+    ssize_t ndim = filter_image.ndim();
+    if ( ndim != 3) {
+        throw std::runtime_error("Error: Input must be 3-dimensional.");
+    }
+    ssize_t ncol = filter_image.shape()[ndim - 1];
+    const std::vector<std::tuple<int, int, bool>>
+        det_default = {{ny/2, nx/2, false}};
+    const std::vector<std::tuple<int, int, bool>>&
+        det_use = det.has_value() ? *det : det_default;
+    ssize_t nrow = det_use.size();
+
+    py::array_t<double> src({nrow, ncol});
+    auto src_r = src.mutable_unchecked<2>();
+    for (ssize_t j = 0; j < nrow; ++j) {
+        const auto& elem = det_use[j];
+        int y = std::get<0>(elem);
+        int x = std::get<1>(elem);
+        {
+            py::array_t<double> psf_use = psf_obj.draw(x, y);
+            cimg.set_r(psf_use, false);
+        }
+        cimg.fft();
+        if (do_rotate){
+            cimg.rotate90_f();
+        }
+        {
+            const py::array_t<std::complex<double>> parr = cimg.draw_f();
+            cimg.set_r(gal_array, x, y);
+            cimg.fft();
+            cimg.deconvolve(parr, klim);
+        }
+        py::array_t<double> row = cimg.measure(filter_image);
         auto row_r = row.unchecked<1>();
         for (ssize_t i = 0; i < ncol; ++i) {
             src_r(j, i) = row_r(i) * fft_ratio;
@@ -254,7 +301,8 @@ pyExportFpfs(py::module& m) {
             py::arg("std_v"),
             py::arg("bound")
         )
-        .def("detect_source", &FpfsImage::detect_source,
+        .def("detect_source",
+            &FpfsImage::detect_source,
             "Detect galaxy candidates from image",
             py::arg("gal_array"),
             py::arg("fthres"),
@@ -266,11 +314,33 @@ pyExportFpfs(py::module& m) {
             py::arg("bound"),
             py::arg("noise_array")=py::none()
         )
-        .def("measure_source", &FpfsImage::measure_source,
+        .def("measure_source",
+            static_cast<py::array_t<double> (FpfsImage::*)(
+                const py::array_t<double>&,
+                const py::array_t<std::complex<double>>&,
+                const std::optional<py::array_t<double>>&,
+                const std::optional<std::vector<std::tuple<int, int, bool>>>&,
+                bool
+            )>(&FpfsImage::measure_source),
             "measure source properties using filter at the position of det",
             py::arg("gal_array"),
             py::arg("filter_image"),
             py::arg("psf_array")=py::none(),
+            py::arg("det")=py::none(),
+            py::arg("do_rotate")=false
+        )
+        .def("measure_source",
+            static_cast<py::array_t<double> (FpfsImage::*)(
+                const py::array_t<double>&,
+                const py::array_t<std::complex<double>>&,
+                const BasePsf&,
+                const std::optional<std::vector<std::tuple<int, int, bool>>>&,
+                bool
+            )>(&FpfsImage::measure_source),
+            "measure source properties using filter at the position of det",
+            py::arg("gal_array"),
+            py::arg("filter_image"),
+            py::arg("psf_obj"),
             py::arg("det")=py::none(),
             py::arg("do_rotate")=false
         );

@@ -2,6 +2,7 @@
 #define ANACAL_FPFS_H
 
 #include "image.h"
+#include "psf.h"
 #include "../imath.h"
 
 namespace anacal {
@@ -69,6 +70,15 @@ namespace anacal {
             const py::array_t<double>& gal_array,
             const py::array_t<std::complex<double>>& filter_image,
             const std::optional<py::array_t<double>>& psf_array=std::nullopt,
+            const std::optional<std::vector<std::tuple<int, int, bool>>>& det=std::nullopt,
+            bool do_rotate=false
+        );
+
+        py::array_t<double>
+        measure_source(
+            const py::array_t<double>& gal_array,
+            const py::array_t<std::complex<double>>& filter_image,
+            const BasePsf& psf_obj,
             const std::optional<std::vector<std::tuple<int, int, bool>>>& det=std::nullopt,
             bool do_rotate=false
         );

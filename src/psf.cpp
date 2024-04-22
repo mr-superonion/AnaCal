@@ -7,6 +7,13 @@ namespace anacal {
         // Constructor implementation. Can be empty if nothing to initialize.
     }
 
+    py::array_t<double>
+    BasePsf::draw(double, double) const {
+        py::array_t<double> result = py::array_t<double>({1, 1});
+        *result.mutable_data(0, 0) = 0.0;
+        return result;
+    }
+
     GridPsf::GridPsf(
         double x0,
         double y0,
@@ -39,12 +46,21 @@ namespace anacal {
         if (! test) {
             throw std::runtime_error("Cannot get PSF image at the position.");
         }
-        auto result = this->model_array[
-            py::make_tuple(
-                y_grid, x_grid, this->slice, this->slice
-            )
-        ];
-        return py::array_t<double>(result);
+        py::array_t<double> view = py::array_t<double>(
+            this->model_array[
+                py::make_tuple(
+                    y_grid, x_grid, this->slice, this->slice
+                )
+            ]
+        );
+        auto vinfo = view.request();
+        py::array_t<double> result(vinfo.shape);
+        std::copy(
+            view.data(),
+            view.data() + vinfo.size,
+            result.mutable_data()
+        );
+        return result;
     }
 
 
