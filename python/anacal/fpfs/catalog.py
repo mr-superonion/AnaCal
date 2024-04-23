@@ -119,6 +119,7 @@ class CatalogBase(object):
 
         self.ncol = len(name_a)
         self.ndet = len(name_d)
+        self.colnames = name_a
         self.name_shapelets = name_s
         self.name_detect = name_d
         self.det_nrot = det_nrot

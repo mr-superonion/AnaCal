@@ -49,17 +49,26 @@ class FpfsConfig(BaseModel):
     )
     pratio: float = Field(
         default=0.00,
-        description="""Detection parameter for the first pooling.
+        description="""Detection parameter (peak identification) for the first
+        pooling.
         """,
     )
     pthres: float = Field(
         default=0.8,
-        description="""Detection threshold for the first pooling.
+        description="""Detection threshold (peak identification) for the first
+        pooling.
         """,
     )
     pthres2: float = Field(
         default=0.12,
-        description="""Detection threshold for the second pooling.
+        description="""Detection threshold (peak identification) for the second
+        pooling.
+        """,
+    )
+    fthres: float = Field(
+        default=8.5,
+        description="""Detection threshold (minimum signal-to-noise ratio) for
+        the first pooling.
         """,
     )
     snr_min: float = Field(

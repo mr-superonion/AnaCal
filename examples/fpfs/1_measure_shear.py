@@ -57,7 +57,7 @@ def process_image(
         )
         coords = dtask.run(
             gal_array=gal_array,
-            fthres=8.5,
+            fthres=fpfs_config.fthres,
             pthres=fpfs_config.pthres,
             pratio=fpfs_config.pratio,
             pthres2=fpfs_config.pthres2,
@@ -101,6 +101,7 @@ def process_image(
         pthres2=fpfs_config.pthres2,
         det_nrot=fpfs_config.det_nrot,
     )
+    print(ctask.colnames)
     out = ctask.measure_g1_renoise(src, noise_src)
     print(np.sum(out[:, 0]) / np.sum(out[:, 1]))
     del ctask
