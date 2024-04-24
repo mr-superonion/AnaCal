@@ -4,7 +4,7 @@
 namespace anacal {
     void
     add_pixel_mask_value(
-        std::vector<std::tuple<int, int, bool, int>>& det,
+        py::array_t<int>& det,
         const py::array_t<int>& mask_array,
         double sigma,
         double scale,
