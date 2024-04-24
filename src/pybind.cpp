@@ -9,5 +9,6 @@ namespace anacal {
         pyExportFpfs(m);
         pyExportNoise(m);
         pyExportPsf(m);
+        pyExportMask(m);
     }
 }

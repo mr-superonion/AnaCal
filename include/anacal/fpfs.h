@@ -40,7 +40,7 @@ namespace anacal {
             const std::optional<py::array_t<double>>& noise_array=std::nullopt
         );
 
-        std::vector<std::tuple<int, int, bool>>
+        std::vector<std::tuple<int, int, bool, int>>
         find_peak(
             const py::array_t<double>& gal_conv,
             double fthres,
@@ -52,7 +52,7 @@ namespace anacal {
             int bound
         );
 
-        std::vector<std::tuple<int, int, bool>>
+        std::vector<std::tuple<int, int, bool, int>>
         detect_source(
             const py::array_t<double>& gal_array,
             double fthres,
@@ -70,7 +70,7 @@ namespace anacal {
             const py::array_t<double>& gal_array,
             const py::array_t<std::complex<double>>& filter_image,
             const std::optional<py::array_t<double>>& psf_array=std::nullopt,
-            const std::optional<std::vector<std::tuple<int, int, bool>>>& det=std::nullopt,
+            const std::optional<std::vector<std::tuple<int, int, bool, int>>>& det=std::nullopt,
             bool do_rotate=false
         );
 
@@ -79,7 +79,7 @@ namespace anacal {
             const py::array_t<double>& gal_array,
             const py::array_t<std::complex<double>>& filter_image,
             const BasePsf& psf_obj,
-            const std::optional<std::vector<std::tuple<int, int, bool>>>& det=std::nullopt,
+            const std::optional<std::vector<std::tuple<int, int, bool, int>>>& det=std::nullopt,
             bool do_rotate=false
         );
 

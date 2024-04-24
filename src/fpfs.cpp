@@ -20,8 +20,8 @@ FpfsImage::FpfsImage(
     this->scale = scale;
     this->sigma_arcsec = sigma_arcsec;
     this->klim = klim;
-    sigma_f = 1.0 / sigma_arcsec;
-    fft_ratio = 1.0 / scale / scale;
+    this->sigma_f = 1.0 / sigma_arcsec;
+    this->fft_ratio = 1.0 / scale / scale;
     return;
 }
 
@@ -72,7 +72,7 @@ FpfsImage::smooth_image(
 }
 
 
-std::vector<std::tuple<int, int, bool>>
+std::vector<std::tuple<int, int, bool, int>>
 FpfsImage::find_peak(
     const py::array_t<double>& gal_conv,
     double fthres,
@@ -101,7 +101,7 @@ FpfsImage::find_peak(
         );
     }
 
-    std::vector<std::tuple<int, int, bool>> peaks;
+    std::vector<std::tuple<int, int, bool, int>> peaks;
     for (ssize_t j = bound + 1; j < ny - bound; ++j) {
         for (ssize_t i = bound + 1; i < nx - bound; ++i) {
             double c = r(j, i);
@@ -126,7 +126,7 @@ FpfsImage::find_peak(
                     (c > r(j, i-1)) &&
                     (c > r(j, i+1))
                 );
-                peaks.push_back({j, i, is_peak});
+                peaks.push_back({j, i, is_peak, 0});
             }
         }
     }
@@ -134,7 +134,7 @@ FpfsImage::find_peak(
 }
 
 
-std::vector<std::tuple<int, int, bool>>
+std::vector<std::tuple<int, int, bool, int>>
 FpfsImage::detect_source(
     const py::array_t<double>& gal_array,
     double fthres,
@@ -169,7 +169,7 @@ FpfsImage::measure_source(
     const py::array_t<double>& gal_array,
     const py::array_t<std::complex<double>>& filter_image,
     const std::optional<py::array_t<double>>& psf_array,
-    const std::optional<std::vector<std::tuple<int, int, bool>>>& det,
+    const std::optional<std::vector<std::tuple<int, int, bool, int>>>& det,
     bool do_rotate
 ) {
     ssize_t ndim = filter_image.ndim();
@@ -194,9 +194,9 @@ FpfsImage::measure_source(
     );
 
     ssize_t ncol = filter_image.shape()[ndim - 1];
-    const std::vector<std::tuple<int, int, bool>>
-        det_default = {{ny/2, nx/2, false}};
-    const std::vector<std::tuple<int, int, bool>>&
+    const std::vector<std::tuple<int, int, bool, int>>
+        det_default = {{ny/2, nx/2, false, 0}};
+    const std::vector<std::tuple<int, int, bool, int>>&
         det_use = det.has_value() ? *det : det_default;
     ssize_t nrow = det_use.size();
 
@@ -222,7 +222,7 @@ FpfsImage::measure_source(
     const py::array_t<double>& gal_array,
     const py::array_t<std::complex<double>>& filter_image,
     const BasePsf& psf_obj,
-    const std::optional<std::vector<std::tuple<int, int, bool>>>& det,
+    const std::optional<std::vector<std::tuple<int, int, bool, int>>>& det,
     bool do_rotate
 ) {
     ssize_t ndim = filter_image.ndim();
@@ -230,9 +230,9 @@ FpfsImage::measure_source(
         throw std::runtime_error("Error: Input must be 3-dimensional.");
     }
     ssize_t ncol = filter_image.shape()[ndim - 1];
-    const std::vector<std::tuple<int, int, bool>>
-        det_default = {{ny/2, nx/2, false}};
-    const std::vector<std::tuple<int, int, bool>>&
+    const std::vector<std::tuple<int, int, bool, int>>
+        det_default = {{ny/2, nx/2, false, 0}};
+    const std::vector<std::tuple<int, int, bool, int>>&
         det_use = det.has_value() ? *det : det_default;
     ssize_t nrow = det_use.size();
 
@@ -319,7 +319,7 @@ pyExportFpfs(py::module& m) {
                 const py::array_t<double>&,
                 const py::array_t<std::complex<double>>&,
                 const std::optional<py::array_t<double>>&,
-                const std::optional<std::vector<std::tuple<int, int, bool>>>&,
+                const std::optional<std::vector<std::tuple<int, int, bool, int>>>&,
                 bool
             )>(&FpfsImage::measure_source),
             "measure source properties using filter at the position of det",
@@ -334,7 +334,7 @@ pyExportFpfs(py::module& m) {
                 const py::array_t<double>&,
                 const py::array_t<std::complex<double>>&,
                 const BasePsf&,
-                const std::optional<std::vector<std::tuple<int, int, bool>>>&,
+                const std::optional<std::vector<std::tuple<int, int, bool, int>>>&,
                 bool
             )>(&FpfsImage::measure_source),
             "measure source properties using filter at the position of det",

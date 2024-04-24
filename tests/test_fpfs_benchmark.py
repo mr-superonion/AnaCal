@@ -26,14 +26,14 @@ psf_data = (
     psf_obj.shift(0.5 * scale, 0.5 * scale)
     .drawImage(nx=64, ny=64, scale=scale)
     .array
-)
+).astype(np.float64)
 gal_obj = (
     psf_obj.shift(-3.5, 2) * 2
     + psf_obj.shift(2, -1) * 4
     + psf_obj.shift(-2, -0.5) * 4
     + psf_obj.shift(-3.2, 0.5) * 6
 )
-gal_data = gal_obj.drawImage(nx=nx, ny=ny, scale=scale).array
+gal_data = gal_obj.drawImage(nx=nx, ny=ny, scale=scale).array.astype(np.float64)
 
 
 def test_detect():

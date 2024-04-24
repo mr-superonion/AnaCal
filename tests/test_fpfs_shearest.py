@@ -41,7 +41,7 @@ def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=4):
     indy = np.arange(ngrid // 2, ngrid, ngrid)
     inds = np.meshgrid(indy, indx, indexing="ij")
     coords = np.vstack(inds).T
-    coords = [(cc[0], cc[1], True) for cc in coords]
+    coords = [(cc[0], cc[1], True, 0) for cc in coords]
     return gal_data, psf_data, coords
 
 

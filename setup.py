@@ -21,6 +21,7 @@ ext_modules.append(
             "src/fpfs.cpp",
             "src/noise.cpp",
             "src/psf.cpp",
+            "src/mask.cpp",
         ],
         include_dirs=lib_dirs,  # Include directories for header files
         libraries=["fftw3"],

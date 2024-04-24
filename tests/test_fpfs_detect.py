@@ -98,6 +98,7 @@ def test_detect():
         noise_array=noise_array,
     )
     out1 = np.array(out1)
+    out1 = out1[:, :-1]
 
     cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
     out2 = task.detect_source(
