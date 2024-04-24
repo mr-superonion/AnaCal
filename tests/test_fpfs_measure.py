@@ -63,6 +63,7 @@ def test_fpfs_measure(seed):
         bound=bound,
         noise_array=None,
     )
+    print(len(out1))
     mtask = anacal.fpfs.FpfsMeasure(
         psf_array=psf_data,
         pixel_scale=scale,

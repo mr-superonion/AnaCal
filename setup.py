@@ -5,7 +5,6 @@ from setuptools import Extension, find_packages, setup
 
 conda_prefix = os.environ.get("CONDA_PREFIX")
 include_dirs = []
-lib_dirs = ["include/"]
 if conda_prefix:
     include_dirs.append(os.path.join(conda_prefix, "include"))
 include_dirs.append(pybind11.get_include())
@@ -23,7 +22,7 @@ ext_modules.append(
             "src/psf.cpp",
             "src/mask.cpp",
         ],
-        include_dirs=lib_dirs,  # Include directories for header files
+        include_dirs=["include/"],  # Include directories for header files
         libraries=["fftw3"],
         language="c++",
         extra_compile_args=[
