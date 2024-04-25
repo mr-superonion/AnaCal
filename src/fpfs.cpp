@@ -13,7 +13,9 @@ FpfsImage::FpfsImage(
     bool use_estimate
 ): cimg(nx, ny, scale, use_estimate), psf_array(psf_array) {
     if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
-        throw std::runtime_error("Error: wrong sigma_arcsec");
+        throw std::runtime_error(
+            "FPFS Error: invalid input sigma_arcsec"
+        );
     }
     this->nx = nx;
     this->ny = ny;
@@ -158,14 +160,15 @@ FpfsImage::detect_source(
     double std_m00,
     double std_v,
     int bound,
-    const std::optional<py::array_t<double>>& noise_array
+    const std::optional<py::array_t<double>>& noise_array,
+    const std::optional<py::array_t<int16_t>>& mask_array
 ) {
 
-    py::array_t<double> gal_conv = smooth_image(
+    py::array_t<double> gal_conv = this->smooth_image(
         gal_array,
         noise_array
     );
-    py::array_t<int> catalog = find_peak(
+    py::array_t<int> detection = this->find_peak(
         gal_conv,
         fthres,
         pthres,
@@ -175,7 +178,16 @@ FpfsImage::detect_source(
         std_v,
         bound
     );
-    return catalog;
+    if (mask_array.has_value()) {
+        add_pixel_mask_value(
+            detection,
+            mask_array.value(),
+            sigma_arcsec,
+            scale,
+            bound
+        );
+    }
+    return detection;
 }
 
 py::array_t<double>
@@ -188,7 +200,9 @@ FpfsImage::measure_source(
 ) {
     ssize_t ndim = filter_image.ndim();
     if ( ndim != 3) {
-        throw std::runtime_error("Error: Input must be 3-dimensional.");
+        throw std::runtime_error(
+            "FPFS Error: Input filter image must be 3-dimensional."
+        );
     }
 
 
@@ -241,7 +255,9 @@ FpfsImage::measure_source(
 ) {
     ssize_t ndim = filter_image.ndim();
     if ( ndim != 3) {
-        throw std::runtime_error("Error: Input must be 3-dimensional.");
+        throw std::runtime_error(
+            "FPFS Error: Input filter image must be 3-dimensional."
+        );
     }
     ssize_t ncol = filter_image.shape()[ndim - 1];
 
@@ -327,7 +343,8 @@ pyExportFpfs(py::module& m) {
             py::arg("std_m00"),
             py::arg("std_v"),
             py::arg("bound"),
-            py::arg("noise_array")=py::none()
+            py::arg("noise_array")=py::none(),
+            py::arg("mask_array")=py::none()
         )
         .def("measure_source",
             static_cast<py::array_t<double> (FpfsImage::*)(

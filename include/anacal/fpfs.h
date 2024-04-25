@@ -62,7 +62,8 @@ namespace anacal {
             double std_m00,
             double std_v,
             int bound,
-            const std::optional<py::array_t<double>>& noise_array=std::nullopt
+            const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+            const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
         );
 
         py::array_t<double>

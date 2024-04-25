@@ -5,7 +5,7 @@ namespace anacal {
     void
     add_pixel_mask_value(
         py::array_t<int>& det,
-        const py::array_t<int>& mask_array,
+        const py::array_t<int16_t>& mask_array,
         double sigma,
         double scale,
         int bound
@@ -24,6 +24,7 @@ namespace anacal {
             int y = det_r(j, 0); int x = det_r(j, 1);
             if (y>=0 && y< ny && x>=0 && x<nx) {
                 det_r(j, 3) = int(conv_r(y, x) * 1000);
+                /* std::cout<<conv_r(y, x) * 1000<<std::endl; */
             }
         }
         return;
@@ -32,7 +33,7 @@ namespace anacal {
 
     py::array_t<float>
     smooth_mask_image(
-        const py::array_t<int>& mask_array,
+        const py::array_t<int16_t>& mask_array,
         double sigma,
         double scale,
         int bound

@@ -5,7 +5,7 @@ namespace anacal {
     void
     add_pixel_mask_value(
         py::array_t<int>& det,
-        const py::array_t<int>& mask_array,
+        const py::array_t<int16_t>& mask_array,
         double sigma,
         double scale,
         int bound
@@ -13,7 +13,7 @@ namespace anacal {
 
     py::array_t<float>
     smooth_mask_image(
-        const py::array_t<int>& mask_array,
+        const py::array_t<int16_t>& mask_array,
         double sigma,
         double scale,
         int bound
