@@ -14,7 +14,7 @@ ext_modules.append(
     Extension(
         "anacal._anacal",  # Name of the module
         [
-            "src/pybind.cpp",
+            "python/anacal/_anacalLib.cc",
             "src/image.cpp",
             "src/model.cpp",
             "src/fpfs.cpp",

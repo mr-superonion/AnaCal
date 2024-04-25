@@ -3,7 +3,7 @@
 
 #include "image.h"
 #include "psf.h"
-#include "../imath.h"
+#include "math.h"
 
 namespace anacal {
     inline constexpr double fpfs_cut_sigma_ratio = 1.6;

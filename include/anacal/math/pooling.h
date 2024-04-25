@@ -1,9 +1,10 @@
-#ifndef IMATH_POOLING_H
-#define IMATH_POOLING_H
+#ifndef ANACAL_MATH_POOLING_H
+#define ANACAL_MATH_POOLING_H
 
 #include <cmath>
 
-namespace imath {
+namespace anacal {
+namespace math {
 
     inline double ssfunc1(double x, double mu, double sigma) {
         auto _func = [](double t) -> double {
@@ -33,5 +34,6 @@ namespace imath {
     }
 
 }
+}
 
-#endif // IMATH_POOLING_H
+#endif // ANACAL_MATH_POOLING_H

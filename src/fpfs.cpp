@@ -110,10 +110,10 @@ FpfsImage::find_peak(
             double d2 = c - r(j+1, i);
             double d3 = c - r(j, i-1);
             double d4 = c - r(j-1, i);
-            double s1 = imath::ssfunc2(d1, sigma_v - thres, sigma_v);
-            double s2 = imath::ssfunc2(d2, sigma_v - thres, sigma_v);
-            double s3 = imath::ssfunc2(d3, sigma_v - thres, sigma_v);
-            double s4 = imath::ssfunc2(d4, sigma_v - thres, sigma_v);
+            double s1 = math::ssfunc2(d1, sigma_v - thres, sigma_v);
+            double s2 = math::ssfunc2(d2, sigma_v - thres, sigma_v);
+            double s3 = math::ssfunc2(d3, sigma_v - thres, sigma_v);
+            double s4 = math::ssfunc2(d4, sigma_v - thres, sigma_v);
             double wdet = s1 * s2 * s3 * s4;
             bool sel = (
                 (c > fcut) &&
