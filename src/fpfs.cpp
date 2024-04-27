@@ -179,7 +179,7 @@ FpfsImage::detect_source(
         bound
     );
     if (mask_array.has_value()) {
-        add_pixel_mask_value(
+        add_pixel_mask_column(
             detection,
             mask_array.value(),
             sigma_arcsec,

@@ -3,7 +3,7 @@
 
 namespace anacal {
     void
-    add_pixel_mask_value(
+    add_pixel_mask_column(
         py::array_t<int>& det,
         const py::array_t<int16_t>& mask_array,
         double sigma,
@@ -25,6 +25,57 @@ namespace anacal {
             if (y>=0 && y< ny && x>=0 && x<nx) {
                 det_r(j, 3) = int(conv_r(y, x) * 1000);
                 /* std::cout<<conv_r(y, x) * 1000<<std::endl; */
+            }
+        }
+        return;
+    }
+
+    void
+    mask_bright_stars(
+        py::array_t<int16_t>& mask_array,
+        const py::array_t<float>& x_array,
+        const py::array_t<float>& y_array,
+        const py::array_t<float>& r_array
+    ) {
+        auto x_r = x_array.unchecked<1>();
+        auto y_r = y_array.unchecked<1>();
+        auto r_r = r_array.unchecked<1>();
+        int nn = x_r.shape(0);
+        if ((y_r.shape(0) != nn) || (r_r.shape(0) != nn)) {
+            throw std::runtime_error(
+                "Mask Error: the shapes between x, y and r are different."
+            );
+        }
+
+        int ndim = mask_array.ndim();
+        if (ndim != 2) {
+            throw std::runtime_error(
+                "Mask Error: The input mask array has an invalid shape."
+            );
+        }
+        auto m_r = mask_array.mutable_unchecked<2>();
+        int ny = m_r.shape(0);
+        int nx = m_r.shape(1);
+        for (int k = 0; k < nn; ++k) {
+            int x = int(x_r(k) + 0.5);
+            int y = int(y_r(k) + 0.5);
+            int r = int(r_r(k) + 0.5);
+            int r2 = r * r;
+            for (int j = y-r; j <= y+r; ++j) {
+                if ((j < 0) || (j >= ny)) {
+                    continue;
+                }
+                int dy2 = (j - y) * (j - y);
+                for (int i = x-r; i <= x+r; ++i) {
+                    if ((i < 0) || (i >= nx)) {
+                        continue;
+                    }
+                    int dx2 = (i - x) * (i - x);
+                    int d2 = dx2 + dy2;
+                    if (d2 < r2) {
+                        m_r(j, i) = m_r(j, i) | 16;
+                    }
+                }
             }
         }
         return;
@@ -90,8 +141,8 @@ namespace anacal {
     pyExportMask(py::module& m) {
         py::module_ mask = m.def_submodule("mask", "submodule for mask");
         mask.def(
-            "add_pixel_mask_value", &add_pixel_mask_value,
-            "Measures the pixel mask value",
+            "add_pixel_mask_column", &add_pixel_mask_column,
+            "Update the detection catalog with the pixel mask value",
             py::arg("det"),
             py::arg("mask_array"),
             py::arg("sigma"),
@@ -105,6 +156,14 @@ namespace anacal {
             py::arg("sigma"),
             py::arg("scale"),
             py::arg("bound")
+        );
+        mask.def(
+            "mask_bright_stars", &mask_bright_stars,
+            "Update mask plane according to bright star catalog",
+            py::arg("mask_array"),
+            py::arg("x_array"),
+            py::arg("y_array"),
+            py::arg("r_array")
         );
     }
 }

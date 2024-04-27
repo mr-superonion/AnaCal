@@ -3,7 +3,7 @@
 
 namespace anacal {
     void
-    add_pixel_mask_value(
+    add_pixel_mask_column(
         py::array_t<int>& det,
         const py::array_t<int16_t>& mask_array,
         double sigma,
@@ -17,6 +17,14 @@ namespace anacal {
         double sigma,
         double scale,
         int bound
+    );
+
+    void
+    mask_bright_stars(
+        py::array_t<int16_t>& mask_array,
+        const py::array_t<float>& x_array,
+        const py::array_t<float>& y_array,
+        const py::array_t<float>& r_array
     );
 
     void pyExportMask(py::module& m);
