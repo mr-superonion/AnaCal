@@ -352,13 +352,13 @@ pyExportFpfs(py::module& m) {
             py::arg("star_array")=py::none()
         )
         .def("measure_source",
-            static_cast<py::array_t<double> (FpfsImage::*)(
+            py::overload_cast<
                 const py::array_t<double>&,
                 const py::array_t<std::complex<double>>&,
                 const std::optional<py::array_t<double>>&,
                 const std::optional<py::array_t<int>>&,
                 bool
-            )>(&FpfsImage::measure_source),
+            >(&FpfsImage::measure_source),
             "measure source properties using filter at the position of det",
             py::arg("gal_array"),
             py::arg("filter_image"),
@@ -367,13 +367,13 @@ pyExportFpfs(py::module& m) {
             py::arg("do_rotate")=false
         )
         .def("measure_source",
-            static_cast<py::array_t<double> (FpfsImage::*)(
+            py::overload_cast<
                 const py::array_t<double>&,
                 const py::array_t<std::complex<double>>&,
                 const BasePsf&,
                 const std::optional<py::array_t<int>>&,
                 bool
-            )>(&FpfsImage::measure_source),
+            >(&FpfsImage::measure_source),
             "measure source properties using filter at the position of det",
             py::arg("gal_array"),
             py::arg("filter_image"),

@@ -699,13 +699,13 @@ pyExportImage(py::module& m) {
             py::arg("mode")=3
         )
         .def("set_r",
-            static_cast<void (Image::*)(const py::array_t<double>&, bool)>(&Image::set_r),
+            py::overload_cast<const py::array_t<double>&, bool>(&Image::set_r),
             "Sets up the image in configuration space",
             py::arg("input"),
             py::arg("ishift")=false
         )
         .def("set_r",
-            static_cast<void (Image::*)(const py::array_t<double>&, int, int)>
+            py::overload_cast<const py::array_t<double>&, int, int>
             (&Image::set_r),
             "Sets up the image in configuration space",
             py::arg("input"),
@@ -717,7 +717,7 @@ pyExportImage(py::module& m) {
             py::arg("input")
         )
         .def("set_noise_f",
-            static_cast<void (Image::*)(unsigned int, const py::array_t<double>&)>
+            py::overload_cast<unsigned int, const py::array_t<double>&>
             (&Image::set_noise_f),
             "Sets up noise image in Fourier space using correlation function",
             py::arg("seed"),
@@ -736,13 +736,13 @@ pyExportImage(py::module& m) {
             "Rotates the image by 90 degree clockwise"
         )
         .def("filter",
-            static_cast<void (Image::*)(const BaseModel&)>
+            py::overload_cast<const BaseModel&>
             (&Image::filter),
             "Convolve method with model object",
             py::arg("filter_model")
         )
         .def("filter",
-            static_cast<void (Image::*)(const py::array_t<std::complex<double>>&)>
+            py::overload_cast<const py::array_t<std::complex<double>>&>
             (&Image::filter),
             "Convolve method with image object",
             py::arg("filter_image")
@@ -752,29 +752,29 @@ pyExportImage(py::module& m) {
             py::arg("filter_image")
         )
         .def("add_image_f",
-            static_cast<void (Image::*)(const py::array_t<std::complex<double>>&)>
+            py::overload_cast<const py::array_t<std::complex<double>>&>
             (&Image::add_image_f),
             "Adds image in Fourier space",
             py::arg("image")
         )
         .def("subtract_image_f",
-            static_cast<void (Image::*)(const py::array_t<std::complex<double>>&)>
+            py::overload_cast<const py::array_t<std::complex<double>>&>
             (&Image::subtract_image_f),
             "Subtracts image in Fourier space",
             py::arg("image")
         )
         .def("deconvolve",
-            static_cast<void (Image::*)(
+            py::overload_cast<
                 const py::array_t<std::complex<double>>&, double
-            )>(&Image::deconvolve),
+            >(&Image::deconvolve),
             "Defilter method with image object",
             py::arg("psf_image"),
             py::arg("klim")
         )
         .def("deconvolve",
-            static_cast<void (Image::*)(
+            py::overload_cast<
                 const BaseModel&, double
-            )>(&Image::deconvolve),
+            >(&Image::deconvolve),
             "Defilter method with model object",
             py::arg("psf_model"),
             py::arg("klim")
