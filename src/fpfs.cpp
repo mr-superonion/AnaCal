@@ -152,7 +152,7 @@ FpfsImage::find_peak(
 
 py::array_t<int>
 FpfsImage::detect_source(
-    const py::array_t<double>& gal_array,
+    py::array_t<double>& gal_array,
     double fthres,
     double pthres,
     double pratio,
@@ -161,8 +161,13 @@ FpfsImage::detect_source(
     double std_v,
     int bound,
     const std::optional<py::array_t<double>>& noise_array,
-    const std::optional<py::array_t<int16_t>>& mask_array
+    std::optional<py::array_t<int16_t>> mask_array,
+    const std::optional<py::array_t<BrightStar>>& star_array
 ) {
+
+    if (mask_array.has_value()) {
+        mask_galaxy_image(gal_array, *mask_array, star_array);
+    }
 
     py::array_t<double> gal_conv = this->smooth_image(
         gal_array,
@@ -181,10 +186,9 @@ FpfsImage::detect_source(
     if (mask_array.has_value()) {
         add_pixel_mask_column(
             detection,
-            mask_array.value(),
+            *mask_array,
             sigma_arcsec,
-            scale,
-            bound
+            scale
         );
     }
     return detection;
@@ -344,7 +348,8 @@ pyExportFpfs(py::module& m) {
             py::arg("std_v"),
             py::arg("bound"),
             py::arg("noise_array")=py::none(),
-            py::arg("mask_array")=py::none()
+            py::arg("mask_array")=py::none(),
+            py::arg("star_array")=py::none()
         )
         .def("measure_source",
             static_cast<py::array_t<double> (FpfsImage::*)(

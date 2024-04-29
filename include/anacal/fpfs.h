@@ -4,6 +4,7 @@
 #include "image.h"
 #include "psf.h"
 #include "math.h"
+#include "mask.h"
 
 namespace anacal {
     inline constexpr double fpfs_cut_sigma_ratio = 1.6;
@@ -54,7 +55,7 @@ namespace anacal {
 
         py::array_t<int>
         detect_source(
-            const py::array_t<double>& gal_array,
+            py::array_t<double>& gal_array,
             double fthres,
             double pthres,
             double pratio,
@@ -63,7 +64,8 @@ namespace anacal {
             double std_v,
             int bound,
             const std::optional<py::array_t<double>>& noise_array=std::nullopt,
-            const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
+            std::optional<py::array_t<int16_t>> mask_array=std::nullopt,
+            const std::optional<py::array_t<BrightStar>>& star_array=std::nullopt
         );
 
         py::array_t<double>

@@ -1,5 +1,5 @@
-import fitsio
 import anacal
+import fitsio
 import numpy as np
 
 

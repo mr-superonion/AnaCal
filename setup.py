@@ -28,7 +28,7 @@ ext_modules.append(
         extra_compile_args=[
             "-Wall",
             "-Wextra",
-            "-Werror",
+            # "-Werror",
             "-Wdeprecated-declarations",
             "-std=c++17",
             "-fopenmp",

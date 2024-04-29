@@ -6,28 +6,56 @@ def test_mask():
     ngrid = 128
     sigma_arcsec = 0.52
     scale = 0.2
-    bound = 25
     mask = np.zeros((ngrid, ngrid), dtype=np.int16)
     mask[ngrid // 2 + 10, ngrid // 2 - 20] = 1
     b = anacal.mask.smooth_mask_image(
-        mask, sigma=sigma_arcsec, scale=scale, bound=bound,
+        mask,
+        sigma=sigma_arcsec,
+        scale=scale,
     )
     np.testing.assert_almost_equal(np.sum(b), 1, decimal=1)
     assert b[ngrid // 2 + 10, ngrid // 2 - 20] == np.max(b)
 
-    src = np.array([
-        [ngrid // 2 + 10, ngrid // 2 - 20, 0, 0]
-    ]).astype(np.int32)
-    anacal.mask.add_pixel_mask_column(src, mask, sigma_arcsec, scale, bound)
+    src = np.array([[ngrid // 2 + 10, ngrid // 2 - 20, 0, 0]]).astype(np.int32)
+    anacal.mask.add_pixel_mask_column(src, mask, sigma_arcsec, scale)
     assert src[0, 3] > 0
-    x_array = np.array([10, 22, 65, 120])
-    y_array = np.array([3, 55, 80, 1])
-    r_array = np.array([20, 20, 20, 20])
-    anacal.mask.mask_bright_stars(mask, x_array, y_array, r_array)
-    # import fitsio
-    # fitsio.write("mask.fits", mask)
-    assert mask[4, 11] == 16
-    assert mask[55, 41] == 16
-    assert mask[99, 65] == 16
-    return
+    star_array = np.array(
+        [
+            (10.0, 3.0, 20.0),
+            (22.0, 55.0, 20.0),
+            (65.0, 80.0, 20.0),
+            (120.0, 1.0, 20.0),
+        ],
+        dtype=[
+            ("x", "f4"),
+            ("y", "f4"),
+            ("r", "f4"),
+        ],
+    )
+    anacal.mask.add_bright_star_mask(mask, star_array)
+    assert mask[4, 11] == 1
+    assert mask[55, 41] == 1
+    assert mask[99, 65] == 1
 
+    mask = np.zeros((ngrid, ngrid), dtype=np.int16)
+    mask[ngrid // 2 + 10, ngrid // 2 - 20] = 1
+    data = np.ones((ngrid, ngrid)) * 10.0
+    anacal.mask.mask_galaxy_image(data, mask, star_array)
+    assert data[4, 11] == 0
+    assert data[55, 41] == 0
+    assert data[99, 65] == 0
+
+    mask = np.ones((ngrid, ngrid))
+    anacal.mask.extend_mask_image(mask)
+    anacal.mask.add_bright_star_mask(mask, star_array)
+    np.testing.assert_almost_equal(mask, np.ones((ngrid, ngrid)))
+    mask = np.ones((ngrid, ngrid))
+    b = anacal.mask.smooth_mask_image(
+        mask,
+        sigma=sigma_arcsec,
+        scale=scale,
+    )
+    np.testing.assert_array_less(b, np.ones((ngrid, ngrid)))
+    np.testing.assert_array_less(-b, -0.3 * np.ones((ngrid, ngrid)))
+
+    return
