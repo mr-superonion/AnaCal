@@ -98,9 +98,12 @@ namespace anacal {
     mask_galaxy_image(
         py::array_t<double>& gal_array,
         py::array_t<int16_t>& mask_array,
+        bool do_extend_mask,
         const std::optional<py::array_t<BrightStar>>& star_array
     ) {
-        extend_mask_image(mask_array);
+        if (do_extend_mask) {
+            extend_mask_image(mask_array);
+        }
         if (star_array.has_value()) {
             add_bright_star_mask(
                 mask_array,
@@ -225,6 +228,7 @@ namespace anacal {
             "Apply mask on galaxy image",
             py::arg("gal_array"),
             py::arg("mask_array"),
+            py::arg("do_extend_mask")=true,
             py::arg("star_array")=py::none()
         );
         mask.def(

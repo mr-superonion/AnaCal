@@ -40,7 +40,7 @@ def test_mask():
     mask = np.zeros((ngrid, ngrid), dtype=np.int16)
     mask[ngrid // 2 + 10, ngrid // 2 - 20] = 1
     data = np.ones((ngrid, ngrid)) * 10.0
-    anacal.mask.mask_galaxy_image(data, mask, star_array)
+    anacal.mask.mask_galaxy_image(data, mask, True, star_array)
     assert data[4, 11] == 0
     assert data[55, 41] == 0
     assert data[99, 65] == 0

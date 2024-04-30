@@ -1,7 +1,8 @@
+import fitsio
 import numpy as np
 from numpy.typing import NDArray
 
-from . import FpfsImage, Image
+from . import FpfsImage, Image, mask_galaxy_image
 from .base import FpfsTask
 
 
@@ -153,6 +154,8 @@ class FpfsDetect(FpfsTask):
         pthres2: float,
         bound: int,
         noise_array: NDArray | None = None,
+        mask_array: NDArray | None = None,
+        star_cat: NDArray | None = None,
     ) -> NDArray:
         """This function detects galaxy from image
 
@@ -168,6 +171,12 @@ class FpfsDetect(FpfsTask):
         Returns:
             galaxy detection catalog
         """
+
+        if mask_array is not None:
+            mask_galaxy_image(gal_array, mask_array, True, star_cat)
+            if noise_array is not None:
+                mask_galaxy_image(noise_array, mask_array, False, star_cat)
+
         ny, nx = gal_array.shape
         assert ny == self.ny
         assert nx == self.nx
@@ -181,6 +190,7 @@ class FpfsDetect(FpfsTask):
             std_m00=self.std_m00 * self.pixel_scale**2.0,
             std_v=self.std_v * self.pixel_scale**2.0,
             noise_array=noise_array,
+            mask_array=mask_array,
         )
 
 

@@ -25,6 +25,7 @@ namespace anacal {
     mask_galaxy_image(
         py::array_t<double>& gal_array,
         py::array_t<int16_t>& mask_array,
+        bool do_extend_mask=true,
         const std::optional<py::array_t<BrightStar>>& star_array=std::nullopt
     );
 
