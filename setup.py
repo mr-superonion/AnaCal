@@ -63,6 +63,11 @@ setup(
     ],
     packages=find_packages(where="python"),
     package_dir={"": "python"},
+    include_package_data=True,
+    zip_safe=False,
+    package_data={
+        'anacal': ['data/*.fits'],
+    },
     ext_modules=ext_modules,
     url="https://github.com/mr-superonion/AnaCal/",
     long_description=long_description,
