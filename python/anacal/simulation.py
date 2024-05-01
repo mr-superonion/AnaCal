@@ -13,14 +13,13 @@
 #
 # python lib
 
-import os
 import gc
 import logging
+import os
 
 import astropy.io.fits as pyfits
 import galsim
 import numpy as np
-
 
 _data_dir = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -32,6 +31,10 @@ logging.basicConfig(
     datefmt="%Y/%m/%d %H:%M:%S --- ",
     level=logging.INFO,
 )
+
+
+def _galsim_round_sersic(n, sersic_prec):
+    return float(int(n / sersic_prec + 0.5)) * sersic_prec
 
 
 def coord_distort_1(x, y, xref, yref, gamma1, gamma2, kappa=0.0, inverse=False):
@@ -86,6 +89,65 @@ def coord_rotate(x, y, xref, yref, theta):
     return x2, y2
 
 
+def generate_cosmos_gal_simple(record, gsparams=None, random_shape=False):
+    """Generates COSMOS galaxies; modified version of
+    https://github.com/GalSim-developers/GalSim/blob/releases/2.3/galsim/scene.py#L626
+
+    Args:
+    record (ndarray): one row of the COSMOS galaxy catalog
+    gsparams: an GSParams argument.
+
+    Returns:
+    gal: Galsim galaxy
+    """
+
+    bdparams = record["bulgefit"]
+    sparams = record["sersicfit"]
+    use_bulgefit = record["use_bulgefit"]
+    if use_bulgefit:
+        # Bulge parameters:
+        # Minor-to-major axis ratio:
+        bulge_hlr = record["hlr"][1]
+        bulge_flux = record["flux"][1]
+        disk_hlr = record["hlr"][2]
+        disk_flux = record["flux"][2]
+        bulge = galsim.Gaussian(
+            flux=bulge_flux, half_light_radius=bulge_hlr, gsparams=gsparams
+        )
+        disk = galsim.Exponential(
+            flux=disk_flux, half_light_radius=disk_hlr, gsparams=gsparams
+        )
+        if random_shape:
+            # Apply shears for intrinsic shape.
+            bulge_q = bdparams[11]
+            bulge_beta = bdparams[15] * galsim.radians
+            if bulge_q < 1.0:  # pragma: no branch
+                bulge = bulge.shear(q=bulge_q, beta=bulge_beta)
+            #
+            disk_q = bdparams[3]
+            disk_beta = bdparams[7] * galsim.radians
+            if disk_q < 1.0:  # pragma: no branch
+                disk = disk.shear(q=disk_q, beta=disk_beta)
+        # Then combine the two components of the galaxy.
+        # No center offset is included
+        gal = bulge + disk
+    else:
+        gal_hlr = record["hlr"][0]
+        gal_flux = record["flux"][0]
+
+        gal = galsim.Gaussian(
+            flux=gal_flux,
+            half_light_radius=gal_hlr,
+        )
+        if random_shape:
+            # Apply shears for intrinsic shape.
+            gal_q = sparams[3]
+            gal_beta = sparams[7] * galsim.radians
+            if gal_q < 1.0:
+                gal = gal.shear(q=gal_q, beta=gal_beta)
+    return gal
+
+
 def generate_cosmos_gal(record, trunc_ratio=5.0, gsparams=None):
     """Generates COSMOS galaxies; modified version of
     https://github.com/GalSim-developers/GalSim/blob/releases/2.3/galsim/scene.py#L626
@@ -116,8 +178,6 @@ def generate_cosmos_gal(record, trunc_ratio=5.0, gsparams=None):
     # For 'bulgefit', the result is an array of 16 parameters that comes from
     # doing a 2-component sersic fit.  The first 8 are the parameters for the
     # disk, with n=1, and the last 8 are for the bulge, with n=4.
-    def _galsim_round_sersic(n, sersic_prec):
-        return float(int(n / sersic_prec + 0.5)) * sersic_prec
 
     bdparams = record["bulgefit"]
     sparams = record["sersicfit"]
@@ -213,8 +273,11 @@ def generate_cosmos_gal(record, trunc_ratio=5.0, gsparams=None):
     return gal
 
 
-def _generate_gal_fft(record, magzero, rng, gsparams):
-    gal0 = generate_cosmos_gal(record, trunc_ratio=-1, gsparams=gsparams)
+def _generate_gal_fft(record, magzero, rng, gsparams, simple_sim):
+    if simple_sim:
+        gal0 = generate_cosmos_gal_simple(record, gsparams=gsparams)
+    else:
+        gal0 = generate_cosmos_gal(record, gsparams=gsparams)
     # E.g., HSC's i-band coadds zero point is 27
     flux = 10 ** ((magzero - record["mag_auto"]) / 2.5)
     # flux_scaling=   2.587
@@ -232,7 +295,7 @@ def _generate_gal_fft(record, magzero, rng, gsparams):
 def _generate_gal_mc(record, magzero, rng, gsparams, npoints):
     # need to truncate the profile since we do not want
     # Knots locate at infinity
-    galp = generate_cosmos_gal(record, trunc_ratio=5.0)
+    galp = generate_cosmos_gal_simple(record)
     # accounting for zeropoint difference between COSMOS HST and HSC
     # HSC's i-band coadds zero point is 27
     flux = 10 ** ((magzero - record["mag_auto"]) / 2.5)
@@ -270,6 +333,7 @@ def make_exposure_stamp(
     do_shift,
     buff=0,
     draw_method="auto",
+    simple_sim=True,
 ):
     ngal = ngalx * ngaly
     gsparams = galsim.GSParams(maximum_fft_size=10240)
@@ -297,6 +361,7 @@ def make_exposure_stamp(
                     magzero,
                     rng,
                     gsparams,
+                    simple_sim,
                 )
             elif sim_method == "mc":
                 gal0 = _generate_gal_mc(
@@ -415,7 +480,7 @@ class CosmosCatalog(object):
         return src
 
 
-def make_isolate_sim(
+def make_isolated_sim(
     ny,
     nx,
     psf_obj,
@@ -438,6 +503,7 @@ def make_isolate_sim(
     sim_method="fft",
     buff=0,
     draw_method="auto",
+    simple_sim=True,
 ):
     """Makes basic **isolated** galaxy image simulation.
 
@@ -524,6 +590,7 @@ def make_isolate_sim(
         do_shift=do_shift,
         buff=buff,
         draw_method=draw_method,
+        simple_sim=simple_sim,
     )
     return exposures
 
@@ -665,7 +732,7 @@ def make_blended_sim(
             g1 = 0.0
             g2 = 0.0
 
-        gal = generate_cosmos_gal(ss, trunc_ratio=-1.0, gsparams=bigfft)
+        gal = generate_cosmos_gal_simple(ss, gsparams=bigfft)
         # rescale the radius while keeping the surface brightness the same
         gal = gal.expand(rsarray[ig])
         # determine and assign flux

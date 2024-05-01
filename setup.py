@@ -66,7 +66,7 @@ setup(
     include_package_data=True,
     zip_safe=False,
     package_data={
-        'anacal': ['data/*.fits'],
+        "anacal": ["data/*.fits"],
     },
     ext_modules=ext_modules,
     url="https://github.com/mr-superonion/AnaCal/",

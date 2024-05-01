@@ -86,7 +86,7 @@ def test_deconvolve_image(seed=1):
         ngrid // 2 - rcut : ngrid // 2 + rcut,
     ]
     gname = "g1-0"
-    gal_data = fpfs.simulation.make_isolate_sim(
+    gal_data = anacal.simulation.make_isolated_sim(
         gal_type="mixed",
         sim_method="fft",
         psf_obj=psf_obj,

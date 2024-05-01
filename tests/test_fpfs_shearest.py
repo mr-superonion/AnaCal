@@ -21,7 +21,7 @@ def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=4):
         ngrid // 2 - rcut : ngrid // 2 + rcut,
     ]
     gname = "%s-0" % gcomp
-    gal_data = anacal.simulation.make_isolate_sim(
+    gal_data = anacal.simulation.make_isolated_sim(
         gal_type="mixed",
         sim_method="fft",
         psf_obj=psf_obj,
