@@ -116,11 +116,20 @@ def process_image(
         pthres2=fpfs_config.pthres2,
         det_nrot=fpfs_config.det_nrot,
     )
-    out = ctask.measure_g1_renoise(src, noise_src)
+    if not fpfs_config.force:
+        out = ctask.measure_g1(src, noise_src)
+    else:
+        out = ctask.measure_g1_force(src, noise_src)
     return out
 
 
 class FpfsConfig(BaseModel):
+    force: bool = Field(
+        default=False,
+        description="""Whether this is a forced detection (selection). If true,
+        we do not apply further detection and selection.
+        """,
+    )
     rcut: int = Field(
         default=32,
         description="""Galaxies are put into stamp before measurement, rcut

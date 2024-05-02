@@ -229,6 +229,7 @@ class CatalogBase(object):
     def _wsel(self, x):
         # selection on flux
         w0l = ssfunc2(x[self.di["m00"]], self.m00_min, self.sigma_m00)
+        w0u = ssfunc2(-x[self.di["m00"]], -500, self.sigma_m00)
 
         # selection on size (lower limit)
         # (M00 + M20) / M00 > r2_min
@@ -254,7 +255,7 @@ class CatalogBase(object):
         # e_sq = self._e1(x) ** 2.0 + self._e2(x) ** 2.0
         # well = jnp.exp(-e_sq / 2.0 / 0.5 ** 2.0)
 
-        wsel = w0l * w2l
+        wsel = w0l * w2l * w0u
         return wsel
 
     def _wdet(self, x):
@@ -290,7 +291,7 @@ class CatalogBase(object):
         w = self._wdet(x)
         return ssfunc2(w, self.pthres2, fpfs_det_sigma2) * e2
 
-    def _measure_g1_renoise(self, x, y=0.0):
+    def _measure_g1(self, x, y=0.0):
         e1, linear_func = jax.linearize(
             self._we1,
             x,
@@ -299,7 +300,7 @@ class CatalogBase(object):
         de1_dg1 = linear_func(dmm_dg1)
         return jnp.hstack([e1, de1_dg1])
 
-    def _measure_g2_renoise(self, x, y=0.0):
+    def _measure_g2(self, x, y=0.0):
         e2, linear_func = jax.linearize(
             self._we2,
             x,
@@ -308,7 +309,25 @@ class CatalogBase(object):
         de2_dg2 = linear_func(dmm_dg2)
         return jnp.hstack([e2, de2_dg2])
 
-    def measure_g1_renoise(self, src, noise=None):
+    def _measure_g1_force(self, x, y=0.0):
+        e1, linear_func = jax.linearize(
+            self._e1,
+            x,
+        )
+        dmm_dg1 = self._dg1(x - y * 2.0)
+        de1_dg1 = linear_func(dmm_dg1)
+        return jnp.hstack([e1, de1_dg1])
+
+    def _measure_g2_force(self, x, y=0.0):
+        e2, linear_func = jax.linearize(
+            self._e2,
+            x,
+        )
+        dmm_dg2 = self._dg2(x - y * 2.0)
+        de2_dg2 = linear_func(dmm_dg2)
+        return jnp.hstack([e2, de2_dg2])
+
+    def measure_g1(self, src, noise=None):
         """This function meausres the first component of shear using
         renoise method to revise noise bias.
 
@@ -322,7 +341,7 @@ class CatalogBase(object):
         src = jnp.atleast_2d(src)
         if noise is None:
             func = jax.vmap(
-                self._measure_g1_renoise,
+                self._measure_g1,
                 in_axes=0,
                 out_axes=0,
             )
@@ -330,14 +349,14 @@ class CatalogBase(object):
         else:
             assert noise.shape == src.shape, "input shapes not matched"
             func = jax.vmap(
-                self._measure_g1_renoise,
+                self._measure_g1,
                 in_axes=(0, 0),
                 out_axes=0,
             )
             result = func(src, noise)
         return result
 
-    def measure_g2_renoise(self, src, noise=None):
+    def measure_g2(self, src, noise=None):
         """This function meausres the second component of shear using
         renoise method to revise noise bias.
 
@@ -351,7 +370,7 @@ class CatalogBase(object):
         src = jnp.atleast_2d(src)
         if noise is None:
             func = jax.vmap(
-                self._measure_g2_renoise,
+                self._measure_g2,
                 in_axes=0,
                 out_axes=0,
             )
@@ -359,7 +378,67 @@ class CatalogBase(object):
         else:
             assert noise.shape == src.shape, "input shapes not matched"
             func = jax.vmap(
-                self._measure_g2_renoise,
+                self._measure_g2,
+                in_axes=(0, 0),
+                out_axes=0,
+            )
+            result = func(src, noise)
+        return result
+
+    def measure_g1_force(self, src, noise=None):
+        """This function meausres the first component of shear using
+        renoise method to revise noise bias. This function is for forced
+        measurement.
+
+        Args:
+        src (ndarray): source catalog
+        noise (ndarray): noise catalog
+
+        Returns:
+        result (ndarray): ellipticity and shear response (first component)
+        """
+        src = jnp.atleast_2d(src)
+        if noise is None:
+            func = jax.vmap(
+                self._measure_g1_force,
+                in_axes=0,
+                out_axes=0,
+            )
+            result = func(src)
+        else:
+            assert noise.shape == src.shape, "input shapes not matched"
+            func = jax.vmap(
+                self._measure_g1_force,
+                in_axes=(0, 0),
+                out_axes=0,
+            )
+            result = func(src, noise)
+        return result
+
+    def measure_g2_force(self, src, noise=None):
+        """This function meausres the second component of shear using
+        renoise method to revise noise bias. This function is for forced
+        measurement.
+
+        Args:
+        src (ndarray): source catalog
+        noise (ndarray): noise catalog
+
+        Returns:
+        result (ndarray): ellipticity and shear response (second component)
+        """
+        src = jnp.atleast_2d(src)
+        if noise is None:
+            func = jax.vmap(
+                self._measure_g2_force,
+                in_axes=0,
+                out_axes=0,
+            )
+            result = func(src)
+        else:
+            assert noise.shape == src.shape, "input shapes not matched"
+            func = jax.vmap(
+                self._measure_g2_force,
                 in_axes=(0, 0),
                 out_axes=0,
             )

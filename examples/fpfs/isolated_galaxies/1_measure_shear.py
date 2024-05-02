@@ -7,13 +7,25 @@ seed = 1
 pixel_scale = 0.2
 noise_variance = 0.23
 
-fpfs_config = anacal.fpfs.FpfsConfig()
 noise_array = None
 cov_matrix = None
-coords = None
 
-rcut = fpfs_config.rcut
+rcut = 32
 ngrid = rcut * 2
+force_detect = True
+
+if force_detect:
+    coords = None
+    buff = 15
+else:
+    # force detection at center
+    indx = np.arange(ngrid // 2, ngrid * nstamp, ngrid)
+    indy = np.arange(ngrid // 2, ngrid * nstamp, ngrid)
+    inds = np.meshgrid(indy, indx, indexing="ij")
+    coords = np.vstack(inds).T
+    buff = 0
+fpfs_config = anacal.fpfs.FpfsConfig(force=force_detect, rcut=rcut)
+
 
 psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0)
 psf_array = (
@@ -38,7 +50,7 @@ for gname in ["g1-1", "g1-0"]:
         nx=ngrid * nstamp,
         scale=pixel_scale,
         do_shift=False,
-        buff=15,
+        buff=buff,
         nrot_per_gal=1,
         simple_sim=False,
     )[0]
