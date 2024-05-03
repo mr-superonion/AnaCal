@@ -2,7 +2,7 @@ import anacal
 import galsim
 import numpy as np
 
-nstamp = 100
+nstamp = 10
 seed = 1
 pixel_scale = 0.2
 noise_variance = 0.23
@@ -24,7 +24,10 @@ else:
     inds = np.meshgrid(indy, indx, indexing="ij")
     coords = np.vstack(inds).T
     buff = 0
-fpfs_config = anacal.fpfs.FpfsConfig(force=force_detect, rcut=rcut)
+fpfs_config = anacal.fpfs.FpfsConfig(
+    force=force_detect, rcut=rcut,
+    gmeasure=3,
+)
 
 
 psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0)
@@ -39,7 +42,7 @@ psf_array = psf_array[
 ]
 
 outcomes = []
-for gname in ["g1-1", "g1-0"]:
+for gname in ["g2-1", "g2-0"]:
     gal_array = anacal.simulation.make_isolated_sim(
         gal_type="mixed",
         sim_method="fft",
@@ -72,4 +75,8 @@ for gname in ["g1-1", "g1-0"]:
 print(
     (np.sum(outcomes[1][:, 0]) - np.sum(outcomes[0][:, 0]))
     / (np.sum(outcomes[1][:, 1]) + np.sum(outcomes[0][:, 1]))
+)
+print(
+    (np.sum(outcomes[1][:, 2]) - np.sum(outcomes[0][:, 2]))
+    / (np.sum(outcomes[1][:, 3]) + np.sum(outcomes[0][:, 3]))
 )

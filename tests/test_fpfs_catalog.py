@@ -47,6 +47,6 @@ def test_catalog():
     )
 
     out1 = cat_obj.measure_g1_renoise(mm, nn)
-    out2 = cat_obj2.measure_g1_renoise(mm, nn)
+    out2 = cat_obj2.measure_g1(mm, nn)
     np.testing.assert_array_almost_equal(out1, out2)
     return

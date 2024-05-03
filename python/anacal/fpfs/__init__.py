@@ -116,10 +116,18 @@ def process_image(
         pthres2=fpfs_config.pthres2,
         det_nrot=fpfs_config.det_nrot,
     )
-    if not fpfs_config.force:
-        out = ctask.measure_g1(src, noise_src)
-    else:
-        out = ctask.measure_g1_force(src, noise_src)
+    out = []
+    if fpfs_config.gmeasure & 1:
+        if not fpfs_config.force:
+            out.append(ctask.measure_g1(src, noise_src))
+        else:
+            out.append(ctask.measure_g1_force(src, noise_src))
+    if fpfs_config.gmeasure & 2:
+        if not fpfs_config.force:
+            out.append(ctask.measure_g2(src, noise_src))
+        else:
+            out.append(ctask.measure_g2_force(src, noise_src))
+    out = np.hstack(out)
     return out
 
 
@@ -128,6 +136,12 @@ class FpfsConfig(BaseModel):
         default=False,
         description="""Whether this is a forced detection (selection). If true,
         we do not apply further detection and selection.
+        """,
+    )
+    gmeasure: int = Field(
+        default=1,
+        description="""
+        Which shear component to measure. '3' for both,  '1' for g1, '2' for g2
         """,
     )
     rcut: int = Field(

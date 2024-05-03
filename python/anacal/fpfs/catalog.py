@@ -291,6 +291,12 @@ class CatalogBase(object):
         w = self._wdet(x)
         return ssfunc2(w, self.pthres2, fpfs_det_sigma2) * e2
 
+    def _we1_force(self, x):
+        return self._wsel(x) * self._e1(x)
+
+    def _we2_force(self, x):
+        return self._wsel(x) * self._e2(x)
+
     def _measure_g1(self, x, y=0.0):
         e1, linear_func = jax.linearize(
             self._we1,
@@ -311,7 +317,7 @@ class CatalogBase(object):
 
     def _measure_g1_force(self, x, y=0.0):
         e1, linear_func = jax.linearize(
-            self._e1,
+            self._we1_force,
             x,
         )
         dmm_dg1 = self._dg1(x - y * 2.0)
@@ -320,7 +326,7 @@ class CatalogBase(object):
 
     def _measure_g2_force(self, x, y=0.0):
         e2, linear_func = jax.linearize(
-            self._e2,
+            self._we2_force,
             x,
         )
         dmm_dg2 = self._dg2(x - y * 2.0)
