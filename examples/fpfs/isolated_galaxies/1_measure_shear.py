@@ -2,8 +2,8 @@ import anacal
 import galsim
 import numpy as np
 
-nstamp = 10
-seed = 1
+nstamp = 100
+seed = 2
 pixel_scale = 0.2
 noise_variance = 0.23
 
@@ -12,7 +12,7 @@ cov_matrix = None
 
 rcut = 32
 ngrid = rcut * 2
-force_detect = True
+force_detect = False
 
 if force_detect:
     coords = None

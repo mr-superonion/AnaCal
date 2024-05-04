@@ -1,8 +1,7 @@
-import fitsio
 import numpy as np
 from numpy.typing import NDArray
 
-from . import FpfsImage, Image, mask_galaxy_image
+from . import FpfsImage, Image, mask_galaxy_image, BasePsf
 from .base import FpfsTask
 
 
@@ -247,6 +246,7 @@ class FpfsMeasure(FpfsTask):
         Args:
         gal_array (NDArray): galaxy image data
         psf_array (NDArray|None): psf image data
+        psf_obj (PSF object): reuturns PSF model according to position
         det (list|None): detection catalog
         do_rotate (bool): whether do rotation
 
@@ -255,19 +255,23 @@ class FpfsMeasure(FpfsTask):
         """
 
         bfunc = np.transpose(self.bfunc, (1, 2, 0))
-        if psf_obj is not None:
-            out = self.mtask.measure_source(
-                gal_array=gal_array,
-                filter_image=bfunc,
-                psf_obj=psf_obj,
-                det=det,
-                do_rotate=do_rotate,
-            )
-        else:
+        if psf_obj is None:
             out = self.mtask.measure_source(
                 gal_array=gal_array,
                 filter_image=bfunc,
                 psf_array=psf_array,
+                det=det,
+                do_rotate=do_rotate,
+            )
+        else:
+            if psf_array is not None:
+                raise RuntimeError("Cannot input both psf_array and psf_obj")
+            if not isinstance(psf_obj, BasePsf):
+                raise RuntimeError("psf_obj is not a correct type")
+            out = self.mtask.measure_source(
+                gal_array=gal_array,
+                filter_image=bfunc,
+                psf_obj=psf_obj,
                 det=det,
                 do_rotate=do_rotate,
             )

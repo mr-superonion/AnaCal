@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from .._anacal.fpfs import FpfsImage, fpfs_cut_sigma_ratio, fpfs_det_sigma2
 from .._anacal.image import Image
 from .._anacal.mask import mask_galaxy_image
+from .._anacal.psf import BasePsf
 from . import base
 from .catalog import FpfsCatalog
 from .task import FpfsDetect, FpfsMeasure, FpfsNoiseCov
@@ -30,11 +31,6 @@ def process_image(
     coords,
 ):
     # Preparing
-    if noise_variance <= 0:
-        raise ValueError(
-            "To enable detection, noise variance should be positive, ",
-            "even though image is noiseless.",
-        )
     ngrid = fpfs_config.rcut * 2
     if not psf_array.shape == (ngrid, ngrid):
         raise ValueError("psf arry has a wrong shape")
@@ -48,6 +44,11 @@ def process_image(
 
     # Shapelet Covariance matrix
     if cov_matrix is None:
+        if noise_variance <= 0:
+            raise ValueError(
+                "To enable detection, noise variance should be positive, ",
+                "even though image is noiseless.",
+            )
         noise_task = FpfsNoiseCov(
             psf_array=psf_array,
             pixel_scale=pixel_scale,
@@ -104,7 +105,7 @@ def process_image(
 
     # Catalog
     ctask = FpfsCatalog(
-        cov_mat=cov_matrix,
+        cov_matrix=cov_matrix,
         snr_min=fpfs_config.snr_min,
         r2_min=fpfs_config.r2_min,
         c0=fpfs_config.c0,

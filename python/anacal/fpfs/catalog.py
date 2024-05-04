@@ -97,7 +97,7 @@ def gaussian(x, mu, sigma):
 class CatalogBase(object):
     def __init__(
         self,
-        cov_mat: NDArray,
+        cov_matrix: NDArray,
         snr_min: float = 12.0,
         r2_min: float = 0.05,
         r2_max: float = 2.0,
@@ -124,14 +124,14 @@ class CatalogBase(object):
         self.name_detect = name_d
         self.det_nrot = det_nrot
 
-        self.cov_mat = cov_mat
-        std_modes = np.sqrt(np.diagonal(cov_mat))
+        self.cov_matrix = cov_matrix
+        std_modes = np.sqrt(np.diagonal(cov_matrix))
         std_m00 = std_modes[self.di["m00"]]
         std_m20 = np.sqrt(
-            cov_mat[self.di["m00"], self.di["m00"]]
-            + cov_mat[self.di["m20"], self.di["m20"]]
-            + cov_mat[self.di["m00"], self.di["m20"]]
-            + cov_mat[self.di["m20"], self.di["m00"]]
+            cov_matrix[self.di["m00"], self.di["m00"]]
+            + cov_matrix[self.di["m20"], self.di["m20"]]
+            + cov_matrix[self.di["m00"], self.di["m20"]]
+            + cov_matrix[self.di["m20"], self.di["m00"]]
         )
         std_v = jnp.average(
             jnp.array([std_modes[self.di["v%d" % _]] for _ in range(det_nrot)])
@@ -455,7 +455,7 @@ class CatalogBase(object):
 class FpfsCatalog(CatalogBase):
     def __init__(
         self,
-        cov_mat: NDArray,
+        cov_matrix: NDArray,
         snr_min: float = 12.0,
         r2_min: float = 0.05,
         r2_max: float = 2.0,
@@ -480,7 +480,7 @@ class FpfsCatalog(CatalogBase):
             pthres=pthres,
             pratio=pratio,
             pthres2=pthres2,
-            cov_mat=cov_mat,
+            cov_matrix=cov_matrix,
             nord=nord,
             det_nrot=det_nrot,
         )

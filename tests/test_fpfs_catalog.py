@@ -6,7 +6,7 @@ from fpfs.catalog import fpfs_catalog
 def test_catalog():
     mm = np.abs(np.random.randn(1000, 21) * 10)
     nn = np.random.randn(1000, 21) * 4
-    cov_mat = 2.0 + np.random.randn(21, 21)
+    cov_matrix = 2.0 + np.random.randn(21, 21)
 
     det_nrot = 4
     snr_min = 12
@@ -19,7 +19,7 @@ def test_catalog():
     pratio = 0.00
 
     cat_obj = fpfs_catalog(
-        cov_mat=cov_mat,
+        cov_mat=cov_matrix,
         snr_min=snr_min,
         r2_min=r2_min,
         ratio=1.6,
@@ -33,7 +33,7 @@ def test_catalog():
     )
 
     cat_obj2 = FpfsCatalog(
-        cov_mat=cov_mat,
+        cov_matrix=cov_matrix,
         snr_min=snr_min,
         r2_min=r2_min,
         c0=c0,

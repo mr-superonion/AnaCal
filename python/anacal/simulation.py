@@ -280,7 +280,6 @@ def _generate_gal_fft(record, magzero, rng, gsparams, simple_sim):
         gal0 = generate_cosmos_gal(record, gsparams=gsparams)
     # E.g., HSC's i-band coadds zero point is 27
     flux = 10 ** ((magzero - record["mag_auto"]) / 2.5)
-    # flux_scaling=   2.587
     gal0 = gal0.withFlux(flux)
     # rescale the radius by 'rescale' and keep surface brightness the
     # same
