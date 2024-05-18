@@ -183,7 +183,7 @@ namespace anacal {
 
     void
     add_pixel_mask_column(
-        py::array_t<int>& det,
+        py::array_t<FpfsPeaks>& det,
         const py::array_t<int16_t>& mask_array,
         double sigma,
         double scale
@@ -196,13 +196,13 @@ namespace anacal {
         int ny = conv_r.shape(0);
         int nx = conv_r.shape(1);
 
-        auto det_r = det.mutable_unchecked<2>();
+        auto det_r = det.mutable_unchecked<1>();
         ssize_t nrow = det_r.shape(0);
         for (ssize_t j = 0; j < nrow; ++j) {
-            int y = det_r(j, 0); int x = det_r(j, 1);
+            int y = det_r(j).y; int x = det_r(j).x;
             if (y>=0 && y< ny && x>=0 && x<nx) {
-                det_r(j, 3) = int(conv_r(y, x) * 1000);
-                /* std::cout<<conv_r(y, x) * 1000<<std::endl; */
+                det_r(j).mask_value = int(conv_r(y, x) * 1000);
+                /* std::cout<<det_r(j).mask_value<<std::endl; */
             }
         }
         return;
@@ -211,6 +211,12 @@ namespace anacal {
     void
     pyExportMask(py::module& m) {
         PYBIND11_NUMPY_DTYPE(BrightStar, x, y, r);
+        PYBIND11_NUMPY_DTYPE(
+            FpfsPeaks,
+            y, x,
+            is_peak,
+            mask_value
+        );
         py::module_ mask = m.def_submodule("mask", "submodule for mask");
         mask.def(
             "add_bright_star_mask", &add_bright_star_mask,

@@ -2,13 +2,6 @@
 #define ANACAL_MASK_H
 
 namespace anacal {
-    struct BrightStar {
-        float x;
-        float y;
-        float r;
-    };
-
-
     void
     add_bright_star_mask(
         py::array_t<int16_t>& mask_array,
@@ -38,7 +31,7 @@ namespace anacal {
 
     void
     add_pixel_mask_column(
-        py::array_t<int>& det,
+        py::array_t<FpfsPeaks>& det,
         const py::array_t<int16_t>& mask_array,
         double sigma,
         double scale

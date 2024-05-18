@@ -41,7 +41,7 @@ namespace anacal {
             const std::optional<py::array_t<double>>& noise_array=std::nullopt
         );
 
-        py::array_t<int>
+        py::array_t<FpfsPeaks>
         find_peak(
             const py::array_t<double>& gal_conv,
             double fthres,
@@ -53,7 +53,7 @@ namespace anacal {
             int bound
         );
 
-        py::array_t<int>
+        py::array_t<FpfsPeaks>
         detect_source(
             py::array_t<double>& gal_array,
             double fthres,
@@ -72,7 +72,7 @@ namespace anacal {
             const py::array_t<double>& gal_array,
             const py::array_t<std::complex<double>>& filter_image,
             const std::optional<py::array_t<double>>& psf_array=std::nullopt,
-            const std::optional<py::array_t<int>>& det=std::nullopt,
+            const std::optional<py::array_t<FpfsPeaks>>& det=std::nullopt,
             bool do_rotate=false
         );
 
@@ -81,7 +81,7 @@ namespace anacal {
             const py::array_t<double>& gal_array,
             const py::array_t<std::complex<double>>& filter_image,
             const BasePsf& psf_obj,
-            const std::optional<py::array_t<int>>& det=std::nullopt,
+            const std::optional<py::array_t<FpfsPeaks>>& det=std::nullopt,
             bool do_rotate=false
         );
 

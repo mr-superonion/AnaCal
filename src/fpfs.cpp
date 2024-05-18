@@ -74,7 +74,7 @@ FpfsImage::smooth_image(
 }
 
 
-py::array_t<int>
+py::array_t<FpfsPeaks>
 FpfsImage::find_peak(
     const py::array_t<double>& gal_conv,
     double fthres,
@@ -103,7 +103,7 @@ FpfsImage::find_peak(
         );
     }
 
-    std::vector<std::tuple<int, int, bool, int>> peaks;
+    std::vector<std::tuple<int, int, bool>> peaks;
     for (ssize_t j = bound + 1; j < ny - bound; ++j) {
         for (ssize_t i = bound + 1; i < nx - bound; ++i) {
             double c = r(j, i);
@@ -128,29 +128,28 @@ FpfsImage::find_peak(
                     (c > r(j, i-1)) &&
                     (c > r(j, i+1))
                 );
-                peaks.push_back({j, i, is_peak, 0});
+                peaks.push_back({j, i, is_peak});
             }
         }
     }
 
     int nrow = peaks.size();
-    int ncol = 4;
-    py::array_t<int> src({nrow, ncol});
-    auto src_r = src.mutable_unchecked<2>();
+    py::array_t<FpfsPeaks> src(nrow);
+    auto src_r = src.mutable_unchecked<1>();
 
     for (ssize_t j = 0; j < nrow; ++j) {
         const auto& elem = peaks[j];
-        src_r(j, 0) = std::get<0>(elem);
-        src_r(j, 1) = std::get<1>(elem);
-        src_r(j, 2) = static_cast<int>(std::get<2>(elem));
-        src_r(j, 3) = std::get<3>(elem);
+        src_r(j).y = std::get<0>(elem);
+        src_r(j).x = std::get<1>(elem);
+        src_r(j).is_peak = int(std::get<2>(elem));
+        src_r(j).mask_value = 0;
     }
 
     return src;
 }
 
 
-py::array_t<int>
+py::array_t<FpfsPeaks>
 FpfsImage::detect_source(
     py::array_t<double>& gal_array,
     double fthres,
@@ -168,7 +167,7 @@ FpfsImage::detect_source(
         gal_array,
         noise_array
     );
-    py::array_t<int> detection = this->find_peak(
+    py::array_t<FpfsPeaks> detection = this->find_peak(
         gal_conv,
         fthres,
         pthres,
@@ -194,7 +193,7 @@ FpfsImage::measure_source(
     const py::array_t<double>& gal_array,
     const py::array_t<std::complex<double>>& filter_image,
     const std::optional<py::array_t<double>>& psf_array,
-    const std::optional<py::array_t<int>>& det,
+    const std::optional<py::array_t<FpfsPeaks>>& det,
     bool do_rotate
 ) {
     ssize_t ndim = filter_image.ndim();
@@ -221,18 +220,18 @@ FpfsImage::measure_source(
     );
 
     ssize_t ncol = filter_image.shape()[ndim - 1];
-    py::array_t<int> det_default({1, 4});
-    auto r = det_default.mutable_unchecked<2>();
-    r(0, 0) = ny / 2; r(0, 1) = nx / 2;
-    r(0, 2) = 0; r(0, 3) = 0;
-    const py::array_t<int>& det_use = det.has_value() ? *det : det_default;
-    auto det_r = det_use.unchecked<2>();
+    py::array_t<FpfsPeaks> det_default(1);
+    auto r = det_default.mutable_unchecked<1>();
+    r(0).y = ny / 2; r(0).x = nx / 2;
+    r(0).is_peak = 1; r(0).mask_value = 0;
+    const py::array_t<FpfsPeaks>& det_use = det.has_value() ? *det : det_default;
+    auto det_r = det_use.unchecked<1>();
 
     ssize_t nrow = det_use.shape()[0];
     py::array_t<double> src({nrow, ncol});
     auto src_r = src.mutable_unchecked<2>();
     for (ssize_t j = 0; j < nrow; ++j) {
-        int y = det_r(j, 0); int x = det_r(j, 1);
+        int y = det_r(j).y; int x = det_r(j).x;
         cimg.set_r(gal_array, x, y);
         cimg.fft();
         py::array_t<double> row = cimg.measure(fimg);
@@ -249,7 +248,7 @@ FpfsImage::measure_source(
     const py::array_t<double>& gal_array,
     const py::array_t<std::complex<double>>& filter_image,
     const BasePsf& psf_obj,
-    const std::optional<py::array_t<int>>& det,
+    const std::optional<py::array_t<FpfsPeaks>>& det,
     bool do_rotate
 ) {
     ssize_t ndim = filter_image.ndim();
@@ -260,18 +259,18 @@ FpfsImage::measure_source(
     }
     ssize_t ncol = filter_image.shape()[ndim - 1];
 
-    py::array_t<int> det_default({1, 4});
-    auto r = det_default.mutable_unchecked<2>();
-    r(0, 0) = ny / 2; r(0, 1) = nx / 2;
-    r(0, 2) = 0; r(0, 3) = 0;
-    const py::array_t<int>& det_use = det.has_value() ? *det : det_default;
-    auto det_r = det_use.unchecked<2>();
+    py::array_t<FpfsPeaks> det_default(1);
+    auto r = det_default.mutable_unchecked<1>();
+    r(0).y = ny / 2; r(0).x = nx / 2;
+    r(0).is_peak = 1; r(0).mask_value = 0;
+    const py::array_t<FpfsPeaks>& det_use = det.has_value() ? *det : det_default;
+    auto det_r = det_use.unchecked<1>();
 
     ssize_t nrow = det_use.shape()[0];
     py::array_t<double> src({nrow, ncol});
     auto src_r = src.mutable_unchecked<2>();
     for (ssize_t j = 0; j < nrow; ++j) {
-        int y = det_r(j, 0); int x = det_r(j, 1);
+        int y = det_r(j).y; int x = det_r(j).x;
         {
             py::array_t<double> psf_use = psf_obj.draw(x, y);
             cimg.set_r(psf_use, false);
@@ -350,7 +349,7 @@ pyExportFpfs(py::module& m) {
                 const py::array_t<double>&,
                 const py::array_t<std::complex<double>>&,
                 const std::optional<py::array_t<double>>&,
-                const std::optional<py::array_t<int>>&,
+                const std::optional<py::array_t<FpfsPeaks>>&,
                 bool
             >(&FpfsImage::measure_source),
             "measure source properties using filter at the position of det",
@@ -365,7 +364,7 @@ pyExportFpfs(py::module& m) {
                 const py::array_t<double>&,
                 const py::array_t<std::complex<double>>&,
                 const BasePsf&,
-                const std::optional<py::array_t<int>>&,
+                const std::optional<py::array_t<FpfsPeaks>>&,
                 bool
             >(&FpfsImage::measure_source),
             "measure source properties using filter at the position of det",

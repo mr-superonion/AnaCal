@@ -129,7 +129,7 @@ def process_image(
         else:
             out.append(ctask.measure_g2_force(src, noise_src))
     out = np.hstack(out)
-    return out
+    return coords, out
 
 
 class FpfsConfig(BaseModel):

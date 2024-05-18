@@ -2,6 +2,7 @@ import anacal
 import fpfs
 import galsim
 import numpy as np
+import numpy.lib.recfunctions as rfn
 
 from .fpfs import smooth
 
@@ -97,7 +98,7 @@ def test_detect():
         std_v=std * scale**2.0,
         noise_array=noise_array,
     )
-    out1 = np.array(out1)
+    out1 = rfn.structured_to_unstructured(out1)
     out1 = out1[:, :-1]
 
     cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
