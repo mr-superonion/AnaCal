@@ -32,11 +32,11 @@ def test_noise_covariance():
     noise_pow = np.ones((ngrid, ngrid)) * variance * ngrid**2.0
     cov_elem = noise_task.measure(noise_pow)
     noise_task2 = anacal.fpfs.FpfsNoiseCov(
-        psf_array,
-        pixel_scale,
-        sigma_as,
-        nord,
-        det_nrot,
+        psf_array=psf_array,
+        pixel_scale=pixel_scale,
+        sigma_arcsec=sigma_as,
+        nord=nord,
+        det_nrot=det_nrot,
         klim_thres=1e-20,
     )
     cov_elem2 = noise_task2.measure(variance=variance)

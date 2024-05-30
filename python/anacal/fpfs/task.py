@@ -12,6 +12,7 @@ class FpfsNoiseCov(FpfsTask):
     psf_array (NDArray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
+    sigma_arcsec_det (float|None): Detection kernel size [default: None]
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
     klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
@@ -25,15 +26,17 @@ class FpfsNoiseCov(FpfsTask):
         psf_array: NDArray,
         pixel_scale: float,
         sigma_arcsec: float,
+        sigma_arcsec_det: float | None = None,
         nord: int = 4,
         det_nrot: int = 4,
         klim_thres: float = 1e-20,
     ) -> None:
         super().__init__(
             psf_array=psf_array,
-            sigma_arcsec=sigma_arcsec,
-            nord=nord,
             pixel_scale=pixel_scale,
+            sigma_arcsec=sigma_arcsec,
+            sigma_arcsec_det=sigma_arcsec_det,
+            nord=nord,
             det_nrot=det_nrot,
             klim_thres=klim_thres,
         )
@@ -102,6 +105,7 @@ class FpfsDetect(FpfsTask):
     psf_array (NDArray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
+    sigma_arcsec_det (float|None): Detection kernel size [default: None]
     cov_matrix (NDArray): covariance matrix of Fpfs basis modes
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel [default: 8]
@@ -113,9 +117,10 @@ class FpfsDetect(FpfsTask):
         nx: int,
         ny: int,
         psf_array: NDArray,
+        cov_matrix: NDArray,
         pixel_scale: float,
         sigma_arcsec: float,
-        cov_matrix: NDArray,
+        sigma_arcsec_det: float | None = None,
         nord: int = 4,
         det_nrot: int = 4,
         klim_thres: float = 1e-20,
@@ -123,8 +128,9 @@ class FpfsDetect(FpfsTask):
         super().__init__(
             psf_array=psf_array,
             sigma_arcsec=sigma_arcsec,
-            nord=nord,
+            sigma_arcsec_det=sigma_arcsec_det,
             pixel_scale=pixel_scale,
+            nord=nord,
             det_nrot=det_nrot,
             klim_thres=klim_thres,
         )
@@ -133,8 +139,8 @@ class FpfsDetect(FpfsTask):
             nx=nx,
             ny=ny,
             scale=self.pixel_scale,
-            sigma_arcsec=self.sigma_arcsec,
-            klim=self.klim / self.pixel_scale,
+            sigma_arcsec=self.sigma_arcsec_det,
+            klim=self.klim_det / self.pixel_scale,
             psf_array=psf_array,
             use_estimate=True,
         )
@@ -166,6 +172,8 @@ class FpfsDetect(FpfsTask):
         pthres2 (float): second pooling layer peak threshold
         bound (int): minimum distance to boundary
         noise_array (NDArray|None): pure noise image
+        mask_array (NDArray|None): mask image
+        star_cat (NDArray|None): bright star catalog
 
         Returns:
             galaxy detection catalog
@@ -200,6 +208,7 @@ class FpfsMeasure(FpfsTask):
     psf_array (NDArray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
+    sigma_arcsec_det (float|None): Detection kernel size [default: None]
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
     klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
@@ -210,15 +219,17 @@ class FpfsMeasure(FpfsTask):
         psf_array: NDArray,
         pixel_scale: float,
         sigma_arcsec: float,
+        sigma_arcsec_det: float | None = None,
         nord: int = 4,
         det_nrot: int = 4,
         klim_thres: float = 1e-20,
     ) -> None:
         super().__init__(
             psf_array=psf_array,
-            sigma_arcsec=sigma_arcsec,
-            nord=nord,
             pixel_scale=pixel_scale,
+            sigma_arcsec=sigma_arcsec,
+            sigma_arcsec_det=sigma_arcsec_det,
+            nord=nord,
             det_nrot=det_nrot,
             klim_thres=klim_thres,
         )

@@ -309,7 +309,8 @@ pyExportFpfs(py::module& m) {
             const py::array_t<double>&, bool>(),
             "Initialize the FpfsImage object using an ndarray",
             py::arg("nx"), py::arg("ny"),
-            py::arg("scale"), py::arg("sigma_arcsec"),
+            py::arg("scale"),
+            py::arg("sigma_arcsec"),
             py::arg("klim"),
             py::arg("psf_array"),
             py::arg("use_estimate")=true

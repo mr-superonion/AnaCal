@@ -88,6 +88,7 @@ class FpfsTask(AnacalBase):
     psf_array (ndarray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
+    sigma_arcsec_det (float|None): Detection kernel size [default: None]
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
     klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
@@ -99,6 +100,7 @@ class FpfsTask(AnacalBase):
         psf_array,
         pixel_scale: float,
         sigma_arcsec: float,
+        sigma_arcsec_det: float | None = None,
         nord: int = 4,
         det_nrot: int = 4,
         klim_thres: float = 1e-20,
@@ -106,6 +108,7 @@ class FpfsTask(AnacalBase):
     ) -> None:
         super().__init__(verbose)
         self.nord = nord
+        self.logger.info("Order of the Shapelets: nord=%d" % self.nord)
         name_s, _ = get_shapelets_col_names(nord)
         name_d = get_det_col_names(det_nrot)
         name_a = name_s + name_d
@@ -117,9 +120,18 @@ class FpfsTask(AnacalBase):
         self.name_detect = name_d
         self.det_nrot = det_nrot
         self.sigma_arcsec = sigma_arcsec
-        if sigma_arcsec <= 0.0 or sigma_arcsec > 5.0:
-            raise ValueError("sigma_arcsec should be positive and < 5 arcsec")
+        if sigma_arcsec_det is None:
+            self.sigma_arcsec_det = sigma_arcsec
+        else:
+            self.sigma_arcsec_det = sigma_arcsec_det
         self.ngrid = psf_array.shape[0]
+
+        if self.sigma_arcsec <= 0.0 or self.sigma_arcsec > 3.0:
+            raise ValueError("sigma_arcsec should be positive and < 3 arcsec")
+        if self.sigma_arcsec_det <= 0.0 or self.sigma_arcsec_det > 3.0:
+            raise ValueError(
+                "sigma_arcsec_det should be positive and < 3 arcsec"
+            )
 
         # Preparing PSF
         psf_f = np.fft.rfft2(psf_array)
@@ -130,20 +142,25 @@ class FpfsTask(AnacalBase):
         self._dk = 2.0 * np.pi / self.ngrid  # assuming pixel scale is 1
 
         # the following two assumes pixel_scale = 1
-        self.sigmaf = float(self.pixel_scale / sigma_arcsec)
-        self.logger.info("Order of the shear estimator: nord=%d" % self.nord)
+        self.sigmaf = float(self.pixel_scale / self.sigma_arcsec)
+        self.sigmaf_det = float(self.pixel_scale / self.sigma_arcsec_det)
         self.logger.info(
             "Shapelet kernel in configuration space: sigma= %.4f arcsec"
             % (sigma_arcsec)
         )
         # effective nyquest wave number
-        self.klim_pix = get_klim(
+        self.klim = get_klim(
             psf_pow=psf_pow,
             sigma=self.sigmaf / np.sqrt(2.0),
             klim_thres=klim_thres,
-        )  # in pixel units
-        self.klim = float(self.klim_pix * self._dk)
-        self.logger.info("Maximum |k| is %.3f" % (self.klim))
+        ) * self._dk
+        self.logger.info("Maximum |k| for shapelet is %.3f" % (self.klim))
+        self.klim_det = get_klim(
+            psf_pow=psf_pow,
+            sigma=self.sigmaf_det / np.sqrt(2.0),
+            klim_thres=klim_thres,
+        ) * self._dk
+        self.logger.info("Maximum |k| for detection is %.3f" % (self.klim_det))
         self.prepare_fpfs_bases()
         return
 
@@ -167,9 +184,9 @@ class FpfsTask(AnacalBase):
         )
         psi, dnames = detlets2d(
             ngrid=self.ngrid,
-            sigma=self.sigmaf,
-            klim=self.klim,
             det_nrot=self.det_nrot,
+            sigma=self.sigmaf_det,
+            klim=self.klim_det,
         )
         bnames = snames + dnames
         self.bfunc = np.vstack([chi, psi])
@@ -179,19 +196,6 @@ class FpfsTask(AnacalBase):
     def get_results(self, data):
         outcome = np.rec.fromarrays(data.T, dtype=np.dtype(self.byps))
         return outcome
-
-    def get_results_detection(self, data):
-        tps = [
-            ("fpfs_y", "i4"),
-            ("fpfs_x", "i4"),
-            ("is_peak", "?"),
-        ]
-
-        coords = np.rec.fromarrays(
-            data.T,
-            dtype=np.dtype(tps),
-        )
-        return coords
 
 
 def gauss_kernel_rfft(
@@ -320,9 +324,9 @@ def shapelets2d(ngrid: int, nord: int, sigma: float, klim: float):
 
 def detlets2d(
     ngrid: int,
+    det_nrot: int,
     sigma: float,
     klim: float,
-    det_nrot: int,
 ):
     """Generates shapelets function in Fourier space, chi00 are normalized to 1
     This function only supports square stamps: ny=nx=ngrid.
