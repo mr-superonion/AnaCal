@@ -97,6 +97,9 @@ def gaussian(x, mu, sigma):
 class CatalogBase(object):
     def __init__(
         self,
+        pixel_scale: float,
+        sigma_arcsec: float,
+        mag_zero: float,
         cov_matrix: NDArray,
         snr_min: float = 12.0,
         r2_min: float = 0.05,
@@ -112,6 +115,9 @@ class CatalogBase(object):
         det_nrot: int = 4,
     ):
         self.nord = nord
+        self.pixel_scale = pixel_scale
+        self.sigma_arcsec = sigma_arcsec
+        self.mag_zero = mag_zero
         name_s, _ = get_shapelets_col_names(nord)
         name_d = get_det_col_names(det_nrot)
         name_a = name_s + name_d
@@ -281,6 +287,9 @@ class CatalogBase(object):
     def _e2(self, x):
         return 0.0
 
+    def _mag(self, x):
+        return 0.0
+
     def _we1(self, x):
         e1 = self._wsel(x) * self._e1(x)
         w = self._wdet(x)
@@ -334,8 +343,7 @@ class CatalogBase(object):
         return jnp.hstack([e2, de2_dg2])
 
     def measure_g1(self, src, noise=None):
-        """This function meausres the first component of shear using
-        renoise method to revise noise bias.
+        """This function meausres the first component of shear
 
         Args:
         src (ndarray): source catalog
@@ -363,8 +371,7 @@ class CatalogBase(object):
         return result
 
     def measure_g2(self, src, noise=None):
-        """This function meausres the second component of shear using
-        renoise method to revise noise bias.
+        """This function meausres the second component of shear
 
         Args:
         src (ndarray): source catalog
@@ -392,9 +399,8 @@ class CatalogBase(object):
         return result
 
     def measure_g1_force(self, src, noise=None):
-        """This function meausres the first component of shear using
-        renoise method to revise noise bias. This function is for forced
-        measurement.
+        """This function meausres the first component of shear. This function
+        is for forced measurement.
 
         Args:
         src (ndarray): source catalog
@@ -422,9 +428,8 @@ class CatalogBase(object):
         return result
 
     def measure_g2_force(self, src, noise=None):
-        """This function meausres the second component of shear using
-        renoise method to revise noise bias. This function is for forced
-        measurement.
+        """This function meausres the second component of shear. This function
+        is for forced measurement.
 
         Args:
         src (ndarray): source catalog
@@ -451,10 +456,31 @@ class CatalogBase(object):
             result = func(src, noise)
         return result
 
+    def measure_mag(self, src):
+        """This function meausres the galaxy magnitude
+
+        Args:
+        src (ndarray): source catalog
+
+        Returns:
+        result (ndarray): galaxy magnitude
+        """
+        src = jnp.atleast_2d(src)
+        func = jax.vmap(
+            self._mag,
+            in_axes=0,
+            out_axes=0,
+        )
+        result = func(src)
+        return result
+
 
 class FpfsCatalog(CatalogBase):
     def __init__(
         self,
+        pixel_scale: float,
+        sigma_arcsec: float,
+        mag_zero: float,
         cov_matrix: NDArray,
         snr_min: float = 12.0,
         r2_min: float = 0.05,
@@ -470,6 +496,10 @@ class FpfsCatalog(CatalogBase):
     ):
         nord = 4
         super().__init__(
+            pixel_scale=pixel_scale,
+            sigma_arcsec=sigma_arcsec,
+            mag_zero=mag_zero,
+            cov_matrix=cov_matrix,
             snr_min=snr_min,
             r2_min=r2_min,
             r2_max=r2_max,
@@ -480,7 +510,6 @@ class FpfsCatalog(CatalogBase):
             pthres=pthres,
             pratio=pratio,
             pthres2=pthres2,
-            cov_matrix=cov_matrix,
             nord=nord,
             det_nrot=det_nrot,
         )
@@ -495,6 +524,13 @@ class FpfsCatalog(CatalogBase):
         # ellipticity2
         e2 = x[self.di["m22s"]] / self._denom(x)
         return e2
+
+    def _mag(self, x):
+        flux = (
+            x[self.di['m00']] + x[self.di['m20']]
+        ) * (self.sigma_arcsec / self.pixel_scale) ** 2.0 / 2.0
+        mag = self.mag_zero - jnp.log10(flux) * 2.5
+        return float(mag)
 
 
 def m2e(mm, const=1.0, nn=None):

@@ -51,10 +51,10 @@ def test_fpfs_measure(seed):
         psf_array=psf_data,
         pixel_scale=scale,
         sigma_arcsec=sigma_as,
-        cov_matrix=cov_element,
+        cov_matrix=cov_element * scale**4.0,
         det_nrot=det_nrot,
     )
-    out1 = dtask.run(
+    det1 = dtask.run(
         gal_array=gal_data,
         fthres=1.0,
         pthres=pthres,
@@ -69,11 +69,11 @@ def test_fpfs_measure(seed):
         sigma_arcsec=sigma_as,
         det_nrot=det_nrot,
     )
-    src1 = mtask.run(gal_array=gal_data, det=out1)
+    src1 = mtask.run(gal_array=gal_data, det=det1)
 
     np.testing.assert_almost_equal(mtask.bfunc.real, task.bfunc.real)
     np.testing.assert_almost_equal(mtask.bfunc.imag, task.bfunc.imag)
-    out2 = task.detect_source(
+    det2 = task.detect_source(
         gal_data,
         psf_data,
         cov_element,
@@ -83,7 +83,7 @@ def test_fpfs_measure(seed):
         bound=bound,
         noise_array=None,
     )
-    src2 = task.measure(gal_data, out2)
+    src2 = task.measure(gal_data, det2)
     np.testing.assert_almost_equal(src1, src2, decimal=5)
 
     psf_data2 = np.zeros((1, 1, ngrid2, ngrid2))
@@ -95,7 +95,7 @@ def test_fpfs_measure(seed):
         dy=ngrid,
         model_array=psf_data2,
     )
-    src3 = mtask.run(gal_array=gal_data, psf_obj=grid_psf, det=out1)
+    src3 = mtask.run(gal_array=gal_data, psf_obj=grid_psf, det=det1)
     np.testing.assert_almost_equal(src1, src3, decimal=5)
     return
 

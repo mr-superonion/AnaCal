@@ -29,6 +29,7 @@ def process_image(
     noise_array,
     cov_matrix,
     coords,
+    mag_zero=30.0,
 ):
     # Preparing
     ngrid = fpfs_config.rcut * 2
@@ -105,6 +106,9 @@ def process_image(
 
     # Catalog
     ctask = FpfsCatalog(
+        pixel_scale=pixel_scale,
+        sigma_arcsec=fpfs_config.sigma_arcsec,
+        mag_zero=mag_zero,
         cov_matrix=cov_matrix,
         snr_min=fpfs_config.snr_min,
         r2_min=fpfs_config.r2_min,

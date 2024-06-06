@@ -243,16 +243,19 @@ def shapelets2d_func(ngrid: int, nord: int, sigma: float, klim: float):
     """
 
     mord = nord
-    gaufunc, (yfunc, xfunc) = gauss_kernel_rfft(
+    gauss_ker, (yfunc, xfunc) = gauss_kernel_rfft(
         ngrid,
         ngrid,
         sigma,
         klim,
         return_grid=True,
     )
+    # for inverse Fourier transform
+    gauss_ker = gauss_ker / ngrid**2.0
+
     rfunc = np.sqrt(xfunc**2.0 + yfunc**2.0)  # radius
     r2_over_sigma2 = (rfunc / sigma) ** 2.0
-    ny, nx = gaufunc.shape
+    ny, nx = gauss_ker.shape
 
     rmask = rfunc != 0.0
     xtfunc = np.zeros((ny, nx))
@@ -285,11 +288,11 @@ def shapelets2d_func(ngrid: int, nord: int, sigma: float, klim: float):
                 * pow(cc, 0.5)
                 * lfunc[c1, abs(mm), :, :]
                 * pow(r2_over_sigma2, abs(mm) / 2)
-                * gaufunc
+                * gauss_ker
                 * eulfunc**mm
                 * (1j) ** nn
             )
-    chi = chi.reshape(((nord + 1) ** 2, ny, nx)) / ngrid**2.0
+    chi = chi.reshape(((nord + 1) ** 2, ny, nx))
     return chi
 
 
@@ -350,6 +353,7 @@ def detlets2d(
     )
     # for inverse Fourier transform
     gauss_ker = gauss_ker / ngrid**2.0
+
     # for shear response
     q1_ker = (k1grid**2.0 - k2grid**2.0) / sigma**2.0 * gauss_ker
     q2_ker = (2.0 * k1grid * k2grid) / sigma**2.0 * gauss_ker

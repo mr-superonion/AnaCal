@@ -91,7 +91,6 @@ class FpfsNoiseCov(FpfsTask):
                 np.conjugate(self.bfunc),
                 axes=((1, 2), (1, 2)),
             ).real
-            / self.pixel_scale**4.0
         )
         return cov_matrix
 
@@ -194,8 +193,8 @@ class FpfsDetect(FpfsTask):
             pratio=pratio,
             bound=bound,
             pthres2=pthres2,
-            std_m00=self.std_m00 * self.pixel_scale**2.0,
-            std_v=self.std_v * self.pixel_scale**2.0,
+            std_m00=self.std_m00,
+            std_v=self.std_v,
             noise_array=noise_array,
             mask_array=mask_array,
         )
@@ -262,7 +261,7 @@ class FpfsMeasure(FpfsTask):
         do_rotate (bool): whether do rotation
 
         Returns:
-            galaxy measurement catalog
+        out (NDArray): galaxy measurement catalog
         """
 
         bfunc = np.transpose(self.bfunc, (1, 2, 0))

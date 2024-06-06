@@ -273,11 +273,8 @@ def generate_cosmos_gal(record, trunc_ratio=5.0, gsparams=None):
     return gal
 
 
-def _generate_gal_fft(record, magzero, rng, gsparams, simple_sim):
-    if simple_sim:
-        gal0 = generate_cosmos_gal_simple(record, gsparams=gsparams)
-    else:
-        gal0 = generate_cosmos_gal(record, gsparams=gsparams)
+def _generate_gal_fft(record, magzero, rng, gsparams):
+    gal0 = generate_cosmos_gal(record, gsparams=gsparams)
     # E.g., HSC's i-band coadds zero point is 27
     flux = 10 ** ((magzero - record["mag_auto"]) / 2.5)
     gal0 = gal0.withFlux(flux)
@@ -332,18 +329,19 @@ def make_exposure_stamp(
     do_shift,
     buff=0,
     draw_method="auto",
-    simple_sim=True,
 ):
     ngal = ngalx * ngaly
     gsparams = galsim.GSParams(maximum_fft_size=10240)
     gal0 = None
     gal_image_list = []
+    gal_input_list = []
     npix_x = ngalx * ngrid + buff * 2.0
     npix_y = ngaly * ngrid + buff * 2.0
     for _ in range(len(rot_field)):
         gal_image = galsim.ImageF(npix_x, npix_y, scale=scale)
         gal_image.setOrigin(0, 0)
         gal_image_list.append(gal_image)
+        gal_input_list.append([])
     for i in range(ngal):
         # boundary
         ix = i % ngalx
@@ -360,7 +358,6 @@ def make_exposure_stamp(
                     magzero,
                     rng,
                     gsparams,
-                    simple_sim,
                 )
             elif sim_method == "mc":
                 gal0 = _generate_gal_mc(
@@ -501,7 +498,7 @@ def make_isolated_sim(
     sim_method="fft",
     buff=0,
     draw_method="auto",
-    simple_sim=True,
+    return_catalog=False,
 ):
     """Makes basic **isolated** galaxy image simulation.
 
@@ -527,6 +524,8 @@ def make_isolated_sim(
     npoints (int): number of random points when
     sim_method (str): galaxy tpye ("fft" or "mc")
     buff (int): buff size (zero padding near boundaries)
+    draw_method (str): method used for drawing image by Galsim
+    return_catalog (bool): whether returning the input catalog
     """
 
     if nx % ngrid != 0:
@@ -555,14 +554,14 @@ def make_isolated_sim(
     dis_version = int(eval(gname.split("-")[-1]))
     assert dis_version < 3 and dis_version >= 0, "gname is not supported"
     shear_const = shear_list[dis_version]
-    gver = gname.split("-")[0]
-    if gver == "g1":
+    g_version = gname.split("-")[0]
+    if g_version == "g1":
         g1 = shear_const
         g2 = 0.0
-    elif gver == "g2":
+    elif g_version == "g2":
         g1 = 0.0
         g2 = shear_const
-    elif gver == "g1_g2":
+    elif g_version == "g1_g2":
         g1 = shear_const
         g2 = shear_const
     else:
@@ -588,9 +587,11 @@ def make_isolated_sim(
         do_shift=do_shift,
         buff=buff,
         draw_method=draw_method,
-        simple_sim=simple_sim,
     )
-    return exposures
+    if not return_catalog:
+        return exposures
+    else:
+        return exposures, cat_input
 
 
 def make_noise_sim(
@@ -730,7 +731,7 @@ def make_blended_sim(
             g1 = 0.0
             g2 = 0.0
 
-        gal = generate_cosmos_gal_simple(ss, gsparams=bigfft)
+        gal = generate_cosmos_gal(ss, gsparams=bigfft)
         # rescale the radius while keeping the surface brightness the same
         gal = gal.expand(rsarray[ig])
         # determine and assign flux

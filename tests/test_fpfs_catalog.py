@@ -17,6 +17,9 @@ def test_catalog():
     beta = 0.0
     pthres = 0.8
     pratio = 0.00
+    mag_zero = 30
+    sigma_arcsec = 0.52
+    pixel_scale = 0.2
 
     cat_obj = fpfs_catalog(
         cov_mat=cov_matrix,
@@ -33,6 +36,9 @@ def test_catalog():
     )
 
     cat_obj2 = FpfsCatalog(
+        pixel_scale=pixel_scale,
+        sigma_arcsec=sigma_arcsec,
+        mag_zero=mag_zero,
         cov_matrix=cov_matrix,
         snr_min=snr_min,
         r2_min=r2_min,

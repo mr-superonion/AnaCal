@@ -44,7 +44,7 @@ def test_detect():
         noise_data = np.random.randn(ny, nx)
         t0 = time.time()
 
-        cov_element = np.ones((21, 21)) * std**2.0
+        cov_element = np.ones((21, 21)) * (std * scale) ** 2.0
         dtask = anacal.fpfs.FpfsDetect(
             nx=nx,
             ny=ny,
