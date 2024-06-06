@@ -12,18 +12,31 @@ cov_matrix = None
 
 rcut = 32
 ngrid = rcut * 2
-force_detect = False
+force_detect = True
 
-if force_detect:
+if not force_detect:
     coords = None
     buff = 15
 else:
     # force detection at center
     indx = np.arange(ngrid // 2, ngrid * nstamp, ngrid)
     indy = np.arange(ngrid // 2, ngrid * nstamp, ngrid)
+    ns = len(indx) * len(indy)
     inds = np.meshgrid(indy, indx, indexing="ij")
-    coords = np.vstack(inds).T
+    yx = np.vstack([np.ravel(_) for _ in inds])
     buff = 0
+    dtype = np.dtype([
+        ('y', np.int32),
+        ('x', np.int32),
+        ('is_peak', np.int32),
+        ('mask_value', np.int32)
+    ])
+    coords = np.empty(ns, dtype=dtype)
+    coords["y"] = yx[0]
+    coords["x"] = yx[1]
+    coords["is_peak"] = np.ones(ns)
+    coords["mask_value"] = np.zeros(ns)
+
 fpfs_config = anacal.fpfs.FpfsConfig(
     force=force_detect, rcut=rcut,
     gmeasure=3,
@@ -55,7 +68,6 @@ for gname in ["g2-1", "g2-0"]:
         do_shift=False,
         buff=buff,
         nrot_per_gal=1,
-        simple_sim=False,
     )[0]
 
     outcomes.append(
@@ -68,7 +80,7 @@ for gname in ["g2-1", "g2-0"]:
             noise_array,
             cov_matrix,
             coords,
-        )
+        )[1]
     )
 
 

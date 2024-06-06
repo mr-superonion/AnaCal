@@ -10,7 +10,7 @@ noise_variance = 0.23
 noise_array = None
 cov_matrix = None
 coords = None
-outcome = anacal.fpfs.process_image(
+coords, outcome = anacal.fpfs.process_image(
     fpfs_config,
     gal_array,
     psf_array,
