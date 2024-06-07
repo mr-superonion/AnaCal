@@ -282,13 +282,16 @@ class CatalogBase(object):
         return denom
 
     def _e1(self, x):
-        return 0.0
+        return jnp.array([0.0])
 
     def _e2(self, x):
-        return 0.0
+        return jnp.array([0.0])
+
+    def _flux(self, x):
+        return jnp.array([0.0])
 
     def _mag(self, x):
-        return 0.0
+        return jnp.array([0.0])
 
     def _we1(self, x):
         e1 = self._wsel(x) * self._e1(x)
@@ -456,6 +459,24 @@ class CatalogBase(object):
             result = func(src, noise)
         return result
 
+    def measure_flux(self, src):
+        """This function meausres the galaxy magnitude
+
+        Args:
+        src (ndarray): source catalog
+
+        Returns:
+        result (ndarray): galaxy magnitude
+        """
+        src = jnp.atleast_2d(src)
+        func = jax.vmap(
+            self._flux,
+            in_axes=0,
+            out_axes=0,
+        )
+        result = func(src)
+        return result
+
     def measure_mag(self, src):
         """This function meausres the galaxy magnitude
 
@@ -525,12 +546,15 @@ class FpfsCatalog(CatalogBase):
         e2 = x[self.di["m22s"]] / self._denom(x)
         return e2
 
-    def _mag(self, x):
+    def _flux(self, x):
         flux = (
             x[self.di['m00']] + x[self.di['m20']]
         ) * (self.sigma_arcsec / self.pixel_scale) ** 2.0 / 2.0
-        mag = self.mag_zero - jnp.log10(flux) * 2.5
-        return float(mag)
+        return flux
+
+    def _mag(self, x):
+        mag = self.mag_zero - jnp.log10(self._flux(x)) * 2.5
+        return mag
 
 
 def m2e(mm, const=1.0, nn=None):
