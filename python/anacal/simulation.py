@@ -14,22 +14,17 @@
 # python lib
 
 import gc
-import logging
 import os
 
 import astropy.io.fits as pyfits
 import galsim
 import numpy as np
 
+from .base import setup_custom_logger
+
 _data_dir = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "data",
-)
-
-logging.basicConfig(
-    format="%(asctime)s %(message)s",
-    datefmt="%Y/%m/%d %H:%M:%S --- ",
-    level=logging.INFO,
 )
 
 
@@ -417,7 +412,10 @@ class CosmosCatalog(object):
         max_hlr=None,
         min_hlr=None,
         gal_type="mixed",
+        logger=None,
     ):
+        if logger is None:
+            logger = setup_custom_logger(verbose=False)
         src = read_cosmos_catalog(filename)
         # Initializing selector mask with all Trues
         sel = np.ones(len(src), dtype=bool)
@@ -444,16 +442,16 @@ class CosmosCatalog(object):
         src = src[sel]
 
         if gal_type == "mixed":
-            logging.info("Creating Mixed galaxy profiles")
+            logger.info("Creating Mixed galaxy profiles")
         elif gal_type == "sersic":
-            logging.info("Creating single Sersic profiles")
+            logger.info("Creating single Sersic profiles")
             src = src[src["use_bulgefit"] == 0]
         elif gal_type == "bulgedisk":
-            logging.info("Creating Bulge + Disk profiles")
+            logger.info("Creating Bulge + Disk profiles")
             src = src[src["use_bulgefit"] != 0]
         elif gal_type == "debug":
             # This is used for debug
-            logging.info("Creating profile for debug")
+            logger.info("Creating profile for debug")
             src = src[src["use_bulgefit"] == 0]
             # src["sersicfit"][:, 3] = 1.0  # round galaxies
             # src["sersicfit"][:, 2] = 0.5  # only Gaussian
@@ -499,6 +497,7 @@ def make_isolated_sim(
     buff=0,
     draw_method="auto",
     return_catalog=False,
+    verbose=False,
 ):
     """Makes basic **isolated** galaxy image simulation.
 
@@ -526,8 +525,10 @@ def make_isolated_sim(
     buff (int): buff size (zero padding near boundaries)
     draw_method (str): method used for drawing image by Galsim
     return_catalog (bool): whether returning the input catalog
+    verbose (bool): whether show log info
     """
 
+    logger = setup_custom_logger(verbose=verbose)
     if nx % ngrid != 0:
         raise ValueError("nx is not divisible by ngrid")
     if ny % ngrid != 0:
@@ -547,6 +548,7 @@ def make_isolated_sim(
         max_hlr=max_hlr,
         min_hlr=min_hlr,
         gal_type=gal_type,
+        logger=logger,
     )
     cat_input = cosmos_cat.make_catalog(rng=rng, n=ngeff)
     # Get the shear information
@@ -566,7 +568,7 @@ def make_isolated_sim(
         g2 = shear_const
     else:
         raise ValueError("cannot decide g1 or g2")
-    logging.info("Processing for %s, and shear is %s." % (gname, shear_const))
+    logger.info("Processing for %s, and shear is %s." % (gname, shear_const))
 
     if rot_field is None:
         rot_field = [0.0]
@@ -601,6 +603,7 @@ def make_noise_sim(
     ny=6400,
     nx=6400,
     scale=0.168,
+    verbose=False,
 ):
     """Makes pure noise for galaxy image simulation.
 
@@ -609,9 +612,12 @@ def make_noise_sim(
     ind0 (int): index of the simulation
     ny (int): number of pixels in y direction
     nx (int): number of pixels in x direction
+    scale (float): pixel scale
+    verbose (bool): whether show log info
     """
-    logging.info("begining for field %04d" % (ind0))
-    logging.info("simulating noise for field %s" % (ind0))
+    logger = setup_custom_logger(verbose=verbose)
+    logger.info("begining for field %04d" % (ind0))
+    logger.info("simulating noise for field %s" % (ind0))
     variance = 0.01
     ud = galsim.UniformDeviate(ind0 * 10000 + 1)
 
@@ -640,6 +646,7 @@ def make_blended_sim(
     shear_value=0.02,
     nrot=4,
     rescale_min_max=None,
+    verbose=False,
 ):
     """Makes cosmo-like blended galaxy image simulations.
 
@@ -658,8 +665,10 @@ def make_blended_sim(
     nrot (int): number of rotation, optional
     rescale_min_max (list|ndarray): lower and upper bounds of galaxy size
         rescaling factor, optional
+    verbose (bool): whether show log info
     """
 
+    logger = setup_custom_logger(verbose=verbose)
     np.random.seed(ind0)
 
     bigfft = galsim.GSParams(maximum_fft_size=10240)  # galsim setup
@@ -675,7 +684,7 @@ def make_blended_sim(
     ngal = max(int(r2 * np.pi * scale**2.0 / 3600.0 * density), nrot)
     ngal = int(ngal // (nrot * 2) * (nrot * 2))
     ngeff = ngal // (nrot * 2)
-    logging.info(
+    logger.info(
         "We have %d galaxies in total, and each %d are the same" % (ngal, nrot)
     )
     if catname is None:

@@ -19,9 +19,11 @@ def test_mask():
     src = np.array(
         [(ngrid // 2 + 10, ngrid // 2 - 20, True, 0)],
         dtype=[
-            ("y", np.int32), ("x", np.int32),
-            ("is_peak", np.int32), ("mask_value", np.int32)
-        ]
+            ("y", np.int32),
+            ("x", np.int32),
+            ("is_peak", np.int32),
+            ("mask_value", np.int32),
+        ],
     )
     anacal.mask.add_pixel_mask_column(src, mask, sigma_arcsec, scale)
     assert src["mask_value"][0] == 23

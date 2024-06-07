@@ -8,21 +8,35 @@ def test_catalog():
     scale = 0.2
     psf_obj = galsim.Moffat(fwhm=0.8, beta=2.5)
     ngrid = 256
-    psf_data = psf_obj.shift(scale * 0.5, scale * 0.5).drawImage(
-        nx=64, ny=64, scale=scale, method="no_pixel",
-    ).array
+    psf_data = (
+        psf_obj.shift(scale * 0.5, scale * 0.5)
+        .drawImage(
+            nx=64,
+            ny=64,
+            scale=scale,
+            method="no_pixel",
+        )
+        .array
+    )
     gal_obj = galsim.Convolve([galsim.Gaussian(sigma=0.52, flux=100), psf_obj])
-    gal_data = gal_obj.shift(scale * 0.5, scale*0.5).drawImage(
-        nx=ngrid, ny=ngrid, scale=scale, method="no_pixel",
-    ).array
+    gal_data = (
+        gal_obj.shift(scale * 0.5, scale * 0.5)
+        .drawImage(
+            nx=ngrid,
+            ny=ngrid,
+            scale=scale,
+            method="no_pixel",
+        )
+        .array
+    )
 
     pthres = 0.2
     pratio = 0.0
     std = 1
     det_nrot = 4
-    nord=4
-    bound=0
-    pixel_scale=0.2
+    nord = 4
+    bound = 0
+    pixel_scale = 0.2
     cov_element = np.ones((21, 21)) * std**2.0 * pixel_scale**4.0
     sigma_as = 0.52
     mag_zero = 30.0

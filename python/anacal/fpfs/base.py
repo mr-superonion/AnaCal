@@ -149,17 +149,23 @@ class FpfsTask(AnacalBase):
             % (sigma_arcsec)
         )
         # effective nyquest wave number
-        self.klim = get_klim(
-            psf_pow=psf_pow,
-            sigma=self.sigmaf / np.sqrt(2.0),
-            klim_thres=klim_thres,
-        ) * self._dk
+        self.klim = (
+            get_klim(
+                psf_pow=psf_pow,
+                sigma=self.sigmaf / np.sqrt(2.0),
+                klim_thres=klim_thres,
+            )
+            * self._dk
+        )
         self.logger.info("Maximum |k| for shapelet is %.3f" % (self.klim))
-        self.klim_det = get_klim(
-            psf_pow=psf_pow,
-            sigma=self.sigmaf_det / np.sqrt(2.0),
-            klim_thres=klim_thres,
-        ) * self._dk
+        self.klim_det = (
+            get_klim(
+                psf_pow=psf_pow,
+                sigma=self.sigmaf_det / np.sqrt(2.0),
+                klim_thres=klim_thres,
+            )
+            * self._dk
+        )
         self.logger.info("Maximum |k| for detection is %.3f" % (self.klim_det))
         self.prepare_fpfs_bases()
         return

@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from . import FpfsImage, Image, mask_galaxy_image, BasePsf
+from . import BasePsf, FpfsImage, Image, mask_galaxy_image
 from .base import FpfsTask
 
 
@@ -85,13 +85,11 @@ class FpfsNoiseCov(FpfsTask):
         _w = np.ones(self.psf_pow.shape) * 2.0
         _w[:, 0] = 1.0
         _w[:, -1] = 1.0
-        cov_matrix = (
-            np.tensordot(
-                self.bfunc * (_w * noise_pf_deconv)[np.newaxis, :, :],
-                np.conjugate(self.bfunc),
-                axes=((1, 2), (1, 2)),
-            ).real
-        )
+        cov_matrix = np.tensordot(
+            self.bfunc * (_w * noise_pf_deconv)[np.newaxis, :, :],
+            np.conjugate(self.bfunc),
+            axes=((1, 2), (1, 2)),
+        ).real
         return cov_matrix
 
 

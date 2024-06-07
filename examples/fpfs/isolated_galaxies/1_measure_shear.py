@@ -25,12 +25,14 @@ else:
     inds = np.meshgrid(indy, indx, indexing="ij")
     yx = np.vstack([np.ravel(_) for _ in inds])
     buff = 0
-    dtype = np.dtype([
-        ('y', np.int32),
-        ('x', np.int32),
-        ('is_peak', np.int32),
-        ('mask_value', np.int32)
-    ])
+    dtype = np.dtype(
+        [
+            ("y", np.int32),
+            ("x", np.int32),
+            ("is_peak", np.int32),
+            ("mask_value", np.int32),
+        ]
+    )
     coords = np.empty(ns, dtype=dtype)
     coords["y"] = yx[0]
     coords["x"] = yx[1]
@@ -38,7 +40,8 @@ else:
     coords["mask_value"] = np.zeros(ns)
 
 fpfs_config = anacal.fpfs.FpfsConfig(
-    force=force_detect, rcut=rcut,
+    force=force_detect,
+    rcut=rcut,
     gmeasure=3,
 )
 

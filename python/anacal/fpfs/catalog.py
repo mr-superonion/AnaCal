@@ -548,8 +548,10 @@ class FpfsCatalog(CatalogBase):
 
     def _flux(self, x):
         flux = (
-            x[self.di['m00']] + x[self.di['m20']]
-        ) * (self.sigma_arcsec / self.pixel_scale) ** 2.0 / 2.0
+            (x[self.di["m00"]] + x[self.di["m20"]])
+            * (self.sigma_arcsec / self.pixel_scale) ** 2.0
+            / 2.0
+        )
         return flux
 
     def _mag(self, x):
