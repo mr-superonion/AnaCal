@@ -8,13 +8,11 @@ def test_catalog():
     nn = np.random.randn(1000, 21) * 4
     cov_matrix = 2.0 + np.random.randn(21, 21)
 
+    nord = 4
     det_nrot = 4
     snr_min = 12
     r2_min = 0.1
     c0 = 5.0
-    c2 = 22.74
-    alpha = 1.0
-    beta = 0.0
     pthres = 0.8
     pratio = 0.00
     mag_zero = 30
@@ -27,9 +25,9 @@ def test_catalog():
         r2_min=r2_min,
         ratio=1.6,
         c0=c0,
-        c2=c2,
-        alpha=alpha,
-        beta=beta,
+        c2=100,
+        alpha=1.0,
+        beta=0.0,
         pthres=pthres,
         pratio=pratio,
         det_nrot=det_nrot,
@@ -43,13 +41,11 @@ def test_catalog():
         snr_min=snr_min,
         r2_min=r2_min,
         c0=c0,
-        c2=c2,
-        alpha=alpha,
-        beta=beta,
         pthres=pthres,
         pratio=pratio,
         pthres2=0.12,
         det_nrot=det_nrot,
+        nord=nord,
     )
 
     out1 = cat_obj.measure_g1_renoise(mm, nn)

@@ -113,9 +113,6 @@ def process_image(
         snr_min=fpfs_config.snr_min,
         r2_min=fpfs_config.r2_min,
         c0=fpfs_config.c0,
-        c2=fpfs_config.c2,
-        alpha=fpfs_config.alpha,
-        beta=fpfs_config.beta,
         pthres=fpfs_config.pthres,
         pratio=fpfs_config.pratio,
         pthres2=fpfs_config.pthres2,
@@ -123,26 +120,14 @@ def process_image(
     )
     out = []
     if fpfs_config.gmeasure & 1:
-        if not fpfs_config.force:
-            out.append(ctask.measure_g1(src, noise_src))
-        else:
-            out.append(ctask.measure_g1_force(src, noise_src))
+        out.append(ctask.measure_g1(src, noise_src))
     if fpfs_config.gmeasure & 2:
-        if not fpfs_config.force:
-            out.append(ctask.measure_g2(src, noise_src))
-        else:
-            out.append(ctask.measure_g2_force(src, noise_src))
+        out.append(ctask.measure_g2(src, noise_src))
     out = np.hstack(out)
     return coords, out
 
 
 class FpfsConfig(BaseModel):
-    force: bool = Field(
-        default=False,
-        description="""Whether this is a forced detection (selection). If true,
-        we do not apply further detection and selection.
-        """,
-    )
     gmeasure: int = Field(
         default=1,
         description="""
@@ -231,20 +216,5 @@ class FpfsConfig(BaseModel):
     c0: float = Field(
         default=5.0,
         description="""Weighting parameter for m00 for ellipticity definition.
-        """,
-    )
-    c2: float = Field(
-        default=22.0,
-        description="""Weighting parameter for m20 for ellipticity definition.
-        """,
-    )
-    alpha: float = Field(
-        default=1.0,
-        description="""Power parameter for m00 for ellipticity definition.
-        """,
-    )
-    beta: float = Field(
-        default=0.0,
-        description="""Power parameter for m20 for ellipticity definition.
         """,
     )

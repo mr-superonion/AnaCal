@@ -3,8 +3,7 @@ import galsim
 import numpy as np
 
 
-def test_catalog():
-
+def test_mag():
     scale = 0.2
     psf_obj = galsim.Moffat(fwhm=0.8, beta=2.5)
     ngrid = 256
@@ -30,11 +29,11 @@ def test_catalog():
         .array
     )
 
+    nord = 4
+    det_nrot = 4
     pthres = 0.2
     pratio = 0.0
     std = 1
-    det_nrot = 4
-    nord = 4
     bound = 0
     pixel_scale = 0.2
     cov_element = np.ones((21, 21)) * std**2.0 * pixel_scale**4.0
@@ -75,13 +74,11 @@ def test_catalog():
         snr_min=12,
         r2_min=0.1,
         c0=4,
-        c2=10,
-        alpha=1.0,
-        beta=0.0,
         pthres=pthres,
         pratio=pratio,
         pthres2=0.12,
         det_nrot=det_nrot,
+        nord=nord,
     )
     mag1 = cat_obj.measure_mag(src)
     mag2 = mag_zero - np.log10(np.sum(gal_data)) * 2.5

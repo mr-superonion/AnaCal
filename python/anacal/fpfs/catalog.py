@@ -94,7 +94,7 @@ def gaussian(x, mu, sigma):
     return jnp.exp(exponent)
 
 
-class CatalogBase(object):
+class FpfsCatalog():
     def __init__(
         self,
         pixel_scale: float,
@@ -105,9 +105,6 @@ class CatalogBase(object):
         r2_min: float = 0.05,
         r2_max: float = 2.0,
         c0: float = 2.55,
-        c2: float = 25.6,
-        alpha: float = 0.27,
-        beta: float = 0.83,
         pthres: float = 0.8,
         pratio: float = 0.0,
         pthres2: float = 0.12,
@@ -156,9 +153,6 @@ class CatalogBase(object):
 
         # shape parameters
         self.C0 = c0 * std_m00
-        self.C2 = c2 * std_m20
-        self.alpha = alpha
-        self.beta = beta
 
         # detection threshold
         self.pcut = pthres * std_v
@@ -276,22 +270,30 @@ class CatalogBase(object):
         return out
 
     def _denom(self, x):
-        denom = (x[self.di["m00"]] + self.C0) ** self.alpha * (
-            x[self.di["m00"]] + x[self.di["m20"]] + self.C2
-        ) ** self.beta
+        denom = x[self.di["m00"]] + self.C0
         return denom
 
     def _e1(self, x):
-        return jnp.array([0.0])
+        # ellipticity1
+        e1 = x[self.di["m22c"]] / self._denom(x)
+        return e1
 
     def _e2(self, x):
-        return jnp.array([0.0])
+        # ellipticity2
+        e2 = x[self.di["m22s"]] / self._denom(x)
+        return e2
 
     def _flux(self, x):
-        return jnp.array([0.0])
+        flux = (
+            (x[self.di["m00"]] + x[self.di["m20"]])
+            * (self.sigma_arcsec / self.pixel_scale) ** 2.0
+            / 2.0
+        )
+        return flux
 
     def _mag(self, x):
-        return jnp.array([0.0])
+        mag = self.mag_zero - jnp.log10(self._flux(x)) * 2.5
+        return mag
 
     def _we1(self, x):
         e1 = self._wsel(x) * self._e1(x)
@@ -302,12 +304,6 @@ class CatalogBase(object):
         e2 = self._wsel(x) * self._e2(x)
         w = self._wdet(x)
         return ssfunc2(w, self.pthres2, fpfs_det_sigma2) * e2
-
-    def _we1_force(self, x):
-        return self._wsel(x) * self._e1(x)
-
-    def _we2_force(self, x):
-        return self._wsel(x) * self._e2(x)
 
     def _measure_g1(self, x, y=0.0):
         e1, linear_func = jax.linearize(
@@ -321,24 +317,6 @@ class CatalogBase(object):
     def _measure_g2(self, x, y=0.0):
         e2, linear_func = jax.linearize(
             self._we2,
-            x,
-        )
-        dmm_dg2 = self._dg2(x - y * 2.0)
-        de2_dg2 = linear_func(dmm_dg2)
-        return jnp.hstack([e2, de2_dg2])
-
-    def _measure_g1_force(self, x, y=0.0):
-        e1, linear_func = jax.linearize(
-            self._we1_force,
-            x,
-        )
-        dmm_dg1 = self._dg1(x - y * 2.0)
-        de1_dg1 = linear_func(dmm_dg1)
-        return jnp.hstack([e1, de1_dg1])
-
-    def _measure_g2_force(self, x, y=0.0):
-        e2, linear_func = jax.linearize(
-            self._we2_force,
             x,
         )
         dmm_dg2 = self._dg2(x - y * 2.0)
@@ -401,64 +379,6 @@ class CatalogBase(object):
             result = func(src, noise)
         return result
 
-    def measure_g1_force(self, src, noise=None):
-        """This function meausres the first component of shear. This function
-        is for forced measurement.
-
-        Args:
-        src (ndarray): source catalog
-        noise (ndarray): noise catalog
-
-        Returns:
-        result (ndarray): ellipticity and shear response (first component)
-        """
-        src = jnp.atleast_2d(src)
-        if noise is None:
-            func = jax.vmap(
-                self._measure_g1_force,
-                in_axes=0,
-                out_axes=0,
-            )
-            result = func(src)
-        else:
-            assert noise.shape == src.shape, "input shapes not matched"
-            func = jax.vmap(
-                self._measure_g1_force,
-                in_axes=(0, 0),
-                out_axes=0,
-            )
-            result = func(src, noise)
-        return result
-
-    def measure_g2_force(self, src, noise=None):
-        """This function meausres the second component of shear. This function
-        is for forced measurement.
-
-        Args:
-        src (ndarray): source catalog
-        noise (ndarray): noise catalog
-
-        Returns:
-        result (ndarray): ellipticity and shear response (second component)
-        """
-        src = jnp.atleast_2d(src)
-        if noise is None:
-            func = jax.vmap(
-                self._measure_g2_force,
-                in_axes=0,
-                out_axes=0,
-            )
-            result = func(src)
-        else:
-            assert noise.shape == src.shape, "input shapes not matched"
-            func = jax.vmap(
-                self._measure_g2_force,
-                in_axes=(0, 0),
-                out_axes=0,
-            )
-            result = func(src, noise)
-        return result
-
     def measure_flux(self, src):
         """This function meausres the galaxy magnitude
 
@@ -494,69 +414,6 @@ class CatalogBase(object):
         )
         result = func(src)
         return result
-
-
-class FpfsCatalog(CatalogBase):
-    def __init__(
-        self,
-        pixel_scale: float,
-        sigma_arcsec: float,
-        mag_zero: float,
-        cov_matrix: NDArray,
-        snr_min: float = 12.0,
-        r2_min: float = 0.05,
-        r2_max: float = 2.0,
-        c0: float = 2.55,
-        c2: float = 25.6,
-        alpha: float = 0.27,
-        beta: float = 0.83,
-        pthres: float = 0.8,
-        pratio: float = 0.0,
-        pthres2: float = 0.12,
-        det_nrot: int = 4,
-    ):
-        nord = 4
-        super().__init__(
-            pixel_scale=pixel_scale,
-            sigma_arcsec=sigma_arcsec,
-            mag_zero=mag_zero,
-            cov_matrix=cov_matrix,
-            snr_min=snr_min,
-            r2_min=r2_min,
-            r2_max=r2_max,
-            c0=c0,
-            c2=c2,
-            alpha=alpha,
-            beta=beta,
-            pthres=pthres,
-            pratio=pratio,
-            pthres2=pthres2,
-            nord=nord,
-            det_nrot=det_nrot,
-        )
-        return
-
-    def _e1(self, x):
-        # ellipticity1
-        e1 = x[self.di["m22c"]] / self._denom(x)
-        return e1
-
-    def _e2(self, x):
-        # ellipticity2
-        e2 = x[self.di["m22s"]] / self._denom(x)
-        return e2
-
-    def _flux(self, x):
-        flux = (
-            (x[self.di["m00"]] + x[self.di["m20"]])
-            * (self.sigma_arcsec / self.pixel_scale) ** 2.0
-            / 2.0
-        )
-        return flux
-
-    def _mag(self, x):
-        mag = self.mag_zero - jnp.log10(self._flux(x)) * 2.5
-        return mag
 
 
 def m2e(mm, const=1.0, nn=None):
