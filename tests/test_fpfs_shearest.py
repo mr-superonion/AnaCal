@@ -89,7 +89,7 @@ def do_test(scale, seed, rcut, gcomp):
     )
     mms2 = np.vstack(
         [
-            mtask.run(gal_array=gal_list[i], psf_array=psf_list[i])
+            mtask.run(gal_array=gal_list[i], psf=psf_list[i])
             for i in range(nrot)
         ]
     )
@@ -101,7 +101,7 @@ def do_test(scale, seed, rcut, gcomp):
     psf_list = [psf_data] * n_tests
     mms = np.vstack(
         [
-            mtask.run(gal_array=gal_list[i], det=coords, psf_array=psf_list[i])
+            mtask.run(gal_array=gal_list[i], det=coords, psf=psf_list[i])
             for i in range(n_tests)
         ]
     )

@@ -95,7 +95,7 @@ def test_fpfs_measure(seed):
         dy=ngrid,
         model_array=psf_data2,
     )
-    src3 = mtask.run(gal_array=gal_data, psf_obj=grid_psf, det=det1)
+    src3 = mtask.run(gal_array=gal_data, psf=grid_psf, det=det1)
     np.testing.assert_almost_equal(src1, src3, decimal=5)
     return
 

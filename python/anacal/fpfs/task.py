@@ -244,8 +244,7 @@ class FpfsMeasure(FpfsTask):
     def run(
         self,
         gal_array: NDArray,
-        psf_array: NDArray | None = None,
-        psf_obj=None,
+        psf: BasePsf | NDArray | None = None,
         det: NDArray | None = None,
         do_rotate: bool = False,
     ) -> NDArray:
@@ -253,7 +252,7 @@ class FpfsMeasure(FpfsTask):
 
         Args:
         gal_array (NDArray): galaxy image data
-        psf_array (NDArray|None): psf image data
+        psf (BasePsf | NDArray | None): psf image data or psf model
         psf_obj (PSF object): reuturns PSF model according to position
         det (list|None): detection catalog
         do_rotate (bool): whether do rotation
@@ -263,24 +262,22 @@ class FpfsMeasure(FpfsTask):
         """
 
         bfunc = np.transpose(self.bfunc, (1, 2, 0))
-        if psf_obj is None:
+        if psf is None or isinstance(psf, np.ndarray):
             out = self.mtask.measure_source(
                 gal_array=gal_array,
                 filter_image=bfunc,
-                psf_array=psf_array,
+                psf_array=psf,
+                det=det,
+                do_rotate=do_rotate,
+            )
+        elif isinstance(psf, BasePsf):
+            out = self.mtask.measure_source(
+                gal_array=gal_array,
+                filter_image=bfunc,
+                psf_obj=psf,
                 det=det,
                 do_rotate=do_rotate,
             )
         else:
-            if psf_array is not None:
-                raise RuntimeError("Cannot input both psf_array and psf_obj")
-            if not isinstance(psf_obj, BasePsf):
-                raise RuntimeError("psf_obj is not a correct type")
-            out = self.mtask.measure_source(
-                gal_array=gal_array,
-                filter_image=bfunc,
-                psf_obj=psf_obj,
-                det=det,
-                do_rotate=do_rotate,
-            )
+            raise RuntimeError("psf does not have a correct type")
         return out
