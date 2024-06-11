@@ -94,7 +94,7 @@ def gaussian(x, mu, sigma):
     return jnp.exp(exponent)
 
 
-class FpfsCatalog():
+class FpfsCatalog:
     def __init__(
         self,
         pixel_scale: float,

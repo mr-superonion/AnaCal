@@ -88,10 +88,7 @@ def do_test(scale, seed, rcut, gcomp):
         det=coords,
     )
     mms2 = np.vstack(
-        [
-            mtask.run(gal_array=gal_list[i], psf=psf_list[i])
-            for i in range(nrot)
-        ]
+        [mtask.run(gal_array=gal_list[i], psf=psf_list[i]) for i in range(nrot)]
     )
     np.testing.assert_almost_equal(mms, mms2)
 
