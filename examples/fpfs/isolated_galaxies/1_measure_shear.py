@@ -8,7 +8,6 @@ pixel_scale = 0.2
 noise_variance = 0.23
 
 noise_array = None
-cov_matrix = None
 
 rcut = 32
 ngrid = rcut * 2
@@ -75,23 +74,22 @@ for gname in ["g2-1", "g2-0"]:
 
     outcomes.append(
         anacal.fpfs.process_image(
-            fpfs_config,
-            gal_array,
-            psf_array,
-            pixel_scale,
-            noise_variance,
-            noise_array,
-            cov_matrix,
-            coords,
-        )[1]
+            fpfs_config=fpfs_config,
+            gal_array=gal_array,
+            psf_array=psf_array,
+            pixel_scale=pixel_scale,
+            noise_variance=noise_variance,
+            noise_array=noise_array,
+            coords=coords,
+        )
     )
 
 
 print(
-    (np.sum(outcomes[1][:, 0]) - np.sum(outcomes[0][:, 0]))
-    / (np.sum(outcomes[1][:, 1]) + np.sum(outcomes[0][:, 1]))
+    (np.sum(outcomes[1]["e1"]) - np.sum(outcomes[0]["e1"]))
+    / (np.sum(outcomes[1]["e1_g1"]) + np.sum(outcomes[0]["e1_g1"]))
 )
 print(
-    (np.sum(outcomes[1][:, 2]) - np.sum(outcomes[0][:, 2]))
-    / (np.sum(outcomes[1][:, 3]) + np.sum(outcomes[0][:, 3]))
+    (np.sum(outcomes[1]["e2"]) - np.sum(outcomes[0]["e2"]))
+    / (np.sum(outcomes[1]["e2_g2"]) + np.sum(outcomes[0]["e2_g2"]))
 )

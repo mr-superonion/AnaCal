@@ -12,8 +12,8 @@ ny = 5000
 nx = 5000
 
 pthres = 0.2
-pratio = 0.05
 std = 0.4
+nord = 4
 det_nrot = 4
 bound = 40
 
@@ -36,7 +36,7 @@ gal_obj = (
 gal_data = gal_obj.drawImage(nx=nx, ny=ny, scale=scale).array.astype(np.float64)
 
 
-def test_detect():
+def test_benchmark():
     print("")
     initial_memory_usage = mem_used()
 
@@ -45,6 +45,11 @@ def test_detect():
         t0 = time.time()
 
         cov_element = np.ones((21, 21)) * (std * scale) ** 2.0
+        cov_element = anacal.fpfs.table.FpfsCovariance(
+            array=cov_element,
+            nord=nord,
+            det_nrot=det_nrot,
+        )
         dtask = anacal.fpfs.FpfsDetect(
             nx=nx,
             ny=ny,
@@ -60,7 +65,6 @@ def test_detect():
             gal_array=gal_data,
             fthres=1.0,
             pthres=pthres,
-            pratio=pratio,
             pthres2=anacal.fpfs.fpfs_det_sigma2 + 0.02,
             bound=bound,
             noise_array=noise_data,
@@ -69,6 +73,7 @@ def test_detect():
             psf_array=psf_data,
             pixel_scale=scale,
             sigma_arcsec=sigma_as,
+            nord=nord,
             det_nrot=det_nrot,
         )
         src = mtask.run(
@@ -92,4 +97,4 @@ def test_detect():
 
 
 if __name__ == "__main__":
-    test_detect()
+    test_benchmark()

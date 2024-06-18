@@ -268,10 +268,10 @@ def generate_cosmos_gal(record, trunc_ratio=5.0, gsparams=None):
     return gal
 
 
-def _generate_gal_fft(record, magzero, rng, gsparams):
+def _generate_gal_fft(record, mag_zero, rng, gsparams):
     gal0 = generate_cosmos_gal(record, gsparams=gsparams)
     # E.g., HSC's i-band coadds zero point is 27
-    flux = 10 ** ((magzero - record["mag_auto"]) / 2.5)
+    flux = 10 ** ((mag_zero - record["mag_auto"]) / 2.5)
     gal0 = gal0.withFlux(flux)
     # rescale the radius by 'rescale' and keep surface brightness the
     # same
@@ -283,13 +283,13 @@ def _generate_gal_fft(record, magzero, rng, gsparams):
     return gal0
 
 
-def _generate_gal_mc(record, magzero, rng, gsparams, npoints):
+def _generate_gal_mc(record, mag_zero, rng, gsparams, npoints):
     # need to truncate the profile since we do not want
     # Knots locate at infinity
     galp = generate_cosmos_gal_simple(record)
     # accounting for zeropoint difference between COSMOS HST and HSC
     # HSC's i-band coadds zero point is 27
-    flux = 10 ** ((magzero - record["mag_auto"]) / 2.5)
+    flux = 10 ** ((mag_zero - record["mag_auto"]) / 2.5)
     galp = galp.withFlux(flux)
     # rescale the radius by 'rescale' and keep surface brightness the
     # same
@@ -310,7 +310,7 @@ def _generate_gal_mc(record, magzero, rng, gsparams, npoints):
 def make_exposure_stamp(
     sim_method,
     rng,
-    magzero,
+    mag_zero,
     psf_obj,
     scale,
     cat_input,
@@ -350,14 +350,14 @@ def make_exposure_stamp(
             if sim_method == "fft":
                 gal0 = _generate_gal_fft(
                     cat_input[igal],
-                    magzero,
+                    mag_zero,
                     rng,
                     gsparams,
                 )
             elif sim_method == "mc":
                 gal0 = _generate_gal_mc(
                     cat_input[igal],
-                    magzero,
+                    mag_zero,
                     rng,
                     gsparams,
                     npoints=15,
@@ -479,9 +479,9 @@ def make_isolated_sim(
     psf_obj,
     gname,
     seed,
-    catname=None,
+    cat_name=None,
     scale=0.168,
-    magzero=27.0,
+    mag_zero=27.0,
     rot_field=None,
     shear_value=0.02,
     ngrid=64,
@@ -507,9 +507,9 @@ def make_isolated_sim(
     psf_obj (PSF): input PSF object of galsim
     gname (str): shear distortion setup
     seed (int): index of the simulation
-    catname (str): input catalog name
+    cat_name (str): input catalog name
     scale (float): pixel scale
-    magzero (float): magnitude zero point [27 for HSC]
+    mag_zero (float): magnitude zero point [27 for HSC]
     rot_field (list): additional rotation angle
     shear_value (float): shear distortion amplitude
     ngrid (int): stampe size
@@ -539,10 +539,10 @@ def make_isolated_sim(
     ngal = ngalx * ngaly
     rng = galsim.BaseDeviate(seed)
     ngeff = max(ngal // nrot_per_gal, 1)
-    if catname is None:
-        catname = os.path.join(_data_dir, "src_cosmos.fits")
+    if cat_name is None:
+        cat_name = os.path.join(_data_dir, "src_cosmos.fits")
     cosmos_cat = CosmosCatalog(
-        filename=catname,
+        filename=cat_name,
         max_mag=max_mag,
         min_mag=min_mag,
         max_hlr=max_hlr,
@@ -575,7 +575,7 @@ def make_isolated_sim(
     exposures = make_exposure_stamp(
         sim_method=sim_method,
         rng=rng,
-        magzero=magzero,
+        mag_zero=mag_zero,
         psf_obj=psf_obj,
         scale=scale,
         cat_input=cat_input,
@@ -636,12 +636,12 @@ def make_blended_sim(
     psf_obj,
     gname,
     ind0,
-    catname=None,
+    cat_name=None,
     ny=5000,
     nx=5000,
     rfrac=0.46,
     scale=0.168,
-    magzero=27.0,
+    mag_zero=27.0,
     rot_field=0.0,
     shear_value=0.02,
     nrot=4,
@@ -655,11 +655,11 @@ def make_blended_sim(
     psf_obj (PSF): input PSF object of galsim
     gname (str): shear distortion setup
     ind0 (int): index of the simulation
-    catname (str): input catalog Name [default: COSMOS 25.2 catalog]
+    cat_name (str): input catalog Name [default: COSMOS 25.2 catalog]
     ny (int): number of galaxies in y direction [default: 5000]
     nx (int): number of galaxies in x direction [default: 5000]
     rfrac(float): fraction of radius to minimum between nx and ny
-    magzero (float): magnitude zero point
+    mag_zero (float): magnitude zero point
     rot_field (float): additional rotational angle [in units of radians]
     shear_value (float): amplitude of the input shear
     nrot (int): number of rotation, optional
@@ -687,11 +687,11 @@ def make_blended_sim(
     logger.info(
         "We have %d galaxies in total, and each %d are the same" % (ngal, nrot)
     )
-    if catname is None:
-        catname = os.path.join(_data_dir, "src_cosmos.fits")
+    if cat_name is None:
+        cat_name = os.path.join(_data_dir, "src_cosmos.fits")
 
     # get the cosmos catalog
-    cat_input = pyfits.getdata(catname)
+    cat_input = pyfits.getdata(cat_name)
     ntrain = len(cat_input)
     inds = np.random.randint(0, ntrain, ngeff)
     cat_input = cat_input[inds]
@@ -745,7 +745,7 @@ def make_blended_sim(
         gal = gal.expand(rsarray[ig])
         # determine and assign flux
         # HSC's i-band coadds zero point is 27
-        flux = 10 ** ((magzero - ss["mag_auto"]) / 2.5)
+        flux = 10 ** ((mag_zero - ss["mag_auto"]) / 2.5)
         gal = gal.withFlux(flux)
         # rotate by 'ang'
         gal = gal.rotate(ang)

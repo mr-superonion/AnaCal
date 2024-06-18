@@ -33,7 +33,7 @@ def test_fpfs_measure(seed):
     gal_data = rng.randn(ngrid, ngrid)
 
     pthres = 0.2
-    pratio = 0.05
+    pratio = 0.00
     std = 0.4
 
     task = fpfs.image.measure_source(
@@ -44,6 +44,11 @@ def test_fpfs_measure(seed):
         det_nrot=det_nrot,
     )
     cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
+    cov_matrix_obj = anacal.fpfs.table.FpfsCovariance(
+        array=cov_element * scale**4.0,
+        nord=nord,
+        det_nrot=det_nrot,
+    )
 
     dtask = anacal.fpfs.FpfsDetect(
         nx=ngrid,
@@ -51,14 +56,13 @@ def test_fpfs_measure(seed):
         psf_array=psf_data,
         pixel_scale=scale,
         sigma_arcsec=sigma_as,
-        cov_matrix=cov_element * scale**4.0,
+        cov_matrix=cov_matrix_obj,
         det_nrot=det_nrot,
     )
     det1 = dtask.run(
         gal_array=gal_data,
         fthres=1.0,
         pthres=pthres,
-        pratio=pratio,
         pthres2=anacal.fpfs.fpfs_det_sigma2 + 0.02,
         bound=bound,
         noise_array=None,
@@ -67,6 +71,7 @@ def test_fpfs_measure(seed):
         psf_array=psf_data,
         pixel_scale=scale,
         sigma_arcsec=sigma_as,
+        nord=nord,
         det_nrot=det_nrot,
     )
     src1 = mtask.run(gal_array=gal_data, det=det1)
@@ -84,7 +89,7 @@ def test_fpfs_measure(seed):
         noise_array=None,
     )
     src2 = task.measure(gal_data, det2)
-    np.testing.assert_almost_equal(src1, src2, decimal=5)
+    np.testing.assert_almost_equal(src1.array, src2, decimal=5)
 
     psf_data2 = np.zeros((1, 1, ngrid2, ngrid2))
     psf_data2[0, 0] = psf_data
@@ -96,7 +101,7 @@ def test_fpfs_measure(seed):
         model_array=psf_data2,
     )
     src3 = mtask.run(gal_array=gal_data, psf=grid_psf, det=det1)
-    np.testing.assert_almost_equal(src1, src3, decimal=5)
+    np.testing.assert_almost_equal(src1.array, src3.array, decimal=5)
     return
 
 

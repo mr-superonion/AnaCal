@@ -78,6 +78,7 @@ def test_detect():
     pratio = 0.05
     std = 0.4
 
+    cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
     det_task = anacal.fpfs.FpfsImage(
         nx=ngrid,
         ny=ngrid,
@@ -101,7 +102,6 @@ def test_detect():
     out1 = rfn.structured_to_unstructured(out1)
     out1 = out1[:, :-1]
 
-    cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
     out2 = task.detect_source(
         gal_data,
         psf_array,

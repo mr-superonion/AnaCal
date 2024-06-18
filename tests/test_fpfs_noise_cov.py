@@ -39,7 +39,7 @@ def test_noise_covariance():
         det_nrot=det_nrot,
         klim_thres=1e-20,
     )
-    cov_elem2 = noise_task2.measure(variance=variance) / pixel_scale**4.0
+    cov_elem2 = noise_task2.measure(variance=variance).array / pixel_scale**4.0
     np.testing.assert_allclose(cov_elem, cov_elem2, atol=1e-6, rtol=0)
     np.testing.assert_allclose(np.diag(cov_elem), np.diag(cov_elem2), rtol=1e-6)
     return
