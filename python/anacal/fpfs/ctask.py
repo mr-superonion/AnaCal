@@ -17,7 +17,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpy.lib.recfunctions as rfn
 
-from . import fpfs_cut_sigma_ratio, fpfs_det_sigma2
+from . import fpfs_cut_sigma_ratio, fpfs_det_sigma2, fpfs_pnr
 from .base import get_det_col_names, get_shapelets_col_names
 from .table import FpfsCatalog, FpfsCovariance
 
@@ -105,17 +105,25 @@ class CatIaskBase(object):
     def _run(self, x: jnp.float64, y: jnp.float64 = 0.0):
         return jnp.array([0])
 
-    def run(self, cat: FpfsCatalog):
+    def prepare(self, cat: FpfsCatalog):
+        self.pixel_scale = cat.pixel_scale
+        self.sigma_arcsec = cat.sigma_arcsec
+        self.mag_zero = cat.mag_zero
+        return
+
+    def run(self, cat: FpfsCatalog, cov: FpfsCovariance | None = None):
         """This function meausres observables and corresponding shear response
 
         Args:
-        cat (FpfsCatalog): Input source catalog
+        cat (FpfsCatalog): Input source observable catalog
+        cov (FpfsCovariance): Image noise covariance on the observables
 
         Returns:
         result (NDArray):   Measurements
         """
         assert cat.nord == self.nord, "input has wrong nord"
         assert cat.det_nrot == self.det_nrot, "input has wrong det_nrot"
+        self.prepare(cat)
         if cat.noise is None:
             func = jax.vmap(
                 self._run,
@@ -143,16 +151,10 @@ class CatTaskS(CatIaskBase):
     def __init__(
         self,
         nord: int,
-        pixel_scale: float,
-        sigma_arcsec: float,
-        mag_zero: float,
         cov_matrix: FpfsCovariance,
     ):
         super().__init__(nord=nord)
         assert nord == 4
-        self.pixel_scale = pixel_scale
-        self.sigma_arcsec = sigma_arcsec
-        self.mag_zero = mag_zero
         name_s, _ = get_shapelets_col_names(nord)
         self.di = {element: index for index, element in enumerate(name_s)}
 
@@ -284,15 +286,11 @@ class CatTaskD(CatIaskBase):
     def __init__(
         self,
         det_nrot: int,
-        sigma_arcsec_det: float,
         cov_matrix: FpfsCovariance,
-        pthres: float = 0.8,
-        pthres2: float = 0.12,
     ):
         super().__init__(det_nrot=det_nrot)
         assert det_nrot == 4
         self.det_nrot = det_nrot
-        self.sigma_arcsec_det = sigma_arcsec_det
         name_d = get_det_col_names(det_nrot)
         self.di = {element: index for index, element in enumerate(name_d)}
         self.ncol = len(name_d)
@@ -311,12 +309,19 @@ class CatTaskD(CatIaskBase):
                 "Input covariance matrix of detection has wrong det_nrot"
             )
         self.cov_matrix = cov_matrix
-        std_v = cov_matrix.std_v
+        self.std_v = cov_matrix.std_v
         # control steepness
-        self.sigma_v = fpfs_cut_sigma_ratio * std_v
+        self.sigma_v = fpfs_cut_sigma_ratio * self.std_v
+        self.pthres = 0.12
+        self.pcut = fpfs_pnr * self.std_v
+        return
+
+    def update_parameters(
+        self,
+        pthres: float = 0.12,
+    ):
         # detection threshold
-        self.pcut = pthres * std_v
-        self.pthres2 = pthres2
+        self.pthres = pthres
         return
 
     def _run(self, x, y=0.0):
@@ -365,7 +370,7 @@ class CatTaskD(CatIaskBase):
             + det0 * det1 * det2_g2 * det3
             + det0 * det1 * det2 * det3_g2
         )
-        wdet, wdet_deriv = ssfunc2(w, self.pthres2, 0.04)
+        wdet, wdet_deriv = ssfunc2(w, self.pthres, fpfs_det_sigma2)
         return jnp.array([wdet, wdet_deriv * w_g1, wdet_deriv * w_g2])
 
 
@@ -374,31 +379,17 @@ class CatalogTask:
         self,
         nord: int,
         det_nrot: int,
-        pixel_scale: float,
-        sigma_arcsec: float,
-        mag_zero: float,
         cov_matrix_s: FpfsCovariance,
         cov_matrix_d: FpfsCovariance,
-        sigma_arcsec_det: float | None = None,
-        pthres: float = 0.8,
-        pthres2: float = 0.12,
     ):
         """Fpfs catalog task"""
         self.shapelet_task = CatTaskS(
             nord=nord,
-            pixel_scale=pixel_scale,
-            sigma_arcsec=sigma_arcsec,
-            mag_zero=mag_zero,
             cov_matrix=cov_matrix_s,
         )
-        if sigma_arcsec_det is None:
-            sigma_arcsec_det = sigma_arcsec
         self.det_task = CatTaskD(
             det_nrot=det_nrot,
-            sigma_arcsec_det=sigma_arcsec_det,
             cov_matrix=cov_matrix_d,
-            pthres=pthres,
-            pthres2=pthres2,
         )
         self.dtype = [
             ("e1", "f8"),
@@ -419,6 +410,7 @@ class CatalogTask:
         r2_min: float | None = None,
         r2_max: float | None = None,
         c0: float | None = None,
+        pthres: float = 0.12,
     ):
         self.shapelet_task.update_parameters(
             snr_min=snr_min,
@@ -426,6 +418,10 @@ class CatalogTask:
             r2_max=r2_max,
             c0=c0,
         )
+        self.det_task.update_parameters(
+            pthres=pthres,
+        )
+        return
 
     def run(
         self,
@@ -463,48 +459,3 @@ class CatalogTask:
             usemask=False,
         )
         return src
-
-
-def m2e(mm, const=1.0, nn=None):
-    """Estimates FPFS ellipticities from fpfs moments
-
-    Args:
-    mm (NDArray): FPFS moments
-    const (float): the weight constant [default:1]
-    nn (NDArray): noise covaraince elements [default: None]
-
-    Returns:
-    out (NDArray):
-        an array of [FPFS ellipticities, FPFS ellipticity response, FPFS flux,
-        size and FPFS selection response]
-    """
-
-    # ellipticity, q-ellipticity, sizes, e^2, eq
-    types = [
-        ("fpfs_e1", "<f8"),
-        ("fpfs_e2", "<f8"),
-        ("fpfs_R1E", "<f8"),
-        ("fpfs_R2E", "<f8"),
-    ]
-    # make the output NDArray
-    out = np.array(np.zeros(mm.size), dtype=types)
-
-    # FPFS shape weight's inverse
-    _w = mm["fpfs_m00"] + const
-    # FPFS ellipticity
-    e1 = mm["fpfs_m22c"] / _w
-    e2 = mm["fpfs_m22s"] / _w
-    # FPFS spin-0 observables
-    s0 = mm["fpfs_m00"] / _w
-    s4 = mm["fpfs_m40"] / _w
-    # intrinsic ellipticity
-    e1e1 = e1 * e1
-    e2e2 = e2 * e2
-
-    # spin-2 properties
-    out["fpfs_e1"] = e1  # ellipticity
-    out["fpfs_e2"] = e2
-    # response for ellipticity
-    out["fpfs_R1E"] = (s0 - s4 + 2.0 * e1e1) / np.sqrt(2.0)
-    out["fpfs_R2E"] = (s0 - s4 + 2.0 * e2e2) / np.sqrt(2.0)
-    return out

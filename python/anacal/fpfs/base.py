@@ -85,6 +85,7 @@ class ImgBase(AnacalBase):
     """A base class for measurement
 
     Args:
+    mag_zero (float): magnitude zero point
     psf_array (ndarray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
@@ -97,7 +98,8 @@ class ImgBase(AnacalBase):
 
     def __init__(
         self,
-        psf_array,
+        mag_zero: float,
+        psf_array: NDArray,
         pixel_scale: float,
         sigma_arcsec: float,
         sigma_arcsec_det: float | None = None,
@@ -107,6 +109,7 @@ class ImgBase(AnacalBase):
         verbose: bool = False,
     ) -> None:
         super().__init__(verbose)
+        self.mag_zero = mag_zero
         self.nord = nord
         self.det_nrot = det_nrot
         self.logger.info("Order of the Shapelets: nord=%d" % self.nord)
@@ -120,12 +123,10 @@ class ImgBase(AnacalBase):
         else:
             self.sigma_arcsec_det = sigma_arcsec_det
         self.ngrid = psf_array.shape[0]
-        if self.sigma_arcsec <= 0.0 or self.sigma_arcsec > 3.0:
-            raise ValueError("sigma_arcsec should be positive and < 3 arcsec")
-        if self.sigma_arcsec_det <= 0.0 or self.sigma_arcsec_det > 3.0:
-            raise ValueError(
-                "sigma_arcsec_det should be positive and < 3 arcsec"
-            )
+        if self.sigma_arcsec > 3.0:
+            raise ValueError("sigma_arcsec should be < 3 arcsec")
+        if self.sigma_arcsec_det > 3.0:
+            raise ValueError("sigma_arcsec_det should be < 3 arcsec")
         if self.nord < 4 and self.det_nrot < 4:
             raise ValueError("Either nord or det_nrot should be >= 4")
 

@@ -27,13 +27,12 @@ def test_fpfs_measure(seed):
 
     nord = 4
     det_nrot = 4
+    mag_zero = 30.0
     sigma_as = 0.53
     bound = 32
     rng = np.random.RandomState(seed)
     gal_data = rng.randn(ngrid, ngrid)
 
-    pthres = 0.2
-    pratio = 0.00
     std = 0.4
 
     task = fpfs.image.measure_source(
@@ -48,12 +47,16 @@ def test_fpfs_measure(seed):
         array=cov_element * scale**4.0,
         nord=nord,
         det_nrot=det_nrot,
+        mag_zero=mag_zero,
+        pixel_scale=scale,
+        sigma_arcsec=sigma_as,
     )
 
     dtask = anacal.fpfs.FpfsDetect(
         nx=ngrid,
         ny=ngrid,
         psf_array=psf_data,
+        mag_zero=mag_zero,
         pixel_scale=scale,
         sigma_arcsec=sigma_as,
         cov_matrix=cov_matrix_obj,
@@ -62,13 +65,13 @@ def test_fpfs_measure(seed):
     det1 = dtask.run(
         gal_array=gal_data,
         fthres=1.0,
-        pthres=pthres,
-        pthres2=anacal.fpfs.fpfs_det_sigma2 + 0.02,
+        pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,
         bound=bound,
         noise_array=None,
     )
     mtask = anacal.fpfs.FpfsMeasure(
         psf_array=psf_data,
+        mag_zero=mag_zero,
         pixel_scale=scale,
         sigma_arcsec=sigma_as,
         nord=nord,
@@ -83,8 +86,8 @@ def test_fpfs_measure(seed):
         psf_data,
         cov_element,
         fthres=1.0,
-        pthres=pthres,
-        pratio=pratio,
+        pthres=0.8,
+        pratio=0.0,
         bound=bound,
         noise_array=None,
     )

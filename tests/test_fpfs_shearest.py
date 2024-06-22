@@ -55,6 +55,7 @@ def do_test(scale, seed, rcut, gcomp):
     else:
         raise ValueError("gcomp should be g1 or g2")
     sigma_arcsec = 0.53
+    mag_zero = 30.0
 
     nrot = 12
     gal_data, psf_data, coords = simulate_gal_psf(
@@ -65,6 +66,7 @@ def do_test(scale, seed, rcut, gcomp):
     det_nrot = -1
     mtask = anacal.fpfs.FpfsMeasure(
         psf_array=psf_data,
+        mag_zero=mag_zero,
         pixel_scale=scale,
         sigma_arcsec=sigma_arcsec,
         nord=nord,
@@ -83,12 +85,12 @@ def do_test(scale, seed, rcut, gcomp):
         array=cov_matrix,
         nord=nord,
         det_nrot=det_nrot,
+        mag_zero=mag_zero,
+        pixel_scale=scale,
+        sigma_arcsec=sigma_arcsec,
     )
     ctask = anacal.fpfs.CatTaskS(
         nord=nord,
-        pixel_scale=scale,
-        sigma_arcsec=sigma_arcsec,
-        mag_zero=mag_zero,
         cov_matrix=cov_matrix,
     )
     ctask.update_parameters(

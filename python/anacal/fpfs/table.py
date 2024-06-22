@@ -1,3 +1,5 @@
+import os
+
 import fitsio
 import numpy as np
 from numpy.typing import NDArray
@@ -6,9 +8,24 @@ from .base import get_det_col_names, get_shapelets_col_names
 
 
 class FpfsObject(object):
-    def __init__(self, nord, det_nrot):
+    def __init__(
+        self,
+        pixel_scale: float,
+        sigma_arcsec: float,
+        mag_zero: float,
+        nord: int = -1,
+        det_nrot: int = -1,
+    ):
         self.nord = nord
         self.det_nrot = det_nrot
+        self.pixel_scale = pixel_scale
+        self.sigma_arcsec = sigma_arcsec
+        self.mag_zero = mag_zero
+
+        if not sigma_arcsec > 0.0:
+            raise ValueError(
+                "Input sigma_arcsec should be >0",
+            )
 
         self.colnames = []
         if self.nord >= 4:
@@ -29,11 +46,20 @@ class FpfsCatalog(FpfsObject):
     def __init__(
         self,
         array: NDArray[np.float64],
+        pixel_scale: float,
+        sigma_arcsec: float,
+        mag_zero: float,
         nord: int = -1,
         det_nrot: int = -1,
         noise: None | NDArray[np.float64] = None,
     ):
-        super().__init__(nord=nord, det_nrot=det_nrot)
+        super().__init__(
+            nord=nord,
+            det_nrot=det_nrot,
+            mag_zero=mag_zero,
+            pixel_scale=pixel_scale,
+            sigma_arcsec=sigma_arcsec,
+        )
 
         if not isinstance(array, np.ndarray):
             raise TypeError("Input array has a wrong type")
@@ -51,6 +77,7 @@ class FpfsCatalog(FpfsObject):
 
     @classmethod
     def from_file(cls, filename):
+        assert os.path.isfile(filename), "Cannot find input file"
         with fitsio.FITS(filename, "r") as fits:
             assert "source" in fits
             array = fits["source"].read()
@@ -61,7 +88,18 @@ class FpfsCatalog(FpfsObject):
             header = fits[0].read_header()
             nord = header["nord"]
             det_nrot = header["det_nrot"]
-        return cls(array, nord=nord, det_nrot=det_nrot, noise=noise)
+            pixel_scale = header["pixel_scale"]
+            mag_zero = header["mag_zero"]
+            sigma_arcsec = header["sigma_arcsec"]
+        return cls(
+            array,
+            nord=nord,
+            det_nrot=det_nrot,
+            pixel_scale=pixel_scale,
+            mag_zero=mag_zero,
+            noise=noise,
+            sigma_arcsec=sigma_arcsec,
+        )
 
     def write(self, filename):
         with fitsio.FITS(filename, "rw", clobber=True) as fits:
@@ -73,6 +111,9 @@ class FpfsCatalog(FpfsObject):
             header["nord"] = self.nord
             header["det_nrot"] = self.det_nrot
             header["colnames"] = self.colnames
+            header["pixel_scale"] = self.pixel_scale
+            header["mag_zero"] = self.mag_zero
+            header["sigma_arcsec"] = self.sigma_arcsec
             fits[0].write_keys(header)
         return
 
@@ -81,10 +122,19 @@ class FpfsCovariance(FpfsObject):
     def __init__(
         self,
         array: NDArray,
+        pixel_scale: float,
+        sigma_arcsec: float,
+        mag_zero: float,
         nord: int = -1,
         det_nrot: int = -1,
     ):
-        super().__init__(nord=nord, det_nrot=det_nrot)
+        super().__init__(
+            nord=nord,
+            det_nrot=det_nrot,
+            mag_zero=mag_zero,
+            pixel_scale=pixel_scale,
+            sigma_arcsec=sigma_arcsec,
+        )
 
         if not isinstance(array, np.ndarray):
             raise TypeError("Input array has a wrong type")
@@ -121,7 +171,18 @@ class FpfsCovariance(FpfsObject):
             header = fits[0].read_header()
             nord = header["nord"]
             det_nrot = header["det_nrot"]
-        return cls(array, nord=nord, det_nrot=det_nrot)
+            pixel_scale = header["pixel_scale"]
+            mag_zero = header["mag_zero"]
+            sigma_arcsec = header["sigma_arcsec"]
+            sigma_arcsec_det = header["sigma_arcsec_det"]
+        return cls(
+            array,
+            nord=nord,
+            det_nrot=det_nrot,
+            pixel_scale=pixel_scale,
+            sigma_arcsec=sigma_arcsec,
+            mag_zero=mag_zero,
+        )
 
     def write(self, filename):
         with fitsio.FITS(filename, "rw", clobber=True) as fits:
@@ -131,5 +192,8 @@ class FpfsCovariance(FpfsObject):
             header["nord"] = self.nord
             header["det_nrot"] = self.det_nrot
             header["colnames"] = self.colnames
+            header["pixel_scale"] = self.pixel_scale
+            header["mag_zero"] = self.mag_zero
+            header["sigma_arcsec"] = self.sigma_arcsec
             fits[0].write_keys(header)
         return

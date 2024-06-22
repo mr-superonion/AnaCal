@@ -10,10 +10,10 @@ class FpfsNoiseCov(ImgBase):
     """A class to measure FPFS noise covariance of basis modes
 
     Args:
+    mag_zero (float): magnitude zero point
     psf_array (NDArray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
-    sigma_arcsec_det (float|None): Detection kernel size [default: None]
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
     klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
@@ -24,19 +24,20 @@ class FpfsNoiseCov(ImgBase):
 
     def __init__(
         self,
+        mag_zero: float,
         psf_array: NDArray,
         pixel_scale: float,
         sigma_arcsec: float,
-        sigma_arcsec_det: float | None = None,
         nord: int = 4,
         det_nrot: int = 4,
         klim_thres: float = 1e-20,
     ) -> None:
         super().__init__(
+            mag_zero=mag_zero,
             psf_array=psf_array,
             pixel_scale=pixel_scale,
             sigma_arcsec=sigma_arcsec,
-            sigma_arcsec_det=sigma_arcsec_det,
+            sigma_arcsec_det=sigma_arcsec,
             nord=nord,
             det_nrot=det_nrot,
             klim_thres=klim_thres,
@@ -90,15 +91,18 @@ class FpfsNoiseCov(ImgBase):
         _w = np.ones(self.psf_pow.shape) * 2.0
         _w[:, 0] = 1.0
         _w[:, -1] = 1.0
-        cov_matrix = np.tensordot(
+        cov_elems = np.tensordot(
             self.bfunc * (_w * noise_pf_deconv)[np.newaxis, :, :],
             np.conjugate(self.bfunc),
             axes=((1, 2), (1, 2)),
         ).real
         return FpfsCovariance(
-            array=cov_matrix,
+            array=cov_elems,
+            mag_zero=self.mag_zero,
             nord=self.nord,
             det_nrot=self.det_nrot,
+            pixel_scale=self.pixel_scale,
+            sigma_arcsec=self.sigma_arcsec,
         )
 
 
@@ -108,10 +112,10 @@ class FpfsDetect(ImgBase):
     Args:
     nx (int): number of grids in x
     ny (int): number of grids in y
+    mag_zero (float): magnitude zero point
     psf_array (NDArray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
-    sigma_arcsec (float): Shapelet kernel size
-    sigma_arcsec_det (float|None): Detection kernel size [default: None]
+    sigma_arcsec (float): Gaussian kernel size
     cov_matrix (FpfsCovariance): covariance matrix of Fpfs basis modes
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel [default: 8]
@@ -122,19 +126,20 @@ class FpfsDetect(ImgBase):
         self,
         nx: int,
         ny: int,
+        mag_zero: float,
         psf_array: NDArray,
         cov_matrix: FpfsCovariance,
         pixel_scale: float,
         sigma_arcsec: float,
-        sigma_arcsec_det: float | None = None,
         nord: int = 4,
         det_nrot: int = 4,
         klim_thres: float = 1e-20,
     ) -> None:
         super().__init__(
+            mag_zero=mag_zero,
             psf_array=psf_array,
             sigma_arcsec=sigma_arcsec,
-            sigma_arcsec_det=sigma_arcsec_det,
+            sigma_arcsec_det=sigma_arcsec,
             pixel_scale=pixel_scale,
             nord=nord,
             det_nrot=det_nrot,
@@ -153,6 +158,7 @@ class FpfsDetect(ImgBase):
         self.nx = nx
         self.ny = ny
 
+        assert self.mag_zero == cov_matrix.mag_zero
         self.std_m00 = cov_matrix.std_m00
         self.std_v = cov_matrix.std_v
         return
@@ -162,7 +168,6 @@ class FpfsDetect(ImgBase):
         gal_array: NDArray,
         fthres: float,
         pthres: float,
-        pthres2: float,
         bound: int,
         noise_array: NDArray | None = None,
         mask_array: NDArray | None = None,
@@ -174,7 +179,6 @@ class FpfsDetect(ImgBase):
         gal_array (NDArray): galaxy image data
         fthres (float): flux threshold
         pthres (float): peak threshold
-        pthres2 (float): second pooling layer peak threshold
         bound (int): minimum distance to boundary
         noise_array (NDArray|None): pure noise image
         mask_array (NDArray|None): mask image
@@ -190,16 +194,13 @@ class FpfsDetect(ImgBase):
                 mask_galaxy_image(noise_array, mask_array, False, star_cat)
 
         ny, nx = gal_array.shape
-        pratio = 0.0
         assert ny == self.ny
         assert nx == self.nx
         return self.dtask.detect_source(
             gal_array=gal_array,
             fthres=fthres,
             pthres=pthres,
-            pratio=pratio,
             bound=bound,
-            pthres2=pthres2,
             std_m00=self.std_m00,
             std_v=self.std_v,
             noise_array=noise_array,
@@ -211,10 +212,10 @@ class FpfsMeasure(ImgBase):
     """A base class for measurement
 
     Args:
+    mag_zero (float): magnitude zero point
     psf_array (NDArray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
-    sigma_arcsec_det (float|None): Detection kernel size [default: None]
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
     klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
@@ -222,19 +223,20 @@ class FpfsMeasure(ImgBase):
 
     def __init__(
         self,
+        mag_zero: float,
         psf_array: NDArray,
         pixel_scale: float,
         sigma_arcsec: float,
-        sigma_arcsec_det: float | None = None,
         nord: int = 4,
         det_nrot: int = 4,
         klim_thres: float = 1e-20,
     ) -> None:
         super().__init__(
+            mag_zero=mag_zero,
             psf_array=psf_array,
             pixel_scale=pixel_scale,
             sigma_arcsec=sigma_arcsec,
-            sigma_arcsec_det=sigma_arcsec_det,
+            sigma_arcsec_det=sigma_arcsec,
             nord=nord,
             det_nrot=det_nrot,
             klim_thres=klim_thres,
@@ -316,6 +318,9 @@ class FpfsMeasure(ImgBase):
         return FpfsCatalog(
             array=src_g,
             noise=src_n,
+            mag_zero=self.mag_zero,
             nord=self.nord,
             det_nrot=self.det_nrot,
+            pixel_scale=self.pixel_scale,
+            sigma_arcsec=self.sigma_arcsec,
         )

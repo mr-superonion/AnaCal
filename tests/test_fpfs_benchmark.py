@@ -11,20 +11,20 @@ from . import mem_used, print_mem
 ny = 5000
 nx = 5000
 
-pthres = 0.2
 std = 0.4
 nord = 4
 det_nrot = 4
 bound = 40
+mag_zero = 30.0
+pixel_scale = 0.2
 
-scale = 0.2
-sigma_as = 0.55
+sigma_arcsec = 0.55
 psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
     e1=0.02, e2=-0.02
 )
 psf_data = (
-    psf_obj.shift(0.5 * scale, 0.5 * scale)
-    .drawImage(nx=64, ny=64, scale=scale)
+    psf_obj.shift(0.5 * pixel_scale, 0.5 * pixel_scale)
+    .drawImage(nx=64, ny=64, scale=pixel_scale)
     .array
 ).astype(np.float64)
 gal_obj = (
@@ -33,7 +33,11 @@ gal_obj = (
     + psf_obj.shift(-2, -0.5) * 4
     + psf_obj.shift(-3.2, 0.5) * 6
 )
-gal_data = gal_obj.drawImage(nx=nx, ny=ny, scale=scale).array.astype(np.float64)
+gal_data = gal_obj.drawImage(
+    nx=nx,
+    ny=ny,
+    scale=pixel_scale,
+).array.astype(np.float64)
 
 
 def test_benchmark():
@@ -44,19 +48,23 @@ def test_benchmark():
         noise_data = np.random.randn(ny, nx)
         t0 = time.time()
 
-        cov_element = np.ones((21, 21)) * (std * scale) ** 2.0
-        cov_element = anacal.fpfs.table.FpfsCovariance(
-            array=cov_element,
+        cov_matrix = np.ones((21, 21)) * (std * pixel_scale) ** 2.0
+        cov_matrix = anacal.fpfs.table.FpfsCovariance(
+            array=cov_matrix,
             nord=nord,
             det_nrot=det_nrot,
+            pixel_scale=pixel_scale,
+            mag_zero=mag_zero,
+            sigma_arcsec=sigma_arcsec,
         )
         dtask = anacal.fpfs.FpfsDetect(
+            mag_zero=mag_zero,
             nx=nx,
             ny=ny,
             psf_array=psf_data,
-            pixel_scale=scale,
-            cov_matrix=cov_element,
-            sigma_arcsec=sigma_as,
+            pixel_scale=pixel_scale,
+            cov_matrix=cov_matrix,
+            sigma_arcsec=sigma_arcsec,
             det_nrot=det_nrot,
         )
         t1 = time.time()
@@ -64,15 +72,15 @@ def test_benchmark():
         det = dtask.run(
             gal_array=gal_data,
             fthres=1.0,
-            pthres=pthres,
-            pthres2=anacal.fpfs.fpfs_det_sigma2 + 0.02,
+            pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,
             bound=bound,
             noise_array=noise_data,
         )[0:30000]
         mtask = anacal.fpfs.FpfsMeasure(
+            mag_zero=mag_zero,
             psf_array=psf_data,
-            pixel_scale=scale,
-            sigma_arcsec=sigma_as,
+            pixel_scale=pixel_scale,
+            sigma_arcsec=sigma_arcsec,
             nord=nord,
             det_nrot=det_nrot,
         )
