@@ -5,6 +5,7 @@ import numpy as np
 
 
 def test_noise_covariance():
+    mag_zero = 30.0
     variance = 0.22**2.0
     sigma_as = 0.55
     nord = 4
@@ -33,13 +34,14 @@ def test_noise_covariance():
     cov_elem = noise_task.measure(noise_pow)
     noise_task2 = anacal.fpfs.FpfsNoiseCov(
         psf_array=psf_array,
+        mag_zero=mag_zero,
         pixel_scale=pixel_scale,
         sigma_arcsec=sigma_as,
         nord=nord,
         det_nrot=det_nrot,
         klim_thres=1e-20,
     )
-    cov_elem2 = noise_task2.measure(variance=variance) / pixel_scale**4.0
+    cov_elem2 = noise_task2.measure(variance=variance).array / pixel_scale**4.0
     np.testing.assert_allclose(cov_elem, cov_elem2, atol=1e-6, rtol=0)
     np.testing.assert_allclose(np.diag(cov_elem), np.diag(cov_elem2), rtol=1e-6)
     return

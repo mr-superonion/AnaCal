@@ -81,10 +81,11 @@ def get_det_col_names(det_nrot: int) -> list[str]:
     return name_d
 
 
-class FpfsTask(AnacalBase):
+class ImgBase(AnacalBase):
     """A base class for measurement
 
     Args:
+    mag_zero (float): magnitude zero point
     psf_array (ndarray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
@@ -97,7 +98,8 @@ class FpfsTask(AnacalBase):
 
     def __init__(
         self,
-        psf_array,
+        mag_zero: float,
+        psf_array: NDArray,
         pixel_scale: float,
         sigma_arcsec: float,
         sigma_arcsec_det: float | None = None,
@@ -107,31 +109,26 @@ class FpfsTask(AnacalBase):
         verbose: bool = False,
     ) -> None:
         super().__init__(verbose)
+        self.mag_zero = mag_zero
         self.nord = nord
-        self.logger.info("Order of the Shapelets: nord=%d" % self.nord)
-        name_s, _ = get_shapelets_col_names(nord)
-        name_d = get_det_col_names(det_nrot)
-        name_a = name_s + name_d
-        self.di = {element: index for index, element in enumerate(name_a)}
-
-        self.ncol = len(name_a)
-        self.ndet = len(name_d)
-        self.name_shapelets = name_s
-        self.name_detect = name_d
         self.det_nrot = det_nrot
+        self.logger.info("Order of the Shapelets: nord=%d" % self.nord)
+        self.logger.info(
+            "Number of Rotation for detection: det_nrot=%d" % self.det_nrot
+        )
+
         self.sigma_arcsec = sigma_arcsec
         if sigma_arcsec_det is None:
             self.sigma_arcsec_det = sigma_arcsec
         else:
             self.sigma_arcsec_det = sigma_arcsec_det
         self.ngrid = psf_array.shape[0]
-
-        if self.sigma_arcsec <= 0.0 or self.sigma_arcsec > 3.0:
-            raise ValueError("sigma_arcsec should be positive and < 3 arcsec")
-        if self.sigma_arcsec_det <= 0.0 or self.sigma_arcsec_det > 3.0:
-            raise ValueError(
-                "sigma_arcsec_det should be positive and < 3 arcsec"
-            )
+        if self.sigma_arcsec > 3.0:
+            raise ValueError("sigma_arcsec should be < 3 arcsec")
+        if self.sigma_arcsec_det > 3.0:
+            raise ValueError("sigma_arcsec_det should be < 3 arcsec")
+        if self.nord < 4 and self.det_nrot < 4:
+            raise ValueError("Either nord or det_nrot should be >= 4")
 
         # Preparing PSF
         psf_f = np.fft.rfft2(psf_array)
@@ -167,41 +164,36 @@ class FpfsTask(AnacalBase):
             * self._dk
         )
         self.logger.info("Maximum |k| for detection is %.3f" % (self.klim_det))
-        self.prepare_fpfs_bases()
         return
-
-    def get_stds(self, cov_mat):
-        std_modes = np.sqrt(np.diagonal(cov_mat))
-        std_m00 = std_modes[self.di["m00"]]
-        std_v = np.average(
-            np.array(
-                [std_modes[self.di["v%d" % _]] for _ in range(self.det_nrot)]
-            )
-        )
-        return std_m00, std_v
 
     def prepare_fpfs_bases(self):
         """This fucntion prepare the FPFS bases (shapelets and detectlets)"""
-        chi, snames = shapelets2d(
-            ngrid=self.ngrid,
-            nord=self.nord,
-            sigma=self.sigmaf,
-            klim=self.klim,
-        )
-        psi, dnames = detlets2d(
-            ngrid=self.ngrid,
-            det_nrot=self.det_nrot,
-            sigma=self.sigmaf_det,
-            klim=self.klim_det,
-        )
-        bnames = snames + dnames
-        self.bfunc = np.vstack([chi, psi])
-        self.byps = [("fpfs_%s" % _nn, "<f8") for _nn in bnames]
+        bfunc = []
+        self.colnames = []
+        if self.nord >= 4:
+            sfunc, snames = shapelets2d(
+                ngrid=self.ngrid,
+                nord=self.nord,
+                sigma=self.sigmaf,
+                klim=self.klim,
+            )
+            bfunc.append(sfunc)
+            self.colnames = self.colnames + snames
+        if self.det_nrot >= 4:
+            dfunc, dnames = detlets2d(
+                ngrid=self.ngrid,
+                det_nrot=self.det_nrot,
+                sigma=self.sigmaf_det,
+                klim=self.klim_det,
+            )
+            bfunc.append(dfunc)
+            self.colnames = self.colnames + dnames
+        self.bfunc = np.vstack(bfunc)
+        self.ncol = len(self.colnames)
+        self.di = {
+            element: index for index, element in enumerate(self.colnames)
+        }
         return
-
-    def get_results(self, data):
-        outcome = np.rec.fromarrays(data.T, dtype=np.dtype(self.byps))
-        return outcome
 
 
 def gauss_kernel_rfft(

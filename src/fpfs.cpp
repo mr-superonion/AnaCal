@@ -79,8 +79,6 @@ FpfsImage::find_peak(
     const py::array_t<double>& gal_conv,
     double fthres,
     double pthres,
-    double pratio,
-    double pthres2,
     double std_m00,
     double std_v,
     int bound
@@ -90,16 +88,16 @@ FpfsImage::find_peak(
     ssize_t nx = r.shape(1);
 
     double fcut = fthres * std_m00;
-    double pcut = pthres * std_v;
+    double pcut = fpfs_pnr * std_v;
     double sigma_v = fpfs_cut_sigma_ratio * std_v;
 
-    double wdet_cut = pthres2 - fpfs_det_sigma2 - 0.02;
+    double wdet_cut = pthres - fpfs_det_sigma2 - 0.02;
     if (std::fabs(wdet_cut) < 1e-10) {
         wdet_cut = 0.0;
     }
     if (wdet_cut < 0.0) {
         throw std::runtime_error(
-            "FPFS Error: The second pooling threshold pthres2 is too small."
+            "FPFS Error: The second pooling threshold pthres is too small."
         );
     }
 
@@ -107,15 +105,14 @@ FpfsImage::find_peak(
     for (ssize_t j = bound + 1; j < ny - bound; ++j) {
         for (ssize_t i = bound + 1; i < nx - bound; ++i) {
             double c = r(j, i);
-            double thres = pcut + pratio * c;
             double d1 = c - r(j, i+1);
             double d2 = c - r(j+1, i);
             double d3 = c - r(j, i-1);
             double d4 = c - r(j-1, i);
-            double s1 = math::ssfunc2(d1, sigma_v - thres, sigma_v);
-            double s2 = math::ssfunc2(d2, sigma_v - thres, sigma_v);
-            double s3 = math::ssfunc2(d3, sigma_v - thres, sigma_v);
-            double s4 = math::ssfunc2(d4, sigma_v - thres, sigma_v);
+            double s1 = math::ssfunc2(d1, sigma_v - pcut, sigma_v);
+            double s2 = math::ssfunc2(d2, sigma_v - pcut, sigma_v);
+            double s3 = math::ssfunc2(d3, sigma_v - pcut, sigma_v);
+            double s4 = math::ssfunc2(d4, sigma_v - pcut, sigma_v);
             double wdet = s1 * s2 * s3 * s4;
             bool sel = (
                 (c > fcut) &&
@@ -154,8 +151,6 @@ FpfsImage::detect_source(
     py::array_t<double>& gal_array,
     double fthres,
     double pthres,
-    double pratio,
-    double pthres2,
     double std_m00,
     double std_v,
     int bound,
@@ -171,8 +166,6 @@ FpfsImage::detect_source(
         gal_conv,
         fthres,
         pthres,
-        pratio,
-        pthres2,
         std_m00,
         std_v,
         bound
@@ -304,6 +297,7 @@ pyExportFpfs(py::module& m) {
     py::module_ fpfs = m.def_submodule("fpfs", "submodule for FPFS shear estimation");
     fpfs.attr("fpfs_cut_sigma_ratio") = fpfs_cut_sigma_ratio;
     fpfs.attr("fpfs_det_sigma2") = fpfs_det_sigma2;
+    fpfs.attr("fpfs_pnr") = fpfs_pnr;
     py::class_<FpfsImage>(fpfs, "FpfsImage")
         .def(py::init<int, int, double, double, double,
             const py::array_t<double>&, bool>(),
@@ -325,8 +319,6 @@ pyExportFpfs(py::module& m) {
             py::arg("gal_conv"),
             py::arg("fthres"),
             py::arg("pthres"),
-            py::arg("pratio"),
-            py::arg("pthres2"),
             py::arg("std_m00"),
             py::arg("std_v"),
             py::arg("bound")
@@ -337,8 +329,6 @@ pyExportFpfs(py::module& m) {
             py::arg("gal_array"),
             py::arg("fthres"),
             py::arg("pthres"),
-            py::arg("pratio"),
-            py::arg("pthres2"),
             py::arg("std_m00"),
             py::arg("std_v"),
             py::arg("bound"),

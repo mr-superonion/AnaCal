@@ -9,6 +9,7 @@
 namespace anacal {
     inline constexpr double fpfs_cut_sigma_ratio = 1.6;
     inline constexpr double fpfs_det_sigma2 = 0.04;
+    inline constexpr double fpfs_pnr = 0.8;
 
     class FpfsImage {
     private:
@@ -46,8 +47,6 @@ namespace anacal {
             const py::array_t<double>& gal_conv,
             double fthres,
             double pthres,
-            double pratio,
-            double pthres2,
             double std_m00,
             double std_v,
             int bound
@@ -58,8 +57,6 @@ namespace anacal {
             py::array_t<double>& gal_array,
             double fthres,
             double pthres,
-            double pratio,
-            double pthres2,
             double std_m00,
             double std_v,
             int bound,

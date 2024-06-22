@@ -10,15 +10,14 @@ noise_variance = 0.23
 noise_array = None
 cov_matrix = None
 coords = None
-coords, outcome = anacal.fpfs.process_image(
-    fpfs_config,
-    gal_array,
-    psf_array,
-    pixel_scale,
-    noise_variance,
-    noise_array,
-    cov_matrix,
-    coords,
+outcome = anacal.fpfs.process_image(
+    fpfs_config=fpfs_config,
+    gal_array=gal_array,
+    psf_array=psf_array,
+    pixel_scale=pixel_scale,
+    noise_variance=noise_variance,
+    noise_array=noise_array,
+    coords=coords,
 )
 
-print(np.sum(outcome[:, 0]) / np.sum(outcome[:, 1]))
+print(np.sum(outcome["e1"]) / np.sum(outcome["e1_g1"]))

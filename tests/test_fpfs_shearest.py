@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 ngrid = 64
+mag_zero = 27
 
 
 def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=4):
@@ -53,17 +54,21 @@ def do_test(scale, seed, rcut, gcomp):
         g2 = -0.02
     else:
         raise ValueError("gcomp should be g1 or g2")
+    sigma_arcsec = 0.53
+    mag_zero = 30.0
 
     nrot = 12
     gal_data, psf_data, coords = simulate_gal_psf(
         scale, seed, rcut, gcomp, nrot
     )
+    # Do not run detection
     nord = 4
-    det_nrot = 4
+    det_nrot = -1
     mtask = anacal.fpfs.FpfsMeasure(
         psf_array=psf_data,
+        mag_zero=mag_zero,
         pixel_scale=scale,
-        sigma_arcsec=0.53,
+        sigma_arcsec=sigma_arcsec,
         nord=nord,
         det_nrot=det_nrot,
     )
@@ -73,10 +78,29 @@ def do_test(scale, seed, rcut, gcomp):
         gal_array=gal_data,
         det=coords,
     )
-    mms = mtask.get_results(mms)
-    ells = anacal.fpfs.catalog.m2e(mms, const=8)
-    g1_est = np.average(ells["fpfs_e1"]) / np.average(ells["fpfs_R1E"])
-    g2_est = np.average(ells["fpfs_e2"]) / np.average(ells["fpfs_R2E"])
+
+    std = 0.1
+    cov_matrix = np.ones((9, 9)) * std**2.0 * scale**4.0
+    cov_matrix = anacal.fpfs.table.FpfsCovariance(
+        array=cov_matrix,
+        nord=nord,
+        det_nrot=det_nrot,
+        mag_zero=mag_zero,
+        pixel_scale=scale,
+        sigma_arcsec=sigma_arcsec,
+    )
+    ctask = anacal.fpfs.CatTaskS(
+        nord=nord,
+        cov_matrix=cov_matrix,
+    )
+    ctask.update_parameters(
+        snr_min=0.0,
+        r2_min=-0.1,
+        c0=4,
+    )
+    ells = ctask.run(mms)
+    g1_est = np.average(ells["e1"]) / np.average(ells["e1_g1"])
+    g2_est = np.average(ells["e2"]) / np.average(ells["e2_g2"])
     assert np.abs(g1_est - g1) < 3e-5
     assert np.abs(g2_est - g2) < 3e-5
 
@@ -87,27 +111,13 @@ def do_test(scale, seed, rcut, gcomp):
         gal_array=gal_data,
         det=coords,
     )
-    mms2 = np.vstack(
-        [mtask.run(gal_array=gal_list[i], psf=psf_list[i]) for i in range(nrot)]
-    )
-    np.testing.assert_almost_equal(mms, mms2)
-
-    # Or in each case, simulate nrot galaxies
-    n_tests = 10
-    gal_list = [gal_data] * n_tests
-    psf_list = [psf_data] * n_tests
-    mms = np.vstack(
+    array2 = np.vstack(
         [
-            mtask.run(gal_array=gal_list[i], det=coords, psf=psf_list[i])
-            for i in range(n_tests)
+            mtask.run(gal_array=gal_list[i], psf=psf_list[i]).array
+            for i in range(nrot)
         ]
     )
-    mms = mtask.get_results(mms)
-    ells = anacal.fpfs.catalog.m2e(mms, const=8)
-    g1_est = np.average(ells["fpfs_e1"]) / np.average(ells["fpfs_R1E"])
-    g2_est = np.average(ells["fpfs_e2"]) / np.average(ells["fpfs_R2E"])
-    assert np.abs(g1_est - g1) < 3e-5
-    assert np.abs(g2_est - g2) < 3e-5
+    np.testing.assert_almost_equal(mms.array, array2)
     return
 
 

@@ -74,10 +74,9 @@ def test_convolve_noise(seed=2):
 
 
 def test_detect():
-    pthres = 0.2
-    pratio = 0.05
     std = 0.4
 
+    cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
     det_task = anacal.fpfs.FpfsImage(
         nx=ngrid,
         ny=ngrid,
@@ -90,9 +89,7 @@ def test_detect():
     out1 = det_task.detect_source(
         gal_array=gal_data,
         fthres=1.0,
-        pthres=pthres,
-        pratio=pratio,
-        pthres2=anacal.fpfs.fpfs_det_sigma2 + 0.02,  # effectively v>0
+        pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,  # effectively v>0
         bound=2,
         std_m00=std * scale**2.0,
         std_v=std * scale**2.0,
@@ -101,14 +98,13 @@ def test_detect():
     out1 = rfn.structured_to_unstructured(out1)
     out1 = out1[:, :-1]
 
-    cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
     out2 = task.detect_source(
         gal_data,
         psf_array,
         cov_element,
         fthres=1.0,
-        pthres=pthres,
-        pratio=pratio,
+        pthres=0.8,
+        pratio=0.0,
         bound=2,
         noise_array=noise_array,
     )
