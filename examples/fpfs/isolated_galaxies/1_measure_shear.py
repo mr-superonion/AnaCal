@@ -11,7 +11,7 @@ noise_array = None
 
 rcut = 32
 ngrid = rcut * 2
-force_detect = True
+force_detect = False
 
 if not force_detect:
     coords = None
@@ -38,11 +38,7 @@ else:
     coords["is_peak"] = np.ones(ns)
     coords["mask_value"] = np.zeros(ns)
 
-fpfs_config = anacal.fpfs.FpfsConfig(
-    force=force_detect,
-    rcut=rcut,
-    gmeasure=3,
-)
+fpfs_config = anacal.fpfs.FpfsConfig()
 
 
 psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0)

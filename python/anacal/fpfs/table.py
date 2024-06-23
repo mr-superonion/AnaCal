@@ -174,7 +174,6 @@ class FpfsCovariance(FpfsObject):
             pixel_scale = header["pixel_scale"]
             mag_zero = header["mag_zero"]
             sigma_arcsec = header["sigma_arcsec"]
-            sigma_arcsec_det = header["sigma_arcsec_det"]
         return cls(
             array,
             nord=nord,
