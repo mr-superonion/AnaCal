@@ -6,7 +6,7 @@ import galsim
 import numpy as np
 from memory_profiler import memory_usage
 
-from . import mem_used, print_mem
+from .. import mem_used, print_mem
 
 ny = 5000
 nx = 5000
