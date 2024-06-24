@@ -279,7 +279,7 @@ class FpfsMeasure(ImgBase):
             )
             if noise_array is not None:
                 src_n = self.mtask.measure_source(
-                    gal_array=gal_array,
+                    gal_array=noise_array,
                     filter_image=bfunc,
                     psf_array=psf,
                     det=det,
@@ -298,7 +298,7 @@ class FpfsMeasure(ImgBase):
             )
             if noise_array is not None:
                 src_n = self.mtask.measure_source(
-                    gal_array=gal_array,
+                    gal_array=noise_array,
                     filter_image=bfunc,
                     psf_obj=psf,
                     det=det,
