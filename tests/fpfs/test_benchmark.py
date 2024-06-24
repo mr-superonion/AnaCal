@@ -49,7 +49,7 @@ def test_benchmark():
         t0 = time.time()
 
         cov_matrix = np.ones((21, 21)) * (std * pixel_scale) ** 2.0
-        cov_matrix = anacal.fpfs.table.FpfsCovariance(
+        cov_matrix = anacal.fpfs.table.Covariance(
             array=cov_matrix,
             nord=nord,
             det_nrot=det_nrot,

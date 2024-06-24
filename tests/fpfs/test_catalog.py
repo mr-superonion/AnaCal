@@ -33,14 +33,14 @@ def test_catalog_shear():
     )
 
     nshapelets = len(cat_obj.name_shapelets)
-    cov_s = anacal.fpfs.table.FpfsCovariance(
+    cov_s = anacal.fpfs.table.Covariance(
         array=cov_matrix[:nshapelets, :nshapelets],
         mag_zero=mag_zero,
         pixel_scale=pixel_scale,
         nord=nord,
         sigma_arcsec=sigma_arcsec,
     )
-    cov_d = anacal.fpfs.table.FpfsCovariance(
+    cov_d = anacal.fpfs.table.Covariance(
         array=cov_matrix[nshapelets:, nshapelets:],
         mag_zero=mag_zero,
         pixel_scale=pixel_scale,
@@ -63,7 +63,7 @@ def test_catalog_shear():
         c0=c0,
         pthres=0.12,
     )
-    src_s = anacal.fpfs.table.FpfsCatalog(
+    src_s = anacal.fpfs.table.Catalog(
         array=mm[:, :nshapelets],
         noise=nn[:, :nshapelets],
         mag_zero=mag_zero,
@@ -71,7 +71,7 @@ def test_catalog_shear():
         nord=nord,
         sigma_arcsec=sigma_arcsec,
     )
-    src_d = anacal.fpfs.table.FpfsCatalog(
+    src_d = anacal.fpfs.table.Catalog(
         array=mm[:, nshapelets:],
         noise=nn[:, nshapelets:],
         mag_zero=mag_zero,
@@ -135,7 +135,7 @@ def test_catalog_mag():
     pthres = 0.2
 
     cov_matrix = np.ones((21, 21)) * std**2.0 * pixel_scale**4.0
-    cov_matrix = anacal.fpfs.table.FpfsCovariance(
+    cov_matrix = anacal.fpfs.table.Covariance(
         array=cov_matrix,
         nord=nord,
         det_nrot=det_nrot,

@@ -81,7 +81,7 @@ def do_test(scale, seed, rcut, gcomp):
 
     std = 0.1
     cov_matrix = np.ones((9, 9)) * std**2.0 * scale**4.0
-    cov_matrix = anacal.fpfs.table.FpfsCovariance(
+    cov_matrix = anacal.fpfs.table.Covariance(
         array=cov_matrix,
         nord=nord,
         det_nrot=det_nrot,

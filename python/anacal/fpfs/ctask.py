@@ -19,7 +19,7 @@ import numpy.lib.recfunctions as rfn
 
 from . import fpfs_cut_sigma_ratio, fpfs_det_sigma2, fpfs_pnr
 from .base import get_det_col_names, get_shapelets_col_names
-from .table import FpfsCatalog, FpfsCovariance
+from .table import Catalog, Covariance
 
 snr_min_default = 12.0
 r2_min_default = 0.05
@@ -105,18 +105,18 @@ class CatIaskBase(object):
     def _run(self, x: jnp.float64, y: jnp.float64 = 0.0):
         return jnp.array([0])
 
-    def prepare(self, cat: FpfsCatalog):
+    def prepare(self, cat: Catalog):
         self.pixel_scale = cat.pixel_scale
         self.sigma_arcsec = cat.sigma_arcsec
         self.mag_zero = cat.mag_zero
         return
 
-    def run(self, cat: FpfsCatalog, cov: FpfsCovariance | None = None):
+    def run(self, cat: Catalog, cov: Covariance | None = None):
         """This function meausres observables and corresponding shear response
 
         Args:
-        cat (FpfsCatalog): Input source observable catalog
-        cov (FpfsCovariance): Image noise covariance on the observables
+        cat (Catalog): Input source observable catalog
+        cov (Covariance): Image noise covariance on the observables
 
         Returns:
         result (NDArray):   Measurements
@@ -151,7 +151,7 @@ class CatTaskS(CatIaskBase):
     def __init__(
         self,
         nord: int,
-        cov_matrix: FpfsCovariance,
+        cov_matrix: Covariance,
     ):
         super().__init__(nord=nord)
         assert nord == 4
@@ -286,7 +286,7 @@ class CatTaskD(CatIaskBase):
     def __init__(
         self,
         det_nrot: int,
-        cov_matrix: FpfsCovariance,
+        cov_matrix: Covariance,
     ):
         super().__init__(det_nrot=det_nrot)
         assert det_nrot == 4
@@ -379,8 +379,8 @@ class CatalogTask:
         self,
         nord: int,
         det_nrot: int,
-        cov_matrix_s: FpfsCovariance,
-        cov_matrix_d: FpfsCovariance,
+        cov_matrix_s: Covariance,
+        cov_matrix_d: Covariance,
     ):
         """Fpfs catalog task"""
         self.shapelet_task = CatTaskS(
@@ -425,15 +425,15 @@ class CatalogTask:
 
     def run(
         self,
-        shapelet: FpfsCatalog,
-        detection: FpfsCatalog,
+        shapelet: Catalog,
+        detection: Catalog,
     ):
         """This function returns the shape and shear response of shape using
         shapelet catalog and detection catalog
 
         Args:
-        shapelet (FpfsCatalog): shapelet catalog
-        detection (FpfsCatalog): detection catalog
+        shapelet (Catalog): shapelet catalog
+        detection (Catalog): detection catalog
 
         Returns:
         src (NDArray): shape catalog

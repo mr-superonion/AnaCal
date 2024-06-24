@@ -42,7 +42,7 @@ class FpfsObject(object):
         return
 
 
-class FpfsCatalog(FpfsObject):
+class Catalog(FpfsObject):
     def __init__(
         self,
         array: NDArray[np.float64],
@@ -76,7 +76,7 @@ class FpfsCatalog(FpfsObject):
         return
 
     @classmethod
-    def from_file(cls, filename):
+    def from_fits(cls, filename):
         assert os.path.isfile(filename), "Cannot find input file"
         with fitsio.FITS(filename, "r") as fits:
             assert "source" in fits
@@ -118,7 +118,7 @@ class FpfsCatalog(FpfsObject):
         return
 
 
-class FpfsCovariance(FpfsObject):
+class Covariance(FpfsObject):
     def __init__(
         self,
         array: NDArray,
@@ -164,7 +164,7 @@ class FpfsCovariance(FpfsObject):
         return
 
     @classmethod
-    def from_file(cls, filename):
+    def from_fits(cls, filename):
         with fitsio.FITS(filename, "r") as fits:
             assert "covariance" in fits
             array = fits["covariance"].read()

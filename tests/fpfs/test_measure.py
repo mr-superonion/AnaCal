@@ -43,7 +43,7 @@ def test_fpfs_measure(seed):
         det_nrot=det_nrot,
     )
     cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
-    cov_matrix_obj = anacal.fpfs.table.FpfsCovariance(
+    cov_matrix_obj = anacal.fpfs.table.Covariance(
         array=cov_element,
         nord=nord,
         det_nrot=det_nrot,

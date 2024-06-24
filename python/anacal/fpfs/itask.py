@@ -3,7 +3,7 @@ from numpy.typing import NDArray
 
 from . import BasePsf, FpfsImage, Image, mask_galaxy_image
 from .base import ImgBase
-from .table import FpfsCatalog, FpfsCovariance
+from .table import Catalog, Covariance
 
 
 class FpfsNoiseCov(ImgBase):
@@ -50,7 +50,7 @@ class FpfsNoiseCov(ImgBase):
 
     def measure(
         self, variance: float, noise_pf: NDArray | None = None
-    ) -> FpfsCovariance:
+    ) -> Covariance:
         """Estimates covariance of measurement error
 
         Args:
@@ -59,7 +59,7 @@ class FpfsNoiseCov(ImgBase):
         noise
 
         Return:
-        (FpfsCovariance): covariance matrix of FPFS basis modes
+        (Covariance): covariance matrix of FPFS basis modes
         """
         if noise_pf is not None:
             if noise_pf.shape == (self.ngrid, self.ngrid // 2 + 1):
@@ -95,7 +95,7 @@ class FpfsNoiseCov(ImgBase):
             np.conjugate(self.bfunc),
             axes=((1, 2), (1, 2)),
         ).real / self.pixel_scale**4.0
-        return FpfsCovariance(
+        return Covariance(
             array=cov_elems,
             mag_zero=self.mag_zero,
             nord=self.nord,
@@ -115,7 +115,7 @@ class FpfsDetect(ImgBase):
     psf_array (NDArray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Gaussian kernel size
-    cov_matrix (FpfsCovariance): covariance matrix of Fpfs basis modes
+    cov_matrix (Covariance): covariance matrix of Fpfs basis modes
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel [default: 8]
     klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
@@ -127,7 +127,7 @@ class FpfsDetect(ImgBase):
         ny: int,
         mag_zero: float,
         psf_array: NDArray,
-        cov_matrix: FpfsCovariance,
+        cov_matrix: Covariance,
         pixel_scale: float,
         sigma_arcsec: float,
         nord: int = 4,
@@ -256,7 +256,7 @@ class FpfsMeasure(ImgBase):
         noise_array: NDArray | None = None,
         psf: BasePsf | NDArray | None = None,
         det: NDArray | None = None,
-    ) -> FpfsCatalog:
+    ) -> Catalog:
         """This function detects galaxy from image
 
         Args:
@@ -309,7 +309,7 @@ class FpfsMeasure(ImgBase):
                 src_n = None
         else:
             raise RuntimeError("psf does not have a correct type")
-        return FpfsCatalog(
+        return Catalog(
             array=src_g,
             noise=src_n,
             mag_zero=self.mag_zero,
