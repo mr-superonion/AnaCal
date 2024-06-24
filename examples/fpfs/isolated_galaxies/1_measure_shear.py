@@ -52,7 +52,7 @@ psf_array = psf_array[
     ngrid // 2 - rcut : ngrid // 2 + rcut,
 ]
 
-outcomes = []
+out = []
 for gname in ["g2-1", "g2-0"]:
     gal_array = anacal.simulation.make_isolated_sim(
         gal_type="mixed",
@@ -68,7 +68,7 @@ for gname in ["g2-1", "g2-0"]:
         nrot_per_gal=1,
     )[0]
 
-    outcomes.append(
+    out.append(
         anacal.fpfs.process_image(
             fpfs_config=fpfs_config,
             gal_array=gal_array,
@@ -80,12 +80,22 @@ for gname in ["g2-1", "g2-0"]:
         )
     )
 
+e1_0 = out[0]["wdet"] * out[0]["e1"]
+e1_1 = out[1]["wdet"] * out[1]["e1"]
+e1g1_0 = out[0]["wdet_g1"] * out[0]["e1"] + out[0]["wdet"] * out[0]["e1_g1"],
+e1g1_1 = out[1]["wdet_g1"] * out[1]["e1"] + out[1]["wdet"] * out[1]["e1_g1"],
 
 print(
-    (np.sum(outcomes[1]["e1"]) - np.sum(outcomes[0]["e1"]))
-    / (np.sum(outcomes[1]["e1_g1"]) + np.sum(outcomes[0]["e1_g1"]))
+    (np.sum(e1_1) - np.sum(e1_0))
+    / (np.sum(e1g1_1) + np.sum(e1g1_0))
 )
+
+e2_0 = out[0]["wdet"] * out[0]["e2"]
+e2_1 = out[1]["wdet"] * out[1]["e2"]
+e2g2_0 = out[0]["wdet_g2"] * out[0]["e2"] + out[0]["wdet"] * out[0]["e2_g2"],
+e2g2_1 = out[1]["wdet_g2"] * out[1]["e2"] + out[1]["wdet"] * out[1]["e2_g2"],
+
 print(
-    (np.sum(outcomes[1]["e2"]) - np.sum(outcomes[0]["e2"]))
-    / (np.sum(outcomes[1]["e2_g2"]) + np.sum(outcomes[0]["e2_g2"]))
+    (np.sum(e2_1) - np.sum(e2_0))
+    / (np.sum(e2g2_1) + np.sum(e2g2_0))
 )

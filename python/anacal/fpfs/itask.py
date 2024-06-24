@@ -37,7 +37,6 @@ class FpfsNoiseCov(ImgBase):
             psf_array=psf_array,
             pixel_scale=pixel_scale,
             sigma_arcsec=sigma_arcsec,
-            sigma_arcsec_det=sigma_arcsec,
             nord=nord,
             det_nrot=det_nrot,
             klim_thres=klim_thres,
@@ -95,7 +94,7 @@ class FpfsNoiseCov(ImgBase):
             self.bfunc * (_w * noise_pf_deconv)[np.newaxis, :, :],
             np.conjugate(self.bfunc),
             axes=((1, 2), (1, 2)),
-        ).real
+        ).real / self.pixel_scale**4.0
         return FpfsCovariance(
             array=cov_elems,
             mag_zero=self.mag_zero,
@@ -139,7 +138,6 @@ class FpfsDetect(ImgBase):
             mag_zero=mag_zero,
             psf_array=psf_array,
             sigma_arcsec=sigma_arcsec,
-            sigma_arcsec_det=sigma_arcsec,
             pixel_scale=pixel_scale,
             nord=nord,
             det_nrot=det_nrot,
@@ -150,8 +148,8 @@ class FpfsDetect(ImgBase):
             nx=nx,
             ny=ny,
             scale=self.pixel_scale,
-            sigma_arcsec=self.sigma_arcsec_det,
-            klim=self.klim_det / self.pixel_scale,
+            sigma_arcsec=self.sigma_arcsec,
+            klim=self.klim / self.pixel_scale,
             psf_array=psf_array,
             use_estimate=True,
         )
@@ -201,8 +199,8 @@ class FpfsDetect(ImgBase):
             fthres=fthres,
             pthres=pthres,
             bound=bound,
-            std_m00=self.std_m00,
-            std_v=self.std_v,
+            std_m00=self.std_m00 * self.pixel_scale**2.0,
+            std_v=self.std_v * self.pixel_scale**2.0,
             noise_array=noise_array,
             mask_array=mask_array,
         )
@@ -236,7 +234,6 @@ class FpfsMeasure(ImgBase):
             psf_array=psf_array,
             pixel_scale=pixel_scale,
             sigma_arcsec=sigma_arcsec,
-            sigma_arcsec_det=sigma_arcsec,
             nord=nord,
             det_nrot=det_nrot,
             klim_thres=klim_thres,
@@ -259,7 +256,6 @@ class FpfsMeasure(ImgBase):
         noise_array: NDArray | None = None,
         psf: BasePsf | NDArray | None = None,
         det: NDArray | None = None,
-        do_rotate: bool = False,
     ) -> FpfsCatalog:
         """This function detects galaxy from image
 
@@ -267,9 +263,7 @@ class FpfsMeasure(ImgBase):
         gal_array (NDArray): galaxy image data
         noise_array (NDArray | None): noise image data [default: None]
         psf (BasePsf | NDArray | None): psf image data or psf model
-        psf_obj (PSF object): reuturns PSF model according to position
         det (list|None): detection catalog
-        do_rotate (bool): whether do rotation
 
         Returns:
         out (NDArray): galaxy measurement catalog

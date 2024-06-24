@@ -10,7 +10,7 @@ noise_variance = 0.23
 noise_array = None
 cov_matrix = None
 coords = None
-outcome = anacal.fpfs.process_image(
+out = anacal.fpfs.process_image(
     fpfs_config=fpfs_config,
     gal_array=gal_array,
     psf_array=psf_array,
@@ -20,4 +20,7 @@ outcome = anacal.fpfs.process_image(
     coords=coords,
 )
 
-print(np.sum(outcome["e1"]) / np.sum(outcome["e1_g1"]))
+e1 = out["wdet"] * out["e1"]
+e1g1 = out["wdet_g1"] * out["e1"] + out["wdet"] * out["e1_g1"],
+
+print(np.sum(e1) / np.sum(e1g1))

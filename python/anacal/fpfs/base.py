@@ -89,7 +89,6 @@ class ImgBase(AnacalBase):
     psf_array (ndarray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
-    sigma_arcsec_det (float|None): Detection kernel size [default: None]
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
     klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
@@ -102,7 +101,6 @@ class ImgBase(AnacalBase):
         psf_array: NDArray,
         pixel_scale: float,
         sigma_arcsec: float,
-        sigma_arcsec_det: float | None = None,
         nord: int = 4,
         det_nrot: int = 4,
         klim_thres: float = 1e-20,
@@ -118,15 +116,9 @@ class ImgBase(AnacalBase):
         )
 
         self.sigma_arcsec = sigma_arcsec
-        if sigma_arcsec_det is None:
-            self.sigma_arcsec_det = sigma_arcsec
-        else:
-            self.sigma_arcsec_det = sigma_arcsec_det
         self.ngrid = psf_array.shape[0]
         if self.sigma_arcsec > 3.0:
             raise ValueError("sigma_arcsec should be < 3 arcsec")
-        if self.sigma_arcsec_det > 3.0:
-            raise ValueError("sigma_arcsec_det should be < 3 arcsec")
         if self.nord < 4 and self.det_nrot < 4:
             raise ValueError("Either nord or det_nrot should be >= 4")
 
@@ -140,7 +132,6 @@ class ImgBase(AnacalBase):
 
         # the following two assumes pixel_scale = 1
         self.sigmaf = float(self.pixel_scale / self.sigma_arcsec)
-        self.sigmaf_det = float(self.pixel_scale / self.sigma_arcsec_det)
         self.logger.info(
             "Shapelet kernel in configuration space: sigma= %.4f arcsec"
             % (sigma_arcsec)
@@ -155,15 +146,6 @@ class ImgBase(AnacalBase):
             * self._dk
         )
         self.logger.info("Maximum |k| for shapelet is %.3f" % (self.klim))
-        self.klim_det = (
-            get_klim(
-                psf_pow=psf_pow,
-                sigma=self.sigmaf_det / np.sqrt(2.0),
-                klim_thres=klim_thres,
-            )
-            * self._dk
-        )
-        self.logger.info("Maximum |k| for detection is %.3f" % (self.klim_det))
         return
 
     def prepare_fpfs_bases(self):
@@ -183,8 +165,8 @@ class ImgBase(AnacalBase):
             dfunc, dnames = detlets2d(
                 ngrid=self.ngrid,
                 det_nrot=self.det_nrot,
-                sigma=self.sigmaf_det,
-                klim=self.klim_det,
+                sigma=self.sigmaf,
+                klim=self.klim,
             )
             bfunc.append(dfunc)
             self.colnames = self.colnames + dnames
