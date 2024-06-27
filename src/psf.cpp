@@ -39,13 +39,11 @@ namespace anacal {
     GridPsf::draw(double x, double y) const {
         int x_grid = static_cast<int>((x - this->x0) / this->dx);
         int y_grid = static_cast<int>((y - this->y0) / this->dy);
-        bool test = (
-            (x_grid >= 0) && (x_grid < this->nx) &&
-            (y_grid >= 0) && (y_grid < this->ny)
-        );
-        if (! test) {
-            throw std::runtime_error("Cannot get PSF image at the position.");
-        }
+        if (x_grid < 0) x_grid = 0;
+        if (y_grid < 0) y_grid = 0;
+        if (x_grid >= this->nx) x_grid = this->nx - 1;
+        if (y_grid >= this->ny) y_grid = this->ny - 1;
+
         py::array_t<double> view = py::array_t<double>(
             this->model_array[
                 py::make_tuple(

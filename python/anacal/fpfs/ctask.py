@@ -234,9 +234,7 @@ class CatTaskS(CatIaskBase):
         )
         return m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2
 
-    def _run(self, x, y=0.0):
-        m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2 = self._dg(x - 2.0 * y)
-
+    def _ell(self, x, m00_g1, m00_g2, m22c_g1, m22s_g2):
         _denom = x[self.di["m00"]] + self.C0
         # ellipticity1
         e1 = x[self.di["m22c"]] / _denom
@@ -245,7 +243,9 @@ class CatTaskS(CatIaskBase):
 
         e1_g1 = m22c_g1 / _denom - m00_g1 * x[self.di["m22c"]] / (_denom) ** 2.0
         e2_g2 = m22s_g2 / _denom - m00_g2 * x[self.di["m22s"]] / (_denom) ** 2.0
+        return e1, e1_g1, e2, e2_g2
 
+    def _wsel(self, x, m00_g1, m00_g2, m20_g1, m20_g2):
         # selection on flux
         w0l, dw0l = ssfunc2(x[self.di["m00"]], self.m00_min, self.sigma_m00)
         w0l_g1 = dw0l * m00_g1
@@ -269,7 +269,12 @@ class CatTaskS(CatIaskBase):
         wsel = w0l * w0u * w2l
         wsel_g1 = w0l_g1 * w0u * w2l + w0l * w0u_g1 * w2l + w0l * w0u * w2l_g1
         wsel_g2 = w0l_g2 * w0u * w2l + w0l * w0u_g2 * w2l + w0l * w0u * w2l_g2
+        return wsel, wsel_g1, wsel_g2
 
+    def _run(self, x, y=0.0):
+        m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2 = self._dg(x - 2.0 * y)
+        e1, e1_g1, e2, e2_g2 = self._ell(x, m00_g1, m00_g2, m22c_g1, m22s_g2)
+        wsel, wsel_g1, wsel_g2 = self._wsel(x, m00_g1, m00_g2, m20_g1, m20_g2)
         we1 = wsel * e1
         we2 = wsel * e2
         we1_g1 = wsel_g1 * e1 + wsel * e1_g1
@@ -438,8 +443,15 @@ class CatalogTask:
         Returns:
         src (NDArray): shape catalog
         """
+        # Catalog Consistent with this task
         assert shapelet.nord == self.shapelet_task.nord
         assert detection.det_nrot == self.det_task.det_nrot
+
+        # Two Catalogs Consistent
+        assert shapelet.sigma_arcsec == detection.sigma_arcsec
+        assert shapelet.mag_zero == detection.mag_zero
+        assert shapelet.pixel_scale == detection.pixel_scale
+
         array_s = self.shapelet_task.run(
             cat=shapelet,
         )
