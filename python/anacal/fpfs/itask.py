@@ -93,11 +93,14 @@ class FpfsNoiseCov(ImgBase):
         _w = np.ones(self.psf_pow.shape) * 2.0
         _w[:, 0] = 1.0
         _w[:, -1] = 1.0
-        cov_elems = np.tensordot(
-            self.bfunc * (_w * noise_pf_deconv)[np.newaxis, :, :],
-            np.conjugate(self.bfunc),
-            axes=((1, 2), (1, 2)),
-        ).real / self.pixel_scale**4.0
+        cov_elems = (
+            np.tensordot(
+                self.bfunc * (_w * noise_pf_deconv)[np.newaxis, :, :],
+                np.conjugate(self.bfunc),
+                axes=((1, 2), (1, 2)),
+            ).real
+            / self.pixel_scale**4.0
+        )
         return Covariance(
             array=cov_elems,
             mag_zero=self.mag_zero,

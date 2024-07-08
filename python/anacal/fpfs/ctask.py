@@ -103,12 +103,12 @@ class CatTaskBase(object):
             if not hasattr(cov_matrix, "std_m00"):
                 raise ValueError(
                     "The input covariance does not have std_m00",
-                    "which is required for nord = %d" % self.nord
+                    "which is required for nord = %d" % self.nord,
                 )
             if not hasattr(cov_matrix, "std_r2"):
                 raise ValueError(
                     "The input covariance does not have std_r2",
-                    "which is required for nord = %d" % self.nord
+                    "which is required for nord = %d" % self.nord,
                 )
             # Initialize column names
             snames, _ = get_shapelets_col_names(nord)
@@ -131,7 +131,7 @@ class CatTaskBase(object):
             if not hasattr(cov_matrix, "std_v"):
                 raise ValueError(
                     "The input covariance does not have std_r2",
-                    "which is required for det_nrot = %d" % self.std_v
+                    "which is required for det_nrot = %d" % self.std_v,
                 )
             dnames = get_det_col_names(det_nrot)
             self.colnames = self.colnames + dnames
@@ -153,7 +153,7 @@ class CatTaskBase(object):
         if not set(self.colnames).issubset(cov_matrix.colnames):
             raise ValueError(
                 "Input covariance matrix has a different colnames from",
-                "nord = %d, det_nrot = %d" % (self.nord, self.det_nrot)
+                "nord = %d, det_nrot = %d" % (self.nord, self.det_nrot),
             )
         return
 
@@ -363,14 +363,14 @@ class CatTaskD(CatTaskBase):
                 "Input covariance matrix of shapelets has wrong nord"
             )
         self.dtype = [
-            ("e1", "f8"),       # shape
-            ("e1_g1", "f8"),    # shear response of shape
-            ("e2", "f8"),       # shape
-            ("e2_g2", "f8"),    # shear response of shape
-            ("w", "f8"),        # weight (detection and selection)
-            ("w_g1", "f8"),     # shear response of weight
-            ("w_g2", "f8"),     # shear response of weight
-            ("flux", "f8"),     # flux
+            ("e1", "f8"),  # shape
+            ("e1_g1", "f8"),  # shear response of shape
+            ("e2", "f8"),  # shape
+            ("e2_g2", "f8"),  # shear response of shape
+            ("w", "f8"),  # weight (detection and selection)
+            ("w_g1", "f8"),  # shear response of weight
+            ("w_g2", "f8"),  # shear response of weight
+            ("flux", "f8"),  # flux
         ]
         return
 
@@ -424,8 +424,7 @@ class CatalogTask:
         det_nrot: int,
         cov_matrix: Covariance,
     ):
-        """Fpfs Catalog Task
-        """
+        """Fpfs Catalog Task"""
         self.nord = nord
         self.det_nrot = det_nrot
         self.det_task = None
@@ -501,8 +500,9 @@ class CatalogTask:
 
         if catalog2 is not None:
             assert self.meas_task is not None
-            assert catalog2.det_nrot == -1, \
-                "The secondary catalog should not have detection columns"
+            assert (
+                catalog2.det_nrot == -1
+            ), "The secondary catalog should not have detection columns"
             array_meas = self.meas_task.run(
                 catalog=catalog2,
             )

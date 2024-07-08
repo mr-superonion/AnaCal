@@ -189,7 +189,6 @@ def test_catalog_mag():
     )
     src = mtask1.run(gal_array=gal_data, det=det)
 
-
     cat_obj = anacal.fpfs.CatalogTask(
         cov_matrix=cov_matrix,
         det_nrot=det_nrot,

@@ -16,5 +16,6 @@ profile = "black"
 line_length = 80
 
 [tool.pytest.ini_options]
-testpaths = ["./tests"]
+python_files = ["test_*.py", "example*.py"]
+testpaths = ["tests", "examples"]
 addopts = "-vv -s"
