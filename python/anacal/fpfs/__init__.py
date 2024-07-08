@@ -63,6 +63,11 @@ class FpfsConfig(BaseModel):
         description="""Smoothing scale of the shapelet and detection kernel.
         """,
     )
+    sigma_arcsec2: float = Field(
+        default=-1,
+        description="""Smoothing scale of the second shapelet kernel.
+        """,
+    )
     pthres: float = Field(
         default=0.12,
         description="""Detection threshold (peak identification) for the
@@ -148,37 +153,40 @@ def process_image(
         )
         del dtask
 
-    mtask_s = FpfsMeasure(
+    mtask_1 = FpfsMeasure(
         mag_zero=mag_zero,
         psf_array=psf_array,
         pixel_scale=pixel_scale,
         sigma_arcsec=fpfs_config.sigma_arcsec,
         klim_thres=fpfs_config.klim_thres,
         nord=fpfs_config.nord,
-        det_nrot=-1,
-    )
-    src_s = mtask_s.run(
-        gal_array=gal_array,
-        det=coords,
-        noise_array=noise_array,
-    )
-    del mtask_s
-
-    mtask_d = FpfsMeasure(
-        mag_zero=mag_zero,
-        psf_array=psf_array,
-        pixel_scale=pixel_scale,
-        sigma_arcsec=fpfs_config.sigma_arcsec,
-        klim_thres=fpfs_config.klim_thres,
-        nord=-1,
         det_nrot=fpfs_config.det_nrot,
     )
-    src_d = mtask_d.run(
+    src_1 = mtask_1.run(
         gal_array=gal_array,
         det=coords,
         noise_array=noise_array,
     )
-    del mtask_d
+    del mtask_1
+
+    if fpfs_config.sigma_arcsec2 > 0.0:
+        mtask_2 = FpfsMeasure(
+            mag_zero=mag_zero,
+            psf_array=psf_array,
+            pixel_scale=pixel_scale,
+            sigma_arcsec=fpfs_config.sigma_arcsec2,
+            klim_thres=fpfs_config.klim_thres,
+            nord=fpfs_config.nord,
+            det_nrot=-1,
+        )
+        src_2 = mtask_2.run(
+            gal_array=gal_array,
+            det=coords,
+            noise_array=noise_array,
+        )
+        del mtask_2
+    else:
+        src_2 = None
 
     # Catalog
     cat_task = CatalogTask(
@@ -192,5 +200,5 @@ def process_image(
         c0=fpfs_config.c0,
         pthres=fpfs_config.pthres,
     )
-    out = cat_task.run(cat1=src_d, cat2=src_s)
+    out = cat_task.run(catalog=src_1, catalog2=src_2)
     return out
