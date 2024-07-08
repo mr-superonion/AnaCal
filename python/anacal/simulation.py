@@ -744,7 +744,8 @@ def make_blended_sim(
         # rescale the radius while keeping the surface brightness the same
         gal = gal.expand(rsarray[ig])
         # determine and assign flux
-        # HSC's i-band coadds zero point is 27
+        # (HSC's i-band coadds zero point is 27)
+        # (LSST's coadds zero point is 30)
         flux = 10 ** ((mag_zero - ss["mag_auto"]) / 2.5)
         gal = gal.withFlux(flux)
         # rotate by 'ang'

@@ -2,20 +2,28 @@ import anacal
 import galsim
 import numpy as np
 
-nstamp = 20
-seed = 2
-pixel_scale = 0.2
-noise_variance = 0.23
+nstamp = 20  # nstamp x nstamp galaxies
+seed = 2     # seed for galaxy
+noise_seed = 1  # seed for noise
+pixel_scale = 0.2  # LSST image pixel scale
+# noise variance for r-bands 10 year LSST coadd (magnitude zero point at 30)
+noise_variance = 0.37
+# NOTE: We can set noise variance to zero in the image simulation, but
+# we cannot set that to zero in the measurement. The measurement needs a
+# non-zero image noise variance to be run
+# For the test with noiseless image simulation, we can set do_add_noise
+# to False, but keep the noise variance to the realistic one as the input
+# of the measurement
+do_add_noise = False  # Add image noise or not
+do_force_detect = True  # Force to have a detection at the center
 
-noise_array = None
+rcut = 32  # cutout radius
+test_component = 1  # which shear component to test
+nrot_per_gal = 4  # number of rotation for each galaxy
 
-rcut = 32
+# Simulation
 ngrid = rcut * 2
-force_detect = True
-test_component = 1
-nrot_per_gal = 4
-
-if not force_detect:
+if not do_force_detect:
     coords = None
     buff = 15
 else:
@@ -55,6 +63,7 @@ psf_array = (
     .array
 )
 
+# Measurement
 out = []
 for gname in ["g%d-1" % test_component, "g%d-0" % test_component]:
     gal_array = anacal.simulation.make_isolated_sim(
@@ -69,19 +78,38 @@ for gname in ["g%d-1" % test_component, "g%d-0" % test_component]:
         do_shift=False,
         buff=buff,
         nrot_per_gal=nrot_per_gal,
+        mag_zero=30,
     )[0]
 
+    if do_add_noise:
+        noise_std = np.sqrt(noise_variance)
+        gal_array = gal_array + np.random.RandomState(noise_seed).normal(
+            scale=noise_std,
+            size=gal_array.shape,
+        )
+        # The pure noise for noise bias correction
+        # make sure that the random seeds are different
+        # (noise variance are the same)
+        add_noise_seed = int(noise_seed + 1e6)
+        noise_array = np.random.RandomState(add_noise_seed).normal(
+            scale=noise_std,
+            size=gal_array.shape,
+        )
+    else:
+        noise_array = None
     out.append(
         anacal.fpfs.process_image(
             fpfs_config=fpfs_config,
             gal_array=gal_array,
             psf_array=psf_array,
             pixel_scale=pixel_scale,
-            noise_variance=noise_variance,
+            noise_variance=max(noise_variance, 0.23),
             noise_array=noise_array,
             coords=coords,
         )
     )
+
+# Printing the results
 print("Testing for shear component: %d" % test_component)
 print("Measurement with sigma_arcsec=%.2f:" % fpfs_config.sigma_arcsec)
 ename = "e%d" % test_component
