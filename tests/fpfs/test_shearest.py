@@ -61,8 +61,9 @@ def do_test(scale, seed, rcut, gcomp):
     gal_data, psf_data, coords = simulate_gal_psf(
         scale, seed, rcut, gcomp, nrot
     )
-    # Do not run detection
     nord = 4
+    # Since we do not run detection
+    # no detection weight
     det_nrot = -1
     mtask = anacal.fpfs.FpfsMeasure(
         psf_array=psf_data,
@@ -89,8 +90,9 @@ def do_test(scale, seed, rcut, gcomp):
         pixel_scale=scale,
         sigma_arcsec=sigma_arcsec,
     )
-    ctask = anacal.fpfs.CatTaskS(
+    ctask = anacal.fpfs.CatalogTask(
         nord=nord,
+        det_nrot=det_nrot,
         cov_matrix=cov_matrix,
     )
     ctask.update_parameters(
@@ -98,9 +100,9 @@ def do_test(scale, seed, rcut, gcomp):
         r2_min=-0.1,
         c0=4,
     )
-    ells = ctask.run(mms)
-    g1_est = np.average(ells["e1"]) / np.average(ells["e1_g1"])
-    g2_est = np.average(ells["e2"]) / np.average(ells["e2_g2"])
+    ells = ctask.run(catalog2=mms)
+    g1_est = np.average(ells["e1_2"]) / np.average(ells["e1_g1_2"])
+    g2_est = np.average(ells["e2_2"]) / np.average(ells["e2_g2_2"])
     assert np.abs(g1_est - g1) < 3e-5
     assert np.abs(g2_est - g2) < 3e-5
 

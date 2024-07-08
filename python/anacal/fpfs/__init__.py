@@ -11,7 +11,7 @@ from .._anacal.image import Image
 from .._anacal.mask import mask_galaxy_image
 from .._anacal.psf import BasePsf
 from . import base, table
-from .ctask import CatalogTask, CatTaskD, CatTaskS
+from .ctask import CatalogTask, CatTaskD, CatTaskM
 from .itask import FpfsDetect, FpfsMeasure, FpfsNoiseCov
 
 __all__ = [
@@ -22,8 +22,8 @@ __all__ = [
     "FpfsDetect",
     "FpfsMeasure",
     "FpfsConfig",
-    "CatTaskS",
     "CatTaskD",
+    "CatTaskM",
     "CatalogTask",
 ]
 
@@ -181,18 +181,16 @@ def process_image(
     del mtask_d
 
     # Catalog
-    ctask = CatalogTask(
+    cat_task = CatalogTask(
         nord=fpfs_config.nord,
         det_nrot=fpfs_config.det_nrot,
-        cov_matrix_s=cov_matrix,
-        cov_matrix_d=cov_matrix,
+        cov_matrix=cov_matrix,
     )
-    ctask.update_parameters(
+    cat_task.update_parameters(
         snr_min=fpfs_config.snr_min,
         r2_min=fpfs_config.r2_min,
         c0=fpfs_config.c0,
         pthres=fpfs_config.pthres,
     )
-    out = ctask.run(shapelet=src_s, detection=src_d)
-    del ctask
+    out = cat_task.run(cat1=src_d, cat2=src_s)
     return out

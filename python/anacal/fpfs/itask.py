@@ -1,3 +1,6 @@
+# Image Tasks of Shapelet Based Measurements
+#
+# python lib
 import numpy as np
 from numpy.typing import NDArray
 
@@ -257,7 +260,7 @@ class FpfsMeasure(ImgBase):
         psf: BasePsf | NDArray | None = None,
         det: NDArray | None = None,
     ) -> Catalog:
-        """This function detects galaxy from image
+        """This function measure galaxy shapes at the position of the detection
 
         Args:
         gal_array (NDArray): galaxy image data

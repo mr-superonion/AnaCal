@@ -5,10 +5,13 @@ from fpfs.catalog import fpfs_catalog
 
 
 def test_catalog_shear():
+    # This test is to confirm that our new code can provide the same
+    # Simulation
     mm = np.abs(np.random.randn(1000, 21) * 10)
     nn = np.random.randn(1000, 21) * 4
     cov_matrix = np.abs(2.0 + np.random.randn(21, 21))
 
+    # Setups
     nord = 4
     det_nrot = 4
     snr_min = 12
@@ -18,11 +21,12 @@ def test_catalog_shear():
     sigma_arcsec = 0.52
     pixel_scale = 0.2
 
+    # Old code
     cat_obj = fpfs_catalog(
         cov_mat=cov_matrix,
         snr_min=snr_min,
         r2_min=r2_min,
-        ratio=1.6,
+        ratio=anacal.fpfs.fpfs_cut_sigma_ratio,
         c0=c0,
         c2=100,
         alpha=1.0,
@@ -31,72 +35,86 @@ def test_catalog_shear():
         pratio=0.0,
         det_nrot=det_nrot,
     )
-
-    nshapelets = len(cat_obj.name_shapelets)
-    cov_s = anacal.fpfs.table.Covariance(
-        array=cov_matrix[:nshapelets, :nshapelets],
-        mag_zero=mag_zero,
-        pixel_scale=pixel_scale,
-        nord=nord,
-        sigma_arcsec=sigma_arcsec,
-    )
-    cov_d = anacal.fpfs.table.Covariance(
-        array=cov_matrix[nshapelets:, nshapelets:],
-        mag_zero=mag_zero,
-        pixel_scale=pixel_scale,
-        det_nrot=det_nrot,
-        sigma_arcsec=sigma_arcsec,
-    )
     out1_1 = cat_obj.measure_g1_renoise(mm, nn)
     out1_2 = cat_obj.measure_g2_renoise(mm, nn)
+
+    # New Task CatalogTask
+    cov_obj = anacal.fpfs.table.Covariance(
+        nord=nord,
+        det_nrot=det_nrot,
+        array=cov_matrix,
+        mag_zero=mag_zero,
+        pixel_scale=pixel_scale,
+        sigma_arcsec=sigma_arcsec,
+    )
 
     meas_obj = anacal.fpfs.ctask.CatalogTask(
         nord=nord,
         det_nrot=det_nrot,
-        cov_matrix_s=cov_s,
-        cov_matrix_d=cov_d,
+        cov_matrix=cov_obj,
     )
-
     meas_obj.update_parameters(
         snr_min=snr_min,
         r2_min=r2_min,
         c0=c0,
         pthres=0.12,
     )
-    src_s = anacal.fpfs.table.Catalog(
+
+    # primary catalog
+    src_1 = anacal.fpfs.table.Catalog(
+        nord=nord,
+        det_nrot=det_nrot,
+        array=mm,
+        noise=nn,
+        mag_zero=mag_zero,
+        pixel_scale=pixel_scale,
+        sigma_arcsec=sigma_arcsec,
+    )
+    nshapelets = len(cat_obj.name_shapelets)
+    src_2 = anacal.fpfs.table.Catalog(
+        nord=nord,
         array=mm[:, :nshapelets],
         noise=nn[:, :nshapelets],
         mag_zero=mag_zero,
         pixel_scale=pixel_scale,
-        nord=nord,
-        sigma_arcsec=sigma_arcsec,
-    )
-    src_d = anacal.fpfs.table.Catalog(
-        array=mm[:, nshapelets:],
-        noise=nn[:, nshapelets:],
-        mag_zero=mag_zero,
-        pixel_scale=pixel_scale,
-        det_nrot=det_nrot,
         sigma_arcsec=sigma_arcsec,
     )
 
-    out2 = meas_obj.run(shapelet=src_s, detection=src_d)
+    out2 = meas_obj.run(catalog=src_1, catalog2=src_2)
     np.testing.assert_array_almost_equal(
-        out2["wdet"] * out2["e1"],
+        out2["w"] * out2["e1"],
         out1_1[:, 0],
     )
     np.testing.assert_array_almost_equal(
-        out2["wdet_g1"] * out2["e1"] + out2["wdet"] * out2["e1_g1"],
+        out2["w_g1"] * out2["e1"] + out2["w"] * out2["e1_g1"],
         out1_1[:, 1],
     )
     np.testing.assert_array_almost_equal(
-        out2["wdet"] * out2["e2"],
+        out2["w"] * out2["e2"],
         out1_2[:, 0],
     )
     np.testing.assert_array_almost_equal(
-        out2["wdet_g2"] * out2["e2"] + out2["wdet"] * out2["e2_g2"],
+        out2["w_g2"] * out2["e2"] + out2["w"] * out2["e2_g2"],
         out1_2[:, 1],
     )
+
+    np.testing.assert_array_almost_equal(
+        out2["w"] * out2["e1_2"],
+        out1_1[:, 0],
+    )
+    np.testing.assert_array_almost_equal(
+        out2["w_g1"] * out2["e1_2"] + out2["w"] * out2["e1_g1_2"],
+        out1_1[:, 1],
+    )
+    np.testing.assert_array_almost_equal(
+        out2["w"] * out2["e2_2"],
+        out1_2[:, 0],
+    )
+    np.testing.assert_array_almost_equal(
+        out2["w_g2"] * out2["e2_2"] + out2["w"] * out2["e2_g2_2"],
+        out1_2[:, 1],
+    )
+
     return
 
 
@@ -167,23 +185,13 @@ def test_catalog_mag():
         pixel_scale=pixel_scale,
         sigma_arcsec=sigma_arcsec,
         nord=nord,
-        det_nrot=-1,
-    )
-    src_s = mtask1.run(gal_array=gal_data, det=det)
-
-    mtask2 = anacal.fpfs.FpfsMeasure(
-        mag_zero=mag_zero,
-        psf_array=psf_data,
-        pixel_scale=pixel_scale,
-        sigma_arcsec=sigma_arcsec,
-        nord=-1,
         det_nrot=det_nrot,
     )
-    src_d = mtask2.run(gal_array=gal_data, det=det)
+    src = mtask1.run(gal_array=gal_data, det=det)
+
 
     cat_obj = anacal.fpfs.CatalogTask(
-        cov_matrix_s=cov_matrix,
-        cov_matrix_d=cov_matrix,
+        cov_matrix=cov_matrix,
         det_nrot=det_nrot,
         nord=nord,
     )
@@ -194,7 +202,7 @@ def test_catalog_mag():
         c0=4,
         pthres=pthres,
     )
-    flux1 = cat_obj.run(src_s, src_d)["flux"]
+    flux1 = cat_obj.run(src)["flux"]
     flux2 = np.sum(gal_data)
     assert (flux1 - flux2) / flux2 < 0.01
 

@@ -1,15 +1,4 @@
-# FPFS shear estimator
-# Copyright 20210805 Xiangchong Li.
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
+# Catalog Tasks of Shapelet Based Measurements
 #
 # python lib
 import jax
@@ -22,9 +11,10 @@ from .base import get_det_col_names, get_shapelets_col_names
 from .table import Catalog, Covariance
 
 snr_min_default = 12.0
-r2_min_default = 0.05
+r2_min_default = 0.1
 r2_max_default = 2.0
-c0_default = 2.55
+c0_default = 3.0
+pthres_default = 0.12
 
 
 def _ssfunc1(t):
@@ -95,100 +85,76 @@ def ssfunc2(x, mu, sigma):
     return v, dv
 
 
-class CatIaskBase(object):
-    def __init__(self, nord=-1, det_nrot=-1):
-        self.nord = nord
-        self.det_nrot = det_nrot
-        self.dtype = None
-        return
-
-    def _run(self, x: jnp.float64, y: jnp.float64 = 0.0):
-        return jnp.array([0])
-
-    def prepare(self, cat: Catalog):
-        self.pixel_scale = cat.pixel_scale
-        self.sigma_arcsec = cat.sigma_arcsec
-        self.mag_zero = cat.mag_zero
-        return
-
-    def run(self, cat: Catalog, cov: Covariance | None = None):
-        """This function meausres observables and corresponding shear response
-
-        Args:
-        cat (Catalog): Input source observable catalog
-        cov (Covariance): Image noise covariance on the observables
-
-        Returns:
-        result (NDArray):   Measurements
-        """
-        assert cat.nord == self.nord, "input has wrong nord"
-        assert cat.det_nrot == self.det_nrot, "input has wrong det_nrot"
-        self.prepare(cat)
-        if cat.noise is None:
-            func = jax.vmap(
-                self._run,
-                in_axes=0,
-                out_axes=0,
-            )
-            result = func(cat.array)
-        else:
-            assert cat.noise is not None
-            func = jax.vmap(
-                self._run,
-                in_axes=(0, 0),
-                out_axes=0,
-            )
-            result = func(cat.array, cat.noise)
-
-        result = np.core.records.fromarrays(
-            result.transpose(),
-            dtype=self.dtype,
-        )
-        return result
-
-
-class CatTaskS(CatIaskBase):
+class CatTaskBase(object):
     def __init__(
         self,
-        nord: int,
         cov_matrix: Covariance,
+        nord: int = -1,
+        det_nrot: int = -1,
     ):
-        super().__init__(nord=nord)
-        assert nord == 4
-        name_s, _ = get_shapelets_col_names(nord)
-        self.di = {element: index for index, element in enumerate(name_s)}
+        self.nord = nord
+        self.det_nrot = det_nrot
+        self.colnames = []
+        self.cov_matrix = cov_matrix
 
-        self.ncol = len(name_s)
-        self.colnames = name_s
-        self.dtype = [
-            ("e1", "f8"),
-            ("e1_g1", "f8"),
-            ("e2", "f8"),
-            ("e2_g2", "f8"),
-            ("flux", "f8"),
-        ]
+        # Initialize the column names
+        # and define cuts dependends on covariance matrix
+        if self.nord >= 4:
+            if not hasattr(cov_matrix, "std_m00"):
+                raise ValueError(
+                    "The input covariance does not have std_m00",
+                    "which is required for nord = %d" % self.nord
+                )
+            if not hasattr(cov_matrix, "std_r2"):
+                raise ValueError(
+                    "The input covariance does not have std_r2",
+                    "which is required for nord = %d" % self.nord
+                )
+            # Initialize column names
+            snames, _ = get_shapelets_col_names(nord)
+            self.colnames = self.colnames + snames
+            # standard deviation
+            std_m00 = cov_matrix.std_m00
+            std_r2 = cov_matrix.std_r2
+            # control steepness of the selection function
+            # (do not change them)
+            self.sigma_m00 = fpfs_cut_sigma_ratio * std_m00
+            self.sigma_r2 = fpfs_cut_sigma_ratio * std_r2
+            # (can be updated)
+            self.snr_min = snr_min_default
+            self.m00_min = self.snr_min * std_m00
+            self.r2_min = r2_min_default
+            self.r2_max = r2_max_default
+            self.C0 = c0_default * std_m00
+
+        if self.det_nrot >= 4:
+            if not hasattr(cov_matrix, "std_v"):
+                raise ValueError(
+                    "The input covariance does not have std_r2",
+                    "which is required for det_nrot = %d" % self.std_v
+                )
+            dnames = get_det_col_names(det_nrot)
+            self.colnames = self.colnames + dnames
+            self.std_v = cov_matrix.std_v
+
+            # control steepness
+            self.sigma_v = fpfs_cut_sigma_ratio * self.std_v
+            # (do not change it)
+            self.pcut = fpfs_pnr * self.std_v
+            # (can be updated)
+            self.pthres = pthres_default
+
+        assert len(self.colnames) > 0
+        self.di = {
+            element: index for index, element in enumerate(self.colnames)
+        }
+        self.ncol = len(self.colnames)
+        self.dtype = None
         if not set(self.colnames).issubset(cov_matrix.colnames):
             raise ValueError(
-                "Input covariance matrix of shapelets has a wrong colnames"
+                "Input covariance matrix has a different colnames from",
+                "nord = %d, det_nrot = %d" % (self.nord, self.det_nrot)
             )
-        if not cov_matrix.nord == nord:
-            raise ValueError(
-                "Input covariance matrix of shapelets has wrong nord"
-            )
-
-        # standard deviation
-        self.cov_matrix = cov_matrix
-        std_m00 = cov_matrix.std_m00
-        std_r2 = cov_matrix.std_r2
-        # control steepness of the selection function
-        self.sigma_m00 = fpfs_cut_sigma_ratio * std_m00
-        self.sigma_r2 = fpfs_cut_sigma_ratio * std_r2
-        self.snr_min = snr_min_default
-        self.m00_min = snr_min_default * std_m00
-        self.r2_min = r2_min_default
-        self.r2_max = r2_max_default
-        # shape parameters
-        self.C0 = c0_default * std_m00
         return
 
     def update_parameters(
@@ -197,18 +163,38 @@ class CatTaskS(CatIaskBase):
         r2_min: float | None = None,
         r2_max: float | None = None,
         c0: float | None = None,
+        pthres: float | None = None,
     ):
+        # selection on SNR
         if snr_min is not None:
-            # selection on SNR
-            self.snr_min = snr_min
-            self.m00_min = snr_min * self.cov_matrix.std_m00
+            if self.nord >= 4:
+                self.snr_min = snr_min
+                self.m00_min = snr_min * self.cov_matrix.std_m00
+            else:
+                raise RuntimeError("Cannot update srn_min")
+        # selection on size
         if r2_min is not None:
-            self.r2_min = r2_min
+            if self.nord >= 4:
+                self.r2_min = r2_min
+            else:
+                raise RuntimeError("Cannot update r2_min")
         if r2_max is not None:
-            self.r2_max = r2_max
+            if self.nord >= 4:
+                self.r2_max = r2_max
+            else:
+                raise RuntimeError("Cannot update r2_min")
+        # shape parameters
         if c0 is not None:
-            # shape parameters
-            self.C0 = c0 * self.cov_matrix.std_m00
+            if self.nord >= 4:
+                self.C0 = c0 * self.cov_matrix.std_m00
+            else:
+                raise RuntimeError("Cannot update c0")
+        # detection threshold
+        if pthres is not None:
+            if self.nord >= 4:
+                self.pthres = pthres
+            else:
+                raise RuntimeError("Cannot update pthres")
         return
 
     def _dg(self, x):
@@ -271,65 +257,7 @@ class CatTaskS(CatIaskBase):
         wsel_g2 = w0l_g2 * w0u * w2l + w0l * w0u_g2 * w2l + w0l * w0u * w2l_g2
         return wsel, wsel_g1, wsel_g2
 
-    def _run(self, x, y=0.0):
-        m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2 = self._dg(x - 2.0 * y)
-        e1, e1_g1, e2, e2_g2 = self._ell(x, m00_g1, m00_g2, m22c_g1, m22s_g2)
-        wsel, wsel_g1, wsel_g2 = self._wsel(x, m00_g1, m00_g2, m20_g1, m20_g2)
-        we1 = wsel * e1
-        we2 = wsel * e2
-        we1_g1 = wsel_g1 * e1 + wsel * e1_g1
-        we2_g2 = wsel_g2 * e2 + wsel * e2_g2
-        flux = (
-            (x[self.di["m00"]] + x[self.di["m20"]])
-            * (self.sigma_arcsec / self.pixel_scale) ** 2.0
-            / 2.0
-        )
-        return jnp.array([we1, we1_g1, we2, we2_g2, flux])
-
-
-class CatTaskD(CatIaskBase):
-    def __init__(
-        self,
-        det_nrot: int,
-        cov_matrix: Covariance,
-    ):
-        super().__init__(det_nrot=det_nrot)
-        assert det_nrot == 4
-        self.det_nrot = det_nrot
-        name_d = get_det_col_names(det_nrot)
-        self.di = {element: index for index, element in enumerate(name_d)}
-        self.ncol = len(name_d)
-        self.colnames = name_d
-        self.dtype = [
-            ("wdet", "f8"),
-            ("wdet_g1", "f8"),
-            ("wdet_g2", "f8"),
-        ]
-        if not set(self.colnames).issubset(cov_matrix.colnames):
-            raise ValueError(
-                "Input covariance matrix of detection has a wrong colnames"
-            )
-        if not cov_matrix.det_nrot == det_nrot:
-            raise ValueError(
-                "Input covariance matrix of detection has wrong det_nrot"
-            )
-        self.cov_matrix = cov_matrix
-        self.std_v = cov_matrix.std_v
-        # control steepness
-        self.sigma_v = fpfs_cut_sigma_ratio * self.std_v
-        self.pthres = 0.12
-        self.pcut = fpfs_pnr * self.std_v
-        return
-
-    def update_parameters(
-        self,
-        pthres: float = 0.12,
-    ):
-        # detection threshold
-        self.pthres = pthres
-        return
-
-    def _run(self, x, y=0.0):
+    def _wdet(self, x, y):
         det0, det0_deriv = ssfunc2(
             x[self.di["v0"]],
             self.sigma_v - self.pcut,
@@ -376,7 +304,117 @@ class CatTaskD(CatIaskBase):
             + det0 * det1 * det2 * det3_g2
         )
         wdet, wdet_deriv = ssfunc2(w, self.pthres, fpfs_det_sigma2)
-        return jnp.array([wdet, wdet_deriv * w_g1, wdet_deriv * w_g2])
+        return wdet, wdet_deriv * w_g1, wdet_deriv * w_g2
+
+    def _run(self, x, y):
+        return jnp.array([0.0])
+
+    def _run_nn(self, x):
+        return self._run(x, 0.0)
+
+    def run(self, catalog: Catalog):
+        """This function meausres observables and corresponding shear response
+
+        Args:
+        catalog (Catalog): Input source observable catalog
+
+        Returns:
+        result (NDArray):   Measurements
+        """
+        assert catalog.nord == self.nord, "input has wrong nord"
+        assert catalog.det_nrot == self.det_nrot, "input has wrong det_nrot"
+        self.pixel_scale = catalog.pixel_scale
+        self.sigma_arcsec = catalog.sigma_arcsec
+        self.mag_zero = catalog.mag_zero
+        if catalog.noise is None:
+            func = jax.vmap(
+                self._run_nn,
+                in_axes=0,
+                out_axes=0,
+            )
+            result = func(catalog.array)
+        else:
+            assert catalog.noise is not None
+            func = jax.vmap(
+                self._run,
+                in_axes=(0, 0),
+                out_axes=0,
+            )
+            result = func(catalog.array, catalog.noise)
+
+        result = np.core.records.fromarrays(
+            result.transpose(),
+            dtype=self.dtype,
+        )
+        return result
+
+
+class CatTaskD(CatTaskBase):
+    def __init__(
+        self,
+        cov_matrix: Covariance,
+        nord: int,
+        det_nrot: int,
+    ):
+        assert nord >= 4 and det_nrot >= 4
+        super().__init__(cov_matrix, nord=nord, det_nrot=det_nrot)
+        if not cov_matrix.nord == nord or not cov_matrix.det_nrot == det_nrot:
+            raise ValueError(
+                "Input covariance matrix of shapelets has wrong nord"
+            )
+        self.dtype = [
+            ("e1", "f8"),       # shape
+            ("e1_g1", "f8"),    # shear response of shape
+            ("e2", "f8"),       # shape
+            ("e2_g2", "f8"),    # shear response of shape
+            ("w", "f8"),        # weight (detection and selection)
+            ("w_g1", "f8"),     # shear response of weight
+            ("w_g2", "f8"),     # shear response of weight
+            ("flux", "f8"),     # flux
+        ]
+        return
+
+    def _run(self, x, y):
+        m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2 = self._dg(x - 2.0 * y)
+        e1, e1_g1, e2, e2_g2 = self._ell(x, m00_g1, m00_g2, m22c_g1, m22s_g2)
+        wsel, wsel_g1, wsel_g2 = self._wsel(x, m00_g1, m00_g2, m20_g1, m20_g2)
+        wdet, wdet_g1, wdet_g2 = self._wdet(x, y)
+        w = wdet * wsel
+        w = wdet * wsel
+        w_g1 = wdet_g1 * wsel + wdet * wsel_g1
+        w_g2 = wdet_g2 * wsel + wdet * wsel_g2
+        flux = (
+            (x[self.di["m00"]] + x[self.di["m20"]])
+            * (self.sigma_arcsec / self.pixel_scale) ** 2.0
+            / 2.0
+        )
+        return jnp.array([e1, e1_g1, e2, e2_g2, w, w_g1, w_g2, flux])
+
+
+class CatTaskM(CatTaskBase):
+    def __init__(
+        self,
+        cov_matrix: Covariance,
+        nord: int,
+    ):
+        assert nord >= 4
+        super().__init__(cov_matrix, nord, det_nrot=-1)
+        if not cov_matrix.nord == nord:
+            raise ValueError(
+                "Input covariance matrix of shapelets has wrong nord"
+            )
+
+        self.dtype = [
+            ("e1_2", "f8"),
+            ("e1_g1_2", "f8"),
+            ("e2_2", "f8"),
+            ("e2_g2_2", "f8"),
+        ]
+
+    def _run(self, x, y):
+        m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2 = self._dg(x - 2.0 * y)
+        e1, e1_g1, e2, e2_g2 = self._ell(x, m00_g1, m00_g2, m22c_g1, m22s_g2)
+        return jnp.array([e1, e1_g1, e2, e2_g2])
 
 
 class CatalogTask:
@@ -384,29 +422,25 @@ class CatalogTask:
         self,
         nord: int,
         det_nrot: int,
-        cov_matrix_s: Covariance,
-        cov_matrix_d: Covariance,
+        cov_matrix: Covariance,
     ):
-        """Fpfs catalog task"""
-        self.shapelet_task = CatTaskS(
-            nord=nord,
-            cov_matrix=cov_matrix_s,
-        )
-        self.det_task = CatTaskD(
-            det_nrot=det_nrot,
-            cov_matrix=cov_matrix_d,
-        )
-        self.dtype = [
-            ("e1", "f8"),
-            ("e1_g1", "f8"),
-            ("e2", "f8"),
-            ("e2_g2", "f8"),
-            ("flux", "f8"),
-            ("wdet", "f8"),
-            ("wdet_g1", "f8"),
-            ("wdet_g2", "f8"),
-            ("mask", "?"),
-        ]
+        """Fpfs Catalog Task
+        """
+        self.nord = nord
+        self.det_nrot = det_nrot
+        self.det_task = None
+        self.meas_task = None
+        if self.det_nrot >= 4 and self.nord >= 4:
+            self.det_task = CatTaskD(
+                cov_matrix=cov_matrix,
+                nord=nord,
+                det_nrot=det_nrot,
+            )
+        if self.nord >= 4:
+            self.meas_task = CatTaskM(
+                cov_matrix=cov_matrix,
+                nord=nord,
+            )
         return
 
     def update_parameters(
@@ -415,59 +449,67 @@ class CatalogTask:
         r2_min: float | None = None,
         r2_max: float | None = None,
         c0: float | None = None,
-        pthres: float = 0.12,
+        pthres: float | None = None,
     ):
-        self.shapelet_task.update_parameters(
-            snr_min=snr_min,
-            r2_min=r2_min,
-            r2_max=r2_max,
-            c0=c0,
-        )
-        self.det_task.update_parameters(
-            pthres=pthres,
-        )
+        if self.det_task is not None:
+            self.det_task.update_parameters(
+                snr_min=snr_min,
+                r2_min=r2_min,
+                r2_max=r2_max,
+                c0=c0,
+                pthres=pthres,
+            )
+
+        if self.meas_task is not None:
+            self.meas_task.update_parameters(
+                c0=c0,
+            )
         return
 
     def run(
         self,
-        shapelet: Catalog,
-        detection: Catalog,
+        catalog: Catalog | None = None,
+        catalog2: Catalog | None = None,
     ):
         """This function returns the shape and shear response of shape using
         shapelet catalog and detection catalog
 
         Args:
-        shapelet (Catalog): shapelet catalog
-        detection (Catalog): detection catalog
+        catalog (Catalog | None): catalog with detection and shapelet
+        catalog2 (Catalog | None): The secondary shapelet catalog
 
         Returns:
-        src (NDArray): shape catalog
+        src (NDArray): shape measurement array
         """
-        # Catalog Consistent with this task
-        assert shapelet.nord == self.shapelet_task.nord
-        assert detection.det_nrot == self.det_task.det_nrot
+        src_list = []
+        if catalog is not None:
+            assert self.det_task is not None
+            assert catalog.nord == self.det_task.nord
+            assert catalog.det_nrot == self.det_task.det_nrot
 
-        # Two Catalogs Consistent
-        assert shapelet.sigma_arcsec == detection.sigma_arcsec
-        assert shapelet.mag_zero == detection.mag_zero
-        assert shapelet.pixel_scale == detection.pixel_scale
+            array_det = self.det_task.run(
+                catalog=catalog,
+            )
+            src_list.append(array_det)
 
-        array_s = self.shapelet_task.run(
-            cat=shapelet,
-        )
+            # mask out those with negligible weight
+            array_mask = np.array(
+                (array_det["w"] > 1e-10),
+                dtype=[("mask", "?")],
+            )
+            src_list.append(array_mask)
 
-        array_d = self.det_task.run(
-            cat=detection,
-        )
-        # mask out those with negligible weight
-        mask = (
-            array_d["wdet"]
-            * np.sqrt(array_s["e1"] ** 2.0 + array_s["e2"] ** 2.0)
-        ) > 1e-10
-        array_m = np.array(mask, dtype=[("mask", "?")])
-        src = rfn.merge_arrays(
-            (array_s, array_d, array_m),
+        if catalog2 is not None:
+            assert self.meas_task is not None
+            assert catalog2.det_nrot == -1, \
+                "The secondary catalog should not have detection columns"
+            array_meas = self.meas_task.run(
+                catalog=catalog2,
+            )
+            src_list.append(array_meas)
+
+        return rfn.merge_arrays(
+            src_list,
             flatten=True,
             usemask=False,
         )
-        return src
