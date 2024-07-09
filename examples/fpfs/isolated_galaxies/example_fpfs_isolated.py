@@ -7,7 +7,8 @@ seed = 2  # seed for galaxy
 noise_seed = 1  # seed for noise
 pixel_scale = 0.2  # LSST image pixel scale
 # noise variance for r-bands 10 year LSST coadd (magnitude zero point at 30)
-noise_variance = 0.37
+noise_std = 0.37
+noise_variance = noise_std ** 2.0
 # NOTE: We can set noise variance to zero in the image simulation, but
 # we cannot set that to zero in the measurement. The measurement needs a
 # non-zero image noise variance to be run
@@ -82,7 +83,7 @@ for gname in ["g%d-1" % test_component, "g%d-0" % test_component]:
     )[0]
 
     if do_add_noise:
-        noise_std = np.sqrt(noise_variance)
+        # Add noise to galaxy image
         gal_array = gal_array + np.random.RandomState(noise_seed).normal(
             scale=noise_std,
             size=gal_array.shape,
@@ -117,8 +118,8 @@ egname = "e%d_g%d" % (test_component, test_component)
 wgname = "w_g%d" % test_component
 e1_0 = out[0]["w"] * out[0][ename]
 e1_1 = out[1]["w"] * out[1][ename]
-e1g1_0 = (out[0][wgname] * out[0][ename] + out[0]["w"] * out[0][egname],)
-e1g1_1 = (out[1][wgname] * out[1][ename] + out[1]["w"] * out[1][egname],)
+e1g1_0 = out[0][wgname] * out[0][ename] + out[0]["w"] * out[0][egname]
+e1g1_1 = out[1][wgname] * out[1][ename] + out[1]["w"] * out[1][egname]
 
 mbias = (np.sum(e1_0) - np.sum(e1_1)) / (
     np.sum(e1g1_0) + np.sum(e1g1_1)
@@ -133,8 +134,8 @@ ename = "e%d_2" % test_component
 egname = "e%d_g%d_2" % (test_component, test_component)
 e1_0 = out[0]["w"] * out[0][ename]
 e1_1 = out[1]["w"] * out[1][ename]
-e1g1_0 = (out[0][wgname] * out[0][ename] + out[0]["w"] * out[0][egname],)
-e1g1_1 = (out[1][wgname] * out[1][ename] + out[1]["w"] * out[1][egname],)
+e1g1_0 = out[0][wgname] * out[0][ename] + out[0]["w"] * out[0][egname]
+e1g1_1 = out[1][wgname] * out[1][ename] + out[1]["w"] * out[1][egname]
 
 mbias = (np.sum(e1_0) - np.sum(e1_1)) / (
     np.sum(e1g1_0) + np.sum(e1g1_1)

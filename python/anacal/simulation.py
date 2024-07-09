@@ -360,7 +360,7 @@ def make_exposure_stamp(
                     mag_zero,
                     rng,
                     gsparams,
-                    npoints=15,
+                    npoints=30,
                 )
             else:
                 raise ValueError("Does not support sim_method=%s" % sim_method)
@@ -565,6 +565,9 @@ def make_isolated_sim(
         g2 = shear_const
     elif g_version == "g1_g2":
         g1 = shear_const
+        g2 = 0.02
+    elif g_version == "g2_g1":
+        g1 = 0.02
         g2 = shear_const
     else:
         raise ValueError("cannot decide g1 or g2")
