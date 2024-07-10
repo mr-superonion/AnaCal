@@ -11,7 +11,7 @@ from .._anacal.image import Image
 from .._anacal.mask import mask_galaxy_image
 from .._anacal.psf import BasePsf
 from . import base, table
-from .ctask import CatalogTask, CatTaskD, CatTaskM
+from .ctask import CatalogTask
 from .itask import FpfsDetect, FpfsMeasure, FpfsNoiseCov
 
 __all__ = [
@@ -22,8 +22,6 @@ __all__ = [
     "FpfsDetect",
     "FpfsMeasure",
     "FpfsConfig",
-    "CatTaskD",
-    "CatTaskM",
     "CatalogTask",
 ]
 
@@ -97,40 +95,17 @@ class FpfsConfig(BaseModel):
     )
 
 
-def process_image(
+def compress_image(
     fpfs_config: FpfsConfig,
     gal_array: NDArray,
     psf_array: NDArray,
     pixel_scale: float,
-    noise_variance: float,
+    cov_matrix: table.Covariance,
     noise_array: NDArray,
     coords: NDArray,
     mag_zero: float = 30.0,
 ):
-    # Preparing
-    ngrid = fpfs_config.rcut * 2
-    if not psf_array.shape == (ngrid, ngrid):
-        raise ValueError("psf arry has a wrong shape")
     ny, nx = gal_array.shape
-
-    # Shapelet Covariance matrix
-    if noise_variance <= 0:
-        raise ValueError(
-            "To enable detection, noise variance should be positive, ",
-            "even though image is noiseless.",
-        )
-    noise_task = FpfsNoiseCov(
-        mag_zero=mag_zero,
-        psf_array=psf_array,
-        pixel_scale=pixel_scale,
-        sigma_arcsec=fpfs_config.sigma_arcsec,
-        nord=fpfs_config.nord,
-        det_nrot=fpfs_config.det_nrot,
-        klim_thres=fpfs_config.klim_thres,
-    )
-    cov_matrix = noise_task.measure(variance=noise_variance)
-    del noise_task
-
     # Detection
     if coords is None:
         dtask = FpfsDetect(
@@ -162,7 +137,7 @@ def process_image(
         nord=fpfs_config.nord,
         det_nrot=fpfs_config.det_nrot,
     )
-    src_1 = mtask_1.run(
+    src1 = mtask_1.run(
         gal_array=gal_array,
         det=coords,
         noise_array=noise_array,
@@ -179,14 +154,65 @@ def process_image(
             nord=fpfs_config.nord,
             det_nrot=-1,
         )
-        src_2 = mtask_2.run(
+        src2 = mtask_2.run(
             gal_array=gal_array,
             det=coords,
             noise_array=noise_array,
         )
         del mtask_2
     else:
-        src_2 = None
+        src2 = None
+    return {
+        "coords": coords,
+        "src1": src1,
+        "src2": src2,
+    }
+
+
+def process_image(
+    fpfs_config: FpfsConfig,
+    gal_array: NDArray,
+    psf_array: NDArray,
+    pixel_scale: float,
+    noise_variance: float,
+    noise_array: NDArray,
+    coords: NDArray,
+    mag_zero: float = 30.0,
+):
+    # Preparing
+    ngrid = fpfs_config.rcut * 2
+    if not psf_array.shape == (ngrid, ngrid):
+        raise ValueError("psf arry has a wrong shape")
+
+    # Shapelet Covariance matrix
+    if noise_variance <= 0:
+        raise ValueError(
+            "To enable detection, noise variance should be positive, ",
+            "even though image is noiseless.",
+        )
+
+    noise_task = FpfsNoiseCov(
+        mag_zero=mag_zero,
+        psf_array=psf_array,
+        pixel_scale=pixel_scale,
+        sigma_arcsec=fpfs_config.sigma_arcsec,
+        nord=fpfs_config.nord,
+        det_nrot=fpfs_config.det_nrot,
+        klim_thres=fpfs_config.klim_thres,
+    )
+    cov_matrix = noise_task.measure(variance=noise_variance)
+    del noise_task
+
+    result = compress_image(
+        fpfs_config=fpfs_config,
+        gal_array=gal_array,
+        psf_array=psf_array,
+        pixel_scale=pixel_scale,
+        cov_matrix=cov_matrix,
+        noise_array=noise_array,
+        coords=coords,
+        mag_zero=mag_zero,
+    )
 
     # Catalog
     cat_task = CatalogTask(
@@ -200,5 +226,5 @@ def process_image(
         c0=fpfs_config.c0,
         pthres=fpfs_config.pthres,
     )
-    out = cat_task.run(catalog=src_1, catalog2=src_2)
-    return out
+    outcome = cat_task.run(catalog=result["src1"], catalog2=result["src2"])
+    return outcome

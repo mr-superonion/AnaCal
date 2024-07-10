@@ -61,7 +61,7 @@ def do_test(scale, seed, rcut, gcomp):
     gal_data, psf_data, coords = simulate_gal_psf(
         scale, seed, rcut, gcomp, nrot
     )
-    nord = 4
+    nord = 6
     # Since we do not run detection
     # no detection weight
     det_nrot = -1
@@ -81,7 +81,7 @@ def do_test(scale, seed, rcut, gcomp):
     )
 
     std = 0.1
-    cov_matrix = np.ones((9, 9)) * std**2.0 * scale**4.0
+    cov_matrix = np.ones((12, 12)) * std**2.0 * scale**4.0
     cov_matrix = anacal.fpfs.table.Covariance(
         array=cov_matrix,
         nord=nord,
@@ -101,8 +101,16 @@ def do_test(scale, seed, rcut, gcomp):
         c0=4,
     )
     ells = ctask.run(catalog2=mms)
+
+    # The 2nd order shear estimator
     g1_est = np.average(ells["e1_2"]) / np.average(ells["e1_g1_2"])
     g2_est = np.average(ells["e2_2"]) / np.average(ells["e2_g2_2"])
+    assert np.abs(g1_est - g1) < 3e-5
+    assert np.abs(g2_est - g2) < 3e-5
+
+    # The 4th order shear estimator
+    g1_est = np.average(ells["q1_2"]) / np.average(ells["q1_g1_2"])
+    g2_est = np.average(ells["q2_2"]) / np.average(ells["q2_g2_2"])
     assert np.abs(g1_est - g1) < 3e-5
     assert np.abs(g2_est - g2) < 3e-5
 

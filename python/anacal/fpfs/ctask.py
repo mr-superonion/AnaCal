@@ -96,6 +96,7 @@ class CatTaskBase(object):
         self.det_nrot = det_nrot
         self.colnames = []
         self.cov_matrix = cov_matrix
+        self.dtype = []
 
         # Initialize the column names
         # and define cuts dependends on covariance matrix
@@ -127,6 +128,20 @@ class CatTaskBase(object):
             self.r2_max = r2_max_default
             self.C0 = c0_default * std_m00
 
+            self.dtype.extend([
+                ("e1", "f8"),     # shape
+                ("e1_g1", "f8"),  # shear response of shape
+                ("e2", "f8"),     # shape
+                ("e2_g2", "f8"),  # shear response of shape
+            ])
+            if self.nord >= 6:
+                self.dtype.extend([
+                    ("q1", "f8"),     # shape (4th order)
+                    ("q1_g1", "f8"),  # shear response of shape
+                    ("q2", "f8"),     # shape (4th order)
+                    ("q2_g2", "f8"),  # shear response of shape
+                ])
+
         if self.det_nrot >= 4:
             if not hasattr(cov_matrix, "std_v"):
                 raise ValueError(
@@ -143,13 +158,18 @@ class CatTaskBase(object):
             self.pcut = fpfs_pnr * self.std_v
             # (can be updated)
             self.pthres = pthres_default
+            self.dtype.extend([
+                ("w", "f8"),      # weight (detection and selection)
+                ("w_g1", "f8"),   # shear response of weight
+                ("w_g2", "f8"),   # shear response of weight
+                ("flux", "f8"),   # flux
+            ])
 
         assert len(self.colnames) > 0
         self.di = {
             element: index for index, element in enumerate(self.colnames)
         }
         self.ncol = len(self.colnames)
-        self.dtype = None
         if not set(self.colnames).issubset(cov_matrix.colnames):
             raise ValueError(
                 "Input covariance matrix has a different colnames from",
@@ -206,7 +226,11 @@ class CatTaskBase(object):
             1.0 / jnp.sqrt(2.0) * (x[self.di["m00"]] - x[self.di["m40"]])
             - jnp.sqrt(3.0) * x[self.di["m44c"]]
         )
-
+        m22s_g2 = (
+            1.0 / jnp.sqrt(2.0) * (x[self.di["m00"]] - x[self.di["m40"]])
+            + jnp.sqrt(3.0) * x[self.di["m44c"]]
+        )
+        # off diagonal term
         # m22c_g2 = (
         #     - jnp.sqrt(3.0) * x[self.di["m44s"]]
         # )
@@ -214,11 +238,30 @@ class CatTaskBase(object):
         # m22s_g1 = (
         #     - jnp.sqrt(3.0) * x[self.di["m44s"]]
         # )
-        m22s_g2 = (
-            1.0 / jnp.sqrt(2.0) * (x[self.di["m00"]] - x[self.di["m40"]])
-            + jnp.sqrt(3.0) * x[self.di["m44c"]]
+        return (
+            m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2
         )
-        return m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2
+
+    def _dg_4th(self, x):
+        m42c_g1 = (
+            jnp.sqrt(6.0) / 2.0 * (x[self.di["m20"]] - x[self.di["m60"]])
+            - jnp.sqrt(5.0) * x[self.di["m64c"]]
+        )
+        m42s_g2 = (
+            jnp.sqrt(6.0) / 2.0 * (x[self.di["m20"]] - x[self.di["m60"]])
+            + jnp.sqrt(5.0) * x[self.di["m64c"]]
+        )
+        # off diagonal term
+        # m22c_g2 = (
+        #     - jnp.sqrt(5.0) * x[self.di["m64s"]]
+        # )
+
+        # m22s_g1 = (
+        #     - jnp.sqrt(5.0) * x[self.di["m64s"]]
+        # )
+        return (
+            m42c_g1, m42s_g2
+        )
 
     def _ell(self, x, m00_g1, m00_g2, m22c_g1, m22s_g2):
         _denom = x[self.di["m00"]] + self.C0
@@ -230,6 +273,17 @@ class CatTaskBase(object):
         e1_g1 = m22c_g1 / _denom - m00_g1 * x[self.di["m22c"]] / (_denom) ** 2.0
         e2_g2 = m22s_g2 / _denom - m00_g2 * x[self.di["m22s"]] / (_denom) ** 2.0
         return e1, e1_g1, e2, e2_g2
+
+    def _ell_4th(self, x, m00_g1, m00_g2, m42c_g1, m42s_g2):
+        _denom = x[self.di["m00"]] + self.C0
+        # ellipticity1 (4th order)
+        q1 = x[self.di["m42c"]] / _denom
+        # ellipticity2 (4th order)
+        q2 = x[self.di["m42s"]] / _denom
+
+        q1_g1 = m42c_g1 / _denom - m00_g1 * x[self.di["m42c"]] / (_denom) ** 2.0
+        q2_g2 = m42s_g2 / _denom - m00_g2 * x[self.di["m42s"]] / (_denom) ** 2.0
+        return q1, q1_g1, q2, q2_g2
 
     def _wsel(self, x, m00_g1, m00_g2, m20_g1, m20_g2):
         # selection on flux
@@ -307,7 +361,31 @@ class CatTaskBase(object):
         return wdet, wdet_deriv * w_g1, wdet_deriv * w_g2
 
     def _run(self, x, y):
-        return jnp.array([0.0])
+        m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2 = self._dg(x - 2.0 * y)
+        e1, e1_g1, e2, e2_g2 = self._ell(x, m00_g1, m00_g2, m22c_g1, m22s_g2)
+        out = [e1, e1_g1, e2, e2_g2]
+        if self.nord >= 6:
+            m42c_g1, m42s_g2 = self._dg_4th(x - 2.0 * y)
+            q1, q1_g1, q2, q2_g2 = self._ell_4th(
+                x, m00_g1, m00_g2, m42c_g1, m42s_g2,
+            )
+            out.extend([q1, q1_g1, q2, q2_g2])
+        if self.det_nrot >= 4:
+            wsel, wsel_g1, wsel_g2 = self._wsel(
+                x, m00_g1, m00_g2, m20_g1, m20_g2
+            )
+            wdet, wdet_g1, wdet_g2 = self._wdet(x, y)
+            w = wdet * wsel
+            w = wdet * wsel
+            w_g1 = wdet_g1 * wsel + wdet * wsel_g1
+            w_g2 = wdet_g2 * wsel + wdet * wsel_g2
+            flux = (
+                (x[self.di["m00"]] + x[self.di["m20"]])
+                * (self.sigma_arcsec / self.pixel_scale) ** 2.0
+                / 2.0
+            )
+            out.extend([w, w_g1, w_g2, flux])
+        return jnp.array(out)
 
     def _run_nn(self, x):
         return self._run(x, 0.0)
@@ -349,74 +427,6 @@ class CatTaskBase(object):
         return result
 
 
-class CatTaskD(CatTaskBase):
-    def __init__(
-        self,
-        cov_matrix: Covariance,
-        nord: int,
-        det_nrot: int,
-    ):
-        assert nord >= 4 and det_nrot >= 4
-        super().__init__(cov_matrix, nord=nord, det_nrot=det_nrot)
-        if not cov_matrix.nord == nord or not cov_matrix.det_nrot == det_nrot:
-            raise ValueError(
-                "Input covariance matrix of shapelets has wrong nord"
-            )
-        self.dtype = [
-            ("e1", "f8"),  # shape
-            ("e1_g1", "f8"),  # shear response of shape
-            ("e2", "f8"),  # shape
-            ("e2_g2", "f8"),  # shear response of shape
-            ("w", "f8"),  # weight (detection and selection)
-            ("w_g1", "f8"),  # shear response of weight
-            ("w_g2", "f8"),  # shear response of weight
-            ("flux", "f8"),  # flux
-        ]
-        return
-
-    def _run(self, x, y):
-        m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2 = self._dg(x - 2.0 * y)
-        e1, e1_g1, e2, e2_g2 = self._ell(x, m00_g1, m00_g2, m22c_g1, m22s_g2)
-        wsel, wsel_g1, wsel_g2 = self._wsel(x, m00_g1, m00_g2, m20_g1, m20_g2)
-        wdet, wdet_g1, wdet_g2 = self._wdet(x, y)
-        w = wdet * wsel
-        w = wdet * wsel
-        w_g1 = wdet_g1 * wsel + wdet * wsel_g1
-        w_g2 = wdet_g2 * wsel + wdet * wsel_g2
-        flux = (
-            (x[self.di["m00"]] + x[self.di["m20"]])
-            * (self.sigma_arcsec / self.pixel_scale) ** 2.0
-            / 2.0
-        )
-        return jnp.array([e1, e1_g1, e2, e2_g2, w, w_g1, w_g2, flux])
-
-
-class CatTaskM(CatTaskBase):
-    def __init__(
-        self,
-        cov_matrix: Covariance,
-        nord: int,
-    ):
-        assert nord >= 4
-        super().__init__(cov_matrix, nord, det_nrot=-1)
-        if not cov_matrix.nord == nord:
-            raise ValueError(
-                "Input covariance matrix of shapelets has wrong nord"
-            )
-
-        self.dtype = [
-            ("e1_2", "f8"),
-            ("e1_g1_2", "f8"),
-            ("e2_2", "f8"),
-            ("e2_g2_2", "f8"),
-        ]
-
-    def _run(self, x, y):
-        m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2 = self._dg(x - 2.0 * y)
-        e1, e1_g1, e2, e2_g2 = self._ell(x, m00_g1, m00_g2, m22c_g1, m22s_g2)
-        return jnp.array([e1, e1_g1, e2, e2_g2])
-
-
 class CatalogTask:
     def __init__(
         self,
@@ -430,16 +440,19 @@ class CatalogTask:
         self.det_task = None
         self.meas_task = None
         if self.det_nrot >= 4 and self.nord >= 4:
-            self.det_task = CatTaskD(
+            self.det_task = CatTaskBase(
                 cov_matrix=cov_matrix,
                 nord=nord,
                 det_nrot=det_nrot,
             )
         if self.nord >= 4:
-            self.meas_task = CatTaskM(
+            self.meas_task = CatTaskBase(
                 cov_matrix=cov_matrix,
                 nord=nord,
+                det_nrot=-1,
             )
+            ndt = [(name + "_2", dtype) for name, dtype in self.meas_task.dtype]
+            self.meas_task.dtype = ndt
         return
 
     def update_parameters(
@@ -508,8 +521,11 @@ class CatalogTask:
             )
             src_list.append(array_meas)
 
-        return rfn.merge_arrays(
-            src_list,
-            flatten=True,
-            usemask=False,
-        )
+        if len(src_list) == 0:
+            return
+        else:
+            return rfn.merge_arrays(
+                src_list,
+                flatten=True,
+                usemask=False,
+            )
