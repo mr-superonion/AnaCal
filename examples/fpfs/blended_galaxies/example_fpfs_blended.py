@@ -1,6 +1,7 @@
+import os
+
 import anacal
 import fitsio
-import os
 import numpy as np
 
 data_dir = os.path.dirname(os.path.abspath(__file__))

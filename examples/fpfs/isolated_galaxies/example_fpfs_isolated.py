@@ -8,7 +8,7 @@ noise_seed = 1  # seed for noise
 pixel_scale = 0.2  # LSST image pixel scale
 # noise variance for r-bands 10 year LSST coadd (magnitude zero point at 30)
 noise_std = 0.37
-noise_variance = noise_std ** 2.0
+noise_variance = noise_std**2.0
 # NOTE: We can set noise variance to zero in the image simulation, but
 # we cannot set that to zero in the measurement. The measurement needs a
 # non-zero image noise variance to be run

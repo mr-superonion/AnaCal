@@ -128,19 +128,23 @@ class CatTaskBase(object):
             self.r2_max = r2_max_default
             self.C0 = c0_default * std_m00
 
-            self.dtype.extend([
-                ("e1", "f8"),     # shape
-                ("e1_g1", "f8"),  # shear response of shape
-                ("e2", "f8"),     # shape
-                ("e2_g2", "f8"),  # shear response of shape
-            ])
+            self.dtype.extend(
+                [
+                    ("e1", "f8"),  # shape
+                    ("e1_g1", "f8"),  # shear response of shape
+                    ("e2", "f8"),  # shape
+                    ("e2_g2", "f8"),  # shear response of shape
+                ]
+            )
             if self.nord >= 6:
-                self.dtype.extend([
-                    ("q1", "f8"),     # shape (4th order)
-                    ("q1_g1", "f8"),  # shear response of shape
-                    ("q2", "f8"),     # shape (4th order)
-                    ("q2_g2", "f8"),  # shear response of shape
-                ])
+                self.dtype.extend(
+                    [
+                        ("q1", "f8"),  # shape (4th order)
+                        ("q1_g1", "f8"),  # shear response of shape
+                        ("q2", "f8"),  # shape (4th order)
+                        ("q2_g2", "f8"),  # shear response of shape
+                    ]
+                )
 
         if self.det_nrot >= 4:
             if not hasattr(cov_matrix, "std_v"):
@@ -158,12 +162,14 @@ class CatTaskBase(object):
             self.pcut = fpfs_pnr * self.std_v
             # (can be updated)
             self.pthres = pthres_default
-            self.dtype.extend([
-                ("w", "f8"),      # weight (detection and selection)
-                ("w_g1", "f8"),   # shear response of weight
-                ("w_g2", "f8"),   # shear response of weight
-                ("flux", "f8"),   # flux
-            ])
+            self.dtype.extend(
+                [
+                    ("w", "f8"),  # weight (detection and selection)
+                    ("w_g1", "f8"),  # shear response of weight
+                    ("w_g2", "f8"),  # shear response of weight
+                    ("flux", "f8"),  # flux
+                ]
+            )
 
         assert len(self.colnames) > 0
         self.di = {
@@ -238,9 +244,7 @@ class CatTaskBase(object):
         # m22s_g1 = (
         #     - jnp.sqrt(3.0) * x[self.di["m44s"]]
         # )
-        return (
-            m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2
-        )
+        return (m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2)
 
     def _dg_4th(self, x):
         m42c_g1 = (
@@ -259,18 +263,16 @@ class CatTaskBase(object):
         # m22s_g1 = (
         #     - jnp.sqrt(5.0) * x[self.di["m64s"]]
         # )
-        return (
-            m42c_g1, m42s_g2
-        )
+        return (m42c_g1, m42s_g2)
 
     def _ell(self, x, m00_g1, m00_g2, m22c_g1, m22s_g2):
         _denom = x[self.di["m00"]] + self.C0
         # ellipticity1
         e1 = x[self.di["m22c"]] / _denom
+        e1_g1 = m22c_g1 / _denom - m00_g1 * x[self.di["m22c"]] / (_denom) ** 2.0
+
         # ellipticity2
         e2 = x[self.di["m22s"]] / _denom
-
-        e1_g1 = m22c_g1 / _denom - m00_g1 * x[self.di["m22c"]] / (_denom) ** 2.0
         e2_g2 = m22s_g2 / _denom - m00_g2 * x[self.di["m22s"]] / (_denom) ** 2.0
         return e1, e1_g1, e2, e2_g2
 
@@ -278,10 +280,10 @@ class CatTaskBase(object):
         _denom = x[self.di["m00"]] + self.C0
         # ellipticity1 (4th order)
         q1 = x[self.di["m42c"]] / _denom
+        q1_g1 = m42c_g1 / _denom - m00_g1 * x[self.di["m42c"]] / (_denom) ** 2.0
+
         # ellipticity2 (4th order)
         q2 = x[self.di["m42s"]] / _denom
-
-        q1_g1 = m42c_g1 / _denom - m00_g1 * x[self.di["m42c"]] / (_denom) ** 2.0
         q2_g2 = m42s_g2 / _denom - m00_g2 * x[self.di["m42s"]] / (_denom) ** 2.0
         return q1, q1_g1, q2, q2_g2
 
@@ -362,12 +364,22 @@ class CatTaskBase(object):
 
     def _run(self, x, y):
         m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2 = self._dg(x - 2.0 * y)
-        e1, e1_g1, e2, e2_g2 = self._ell(x, m00_g1, m00_g2, m22c_g1, m22s_g2)
+        e1, e1_g1, e2, e2_g2 = self._ell(
+            x,
+            m00_g1,
+            m00_g2,
+            m22c_g1,
+            m22s_g2,
+        )
         out = [e1, e1_g1, e2, e2_g2]
         if self.nord >= 6:
             m42c_g1, m42s_g2 = self._dg_4th(x - 2.0 * y)
             q1, q1_g1, q2, q2_g2 = self._ell_4th(
-                x, m00_g1, m00_g2, m42c_g1, m42s_g2,
+                x,
+                m00_g1,
+                m00_g2,
+                m42c_g1,
+                m42s_g2,
             )
             out.extend([q1, q1_g1, q2, q2_g2])
         if self.det_nrot >= 4:
