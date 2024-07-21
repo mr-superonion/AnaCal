@@ -35,8 +35,6 @@ Image::Image(
     ky_length = ny;
     dkx = 2.0 * M_PI / nx / scale;
     dky = 2.0 * M_PI / ny / scale;
-    xpad = 0;
-    ypad = 0;
     unsigned fftw_flag = use_estimate ? FFTW_ESTIMATE : FFTW_MEASURE;
 
     if (mode & 1) {
@@ -58,37 +56,55 @@ Image::Image(
 void
 Image::set_r (
     const py::array_t<double>& input,
+    int x,
+    int y,
     bool ishift
 ) {
     assert_mode(this->mode & 1);
-    const ssize_t* shape = input.shape();
-    int arr_ny = shape[0];
-    int arr_nx = shape[1];
-    if (arr_ny > ny) {
-        throw std::runtime_error("Error: input array's ny too large");
-    }
-    if (arr_nx > nx) {
-        throw std::runtime_error("Error: input array's nx too large");
-    }
-    if ((ny > arr_ny) || (nx > arr_nx)) {
-        std::fill_n(data_r, ny * nx, 0.0);
-    }
-    int off_y = (ny - arr_ny) / 2;
-    int off_x = (nx - arr_nx) / 2;
-    if (ishift) {
-        off_y = off_y + ny /2;
-        off_x = off_x + nx /2;
-    }
     auto r = input.unchecked<2>();
-    for (ssize_t j = 0; j < arr_ny; ++j) {
-        ssize_t jj = (j + off_y) % ny;
-        for (ssize_t i = 0; i < arr_nx; ++i) {
-            ssize_t ii = (i + off_x) % nx;
-            data_r[jj * nx + ii] = r(j, i);
+    ssize_t arr_ny = r.shape(0);
+    ssize_t arr_nx = r.shape(1);
+    if (x < 0 || x > arr_nx) {
+        x = arr_nx / 2;
+    }
+    if (y < 0 || y > arr_ny) {
+        y = arr_ny / 2;
+    }
+    ssize_t ybeg = y - this->ny2;
+    ssize_t yend = ybeg + this->ny;
+    ssize_t xbeg = x - this->nx2;
+    ssize_t xend = xbeg + this->nx;
+    ssize_t off_x = 0;
+    ssize_t off_y = 0;
+    // for the case the beginning or ending point is outside of the image
+    if (xbeg < 0) {
+        off_x = -xbeg;
+        xbeg = 0;
+    }
+    if (ybeg < 0) {
+        off_y = -ybeg;
+        ybeg = 0;
+    }
+    if (xend > arr_nx) xend = arr_nx;
+    if (yend > arr_ny) yend = arr_ny;
+    // phase shift by half period
+    if (ishift) {
+        off_y = off_y + this->ny / 2;
+        off_x = off_x + this->nx / 2;
+    }
+    // First fill in the data_r with 0
+    std::fill_n(this->data_r, this->ny * this->nx, 0.0);
+    // The part has data
+    for (ssize_t j = ybeg; j < yend; ++j) {
+        ssize_t jj = (j - ybeg + off_y)  % this->ny;
+        for (ssize_t i = xbeg; i < xend; ++i) {
+            ssize_t ii = (i - xbeg + off_x) % this->nx;
+            data_r[jj * this->nx + ii] = r(j, i);
         }
     }
     return;
 }
+
 
 void
 Image::set_delta_r (bool ishift) {
@@ -99,38 +115,6 @@ Image::set_delta_r (bool ishift) {
         ssize_t jj = ny / 2;
         ssize_t ii = nx / 2;
         data_r[jj * nx + ii] = 1.0;
-    }
-    return;
-}
-
-
-void
-Image::set_r (
-    const py::array_t<double>& input,
-    int x,
-    int y
-) {
-    assert_mode(this->mode & 1);
-    auto r = input.unchecked<2>();
-    ssize_t arr_ny = r.shape(0);
-    ssize_t arr_nx = r.shape(1);
-    ssize_t ybeg = y - ny2;
-    ssize_t yend = ybeg + ny;
-    ssize_t xbeg = x - nx2;
-    ssize_t xend = xbeg + nx;
-    if (
-        (xbeg < 0) || (ybeg < 0) ||
-        (xend > arr_nx) || (yend > arr_ny)
-    ) {
-        throw std::runtime_error(
-            "Error: Stamp is too close to exposure boundary"
-        );
-    }
-    for (ssize_t j = ybeg; j < yend; ++j) {
-        int ji = (j - ybeg) * nx;
-        for (ssize_t i = xbeg; i < xend; ++i) {
-            data_r[ji + i - xbeg] = r(j, i);
-        }
     }
     return;
 }
@@ -555,6 +539,7 @@ Image::draw_f() const {
 
 py::array_t<double>
 Image::draw_r(bool ishift) const {
+    // ishfit determines whether shift by (ny // 2, nx // 2)
     assert_mode(this->mode & 1);
     auto result = py::array_t<double>({ny, nx});
     auto r = result.mutable_unchecked<2>();
@@ -698,19 +683,12 @@ pyExportImage(py::module& m) {
             py::arg("use_estimate")=true,
             py::arg("mode")=3
         )
-        .def("set_r",
-            py::overload_cast<const py::array_t<double>&, bool>(&Image::set_r),
+        .def("set_r", &Image::set_r,
             "Sets up the image in configuration space",
             py::arg("input"),
+            py::arg("x")=-1,
+            py::arg("y")=-1,
             py::arg("ishift")=false
-        )
-        .def("set_r",
-            py::overload_cast<const py::array_t<double>&, int, int>
-            (&Image::set_r),
-            "Sets up the image in configuration space",
-            py::arg("input"),
-            py::arg("x"),
-            py::arg("y")
         )
         .def("set_f", &Image::set_f,
             "Sets up the image in Fourier space",

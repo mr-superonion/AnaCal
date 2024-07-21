@@ -15,7 +15,6 @@ namespace anacal {
         int kx_length, ky_length;
         double dkx, dky;
         double norm_factor;
-        int xpad, ypad;
         double* data_r = nullptr;
         fftw_complex* data_f = nullptr;
 
@@ -45,9 +44,11 @@ namespace anacal {
             unsigned int mode=3
         );
 
-        void set_r(const py::array_t<double>&, bool ishift=false);
-
-        void set_r(const py::array_t<double>&, int, int);
+        void set_r(
+            const py::array_t<double>&,
+            int x=-1, int y=-1,
+            bool ishift=false
+        );
 
         void set_delta_r(bool ishift=false);
 

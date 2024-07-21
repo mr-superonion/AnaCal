@@ -30,46 +30,63 @@ FpfsImage::FpfsImage(
 
 py::array_t<double>
 FpfsImage::smooth_image(
-    const py::array_t<double>& gal_array,
-    const std::optional<py::array_t<double>>& noise_array
+    const py::array_t<double>& img_array,
+    bool do_rotate,
+    int x,
+    int y
 ) {
     const Gaussian gauss_model(sigma_f);
-
-    // Psf
-    cimg.set_r(psf_array, true);
+    std::optional<py::array_t<double>> noise_conv;
+    // Prepare PSF
+    cimg.set_r(psf_array, -1, -1, true);
     cimg.fft();
-    {
-        const py::array_t<std::complex<double>> parr1 = cimg.draw_f();
-        if (noise_array.has_value()) {
-            cimg.rotate90_f();
-            {
-                const py::array_t<std::complex<double>> parr2 = cimg.draw_f();
+    if (do_rotate) {
+        cimg.rotate90_f();
+    }
+    const py::array_t<std::complex<double>> parr = cimg.draw_f();
+    // signal
+    cimg.set_r(img_array, x, y, false);
+    cimg.fft();
+    // Deconvolve the PSF
+    cimg.deconvolve(parr, klim);
+    // Convolve Gaussian
+    cimg.filter(gauss_model);
+    // Back to Real space
+    cimg.ifft();
+    py::array_t<double> img_conv = cimg.draw_r();
+    return img_conv;
+}
 
-                cimg.set_r(*noise_array, false);
-                cimg.fft();
-                cimg.deconvolve(parr2, klim);
+
+py::array_t<double>
+FpfsImage::smooth_image(
+    const py::array_t<double>& gal_array,
+    const std::optional<py::array_t<double>>& noise_array,
+    int x,
+    int y
+) {
+    //TODO: use different PSF here
+    py::array_t<double> gal_conv = this->smooth_image(
+        gal_array,
+        false,
+        x,
+        y
+    );
+    if (noise_array.has_value()) {
+        py::array_t<double> noise_conv = this->smooth_image(
+            *noise_array,
+            true,
+            x,
+            y
+        );
+        auto g_r = gal_conv.mutable_unchecked<2>();
+        auto n_r = noise_conv.mutable_unchecked<2>();
+        for (ssize_t j = 0; j < this->ny; ++j) {
+            for (ssize_t i = 0; i < this->nx; ++i) {
+                g_r(j, i) = g_r(j, i) + n_r(j, i);
             }
-            cimg.filter(gauss_model);
-
-            const py::array_t<std::complex<double>> narr = cimg.draw_f();
-            // Galaxy
-            cimg.set_r(gal_array, false);
-            cimg.fft();
-
-            cimg.deconvolve(parr1, klim);
-            cimg.filter(gauss_model);
-            cimg.add_image_f(narr);
-        } else {
-            cimg.set_r(gal_array, false);
-            cimg.fft();
-
-            cimg.deconvolve(parr1, klim);
-            cimg.filter(gauss_model);
         }
     }
-    // Galaxy
-    cimg.ifft();
-    py::array_t<double> gal_conv = cimg.draw_r();
     return gal_conv;
 }
 
@@ -158,10 +175,19 @@ FpfsImage::detect_source(
     const std::optional<py::array_t<int16_t>>& mask_array
 ) {
 
+    int nn = 256;
+    auto r = gal_array.unchecked<2>();
+    int npix_y = r.shape(0);
+    int npix_x = r.shape(1);
+    int my = npix_y / (nn - 64) + 1;
+    int mx = npix_x / (nn - 64) + 1;
     py::array_t<double> gal_conv = this->smooth_image(
         gal_array,
-        noise_array
+        noise_array,
+        -1,
+        -1
     );
+
     py::array_t<FpfsPeaks> detection = this->find_peak(
         gal_conv,
         fthres,
@@ -170,6 +196,7 @@ FpfsImage::detect_source(
         std_v,
         bound
     );
+
     if (mask_array.has_value()) {
         add_pixel_mask_column(
             detection,
@@ -199,7 +226,7 @@ FpfsImage::measure_source(
 
     const py::array_t<double>&
         psf_use = psf_array.has_value() ? *psf_array : this->psf_array;
-    cimg.set_r(psf_use, false);
+    cimg.set_r(psf_use, -1, -1, false);
     cimg.fft();
     if (do_rotate){
         cimg.rotate90_f();
@@ -225,7 +252,7 @@ FpfsImage::measure_source(
     auto src_r = src.mutable_unchecked<2>();
     for (ssize_t j = 0; j < nrow; ++j) {
         int y = det_r(j).y; int x = det_r(j).x;
-        cimg.set_r(gal_array, x, y);
+        cimg.set_r(gal_array, x, y, false);
         cimg.fft();
         py::array_t<double> row = cimg.measure(fimg);
         auto row_r = row.unchecked<1>();
@@ -266,7 +293,7 @@ FpfsImage::measure_source(
         int y = det_r(j).y; int x = det_r(j).x;
         {
             py::array_t<double> psf_use = psf_obj.draw(x, y);
-            cimg.set_r(psf_use, false);
+            cimg.set_r(psf_use, -1, -1, false);
         }
         cimg.fft();
         if (do_rotate){
@@ -274,7 +301,7 @@ FpfsImage::measure_source(
         }
         {
             const py::array_t<std::complex<double>> parr = cimg.draw_f();
-            cimg.set_r(gal_array, x, y);
+            cimg.set_r(gal_array, x, y, false);
             cimg.fft();
             cimg.deconvolve(parr, klim);
         }
@@ -309,10 +336,31 @@ pyExportFpfs(py::module& m) {
             py::arg("psf_array"),
             py::arg("use_estimate")=true
         )
-        .def("smooth_image", &FpfsImage::smooth_image,
+        .def("smooth_image",
+            py::overload_cast<
+                const py::array_t<double>&,
+                bool,
+                int,
+                int
+            >(&FpfsImage::smooth_image),
             "Smooths the image after PSF deconvolution",
             py::arg("gal_array"),
-            py::arg("noise_array")=py::none()
+            py::arg("do_rotate")=false,
+            py::arg("x")=-1,
+            py::arg("y")=-1
+        )
+        .def("smooth_image",
+            py::overload_cast<
+                const py::array_t<double>&,
+                const std::optional<py::array_t<double>>&,
+                int,
+                int
+            >(&FpfsImage::smooth_image),
+            "Smooths the image after PSF deconvolution",
+            py::arg("gal_array"),
+            py::arg("noise_array")=py::none(),
+            py::arg("x")=-1,
+            py::arg("y")=-1
         )
         .def("find_peak", &FpfsImage::find_peak,
             "Detects peaks from smoothed images",

@@ -37,7 +37,7 @@ gal_data = gal_obj.drawImage(
     nx=nx,
     ny=ny,
     scale=pixel_scale,
-).array.astype(np.float64)
+).array.astype(np.float32)
 
 
 def test_benchmark():
@@ -93,6 +93,7 @@ def test_benchmark():
         del noise_data, det, src, dtask, mtask
         return
 
+    print("Initial Mem:")
     print_mem(initial_memory_usage)
     func()
 
@@ -100,6 +101,7 @@ def test_benchmark():
     print("Peak Mem:", peak_memory_usage, "M")
     gc.collect()
     final_memory_usage = mem_used()
+    print("Additional Mem:")
     print_mem(final_memory_usage - initial_memory_usage)
     return
 
