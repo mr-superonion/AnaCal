@@ -175,12 +175,12 @@ FpfsImage::detect_source(
     const std::optional<py::array_t<int16_t>>& mask_array
 ) {
 
-    int nn = 256;
+    int n_overlap = 64;
     auto r = gal_array.unchecked<2>();
     int npix_y = r.shape(0);
     int npix_x = r.shape(1);
-    int my = npix_y / (nn - 64) + 1;
-    int mx = npix_x / (nn - 64) + 1;
+    int my = npix_y / (this->ny - n_overlap) + 1;
+    int mx = npix_x / (this->nx - n_overlap) + 1;
     py::array_t<double> gal_conv = this->smooth_image(
         gal_array,
         noise_array,

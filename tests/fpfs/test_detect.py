@@ -97,6 +97,7 @@ def test_detect():
     )
     out1 = rfn.structured_to_unstructured(out1)
     out1 = out1[:, :-1]
+    out1 = np.lexsort((out1[:, 0], out1[:, 1]))
 
     out2 = task.detect_source(
         gal_data,
@@ -108,6 +109,7 @@ def test_detect():
         bound=2,
         noise_array=noise_array,
     )
+    out2 = np.lexsort((out2[:, 0], out2[:, 1]))
     assert out1.shape == out2.shape
     np.testing.assert_almost_equal(out1, out2)
     return
