@@ -19,6 +19,7 @@ namespace anacal {
         Image cimg;
         double fft_ratio;
         const py::array_t<double> psf_array;
+        int n_overlap;
     public:
         double scale = 1.0;
         double sigma_arcsec;
@@ -33,7 +34,8 @@ namespace anacal {
             double sigma_arcsec,
             double klim,
             const py::array_t<double>& psf_array,
-            bool use_estimate=true
+            bool use_estimate=true,
+            int n_overlap=0
         );
 
         py::array_t<double>
@@ -52,14 +54,14 @@ namespace anacal {
             int y
         );
 
-        py::array_t<FpfsPeaks>
+        void
         find_peak(
+            std::vector<std::tuple<int, int, bool>>& peaks,
             const py::array_t<double>& gal_conv,
             double fthres,
             double pthres,
             double std_m00,
-            double std_v,
-            int bound
+            double std_v
         );
 
         py::array_t<FpfsPeaks>

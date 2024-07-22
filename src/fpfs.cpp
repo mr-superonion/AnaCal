@@ -10,7 +10,8 @@ FpfsImage::FpfsImage(
     double sigma_arcsec,
     double klim,
     const py::array_t<double>& psf_array,
-    bool use_estimate
+    bool use_estimate,
+    int n_overlap
 ): cimg(nx, ny, scale, use_estimate), psf_array(psf_array) {
     if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
         throw std::runtime_error(
@@ -24,6 +25,12 @@ FpfsImage::FpfsImage(
     this->klim = klim;
     this->sigma_f = 1.0 / sigma_arcsec;
     this->fft_ratio = 1.0 / scale / scale;
+    if ((n_overlap % 2 != 0) || (n_overlap < 0)) {
+        throw std::runtime_error(
+            "FPFS Error: n_overlap is not an even number"
+        );
+    }
+    this->n_overlap = n_overlap;
     return;
 }
 
@@ -90,19 +97,23 @@ FpfsImage::smooth_image(
     return gal_conv;
 }
 
-
-py::array_t<FpfsPeaks>
+void
 FpfsImage::find_peak(
+    std::vector<std::tuple<int, int, bool>>& peaks,
     const py::array_t<double>& gal_conv,
     double fthres,
     double pthres,
     double std_m00,
-    double std_v,
-    int bound
+    double std_v
 ) {
+    // Never use detections that is too close to boundary
+    int bound = std::max(this->n_overlap / 2, 3);
     auto r = gal_conv.unchecked<2>();
-    ssize_t ny = r.shape(0);
-    ssize_t nx = r.shape(1);
+    if ((r.shape(0) != this->ny)  || (r.shape(1) != this->nx)) {
+        throw std::runtime_error(
+            "FPFS Error: convolved image has wrong shape in find_peak."
+        );
+    }
 
     double fcut = fthres * std_m00;
     double pcut = fpfs_pnr * std_v;
@@ -114,13 +125,12 @@ FpfsImage::find_peak(
     }
     if (wdet_cut < 0.0) {
         throw std::runtime_error(
-            "FPFS Error: The second pooling threshold pthres is too small."
+            "FPFS Error: The second selection threshold pthres is too small."
         );
     }
 
-    std::vector<std::tuple<int, int, bool>> peaks;
-    for (ssize_t j = bound + 1; j < ny - bound; ++j) {
-        for (ssize_t i = bound + 1; i < nx - bound; ++i) {
+    for (ssize_t j = bound; j < this->ny - bound; ++j) {
+        for (ssize_t i = bound; i < this->nx - bound; ++i) {
             double c = r(j, i);
             double d1 = c - r(j, i+1);
             double d2 = c - r(j+1, i);
@@ -142,24 +152,11 @@ FpfsImage::find_peak(
                     (c > r(j, i-1)) &&
                     (c > r(j, i+1))
                 );
-                peaks.push_back({j, i, is_peak});
+                peaks.emplace_back(j, i, is_peak);
             }
         }
     }
-
-    int nrow = peaks.size();
-    py::array_t<FpfsPeaks> src(nrow);
-    auto src_r = src.mutable_unchecked<1>();
-
-    for (ssize_t j = 0; j < nrow; ++j) {
-        const auto& elem = peaks[j];
-        src_r(j).y = std::get<0>(elem);
-        src_r(j).x = std::get<1>(elem);
-        src_r(j).is_peak = int(std::get<2>(elem));
-        src_r(j).mask_value = 0;
-    }
-
-    return src;
+    return;
 }
 
 
@@ -175,27 +172,82 @@ FpfsImage::detect_source(
     const std::optional<py::array_t<int16_t>>& mask_array
 ) {
 
-    int n_overlap = 64;
+    std::vector<std::tuple<int, int, bool>> peaks;
     auto r = gal_array.unchecked<2>();
+    // Determine number of patches
+    // y direction
     int npix_y = r.shape(0);
-    int npix_x = r.shape(1);
-    int my = npix_y / (this->ny - n_overlap) + 1;
-    int mx = npix_x / (this->nx - n_overlap) + 1;
-    py::array_t<double> gal_conv = this->smooth_image(
-        gal_array,
-        noise_array,
-        -1,
-        -1
-    );
+    int npatch_y = npix_y / (this->ny - this->n_overlap);
+    float npatch_y_f = npix_y / (this->ny - this->n_overlap);
+    if (npatch_y > npatch_y_f) {
+        npatch_y = npatch_y + 1;
+    }
+    int npix2_y = npatch_y * (this->ny - this->n_overlap) + this->n_overlap;
+    int npad_y = (npix2_y - npix_y) / 2;
 
-    py::array_t<FpfsPeaks> detection = this->find_peak(
-        gal_conv,
-        fthres,
-        pthres,
-        std_m00,
-        std_v,
-        bound
-    );
+    // x direction
+    int npix_x = r.shape(1);
+    int npatch_x = npix_x / (this->nx - this->n_overlap);
+    float npatch_x_f = npix_x / (this->nx - this->n_overlap);
+    if (npatch_x > npatch_x_f) {
+        npatch_x = npatch_x + 1;
+    }
+    int npix2_x = npatch_x * (this->nx - this->n_overlap) + this->n_overlap ;
+    int npad_x = (npix2_x - npix_x) / 2;
+
+    // Do detection in each patch
+    for (int j = 0; j < npatch_y; ++j) {
+        int yc = (this->ny - this->n_overlap) * j + this->ny / 2 - npad_y;
+        int ymin = (this->ny - this->n_overlap) * j - npad_y;
+        for (int i = 0; i < npatch_x; ++i) {
+            int xc = (this->nx - this->n_overlap) * i + this->nx / 2 - npad_x;
+            int xmin = (this->nx - this->n_overlap) * i - npad_x;
+            py::array_t<double> gal_conv = this->smooth_image(
+                gal_array,
+                noise_array,
+                xc,
+                yc
+            );
+
+            this->find_peak(
+                peaks,
+                gal_conv,
+                fthres,
+                pthres,
+                std_m00,
+                std_v
+            );
+            int npeaks = peaks.size();
+            for (int i = 0; i < npeaks;) {
+                int y = std::get<0>(peaks[i]) + ymin;
+                int x = std::get<1>(peaks[i]) + xmin;
+                std::get<0>(peaks[i]) = y;
+                std::get<1>(peaks[i]) = x;
+                bool cond = (
+                    (y > bound) && (y < npix_y - bound) &&
+                    (x > bound) && (x < npix_x - bound)
+                );
+                if (cond) {
+                    ++i;
+                } else {
+                    peaks.erase(peaks.begin() + i);
+                    --npeaks;
+                }
+            }
+        }
+    }
+
+    int nrow = peaks.size();
+    py::array_t<FpfsPeaks> detection(nrow);
+    auto src_r = detection.mutable_unchecked<1>();
+
+    for (ssize_t j = 0; j < nrow; ++j) {
+        const auto& elem = peaks[j];
+        src_r(j).y = std::get<0>(elem);
+        src_r(j).x = std::get<1>(elem);
+        src_r(j).is_peak = int(std::get<2>(elem));
+        src_r(j).mask_value = 0;
+    }
 
     if (mask_array.has_value()) {
         add_pixel_mask_column(
@@ -326,15 +378,18 @@ pyExportFpfs(py::module& m) {
     fpfs.attr("fpfs_det_sigma2") = fpfs_det_sigma2;
     fpfs.attr("fpfs_pnr") = fpfs_pnr;
     py::class_<FpfsImage>(fpfs, "FpfsImage")
-        .def(py::init<int, int, double, double, double,
-            const py::array_t<double>&, bool>(),
+        .def(py::init<
+                int, int, double, double, double, const py::array_t<double>&,
+                bool, int
+            >(),
             "Initialize the FpfsImage object using an ndarray",
             py::arg("nx"), py::arg("ny"),
             py::arg("scale"),
             py::arg("sigma_arcsec"),
             py::arg("klim"),
             py::arg("psf_array"),
-            py::arg("use_estimate")=true
+            py::arg("use_estimate")=true,
+            py::arg("n_overlap")=0
         )
         .def("smooth_image",
             py::overload_cast<
@@ -361,15 +416,6 @@ pyExportFpfs(py::module& m) {
             py::arg("noise_array")=py::none(),
             py::arg("x")=-1,
             py::arg("y")=-1
-        )
-        .def("find_peak", &FpfsImage::find_peak,
-            "Detects peaks from smoothed images",
-            py::arg("gal_conv"),
-            py::arg("fthres"),
-            py::arg("pthres"),
-            py::arg("std_m00"),
-            py::arg("std_v"),
-            py::arg("bound")
         )
         .def("detect_source",
             &FpfsImage::detect_source,

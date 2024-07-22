@@ -90,7 +90,7 @@ def test_detect():
         gal_array=gal_data,
         fthres=1.0,
         pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,  # effectively v>0
-        bound=2,
+        bound=3,
         std_m00=std * scale**2.0,
         std_v=std * scale**2.0,
         noise_array=noise_array,
@@ -106,7 +106,7 @@ def test_detect():
         fthres=1.0,
         pthres=0.8,
         pratio=0.0,
-        bound=2,
+        bound=3,
         noise_array=noise_array,
     )
     out2 = np.lexsort((out2[:, 0], out2[:, 1]))
