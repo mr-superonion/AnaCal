@@ -104,10 +104,13 @@ FpfsImage::find_peak(
     double fthres,
     double pthres,
     double std_m00,
-    double std_v
+    double std_v,
+    int xmin,
+    int ymin,
+    int bound
 ) {
     // Never use detections that is too close to boundary
-    int bound = std::max(this->n_overlap / 2, 3);
+    int this_bound = std::max(this->n_overlap / 2, 3);
     auto r = gal_conv.unchecked<2>();
     if ((r.shape(0) != this->ny)  || (r.shape(1) != this->nx)) {
         throw std::runtime_error(
@@ -129,8 +132,8 @@ FpfsImage::find_peak(
         );
     }
 
-    for (ssize_t j = bound; j < this->ny - bound; ++j) {
-        for (ssize_t i = bound; i < this->nx - bound; ++i) {
+    for (ssize_t j = this_bound; j < this->ny - this_bound; ++j) {
+        for (ssize_t i = this_bound; i < this->nx - this_bound; ++i) {
             double c = r(j, i);
             double d1 = c - r(j, i+1);
             double d2 = c - r(j+1, i);
@@ -141,9 +144,13 @@ FpfsImage::find_peak(
             double s3 = math::ssfunc2(d3, sigma_v - pcut, sigma_v);
             double s4 = math::ssfunc2(d4, sigma_v - pcut, sigma_v);
             double wdet = s1 * s2 * s3 * s4;
+            int y = j + ymin;
+            int x = i + xmin;
             bool sel = (
                 (c > fcut) &&
-                (wdet > wdet_cut)
+                (wdet > wdet_cut) &&
+                (y > bound) && (y < this->npix_y - bound) &&
+                (x > bound) && (x < this->npix_x - bound)
             );
             if (sel) {
                 bool is_peak = (
@@ -152,7 +159,7 @@ FpfsImage::find_peak(
                     (c > r(j, i-1)) &&
                     (c > r(j, i+1))
                 );
-                peaks.emplace_back(j, i, is_peak);
+                peaks.emplace_back(y, x, is_peak);
             }
         }
     }
@@ -172,29 +179,31 @@ FpfsImage::detect_source(
     const std::optional<py::array_t<int16_t>>& mask_array
 ) {
 
-    std::vector<std::tuple<int, int, bool>> peaks;
     auto r = gal_array.unchecked<2>();
     // Determine number of patches
     // y direction
-    int npix_y = r.shape(0);
-    int npatch_y = npix_y / (this->ny - this->n_overlap);
-    float npatch_y_f = npix_y / (this->ny - this->n_overlap);
-    if (npatch_y > npatch_y_f) {
+    this->npix_y = r.shape(0);
+    int npatch_y = this->npix_y / (this->ny - this->n_overlap);
+    float npatch_y_f = this->npix_y / (this->ny - this->n_overlap + 0.0);
+    if (npatch_y_f > npatch_y) {
         npatch_y = npatch_y + 1;
     }
     int npix2_y = npatch_y * (this->ny - this->n_overlap) + this->n_overlap;
-    int npad_y = (npix2_y - npix_y) / 2;
+    int npad_y = (npix2_y - this->npix_y) / 2;
+
+    /* std::cout<<npatch_y_f<<","<<npatch_y<<","<<npad_y<<std::endl; */
 
     // x direction
-    int npix_x = r.shape(1);
-    int npatch_x = npix_x / (this->nx - this->n_overlap);
-    float npatch_x_f = npix_x / (this->nx - this->n_overlap);
-    if (npatch_x > npatch_x_f) {
+    this->npix_x = r.shape(1);
+    int npatch_x = this->npix_x / (this->nx - this->n_overlap);
+    float npatch_x_f = this->npix_x / (this->nx - this->n_overlap + 0.0);
+    if (npatch_x_f > npatch_x) {
         npatch_x = npatch_x + 1;
     }
     int npix2_x = npatch_x * (this->nx - this->n_overlap) + this->n_overlap ;
-    int npad_x = (npix2_x - npix_x) / 2;
+    int npad_x = (npix2_x - this->npix_x) / 2;
 
+    std::vector<std::tuple<int, int, bool>> peaks;
     // Do detection in each patch
     for (int j = 0; j < npatch_y; ++j) {
         int yc = (this->ny - this->n_overlap) * j + this->ny / 2 - npad_y;
@@ -215,25 +224,11 @@ FpfsImage::detect_source(
                 fthres,
                 pthres,
                 std_m00,
-                std_v
+                std_v,
+                xmin,
+                ymin,
+                bound
             );
-            int npeaks = peaks.size();
-            for (int i = 0; i < npeaks;) {
-                int y = std::get<0>(peaks[i]) + ymin;
-                int x = std::get<1>(peaks[i]) + xmin;
-                std::get<0>(peaks[i]) = y;
-                std::get<1>(peaks[i]) = x;
-                bool cond = (
-                    (y > bound) && (y < npix_y - bound) &&
-                    (x > bound) && (x < npix_x - bound)
-                );
-                if (cond) {
-                    ++i;
-                } else {
-                    peaks.erase(peaks.begin() + i);
-                    --npeaks;
-                }
-            }
         }
     }
 

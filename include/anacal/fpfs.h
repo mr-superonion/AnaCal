@@ -20,6 +20,7 @@ namespace anacal {
         double fft_ratio;
         const py::array_t<double> psf_array;
         int n_overlap;
+        int npix_x, npix_y;
     public:
         double scale = 1.0;
         double sigma_arcsec;
@@ -61,7 +62,10 @@ namespace anacal {
             double fthres,
             double pthres,
             double std_m00,
-            double std_v
+            double std_v,
+            int xmin,
+            int ymin,
+            int bound
         );
 
         py::array_t<FpfsPeaks>

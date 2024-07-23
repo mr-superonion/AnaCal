@@ -151,16 +151,17 @@ class FpfsDetect(ImgBase):
         )
 
         self.dtask = FpfsImage(
-            nx=nx,
-            ny=ny,
+            nx=256,
+            ny=256,
             scale=self.pixel_scale,
             sigma_arcsec=self.sigma_arcsec,
             klim=self.klim / self.pixel_scale,
             psf_array=psf_array,
             use_estimate=True,
+            n_overlap=64,
         )
-        self.nx = nx
-        self.ny = ny
+        # self.nx = nx
+        # self.ny = ny
 
         assert self.mag_zero == cov_matrix.mag_zero
         self.std_m00 = cov_matrix.std_m00
@@ -199,9 +200,9 @@ class FpfsDetect(ImgBase):
                 # Also do it for pure noise image
                 mask_galaxy_image(noise_array, mask_array, False, star_cat)
 
-        ny, nx = gal_array.shape
-        assert ny == self.ny
-        assert nx == self.nx
+        # ny, nx = gal_array.shape
+        # assert ny == self.ny
+        # assert nx == self.nx
         return self.dtask.detect_source(
             gal_array=gal_array,
             fthres=fthres,

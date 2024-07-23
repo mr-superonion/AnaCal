@@ -69,6 +69,8 @@ def test_fpfs_measure(seed):
         bound=bound,
         noise_array=None,
     )
+
+    det1 = det1[np.lexsort((det1["y"], det1["x"]))]
     mtask = anacal.fpfs.FpfsMeasure(
         psf_array=psf_data,
         mag_zero=mag_zero,
@@ -91,9 +93,11 @@ def test_fpfs_measure(seed):
         bound=bound,
         noise_array=None,
     )
+    det2 = det2[np.lexsort((det2[:, 0], det2[:, 1]))]
     src2 = task.measure(gal_data, det2)
     np.testing.assert_almost_equal(src1.array, src2, decimal=5)
 
+    # use grid PSF
     psf_data2 = np.zeros((1, 1, ngrid2, ngrid2))
     psf_data2[0, 0] = psf_data
     grid_psf = anacal.psf.GridPsf(
