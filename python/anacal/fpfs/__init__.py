@@ -109,8 +109,6 @@ def compress_image(
     # Detection
     if coords is None:
         dtask = FpfsDetect(
-            nx=ny,
-            ny=nx,
             mag_zero=mag_zero,
             psf_array=psf_array,
             pixel_scale=pixel_scale,
@@ -118,12 +116,12 @@ def compress_image(
             cov_matrix=cov_matrix,
             det_nrot=fpfs_config.det_nrot,
             klim_thres=fpfs_config.klim_thres,
+            bound=fpfs_config.bound,
         )
         coords = dtask.run(
             gal_array=gal_array,
             fthres=fpfs_config.fthres,
             pthres=fpfs_config.pthres,
-            bound=fpfs_config.bound,
             noise_array=noise_array,
         )
         del dtask

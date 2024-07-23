@@ -8,6 +8,9 @@ from . import BasePsf, FpfsImage, Image, mask_galaxy_image
 from .base import ImgBase
 from .table import Catalog, Covariance
 
+npix_patch = 256
+npix_overlap = 64
+
 
 class FpfsNoiseCov(ImgBase):
     """A class to measure FPFS noise covariance of basis modes
@@ -115,8 +118,6 @@ class FpfsDetect(ImgBase):
     """A base class for measurement
 
     Args:
-    nx (int): number of grids in x
-    ny (int): number of grids in y
     mag_zero (float): magnitude zero point
     psf_array (NDArray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
@@ -125,12 +126,11 @@ class FpfsDetect(ImgBase):
     nord (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel [default: 8]
     klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+    bound (int): minimum distance to boundary
     """
 
     def __init__(
         self,
-        nx: int,
-        ny: int,
         mag_zero: float,
         psf_array: NDArray,
         cov_matrix: Covariance,
@@ -139,6 +139,7 @@ class FpfsDetect(ImgBase):
         nord: int = 4,
         det_nrot: int = 4,
         klim_thres: float = 1e-20,
+        bound: int = 0,
     ) -> None:
         super().__init__(
             mag_zero=mag_zero,
@@ -151,17 +152,16 @@ class FpfsDetect(ImgBase):
         )
 
         self.dtask = FpfsImage(
-            nx=256,
-            ny=256,
+            nx=npix_patch,
+            ny=npix_patch,
             scale=self.pixel_scale,
             sigma_arcsec=self.sigma_arcsec,
             klim=self.klim / self.pixel_scale,
             psf_array=psf_array,
             use_estimate=True,
-            n_overlap=64,
+            npix_overlap=npix_overlap,
+            bound=bound,
         )
-        # self.nx = nx
-        # self.ny = ny
 
         assert self.mag_zero == cov_matrix.mag_zero
         self.std_m00 = cov_matrix.std_m00
@@ -173,7 +173,6 @@ class FpfsDetect(ImgBase):
         gal_array: NDArray,
         fthres: float,
         pthres: float,
-        bound: int,
         noise_array: NDArray | None = None,
         mask_array: NDArray | None = None,
         star_cat: NDArray | None = None,
@@ -184,7 +183,6 @@ class FpfsDetect(ImgBase):
         gal_array (NDArray): galaxy image data
         fthres (float): flux threshold
         pthres (float): peak threshold
-        bound (int): minimum distance to boundary
         noise_array (NDArray|None): pure noise image
         mask_array (NDArray|None): mask image
         star_cat (NDArray|None): bright star catalog
@@ -207,7 +205,6 @@ class FpfsDetect(ImgBase):
             gal_array=gal_array,
             fthres=fthres,
             pthres=pthres,
-            bound=bound,
             std_m00=self.std_m00 * self.pixel_scale**2.0,
             std_v=self.std_v * self.pixel_scale**2.0,
             noise_array=noise_array,

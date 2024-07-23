@@ -56,23 +56,23 @@ Image::Image(
 void
 Image::set_r (
     const py::array_t<double>& input,
-    int x,
-    int y,
+    int xcen,
+    int ycen,
     bool ishift
 ) {
     assert_mode(this->mode & 1);
     auto r = input.unchecked<2>();
     ssize_t arr_ny = r.shape(0);
     ssize_t arr_nx = r.shape(1);
-    if (x < 0 || x > arr_nx) {
-        x = arr_nx / 2;
+    if (xcen < 0 || xcen > arr_nx) {
+        xcen = arr_nx / 2;
     }
-    if (y < 0 || y > arr_ny) {
-        y = arr_ny / 2;
+    if (ycen < 0 || ycen > arr_ny) {
+        ycen = arr_ny / 2;
     }
-    ssize_t ybeg = y - this->ny2;
+    ssize_t ybeg = ycen - this->ny2;
     ssize_t yend = ybeg + this->ny;
-    ssize_t xbeg = x - this->nx2;
+    ssize_t xbeg = xcen - this->nx2;
     ssize_t xend = xbeg + this->nx;
     ssize_t off_x = 0;
     ssize_t off_y = 0;
@@ -686,8 +686,8 @@ pyExportImage(py::module& m) {
         .def("set_r", &Image::set_r,
             "Sets up the image in configuration space",
             py::arg("input"),
-            py::arg("x")=-1,
-            py::arg("y")=-1,
+            py::arg("xcen")=-1,
+            py::arg("ycen")=-1,
             py::arg("ishift")=false
         )
         .def("set_f", &Image::set_f,

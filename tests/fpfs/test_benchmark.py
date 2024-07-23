@@ -59,13 +59,12 @@ def test_benchmark():
         )
         dtask = anacal.fpfs.FpfsDetect(
             mag_zero=mag_zero,
-            nx=nx,
-            ny=ny,
             psf_array=psf_data,
             pixel_scale=pixel_scale,
             cov_matrix=cov_matrix,
             sigma_arcsec=sigma_arcsec,
             det_nrot=det_nrot,
+            bound=bound,
         )
         t1 = time.time()
         print("Detection Time: ", t1 - t0)
@@ -73,7 +72,6 @@ def test_benchmark():
             gal_array=gal_data,
             fthres=1.0,
             pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,
-            bound=bound,
             noise_array=noise_data,
         )[0:30000]
         mtask = anacal.fpfs.FpfsMeasure(

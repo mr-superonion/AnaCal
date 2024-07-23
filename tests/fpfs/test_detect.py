@@ -84,14 +84,14 @@ def test_detect():
         sigma_arcsec=sigma_as,
         klim=task.klim / scale,
         psf_array=psf_array,
-        n_overlap=64,
+        npix_overlap=64,
+        bound=20,
     )
     noise_array = np.random.randn(ngrid, ngrid)
     out1 = det_task.detect_source(
         gal_array=gal_data + noise_array,
         fthres=1.0,
         pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,  # effectively v>0
-        bound=20,
         std_m00=std * scale**2.0,
         std_v=std * scale**2.0,
     )

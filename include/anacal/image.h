@@ -46,7 +46,7 @@ namespace anacal {
 
         void set_r(
             const py::array_t<double>&,
-            int x=-1, int y=-1,
+            int xcen=-1, int ycen=-1,
             bool ishift=false
         );
 
@@ -70,9 +70,14 @@ namespace anacal {
 
         void filter(const BaseModel&);
 
-        py::array_t<double> measure(const py::array_t<std::complex<double>>&) const;
+        py::array_t<double> measure(
+            const py::array_t<std::complex<double>>&
+        ) const;
 
-        void deconvolve(const py::array_t<std::complex<double>>&, double);
+        void deconvolve(
+            const py::array_t<std::complex<double>>&,
+            double
+        );
 
         void deconvolve(const BaseModel&, double);
 

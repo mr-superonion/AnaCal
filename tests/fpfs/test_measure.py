@@ -53,20 +53,18 @@ def test_fpfs_measure(seed):
     )
 
     dtask = anacal.fpfs.FpfsDetect(
-        nx=ngrid,
-        ny=ngrid,
         psf_array=psf_data,
         mag_zero=mag_zero,
         pixel_scale=scale,
         sigma_arcsec=sigma_as,
         cov_matrix=cov_matrix_obj,
         det_nrot=det_nrot,
+        bound=bound,
     )
     det1 = dtask.run(
         gal_array=gal_data,
         fthres=1.0,
         pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,
-        bound=bound,
         noise_array=None,
     )
 

@@ -163,19 +163,17 @@ def test_catalog_mag():
     )
     dtask = anacal.fpfs.FpfsDetect(
         mag_zero=mag_zero,
-        nx=gal_data.shape[1],
-        ny=gal_data.shape[0],
         psf_array=psf_data,
         pixel_scale=pixel_scale,
         sigma_arcsec=sigma_arcsec,
         cov_matrix=cov_matrix,
         det_nrot=det_nrot,
+        bound=bound,
     )
     det = dtask.run(
         gal_array=gal_data,
         fthres=1.0,
         pthres=pthres,
-        bound=bound,
         noise_array=None,
     )
 
