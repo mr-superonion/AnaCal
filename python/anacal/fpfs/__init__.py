@@ -1,3 +1,4 @@
+import numpy.lib.recfunctions as rfn
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
@@ -101,8 +102,8 @@ def compress_image(
     psf_array: NDArray,
     pixel_scale: float,
     cov_matrix: table.Covariance,
-    noise_array: NDArray,
-    coords: NDArray,
+    noise_array: NDArray | None = None,
+    coords: NDArray | None = None,
     mag_zero: float = 30.0,
 ):
     ny, nx = gal_array.shape
@@ -173,8 +174,8 @@ def process_image(
     psf_array: NDArray,
     pixel_scale: float,
     noise_variance: float,
-    noise_array: NDArray,
-    coords: NDArray,
+    noise_array: NDArray | None = None,
+    coords: NDArray | None = None,
     mag_zero: float = 30.0,
 ):
     # Preparing
@@ -224,5 +225,10 @@ def process_image(
         c0=fpfs_config.c0,
         pthres=fpfs_config.pthres,
     )
-    outcome = cat_task.run(catalog=result["src1"], catalog2=result["src2"])
-    return outcome
+    meas = cat_task.run(catalog=result["src1"], catalog2=result["src2"])
+
+    return rfn.merge_arrays(
+        [result["coords"], meas],
+        flatten=True,
+        usemask=False,
+    )

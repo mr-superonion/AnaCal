@@ -15,7 +15,6 @@ psf_array = fitsio.read(os.path.join(data_dir, "PSF_Fixed.fits"))
 pixel_scale = 0.2
 noise_variance = 0.23
 noise_array = None
-cov_matrix = None
 coords = None
 out = anacal.fpfs.process_image(
     fpfs_config=fpfs_config,
