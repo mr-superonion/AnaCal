@@ -28,7 +28,6 @@ ext_modules.append(
         extra_compile_args=[
             "-Wall",
             "-Wextra",
-            # "-Werror",
             "-Wdeprecated-declarations",
             "-std=c++17",
             "-fopenmp",
@@ -51,7 +50,7 @@ setup(
     version=__version__,
     author="Xiangchong Li",
     author_email="mr.superonion@hotmail.com",
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     install_requires=[
         "numpy",
         "jax>=0.4.9",
