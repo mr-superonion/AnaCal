@@ -1,4 +1,3 @@
-pip
 jax
 jaxlib
 stackvana
