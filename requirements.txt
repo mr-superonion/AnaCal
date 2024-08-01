@@ -1,9 +1,0 @@
-fitsio
-galsim
-numpy
-pydantic
-setuptools>=38
-wheel
-pybind11>=2.2
-jax
-jaxlib
