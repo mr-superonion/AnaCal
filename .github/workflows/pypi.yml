@@ -15,12 +15,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11"]
 
     steps:
     - name: Git checkout currect repo
@@ -28,13 +24,10 @@ jobs:
       with:
         submodules: 'recursive'
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: conda-incubator/setup-miniconda@v2
+    - name: Set up Python
+      uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.python-version }}
-        channels: conda-forge
-        channel-priority: strict
-        show-channel-urls: true
+        python-version: '3.x'
 
     - name: Build and publish
       shell: bash -l {0}
@@ -42,10 +35,8 @@ jobs:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: |
-        conda config --set always_yes yes
-        conda install --file conda_requirements.txt -c conda-forge
         python -m pip install --upgrade pip
-        pip install -U setuptools wheel twine
-        pip install . --user
-        python setup.py sdist bdist_wheel
-        twine upload dist/*
+        pip install -U setuptools wheel twine cibuildwheel
+        pip install -r conda_requirements.txt
+        cibuildwheel --output-dir wheelhouse
+        twine upload wheelhouse/*
