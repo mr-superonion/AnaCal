@@ -16,8 +16,8 @@
 import gc
 import os
 
-import astropy.io.fits as pyfits
 import galsim
+import fitsio
 import numpy as np
 
 from .base import setup_custom_logger
@@ -399,7 +399,7 @@ def make_exposure_stamp(
 
 def read_cosmos_catalog(filename):
     # read the input COSMOS galaxy catalog
-    cat_input = pyfits.getdata(filename)
+    cat_input = fitsio.read(filename)
     return cat_input
 
 
@@ -694,7 +694,7 @@ def make_blended_sim(
         cat_name = os.path.join(_data_dir, "src_cosmos.fits")
 
     # get the cosmos catalog
-    cat_input = pyfits.getdata(cat_name)
+    cat_input = fitsio.read(cat_name)
     ntrain = len(cat_input)
     inds = np.random.randint(0, ntrain, ngeff)
     cat_input = cat_input[inds]

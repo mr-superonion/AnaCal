@@ -1,13 +1,14 @@
 import os
 
-import pybind11
 from setuptools import Extension, find_packages, setup
 
 conda_prefix = os.environ.get("CONDA_PREFIX")
 include_dirs = []
 if conda_prefix:
     include_dirs.append(os.path.join(conda_prefix, "include"))
-include_dirs.append(pybind11.get_include())
+
+# import pybind11
+# include_dirs.append(pybind11.get_include())
 
 ext_modules = []
 ext_modules.append(
@@ -53,12 +54,12 @@ setup(
     python_requires=">=3.10",
     install_requires=[
         "numpy",
-        "jax>=0.4.9",
-        "jaxlib>=0.4.9",
+        "jax",
+        "jaxlib",
         "galsim",
-        "astropy",
         "fitsio",
         "pybind11",
+        "pydantic"
     ],
     packages=find_packages(where="python"),
     package_dir={"": "python"},
