@@ -9,6 +9,7 @@ if conda_prefix:
 
 import pybind11
 include_dirs.append(pybind11.get_include())
+print(include_dirs)
 
 ext_modules = []
 ext_modules.append(
