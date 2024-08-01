@@ -7,8 +7,8 @@ include_dirs = []
 if conda_prefix:
     include_dirs.append(os.path.join(conda_prefix, "include"))
 
-# import pybind11
-# include_dirs.append(pybind11.get_include())
+import pybind11
+include_dirs.append(pybind11.get_include())
 
 ext_modules = []
 ext_modules.append(
@@ -53,13 +53,13 @@ setup(
     author_email="mr.superonion@hotmail.com",
     python_requires=">=3.10",
     install_requires=[
+        "pybind11>=2.2",
         "numpy",
         "jax",
         "jaxlib",
         "galsim",
         "fitsio",
-        "pybind11",
-        "pydantic"
+        "pydantic",
     ],
     packages=find_packages(where="python"),
     package_dir={"": "python"},
