@@ -1,0 +1,7 @@
+black
+pytest>=3.4
+pytest-xdist>=1.19
+pytest-timeout>=1.2
+psutil
+memory_profiler
+matplotlib

@@ -1,9 +1,9 @@
-python
-jax
-jaxlib
-stackvana
 fitsio
 galsim
-matplotlib
 numpy
-pybind11
+pydantic
+setuptools>=38
+wheel
+pybind11>=2.2
+jax
+jaxlib
