@@ -16,8 +16,7 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
-
+  build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,9 +47,11 @@ jobs:
         pip install . --user
 
     - name: Build and publish
+      shell: bash -l {0}
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: |
+        conda activate base
         python setup.py sdist bdist_wheel
         twine upload dist/*
