@@ -41,15 +41,19 @@ jobs:
         pip install -U setuptools twine cibuildwheel
         pip install -r requirements.txt
 
-    - name: Build and publish
+    - name: Build Wheels for Manylinux
+      env:
+        CIBW_BUILD: "*-manylinux*"
+        CIBW_BEFORE_BUILD: "yum install -y fftw-devel"
+        CIBW_SKIP: pp*
+      run: |
+        cibuildwheel --output-dir wheelhouse
+
+    - name: Build Source file and publish
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        CIBW_BUILD: "*-manylinux*"
-        CIBW_BEFORE_BUILD: "yum install -y fftw-devel"
       run: |
-        cibuildwheel --output-dir wheelhouse
         python setup.py sdist
-        twine upload dist/* wheelhouse/*
-
-
+        cp wheelhouse/*.whl dist
+        twine upload dist/*
