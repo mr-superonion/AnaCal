@@ -1,0 +1,17 @@
+include README.md
+include LICENSE
+include setup.py
+include pyproject.toml
+recursive-include include *
+recursive-include src *
+recursive-include python *
+
+# Exclude unnecessary files and directories
+exclude .github
+prune .github
+exclude examples
+prune examples
+exclude docs
+prune docs
+exclude tests
+prune tests
