@@ -1,7 +1,7 @@
 # AnaCal
 [![docs](https://readthedocs.org/projects/anacal/badge/?version=latest)](https://anacal.readthedocs.io/en/latest/?badge=latest)
 [![tests](https://github.com/mr-superonion/AnaCal/actions/workflows/tests.yml/badge.svg)](https://github.com/mr-superonion/AnaCal/actions/workflows/tests.yml)
-[![pypi](https://github.com/mr-superonion/AnaCal/actions/workflows/pypi.yml/badge.svg)](https://pypi.org/project/anacal/)
+[![pypi](https://github.com/mr-superonion/AnaCal/actions/workflows/pypi.yml/badge.svg?event=release)](https://github.com/mr-superonion/AnaCal/actions/workflows/pypi.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
@@ -26,7 +26,7 @@ cd AnaCal
 # install required softwares
 conda install -c conda-forge --file requirements.txt
 # install required softwares for unit tests (if necessary)
-conda install -c conda-forge --file test_requirements.txt
+conda install -c conda-forge --file requirements_test.txt
 pip install . --user
 ```
 or install stable verion from pypi
