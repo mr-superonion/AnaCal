@@ -28,7 +28,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential
-
+        sudo apt-get install -y fftw3-dev
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -47,7 +47,9 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         CIBW_BUILD: "*-manylinux*"
         CIBW_BEFORE_BUILD: "yum install -y fftw-devel"
-
       run: |
         cibuildwheel --output-dir wheelhouse
-        twine upload wheelhouse/*
+        python setup.py sdist
+        twine upload dist/* wheelhouse/*
+
+
