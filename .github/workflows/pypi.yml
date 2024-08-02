@@ -45,7 +45,8 @@ jobs:
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        CIBW_BEFORE_BUILD: "apt-get update && apt-get install -y libfftw3-dev"
+        CIBW_BEFORE_BUILD: "yum install -y fftw-devel"
+
       run: |
         cibuildwheel --output-dir wheelhouse
         twine upload wheelhouse/*
