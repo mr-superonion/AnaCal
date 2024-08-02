@@ -16,8 +16,8 @@
 import gc
 import os
 
-import galsim
 import fitsio
+import galsim
 import numpy as np
 
 from .base import setup_custom_logger
