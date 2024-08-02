@@ -129,6 +129,7 @@ setup(
     author="Xiangchong Li",
     author_email="mr.superonion@hotmail.com",
     python_requires=">=3.10",
+    setup_requires=["pybind11>=2.2", "setuptools>=38", "wheel"],
     install_requires=[
         "pybind11>=2.2",
         "numpy",
