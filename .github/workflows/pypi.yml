@@ -45,6 +45,7 @@ jobs:
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        CIBW_BUILD: "*-manylinux*"
         CIBW_BEFORE_BUILD: "yum install -y fftw-devel"
 
       run: |
