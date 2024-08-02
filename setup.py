@@ -4,8 +4,8 @@ from setuptools import Extension, find_packages, setup
 
 conda_prefix = os.environ.get("CONDA_PREFIX")
 include_dirs = []
-if conda_prefix:
-    include_dirs.append(os.path.join(conda_prefix, "include"))
+# if conda_prefix:
+#     include_dirs.append(os.path.join(conda_prefix, "include"))
 
 import pybind11
 include_dirs.append(pybind11.get_include())
