@@ -24,6 +24,9 @@ jobs:
       with:
         submodules: 'recursive'
 
+    - name: Install system dependencies
+      run: sudo apt-get update && sudo apt-get install -y build-essential
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -39,6 +42,7 @@ jobs:
       run: |
         python -c "import pybind11; print(pybind11.get_include())"
         find $(python -c "import pybind11; print(pybind11.get_include())") -type f
+        python -c "import galsim; print(galsim.__file__)"
 
     - name: Build and publish
       env:
