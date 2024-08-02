@@ -62,20 +62,20 @@ Image::set_r (
 ) {
     assert_mode(this->mode & 1);
     auto r = input.unchecked<2>();
-    ssize_t arr_ny = r.shape(0);
-    ssize_t arr_nx = r.shape(1);
+    int arr_ny = r.shape(0);
+    int arr_nx = r.shape(1);
     if (xcen < 0 || xcen > arr_nx) {
         xcen = arr_nx / 2;
     }
     if (ycen < 0 || ycen > arr_ny) {
         ycen = arr_ny / 2;
     }
-    ssize_t ybeg = ycen - this->ny2;
-    ssize_t yend = ybeg + this->ny;
-    ssize_t xbeg = xcen - this->nx2;
-    ssize_t xend = xbeg + this->nx;
-    ssize_t off_x = 0;
-    ssize_t off_y = 0;
+    int ybeg = ycen - this->ny2;
+    int yend = ybeg + this->ny;
+    int xbeg = xcen - this->nx2;
+    int xend = xbeg + this->nx;
+    int off_x = 0;
+    int off_y = 0;
     // for the case the beginning or ending point is outside of the image
     if (xbeg < 0) {
         off_x = -xbeg;
@@ -95,10 +95,10 @@ Image::set_r (
     // First fill in the data_r with 0
     std::fill_n(this->data_r, this->ny * this->nx, 0.0);
     // The part has data
-    for (ssize_t j = ybeg; j < yend; ++j) {
-        ssize_t jj = (j - ybeg + off_y)  % this->ny;
-        for (ssize_t i = xbeg; i < xend; ++i) {
-            ssize_t ii = (i - xbeg + off_x) % this->nx;
+    for (int j = ybeg; j < yend; ++j) {
+        int jj = (j - ybeg + off_y)  % this->ny;
+        for (int i = xbeg; i < xend; ++i) {
+            int ii = (i - xbeg + off_x) % this->nx;
             data_r[jj * this->nx + ii] = r(j, i);
         }
     }
@@ -112,8 +112,8 @@ Image::set_delta_r (bool ishift) {
     if (ishift){
         data_r[0] = 1.0;
     } else {
-        ssize_t jj = ny / 2;
-        ssize_t ii = nx / 2;
+        int jj = ny / 2;
+        int ii = nx / 2;
         data_r[jj * nx + ii] = 1.0;
     }
     return;
@@ -125,14 +125,14 @@ Image::set_f(
     const py::array_t<std::complex<double>>& input
 ) {
     assert_mode(this->mode & 2);
-    const ssize_t* shape = input.shape();
+    const auto* shape = input.shape();
     if ((shape[0] != ky_length) || (shape[1] != kx_length)) {
         throw std::runtime_error("Error: input filter shape not correct");
     }
     auto r = input.unchecked<2>();
-    for (ssize_t j = 0; j < ky_length ; ++j) {
+    for (int j = 0; j < ky_length ; ++j) {
         int ji = j * kx_length;
-        for (ssize_t i = 0; i < kx_length ; ++i) {
+        for (int i = 0; i < kx_length ; ++i) {
             int index = ji + i;
             data_f[index][0] = r(j, i).real();
             data_f[index][1] = r(j, i).imag();
@@ -145,10 +145,10 @@ Image::set_f(
 void
 Image::set_delta_f() {
     assert_mode(this->mode & 2);
-    for (ssize_t j = 0; j < ky_length; ++j) {
-        ssize_t ji = j * kx_length;
-        for (ssize_t i = 0; i < kx_length; ++i) {
-            ssize_t index = ji + i;
+    for (int j = 0; j < ky_length; ++j) {
+        int ji = j * kx_length;
+        for (int i = 0; i < kx_length; ++i) {
+            int index = ji + i;
             data_f[index][0] = 1.0;
             data_f[index][1] = 0.0;
         }
@@ -175,10 +175,10 @@ Image::set_noise_f(
     std::mt19937 engine(seed);
     double std_f = std::sqrt(nx * ny / 2.0);
     std::normal_distribution<double> dist(0.0, std_f);
-    for (ssize_t j = 0; j < ky_length; ++j) {
-        ssize_t ji = j * kx_length;
-        for (ssize_t i = 0; i < kx_length; ++i) {
-            ssize_t index = ji + i;
+    for (int j = 0; j < ky_length; ++j) {
+        int ji = j * kx_length;
+        for (int i = 0; i < kx_length; ++i) {
+            int index = ji + i;
             double ff = std::sqrt(std::abs(r(j, i)));
             data_f[index][0] = ff * dist(engine);
             data_f[index][1] = ff * dist(engine);
@@ -187,8 +187,8 @@ Image::set_noise_f(
 
     {
         // k = (0, 0)
-        ssize_t i = 0;
-        ssize_t j = 0;
+        int i = 0;
+        int j = 0;
         double ff = std::sqrt(2.0 * std::abs(r(i, j)));
         data_f[0][0] = ff * dist(engine);
         data_f[0][1] = 0.0;
@@ -199,7 +199,7 @@ Image::set_noise_f(
         i = 0;
         j = ny2;
         ff = std::sqrt(2.0 * std::abs(r(i, j)));
-        ssize_t index = j * kx_length + i;
+        int index = j * kx_length + i;
         data_f[index][0] = ff * dist(engine);
         data_f[index][1] = 0.0;
 
@@ -214,20 +214,20 @@ Image::set_noise_f(
         data_f[index][1] = 0.0;
     }
 
-    for (ssize_t j = 1; j < ny2; ++j) {
-        ssize_t j2 = -j + ny;
+    for (int j = 1; j < ny2; ++j) {
+        int j2 = -j + ny;
         {
-            ssize_t i = 0;
-            ssize_t index = j * kx_length + i;
-            ssize_t index2 = j2 * kx_length + i;
+            int i = 0;
+            int index = j * kx_length + i;
+            int index2 = j2 * kx_length + i;
             data_f[index][0] = data_f[index2][0];
             data_f[index][1] = -data_f[index2][1];
         }
 
         {
-            ssize_t i = nx2;
-            ssize_t index = j * kx_length + i;
-            ssize_t index2 = j2 * kx_length + i;
+            int i = nx2;
+            int index = j * kx_length + i;
+            int index2 = j2 * kx_length + i;
             data_f[index][0] = data_f[index2][0];
             data_f[index][1] = -data_f[index2][1];
         }
@@ -247,7 +247,7 @@ void
 Image::ifft() {
     assert_mode(this->mode == 3);
     fftw_execute(plan_backward);
-    for (ssize_t i = 0; i < npixels; ++i){
+    for (int i = 0; i < npixels; ++i){
         data_r[i] = data_r[i] * norm_factor;
     }
     return;
@@ -323,9 +323,9 @@ Image::add_image_f(
 ) {
     assert_mode(this->mode & 2);
     auto r = image.unchecked<2>();
-    for (ssize_t j = 0; j < ky_length ; ++j) {
-        for (ssize_t i = 0; i < kx_length ; ++i) {
-            ssize_t index = j * kx_length + i;
+    for (int j = 0; j < ky_length ; ++j) {
+        for (int i = 0; i < kx_length ; ++i) {
+            int index = j * kx_length + i;
             data_f[index][0] = data_f[index][0] + r(j, i).real();
             data_f[index][1] = data_f[index][1] + r(j, i).imag();
         }
@@ -339,9 +339,9 @@ Image::subtract_image_f(
 ) {
     assert_mode(this->mode & 2);
     auto r = image.unchecked<2>();
-    for (ssize_t j = 0; j < ky_length ; ++j) {
-        for (ssize_t i = 0; i < kx_length ; ++i) {
-            ssize_t index = j * kx_length + i;
+    for (int j = 0; j < ky_length ; ++j) {
+        for (int i = 0; i < kx_length ; ++i) {
+            int index = j * kx_length + i;
             data_f[index][0] = data_f[index][0] - r(j, i).real();
             data_f[index][1] = data_f[index][1] - r(j, i).imag();
         }
@@ -354,10 +354,10 @@ Image::filter(
     const BaseModel& filter_model
 ) {
     assert_mode(this->mode & 2);
-    for (ssize_t j = 0; j < ky_length; ++j) {
+    for (int j = 0; j < ky_length; ++j) {
         double ky = ((j < ny2) ? j : (j - ny)) * dky ;
-        for (ssize_t i = 0; i < kx_length; ++i) {
-            ssize_t index = j * kx_length + i;
+        for (int i = 0; i < kx_length; ++i) {
+            int index = j * kx_length + i;
             double kx = i * dkx;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
             std::complex<double> result = val * filter_model.apply(kx, ky);
@@ -374,8 +374,8 @@ Image::filter(
 ) {
     assert_mode(this->mode & 2);
     auto r = filter_image.unchecked<2>();
-    for (ssize_t j = 0; j < ky_length ; ++j) {
-        for (ssize_t i = 0; i < kx_length ; ++i) {
+    for (int j = 0; j < ky_length ; ++j) {
+        for (int i = 0; i < kx_length ; ++i) {
             int index = j * kx_length + i;
             std::complex<double> val1(data_f[index][0], data_f[index][1]);
             val1 = val1 * r(j, i);
@@ -401,25 +401,25 @@ Image::measure(
 
     py::array_t<double> meas(ncol);
     auto meas_r = meas.mutable_unchecked<1>();
-    for (ssize_t z = 0; z < ncol; z++) {
+    for (int z = 0; z < ncol; z++) {
         meas_r(z) = 0.0;
     }
 
     auto fr = filter_image.unchecked<3>();
-    for (ssize_t j = 0; j < ky_length; ++j) {
-        ssize_t ji = j * kx_length;
-        for (ssize_t i = -1; i < 1; ++i) {
-            ssize_t ii = (i + kx_length) % kx_length;
-            ssize_t index = ji + ii;
+    for (int j = 0; j < ky_length; ++j) {
+        int ji = j * kx_length;
+        for (int i = -1; i < 1; ++i) {
+            int ii = (i + kx_length) % kx_length;
+            int index = ji + ii;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
-            for (ssize_t z = 0; z < ncol; ++z) {
+            for (int z = 0; z < ncol; ++z) {
                 meas_r(z) = meas_r(z) + (fr(j, ii, z) * val).real();
             }
         }
-        for (ssize_t i = 1; i < kx_length - 1; ++i) {
-            ssize_t index = ji + i;
+        for (int i = 1; i < kx_length - 1; ++i) {
+            int index = ji + i;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
-            for (ssize_t z = 0; z < ncol; ++z) {
+            for (int z = 0; z < ncol; ++z) {
                 meas_r(z) = meas_r(z) + (fr(j, i, z) * val).real() * 2.0;
             }
         }
@@ -526,8 +526,8 @@ Image::draw_f() const {
     // Prepare data_fput array
     auto result = py::array_t<std::complex<double>>({ky_length, kx_length});
     auto r = result.mutable_unchecked<2>(); // Accessor
-    for (ssize_t j = 0; j < ky_length ; ++j) {
-        for (ssize_t i = 0; i < kx_length ; ++i) {
+    for (int j = 0; j < ky_length ; ++j) {
+        for (int i = 0; i < kx_length ; ++i) {
             int index = j * kx_length + i;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
             r(j, i) = val;
@@ -544,18 +544,18 @@ Image::draw_r(bool ishift) const {
     auto result = py::array_t<double>({ny, nx});
     auto r = result.mutable_unchecked<2>();
     if (ishift) {
-        for (ssize_t j = 0; j < ny; ++j) {
-            ssize_t jj = (j + ny2) % ny;
-            ssize_t ji = jj * nx;
-            for (ssize_t i = 0; i < nx; ++i) {
-                ssize_t ii = (i + nx2) % nx;
+        for (int j = 0; j < ny; ++j) {
+            int jj = (j + ny2) % ny;
+            int ji = jj * nx;
+            for (int i = 0; i < nx; ++i) {
+                int ii = (i + nx2) % nx;
                 r(j, i) = data_r[ji + ii];
             }
         }
     } else {
-        for (ssize_t j = 0; j < ny; ++j) {
-            ssize_t ji = j * nx;
-            for (ssize_t i = 0; i < nx; ++i) {
+        for (int j = 0; j < ny; ++j) {
+            int ji = j * nx;
+            for (int i = 0; i < nx; ++i) {
                 r(j, i) = data_r[ji + i];
             }
         }
