@@ -5,7 +5,7 @@ submodules:
   include: all
 
 build:
-  os: "ubuntu-latest"
+  os: "ubuntu-lts-latest"
   tools:
     python: "3.11"
   apt_packages:
