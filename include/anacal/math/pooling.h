@@ -56,10 +56,18 @@ namespace math {
         else return 0.0;
     }
 
-    inline double sigmoid(double x, double mu, double sigma) {
-        double t = (x - mu) / sigma;
-        return 1.0 / (1.0 + std::exp(-t));
+    template <typename T>
+    inline qnumber ssfunc2(qnumber x, double mu, double sigma) {
+        qnumber t = (x - mu) / (sigma * 2.0) + 0.5;
+        if ((t < 0) || (t > 1)) {
+            return 0.0;
+        }
+        else {
+            return _func(t) / (sigma * 2.0);
+        }
+
     }
+
 
 }
 }

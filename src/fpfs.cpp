@@ -137,19 +137,26 @@ FpfsImage::find_peaks(
             "FPFS Error: The second selection threshold pthres is too small."
         );
     }
+    int drmax2 = 1;
 
-    for (ssize_t j = bound_patch; j < this->ny - bound_patch; ++j) {
-        for (ssize_t i = bound_patch; i < this->nx - bound_patch; ++i) {
+    for (int j = bound_patch; j < this->ny - bound_patch; ++j) {
+        for (int i = bound_patch; i < this->nx - bound_patch; ++i) {
+            double wdet = 1.0;
             double c = r(j, i);
-            double d1 = c - r(j, i+1);
-            double d2 = c - r(j+1, i);
-            double d3 = c - r(j, i-1);
-            double d4 = c - r(j-1, i);
-            double s1 = math::ssfunc2(d1, sigma_v - pcut, sigma_v);
-            double s2 = math::ssfunc2(d2, sigma_v - pcut, sigma_v);
-            double s3 = math::ssfunc2(d3, sigma_v - pcut, sigma_v);
-            double s4 = math::ssfunc2(d4, sigma_v - pcut, sigma_v);
-            double wdet = s1 * s2 * s3 * s4;
+            for (int dj = -1; dj <= 1; dj++) {
+                int dj2 = dj * dj;
+                for (int di = -1; di <= 1; di++) {
+                    int dr2 = di * di + dj2;
+                    if ((dr2 <= drmax2) && (dr2 != 0)) {
+                        double zv = math::ssfunc2(
+                            c - r(j + dj, i + di),
+                            sigma_v - pcut,
+                            sigma_v
+                        );
+                        wdet = wdet * zv;
+                    }
+                }
+            }
             int y = j + ymin;
             int x = i + xmin;
             bool sel = (

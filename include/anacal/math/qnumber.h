@@ -2,6 +2,7 @@
 #define ANACAL_MATH_QN_H
 
 #include <cmath>
+#include <ostream>
 
 namespace anacal {
 namespace math {

@@ -96,7 +96,37 @@ class FpfsConfig(BaseModel):
     )
 
 
-def compress_image(
+def detect_sources(
+    fpfs_config: FpfsConfig,
+    gal_array: NDArray,
+    psf_array: NDArray,
+    pixel_scale: float,
+    cov_matrix: table.Covariance,
+    noise_array: NDArray | None = None,
+    mag_zero: float = 30.0,
+):
+    ny, nx = gal_array.shape
+    # Detection
+    dtask = FpfsDetect(
+        mag_zero=mag_zero,
+        psf_array=psf_array,
+        pixel_scale=pixel_scale,
+        sigma_arcsec=fpfs_config.sigma_arcsec,
+        cov_matrix=cov_matrix,
+        det_nrot=fpfs_config.det_nrot,
+        klim_thres=fpfs_config.klim_thres,
+        bound=fpfs_config.bound,
+    )
+    coords = dtask.run(
+        gal_array=gal_array,
+        fthres=fpfs_config.fthres,
+        pthres=fpfs_config.pthres,
+        noise_array=noise_array,
+    )
+    return coords
+
+
+def measure_linear_obs(
     fpfs_config: FpfsConfig,
     gal_array: NDArray,
     psf_array: NDArray,
@@ -107,26 +137,6 @@ def compress_image(
     mag_zero: float = 30.0,
 ):
     ny, nx = gal_array.shape
-    # Detection
-    if coords is None:
-        dtask = FpfsDetect(
-            mag_zero=mag_zero,
-            psf_array=psf_array,
-            pixel_scale=pixel_scale,
-            sigma_arcsec=fpfs_config.sigma_arcsec,
-            cov_matrix=cov_matrix,
-            det_nrot=fpfs_config.det_nrot,
-            klim_thres=fpfs_config.klim_thres,
-            bound=fpfs_config.bound,
-        )
-        coords = dtask.run(
-            gal_array=gal_array,
-            fthres=fpfs_config.fthres,
-            pthres=fpfs_config.pthres,
-            noise_array=noise_array,
-        )
-        del dtask
-
     mtask_1 = FpfsMeasure(
         mag_zero=mag_zero,
         psf_array=psf_array,
@@ -162,7 +172,6 @@ def compress_image(
     else:
         src2 = None
     return {
-        "coords": coords,
         "src1": src1,
         "src2": src2,
     }
@@ -202,7 +211,18 @@ def process_image(
     cov_matrix = noise_task.measure(variance=noise_variance)
     del noise_task
 
-    result = compress_image(
+    if coords is None:
+        coords = detect_sources(
+            fpfs_config=fpfs_config,
+            gal_array=gal_array,
+            psf_array=psf_array,
+            pixel_scale=pixel_scale,
+            cov_matrix=cov_matrix,
+            noise_array=noise_array,
+            mag_zero=mag_zero,
+        )
+
+    result = measure_linear_obs(
         fpfs_config=fpfs_config,
         gal_array=gal_array,
         psf_array=psf_array,
@@ -228,7 +248,7 @@ def process_image(
     meas = cat_task.run(catalog=result["src1"], catalog2=result["src2"])
 
     return rfn.merge_arrays(
-        [result["coords"], meas],
+        [coords, meas],
         flatten=True,
         usemask=False,
     )
