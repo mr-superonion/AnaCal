@@ -313,7 +313,7 @@ class CatTaskBase(object):
         wsel_g2 = w0l_g2 * w0u * w2l + w0l * w0u_g2 * w2l + w0l * w0u * w2l_g2
         return wsel, wsel_g1, wsel_g2
 
-    def _wdet(self, x, y):
+    def _wdet1(self, x, y):
         det0, det0_deriv = ssfunc2(
             x[self.di["v0"]],
             self.sigma_v - self.pcut,
@@ -359,8 +359,12 @@ class CatTaskBase(object):
             + det0 * det1 * det2_g2 * det3
             + det0 * det1 * det2 * det3_g2
         )
-        wdet, wdet_deriv = ssfunc2(w, self.pthres, fpfs_det_sigma2)
-        return wdet, wdet_deriv * w_g1, wdet_deriv * w_g2
+        return w, w_g1, w_g2
+
+    def _wdet(self, x, y):
+        w1, w1_g1, w1_g2 = self._wdet1(x, y)
+        wdet, wdet_deriv = ssfunc2(w1, self.pthres, fpfs_det_sigma2)
+        return wdet, wdet_deriv * w1_g1, wdet_deriv * w1_g2
 
     def _run(self, x, y):
         m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2 = self._dg(x - 2.0 * y)
