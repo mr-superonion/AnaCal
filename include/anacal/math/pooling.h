@@ -2,6 +2,7 @@
 #define ANACAL_MATH_POOLING_H
 
 #include <cmath>
+#include "qnumber.h"
 
 namespace anacal {
 namespace math {
@@ -56,14 +57,13 @@ namespace math {
         else return 0.0;
     }
 
-    template <typename T>
     inline qnumber ssfunc2(qnumber x, double mu, double sigma) {
-        qnumber t = (x - mu) / (sigma * 2.0) + 0.5;
+        double t = 0.5;
         if ((t < 0) || (t > 1)) {
-            return 0.0;
+            return qnumber(0.0, 0.0, 0.0, 0.0, 0.0);
         }
         else {
-            return _func(t) / (sigma * 2.0);
+            return qnumber(0.0, 0.0, 0.0, 0.0, 0.0);
         }
 
     }
