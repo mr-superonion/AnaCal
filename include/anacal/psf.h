@@ -12,7 +12,7 @@ namespace anacal {
         BasePsf& operator=(BasePsf&& other) noexcept = default;
         virtual py::array_t<double> draw(double, double) const;
         virtual ~BasePsf() = default;
-
+        bool crun;
     };
 
 
@@ -35,6 +35,21 @@ namespace anacal {
         );
         py::array_t<double>
         draw(double x, double y) const;
+        bool crun;
+    };
+
+    class PyPsf : public BasePsf {
+    public:
+        PyPsf() {this->crun = false;}
+        py::array_t<double> draw(double x, double y) const override {
+            PYBIND11_OVERRIDE_PURE(
+                py::array_t<double>, // Return type
+                PyPsf,         // Parent class
+                draw,                // Name of the method in Python
+                x, y                 // Arguments
+            );
+        }
+        bool crun;
     };
 
     void pyExportPsf(py::module& m);

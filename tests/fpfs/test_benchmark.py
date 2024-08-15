@@ -12,7 +12,7 @@ ny = 5000
 nx = 5000
 
 std = 0.4
-nord = 4
+norder = 4
 det_nrot = 4
 bound = 40
 mag_zero = 30.0
@@ -51,7 +51,7 @@ def test_benchmark():
         cov_matrix = np.ones((21, 21)) * (std * pixel_scale) ** 2.0
         cov_matrix = anacal.fpfs.table.Covariance(
             array=cov_matrix,
-            nord=nord,
+            norder=norder,
             det_nrot=det_nrot,
             pixel_scale=pixel_scale,
             mag_zero=mag_zero,
@@ -79,11 +79,12 @@ def test_benchmark():
             psf_array=psf_data,
             pixel_scale=pixel_scale,
             sigma_arcsec=sigma_arcsec,
-            nord=nord,
+            norder=norder,
             det_nrot=det_nrot,
         )
         src = mtask.run(
             gal_array=gal_data,
+            psf=psf_data,
             det=det,
         )
         t2 = time.time()

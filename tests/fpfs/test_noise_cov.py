@@ -8,7 +8,7 @@ def test_noise_covariance():
     mag_zero = 30.0
     variance = 0.22**2.0
     sigma_as = 0.55
-    nord = 4
+    norder = 4
     det_nrot = 4
     pixel_scale = 0.2
     ngrid = 64
@@ -23,7 +23,7 @@ def test_noise_covariance():
     noise_task = fpfs.image.measure_noise_cov(
         psf_array,
         sigma_arcsec=sigma_as,
-        nord=nord,
+        nord=norder,
         pix_scale=pixel_scale,
         det_nrot=det_nrot,
     )
@@ -37,9 +37,9 @@ def test_noise_covariance():
         mag_zero=mag_zero,
         pixel_scale=pixel_scale,
         sigma_arcsec=sigma_as,
-        nord=nord,
+        norder=norder,
         det_nrot=det_nrot,
-        klim_thres=1e-20,
+        kmax_thres=1e-20,
     )
     cov_elem2 = noise_task2.measure(variance=variance).array
     np.testing.assert_allclose(cov_elem, cov_elem2, atol=1e-6, rtol=0)

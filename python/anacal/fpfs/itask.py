@@ -10,19 +10,20 @@ from .table import Catalog, Covariance
 
 npix_patch = 256
 npix_overlap = 64
+npix_default = 64
 
 
 class FpfsNoiseCov(ImgBase):
     """A class to measure FPFS noise covariance of basis modes
 
     Args:
-    mag_zero (float): magnitude zero point
     psf_array (NDArray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
-    nord (int): the highest order of Shapelets radial components [default: 4]
+    norder (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
-    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+    kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+    mag_zero (float): magnitude zero point [default 30]
 
     NOTE: The current version of Anacal.Fpfs only uses two elements of the
     covariance matrix. The full matrix will be useful in the future.
@@ -30,22 +31,23 @@ class FpfsNoiseCov(ImgBase):
 
     def __init__(
         self,
-        mag_zero: float,
         psf_array: NDArray,
         pixel_scale: float,
         sigma_arcsec: float,
-        nord: int = 4,
+        norder: int = 4,
         det_nrot: int = 4,
-        klim_thres: float = 1e-20,
+        kmax_thres: float = 1e-20,
+        mag_zero: float = 30.0,
     ) -> None:
         super().__init__(
-            mag_zero=mag_zero,
+            npix=npix_default,
             psf_array=psf_array,
             pixel_scale=pixel_scale,
             sigma_arcsec=sigma_arcsec,
-            nord=nord,
+            norder=norder,
             det_nrot=det_nrot,
-            klim_thres=klim_thres,
+            kmax_thres=kmax_thres,
+            mag_zero=mag_zero,
         )
 
         # Preparing PSF
@@ -68,28 +70,28 @@ class FpfsNoiseCov(ImgBase):
         (Covariance): covariance matrix of FPFS basis modes
         """
         if noise_pf is not None:
-            if noise_pf.shape == (self.ngrid, self.ngrid // 2 + 1):
+            if noise_pf.shape == (self.npix, self.npix // 2 + 1):
                 # rfft
                 noise_pf = np.array(noise_pf, dtype=np.float64)
-            elif noise_pf.shape == (self.ngrid, self.ngrid):
+            elif noise_pf.shape == (self.npix, self.npix):
                 # fft
                 noise_pf = np.fft.ifftshift(noise_pf)
                 noise_pf = np.array(
-                    noise_pf[:, : self.ngrid // 2 + 1], dtype=np.float64
+                    noise_pf[:, : self.npix // 2 + 1], dtype=np.float64
                 )
             else:
                 raise ValueError("noise power not in correct shape")
         else:
-            ss = (self.ngrid, self.ngrid // 2 + 1)
+            ss = (self.npix, self.npix // 2 + 1)
             noise_pf = np.ones(ss)
-        norm_factor = variance * self.ngrid**2.0 / noise_pf[0, 0]
+        norm_factor = variance * self.npix**2.0 / noise_pf[0, 0]
         noise_pf = noise_pf * norm_factor
 
-        img_obj = Image(nx=self.ngrid, ny=self.ngrid, scale=self.pixel_scale)
+        img_obj = Image(nx=self.npix, ny=self.npix, scale=self.pixel_scale)
         img_obj.set_f(noise_pf)
         img_obj.deconvolve(
             psf_image=self.psf_pow,
-            klim=self.klim / self.pixel_scale,
+            klim=self.kmax / self.pixel_scale,
         )
         noise_pf_deconv = img_obj.draw_f().real
 
@@ -106,11 +108,11 @@ class FpfsNoiseCov(ImgBase):
         )
         return Covariance(
             array=cov_elems,
-            mag_zero=self.mag_zero,
-            nord=self.nord,
+            norder=self.norder,
             det_nrot=self.det_nrot,
             pixel_scale=self.pixel_scale,
             sigma_arcsec=self.sigma_arcsec,
+            mag_zero=self.mag_zero,
         )
 
 
@@ -118,37 +120,41 @@ class FpfsDetect(ImgBase):
     """A base class for measurement
 
     Args:
-    mag_zero (float): magnitude zero point
-    psf_array (NDArray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Gaussian kernel size
     cov_matrix (Covariance): covariance matrix of Fpfs basis modes
-    nord (int): the highest order of Shapelets radial components [default: 4]
+    norder (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel [default: 8]
-    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
-    bound (int): minimum distance to boundary
+    kmax (float | None): maximum k
+    psf_array (NDArray): an average PSF image used to initialize the task
+    kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+    bound (int): minimum distance to boundary [default: 0]
+    mag_zero (float): magnitude zero point [default: 30]
     """
 
     def __init__(
         self,
-        mag_zero: float,
-        psf_array: NDArray,
         cov_matrix: Covariance,
         pixel_scale: float,
         sigma_arcsec: float,
-        nord: int = 4,
+        norder: int = 4,
         det_nrot: int = 4,
-        klim_thres: float = 1e-20,
+        kmax: float | None = None,
+        psf_array: NDArray | None = None,
+        kmax_thres: float = 1e-20,
         bound: int = 0,
+        mag_zero: float = 30.0,
     ) -> None:
         super().__init__(
-            mag_zero=mag_zero,
-            psf_array=psf_array,
+            npix=npix_default,
             sigma_arcsec=sigma_arcsec,
             pixel_scale=pixel_scale,
-            nord=nord,
+            norder=norder,
             det_nrot=det_nrot,
-            klim_thres=klim_thres,
+            kmax=kmax,
+            psf_array=psf_array,
+            kmax_thres=kmax_thres,
+            mag_zero=mag_zero,
         )
 
         self.dtask = FpfsImage(
@@ -156,7 +162,7 @@ class FpfsDetect(ImgBase):
             ny=npix_patch,
             scale=self.pixel_scale,
             sigma_arcsec=self.sigma_arcsec,
-            klim=self.klim / self.pixel_scale,
+            klim=self.kmax / self.pixel_scale,
             psf_array=psf_array,
             use_estimate=True,
             npix_overlap=npix_overlap,
@@ -216,110 +222,171 @@ class FpfsMeasure(ImgBase):
     """A base class for measurement
 
     Args:
-    mag_zero (float): magnitude zero point
-    psf_array (NDArray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
-    nord (int): the highest order of Shapelets radial components [default: 4]
+    norder (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
-    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+    kmax (float | None): maximum k
+    psf_array (NDArray | None): an average PSF image used to initialize the task
+    kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+    mag_zero (float): magnitude zero point [default: 30.0]
     """
 
     def __init__(
         self,
-        mag_zero: float,
-        psf_array: NDArray,
         pixel_scale: float,
         sigma_arcsec: float,
-        nord: int = 4,
+        norder: int = 4,
         det_nrot: int = 4,
-        klim_thres: float = 1e-20,
+        kmax: float | None = None,
+        psf_array: NDArray | None = None,
+        kmax_thres: float = 1e-20,
+        mag_zero: float = 30.0,
     ) -> None:
         super().__init__(
-            mag_zero=mag_zero,
-            psf_array=psf_array,
+            npix=npix_default,
             pixel_scale=pixel_scale,
             sigma_arcsec=sigma_arcsec,
-            nord=nord,
+            norder=norder,
             det_nrot=det_nrot,
-            klim_thres=klim_thres,
+            kmax=kmax,
+            psf_array=psf_array,
+            kmax_thres=kmax_thres,
+            mag_zero=mag_zero,
         )
         self.mtask = FpfsImage(
-            nx=self.ngrid,
-            ny=self.ngrid,
+            nx=self.npix,
+            ny=self.npix,
             scale=self.pixel_scale,
             sigma_arcsec=self.sigma_arcsec,
-            klim=self.klim / self.pixel_scale,
+            klim=self.kmax / self.pixel_scale,
             psf_array=psf_array,
             use_estimate=True,
         )
         self.prepare_fpfs_bases()
+
+        self.bfunc_use = np.transpose(self.bfunc, (1, 2, 0))
         return
+
+    def run_single_psf(
+        self,
+        gal_array: NDArray,
+        psf_array: NDArray,
+        noise_array: NDArray | None = None,
+        det: NDArray | None = None,
+    ) -> tuple[NDArray, NDArray | None]:
+        """This function measure galaxy shapes at the position of the detection
+        using PSF image data
+
+        Args:
+        gal_array (NDArray): galaxy image data
+        psf_array (NDArray): psf image data
+        noise_array (NDArray | None): noise image data [default: None]
+        det (list|None): detection catalog
+
+        Returns:
+        src_g (NDArray): source measurement catalog
+        src_n (NDArray): noise measurement catalog
+        """
+        src_g = self.mtask.measure_source(
+            gal_array=gal_array,
+            filter_image=self.bfunc_use,
+            psf_array=psf_array,
+            det=det,
+            do_rotate=False,
+        )
+        if noise_array is not None:
+            src_n = self.mtask.measure_source(
+                gal_array=noise_array,
+                filter_image=self.bfunc_use,
+                psf_array=psf_array,
+                det=det,
+                do_rotate=True,
+            )
+            src_g = src_g + src_n
+        else:
+            src_n = None
+        return src_g, src_n
+
+    def run_spacial_psf(
+        self,
+        gal_array: NDArray,
+        psf_obj: BasePsf,
+        noise_array: NDArray | None = None,
+        det: NDArray | None = None,
+    ) -> tuple[NDArray, NDArray | None]:
+        """This function measure galaxy shapes at the position of the detection
+        using PSF model with spacial variation
+
+        Args:
+        gal_array (NDArray): galaxy image data
+        psf_model (BasePsf): psf image data
+        noise_array (NDArray | None): noise image data [default: None]
+        det (list|None): detection catalog
+
+        Returns:
+        src_g (NDArray): source measurement catalog
+        src_n (NDArray): noise measurement catalog
+        """
+        src_g = self.mtask.measure_source(
+            gal_array=gal_array,
+            filter_image=self.bfunc_use,
+            psf_obj=psf_obj,
+            det=det,
+            do_rotate=False,
+        )
+        if noise_array is not None:
+            src_n = self.mtask.measure_source(
+                gal_array=noise_array,
+                filter_image=self.bfunc_use,
+                psf_obj=psf_obj,
+                det=det,
+                do_rotate=True,
+            )
+            src_g = src_g + src_n
+        else:
+            src_n = None
+        return src_g, src_n
 
     def run(
         self,
         gal_array: NDArray,
+        psf: BasePsf | NDArray,
         noise_array: NDArray | None = None,
-        psf: BasePsf | NDArray | None = None,
         det: NDArray | None = None,
     ) -> Catalog:
         """This function measure galaxy shapes at the position of the detection
 
         Args:
         gal_array (NDArray): galaxy image data
+        psf (BasePsf | NDArray): psf image data or psf model
         noise_array (NDArray | None): noise image data [default: None]
-        psf (BasePsf | NDArray | None): psf image data or psf model
         det (list|None): detection catalog
 
         Returns:
-        out (NDArray): galaxy measurement catalog
+        (NDArray): galaxy measurement catalog
         """
-        bfunc = np.transpose(self.bfunc, (1, 2, 0))
-        if psf is None or isinstance(psf, np.ndarray):
-            src_g = self.mtask.measure_source(
+        if isinstance(psf, np.ndarray):
+            src_g, src_n = self.run_single_psf(
                 gal_array=gal_array,
-                filter_image=bfunc,
                 psf_array=psf,
+                noise_array=noise_array,
                 det=det,
-                do_rotate=False,
             )
-            if noise_array is not None:
-                src_n = self.mtask.measure_source(
-                    gal_array=noise_array,
-                    filter_image=bfunc,
-                    psf_array=psf,
-                    det=det,
-                    do_rotate=True,
-                )
-                src_g = src_g + src_n
-            else:
-                src_n = None
-        elif isinstance(psf, BasePsf):
-            src_g = self.mtask.measure_source(
+        elif (isinstance(psf, BasePsf) and psf.crun):
+            src_g, src_n = self.run_spacial_psf(
                 gal_array=gal_array,
-                filter_image=bfunc,
                 psf_obj=psf,
+                noise_array=noise_array,
                 det=det,
-                do_rotate=False,
             )
-            if noise_array is not None:
-                src_n = self.mtask.measure_source(
-                    gal_array=noise_array,
-                    filter_image=bfunc,
-                    psf_obj=psf,
-                    det=det,
-                    do_rotate=True,
-                )
-                src_g = src_g + src_n
-            else:
-                src_n = None
         else:
             raise RuntimeError("psf does not have a correct type")
         return Catalog(
             array=src_g,
             noise=src_n,
             mag_zero=self.mag_zero,
-            nord=self.nord,
+            norder=self.norder,
             det_nrot=self.det_nrot,
             pixel_scale=self.pixel_scale,
             sigma_arcsec=self.sigma_arcsec,

@@ -89,10 +89,10 @@ class CatTaskBase(object):
     def __init__(
         self,
         cov_matrix: Covariance,
-        nord: int = -1,
+        norder: int = -1,
         det_nrot: int = -1,
     ):
-        self.nord = nord
+        self.norder = norder
         self.det_nrot = det_nrot
         self.colnames = []
         self.cov_matrix = cov_matrix
@@ -100,19 +100,19 @@ class CatTaskBase(object):
 
         # Initialize the column names
         # and define cuts dependends on covariance matrix
-        if self.nord >= 4:
+        if self.norder >= 4:
             if not hasattr(cov_matrix, "std_m00"):
                 raise ValueError(
                     "The input covariance does not have std_m00",
-                    "which is required for nord = %d" % self.nord,
+                    "which is required for norder = %d" % self.norder,
                 )
             if not hasattr(cov_matrix, "std_r2"):
                 raise ValueError(
                     "The input covariance does not have std_r2",
-                    "which is required for nord = %d" % self.nord,
+                    "which is required for norder = %d" % self.norder,
                 )
             # Initialize column names
-            snames, _ = get_shapelets_col_names(nord)
+            snames, _ = get_shapelets_col_names(norder)
             self.colnames = self.colnames + snames
             # standard deviation
             std_m00 = cov_matrix.std_m00
@@ -136,7 +136,7 @@ class CatTaskBase(object):
                     ("e2_g2", "f8"),  # shear response of shape
                 ]
             )
-            if self.nord >= 6:
+            if self.norder >= 6:
                 self.dtype.extend(
                     [
                         ("q1", "f8"),  # shape (4th order)
@@ -179,7 +179,7 @@ class CatTaskBase(object):
         if not set(self.colnames).issubset(cov_matrix.colnames):
             raise ValueError(
                 "Input covariance matrix has a different colnames from",
-                "nord = %d, det_nrot = %d" % (self.nord, self.det_nrot),
+                "norder = %d, det_nrot = %d" % (self.norder, self.det_nrot),
             )
         return
 
@@ -193,31 +193,31 @@ class CatTaskBase(object):
     ):
         # selection on SNR
         if snr_min is not None:
-            if self.nord >= 4:
+            if self.norder >= 4:
                 self.snr_min = snr_min
                 self.m00_min = snr_min * self.cov_matrix.std_m00
             else:
                 raise RuntimeError("Cannot update srn_min")
         # selection on size
         if r2_min is not None:
-            if self.nord >= 4:
+            if self.norder >= 4:
                 self.r2_min = r2_min
             else:
                 raise RuntimeError("Cannot update r2_min")
         if r2_max is not None:
-            if self.nord >= 4:
+            if self.norder >= 4:
                 self.r2_max = r2_max
             else:
                 raise RuntimeError("Cannot update r2_min")
         # shape parameters
         if c0 is not None:
-            if self.nord >= 4:
+            if self.norder >= 4:
                 self.C0 = c0 * self.cov_matrix.std_m00
             else:
                 raise RuntimeError("Cannot update c0")
         # detection threshold
         if pthres is not None:
-            if self.nord >= 4:
+            if self.norder >= 4:
                 self.pthres = pthres
             else:
                 raise RuntimeError("Cannot update pthres")
@@ -376,7 +376,7 @@ class CatTaskBase(object):
             m22s_g2,
         )
         out = [e1, e1_g1, e2, e2_g2]
-        if self.nord >= 6:
+        if self.norder >= 6:
             m42c_g1, m42s_g2 = self._dg_4th(x - 2.0 * y)
             q1, q1_g1, q2, q2_g2 = self._ell_4th(
                 x,
@@ -415,11 +415,10 @@ class CatTaskBase(object):
         Returns:
         result (NDArray):   Measurements
         """
-        assert catalog.nord == self.nord, "input has wrong nord"
+        assert catalog.norder == self.norder, "input has wrong norder"
         assert catalog.det_nrot == self.det_nrot, "input has wrong det_nrot"
         self.pixel_scale = catalog.pixel_scale
         self.sigma_arcsec = catalog.sigma_arcsec
-        self.mag_zero = catalog.mag_zero
         if catalog.noise is None:
             func = jax.vmap(
                 self._run_nn,
@@ -446,29 +445,29 @@ class CatTaskBase(object):
 class CatalogTask:
     def __init__(
         self,
-        nord: int,
+        norder: int,
         det_nrot: int,
         cov_matrix: Covariance,
     ):
         """Fpfs Catalog Task"""
-        self.nord = nord
+        self.norder = norder
         self.det_nrot = det_nrot
-        self.det_task = None
-        self.meas_task = None
-        if self.det_nrot >= 4 and self.nord >= 4:
+        assert self.norder >= 4
+        if self.det_nrot >= 4:
             self.det_task = CatTaskBase(
                 cov_matrix=cov_matrix,
-                nord=nord,
-                det_nrot=det_nrot,
+                norder=self.norder,
+                det_nrot=self.det_nrot,
             )
-        if self.nord >= 4:
-            self.meas_task = CatTaskBase(
-                cov_matrix=cov_matrix,
-                nord=nord,
-                det_nrot=-1,
-            )
-            ndt = [(name + "_2", dtype) for name, dtype in self.meas_task.dtype]
-            self.meas_task.dtype = ndt
+        else:
+            self.det_task = None
+        self.meas_task = CatTaskBase(
+            cov_matrix=cov_matrix,
+            norder=self.norder,
+            det_nrot=-1,
+        )
+        ndt = [(name + "_2", dtype) for name, dtype in self.meas_task.dtype]
+        self.meas_task.dtype = ndt
         return
 
     def update_parameters(
@@ -512,20 +511,13 @@ class CatalogTask:
         src_list = []
         if catalog is not None:
             assert self.det_task is not None
-            assert catalog.nord == self.det_task.nord
+            assert catalog.norder == self.det_task.norder
             assert catalog.det_nrot == self.det_task.det_nrot
 
             array_det = self.det_task.run(
                 catalog=catalog,
             )
             src_list.append(array_det)
-
-            # mask out those with negligible weight
-            array_mask = np.array(
-                (array_det["w"] > 1e-10),
-                dtype=[("mask", "?")],
-            )
-            src_list.append(array_mask)
 
         if catalog2 is not None:
             assert self.meas_task is not None

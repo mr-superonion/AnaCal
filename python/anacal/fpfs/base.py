@@ -6,10 +6,18 @@ from numpy.typing import NDArray
 from ..base import AnacalBase
 
 
-def get_shapelets_col_names(nord: int) -> tuple[list, list]:
+def get_shapelets_col_names(norder: int) -> tuple[list, list]:
+    """This function returns the column names of shapelet modes
+    Args:
+    norder (int):  order of the shapelet radial number
+
+    Returns:
+    name_s (list): list of the column name
+    ind_s (list): list of index in the extended basis function list
+    """
     # M_{nm}
-    # nm = n*(nord+1)+m
-    if nord == 4:
+    # nm = n*(norder+1)+m
+    if norder == 4:
         # This setup is for shear response only
         # Only uses M00, M20, M22 (real and img) and M40, M42 (real and img)
         name_s = [
@@ -34,7 +42,7 @@ def get_shapelets_col_names(nord: int) -> tuple[list, list]:
             [24, False],
             [24, True],
         ]
-    elif nord == 6:
+    elif norder == 6:
         # This setup is able to derive kappa response and shear response
         # Only uses M00, M20, M22 (real and img), M40, M42(real and img), M60
         name_s = [
@@ -67,9 +75,9 @@ def get_shapelets_col_names(nord: int) -> tuple[list, list]:
         ]
     else:
         raise ValueError(
-            "only support for nord= 4 or nord=6, but your input\
-                is nord=%d"
-            % nord
+            "only support for norder= 4 or norder=6, but your input\
+                is norder=%d"
+            % norder
         )
     return name_s, ind_s
 
@@ -89,50 +97,49 @@ class ImgBase(AnacalBase):
     """A base class for measurement
 
     Args:
-    mag_zero (float): magnitude zero point
-    psf_array (ndarray): an average PSF image used to initialize the task
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
-    nord (int): the highest order of Shapelets radial components [default: 4]
+    norder (int): the highest order of Shapelets radial components [default: 4]
     det_nrot (int): number of rotation in the detection kernel
-    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+    kmax (float | None): maximum k
+    psf_array (ndarray): an average PSF image [default: None]
+    kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+    mag_zero (float): magnitude zero point [default: 30.0]
     verbose (bool): whether print out INFO
     """
 
     def __init__(
         self,
-        mag_zero: float,
-        psf_array: NDArray,
+        npix: int,
         pixel_scale: float,
         sigma_arcsec: float,
-        nord: int = 4,
+        norder: int = 4,
         det_nrot: int = 4,
-        klim_thres: float = 1e-20,
+        kmax: float | None = None,
+        psf_array: NDArray | None = None,
+        kmax_thres: float = 1e-20,
+        mag_zero: float = 30.0,
         verbose: bool = False,
     ) -> None:
         super().__init__(verbose)
+        self.npix = npix
         self.mag_zero = mag_zero
-        self.nord = nord
+        self.norder = norder
         self.det_nrot = det_nrot
-        self.logger.info("Order of the Shapelets: nord=%d" % self.nord)
+        self.logger.info("Order of the Shapelets: norder=%d" % self.norder)
         self.logger.info(
             "Number of Rotation for detection: det_nrot=%d" % self.det_nrot
         )
 
         self.sigma_arcsec = sigma_arcsec
-        self.ngrid = psf_array.shape[0]
         if self.sigma_arcsec > 3.0:
             raise ValueError("sigma_arcsec should be < 3 arcsec")
-        if self.nord < 4 and self.det_nrot < 4:
-            raise ValueError("Either nord or det_nrot should be >= 4")
-
-        # Preparing PSF
-        psf_f = np.fft.rfft2(psf_array)
-        psf_pow = (np.abs(psf_f) ** 2.0).astype(np.float64)
+        if self.norder < 4 and self.det_nrot < 4:
+            raise ValueError("Either norder or det_nrot should be >= 4")
 
         # A few import scales
         self.pixel_scale = pixel_scale
-        self._dk = 2.0 * np.pi / self.ngrid  # assuming pixel scale is 1
+        self._dk = 2.0 * np.pi / self.npix  # assuming pixel scale is 1
 
         # the following two assumes pixel_scale = 1
         self.sigmaf = float(self.pixel_scale / self.sigma_arcsec)
@@ -140,37 +147,46 @@ class ImgBase(AnacalBase):
             "Shapelet kernel in configuration space: sigma= %.4f arcsec"
             % (sigma_arcsec)
         )
-        # effective nyquest wave number
-        self.klim = (
-            get_klim(
-                psf_pow=psf_pow,
-                sigma=self.sigmaf / np.sqrt(2.0),
-                klim_thres=klim_thres,
+        if psf_array is not None:
+            if not psf_array.shape == (npix, npix):
+                raise ValueError("psf arry has a wrong shape")
+        if kmax is None:
+            assert psf_array is not None
+            # truncation raduis for PSF in Fourier space
+            psf_f = np.fft.rfft2(psf_array)
+            psf_pow = (np.abs(psf_f) ** 2.0).astype(np.float64)
+            self.kmax = (
+                get_kmax(
+                    psf_pow=psf_pow,
+                    sigma=self.sigmaf / np.sqrt(2.0),
+                    kmax_thres=kmax_thres,
+                )
+                * self._dk
             )
-            * self._dk
-        )
-        self.logger.info("Maximum |k| for shapelet is %.3f" % (self.klim))
+        else:
+            self.kmax = kmax
+        self.logger.info("Maximum |k| for shapelet is %.3f" % (self.kmax))
         return
 
     def prepare_fpfs_bases(self):
         """This fucntion prepare the FPFS bases (shapelets and detectlets)"""
         bfunc = []
         self.colnames = []
-        if self.nord >= 4:
+        if self.norder >= 4:
             sfunc, snames = shapelets2d(
-                ngrid=self.ngrid,
-                nord=self.nord,
+                npix=self.npix,
+                norder=self.norder,
                 sigma=self.sigmaf,
-                klim=self.klim,
+                kmax=self.kmax,
             )
             bfunc.append(sfunc)
             self.colnames = self.colnames + snames
         if self.det_nrot >= 4:
             dfunc, dnames = detlets2d(
-                ngrid=self.ngrid,
+                npix=self.npix,
                 det_nrot=self.det_nrot,
                 sigma=self.sigmaf,
-                klim=self.klim,
+                kmax=self.kmax,
             )
             bfunc.append(dfunc)
             self.colnames = self.colnames + dnames
@@ -183,16 +199,16 @@ class ImgBase(AnacalBase):
 
 
 def gauss_kernel_rfft(
-    ny: int, nx: int, sigma: float, klim: float, return_grid: bool = False
+    ny: int, nx: int, sigma: float, kmax: float, return_grid: bool = False
 ):
     """Generates a Gaussian kernel on grids for np.fft.rfft transform
-    The kernel is truncated at radius klim.
+    The kernel is truncated at radius kmax.
 
     Args:
     ny (int): grid size in y-direction
     nx (int): grid size in x-direction
     sigma (float): scale of Gaussian in Fourier space (pixel scale=1)
-    klim (float): upper limit of k
+    kmax (float): upper limit of k
     return_grid (bool): return grids or not
 
     Returns:
@@ -203,7 +219,7 @@ def gauss_kernel_rfft(
     y = np.fft.fftfreq(ny, 1 / np.pi / 2.0)
     ygrid, xgrid = np.meshgrid(y, x, indexing="ij")
     r2 = xgrid**2.0 + ygrid**2.0
-    mask = (r2 <= klim**2).astype(int)
+    mask = (r2 <= kmax**2).astype(int)
     out = np.exp(-r2 / 2.0 / sigma**2.0) * mask
     if not return_grid:
         return out
@@ -211,31 +227,31 @@ def gauss_kernel_rfft(
         return out, (ygrid, xgrid)
 
 
-def shapelets2d_func(ngrid: int, nord: int, sigma: float, klim: float):
+def shapelets2d_func(npix: int, norder: int, sigma: float, kmax: float):
     """Generates complex shapelets function in Fourier space, chi00 are
     normalized to 1
-    [only support square stamps: ny=nx=ngrid]
+    [only support square stamps: ny=nx=npix]
 
     Args:
-    ngrid (int): number of pixels in x and y direction
-    nord (int): radial order of the shaplets
+    npix (int): number of pixels in x and y direction
+    norder (int): radial order of the shaplets
     sigma (float): scale of shapelets in Fourier space
-    klim (float): upper limit of |k|
+    kmax (float): upper limit of |k|
 
     Returns:
     chi (ndarray): 2d shapelet basis
     """
 
-    mord = nord
+    mord = norder
     gauss_ker, (yfunc, xfunc) = gauss_kernel_rfft(
-        ngrid,
-        ngrid,
+        npix,
+        npix,
         sigma,
-        klim,
+        kmax,
         return_grid=True,
     )
     # for inverse Fourier transform
-    gauss_ker = gauss_ker / ngrid**2.0
+    gauss_ker = gauss_ker / npix**2.0
 
     rfunc = np.sqrt(xfunc**2.0 + yfunc**2.0)  # radius
     r2_over_sigma2 = (rfunc / sigma) ** 2.0
@@ -248,19 +264,19 @@ def shapelets2d_func(ngrid: int, nord: int, sigma: float, klim: float):
     np.divide(yfunc, rfunc, where=rmask, out=ytfunc)  # sin(phi)
     eulfunc = xtfunc + 1j * ytfunc  # e^{jphi}
     # Set up Laguerre polynomials
-    lfunc = np.zeros((nord + 1, mord + 1, ny, nx), dtype=np.float64)
+    lfunc = np.zeros((norder + 1, mord + 1, ny, nx), dtype=np.float64)
     lfunc[0, :, :, :] = 1.0
     lfunc[1, :, :, :] = (
         1.0 - r2_over_sigma2 + np.arange(mord + 1)[None, :, None, None]
     )
     #
-    chi = np.zeros((nord + 1, mord + 1, ny, nx), dtype=np.complex128)
-    for n in range(2, nord + 1):
+    chi = np.zeros((norder + 1, mord + 1, ny, nx), dtype=np.complex128)
+    for n in range(2, norder + 1):
         for m in range(mord + 1):
             lfunc[n, m, :, :] = (2.0 + (m - 1.0 - r2_over_sigma2) / n) * lfunc[
                 n - 1, m, :, :
             ] - (1.0 + (m - 1.0) / n) * lfunc[n - 2, m, :, :]
-    for nn in range(nord + 1):
+    for nn in range(norder + 1):
         for mm in range(nn, -1, -2):
             c1 = (nn - abs(mm)) // 2
             d1 = (nn + abs(mm)) // 2
@@ -276,30 +292,30 @@ def shapelets2d_func(ngrid: int, nord: int, sigma: float, klim: float):
                 * eulfunc**mm
                 * (1j) ** nn
             )
-    chi = chi.reshape(((nord + 1) ** 2, ny, nx))
+    chi = chi.reshape(((norder + 1) ** 2, ny, nx))
     return chi
 
 
-def shapelets2d(ngrid: int, nord: int, sigma: float, klim: float):
+def shapelets2d(npix: int, norder: int, sigma: float, kmax: float):
     """Generates real shapelets function in Fourier space, chi00 are
     normalized to 1
-    [only support square stamps: ny=nx=ngrid]
+    [only support square stamps: ny=nx=npix]
 
     Args:
-    ngrid (int): number of pixels in x and y direction
-    nord (int): radial order of the shaplets
+    npix (int): number of pixels in x and y direction
+    norder (int): radial order of the shaplets
     sigma (float): scale of shapelets in Fourier space
-    klim (float): upper limit of |k|
+    kmax (float): upper limit of |k|
 
     Returns:
-    chi_2 (ndarray): 2d shapelet basis w/ shape [n,ngrid,ngrid]
+    chi_2 (ndarray): 2d shapelet basis w/ shape [n,npix,npix]
     name_s (list): A list of shaplet names
     """
-    name_s, ind_s = get_shapelets_col_names(nord)
+    name_s, ind_s = get_shapelets_col_names(norder)
     # generate the complex shaplet functions
-    chi = shapelets2d_func(ngrid, nord, sigma, klim)
+    chi = shapelets2d_func(npix, norder, sigma, kmax)
     # transform to real shapelet functions
-    chi_2 = np.zeros((len(name_s), ngrid, ngrid // 2 + 1))
+    chi_2 = np.zeros((len(name_s), npix, npix // 2 + 1))
     for i, ind in enumerate(ind_s):
         if ind[1]:
             chi_2[i] = chi[ind[0]].imag
@@ -310,33 +326,33 @@ def shapelets2d(ngrid: int, nord: int, sigma: float, klim: float):
 
 
 def detlets2d(
-    ngrid: int,
+    npix: int,
     det_nrot: int,
     sigma: float,
-    klim: float,
+    kmax: float,
 ):
     """Generates shapelets function in Fourier space, chi00 are normalized to 1
-    This function only supports square stamps: ny=nx=ngrid.
+    This function only supports square stamps: ny=nx=npix.
 
     Args:
-    ngrid (int): number of pixels in x and y direction
+    npix (int): number of pixels in x and y direction
     sigma (float): radius of shapelets in Fourier space
-    klim (float): upper limit of |k|
+    kmax (float): upper limit of |k|
     det_nrot (int): number of rotation in the detection kernel
 
     Returns:
-    psi (ndarray): 2d detlets basis in shape of [det_nrot,3,ngrid,ngrid]
+    psi (ndarray): 2d detlets basis in shape of [det_nrot,3,npix,npix]
     """
     # Gaussian Kernel
     gauss_ker, (k2grid, k1grid) = gauss_kernel_rfft(
-        ngrid,
-        ngrid,
+        npix,
+        npix,
         sigma,
-        klim,
+        kmax,
         return_grid=True,
     )
     # for inverse Fourier transform
-    gauss_ker = gauss_ker / ngrid**2.0
+    gauss_ker = gauss_ker / npix**2.0
 
     # for shear response
     q1_ker = (k1grid**2.0 - k2grid**2.0) / sigma**2.0 * gauss_ker
@@ -359,41 +375,41 @@ def detlets2d(
     return psi, name_d
 
 
-def get_klim(
+def get_kmax(
     psf_pow: NDArray,
     sigma: float,
-    klim_thres: float = 1e-20,
+    kmax_thres: float = 1e-20,
 ) -> float:
-    """Gets klim, the region outside klim is supressed by the shaplet Gaussian
+    """Gets kmax, the region outside kmax is supressed by the shaplet Gaussian
     kernel in FPFS shear estimation method; therefore we set values in this
     region to zeros
 
     Args:
     psf_pow (ndarray): PSF's Fourier power (rfft)
     sigma (float): one sigma of Gaussian Fourier power (pixel scale=1)
-    klim_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+    kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
 
     Returns:
-    klim (float): the limit radius
+    kmax (float): the limit radius
     """
-    ngrid = psf_pow.shape[0]
+    npix = psf_pow.shape[0]
     gaussian, (y, x) = gauss_kernel_rfft(
-        ngrid,
-        ngrid,
+        npix,
+        npix,
         sigma,
         np.pi,
         return_grid=True,
     )
     r = np.sqrt(x**2.0 + y**2.0)  # radius
-    mask = gaussian / psf_pow < klim_thres
-    dk = 2.0 * math.pi / ngrid
-    klim_pix = round(float(np.min(r[mask]) / dk))
-    klim_pix = min(max(klim_pix, ngrid // 5), ngrid // 2 - 1)
-    return klim_pix
+    mask = gaussian / psf_pow < kmax_thres
+    dk = 2.0 * math.pi / npix
+    kmax_pix = round(float(np.min(r[mask]) / dk))
+    kmax_pix = min(max(kmax_pix, npix // 5), npix // 2 - 1)
+    return kmax_pix
 
 
 def truncate_square(arr: NDArray, rcut: int) -> None:
-    """Truncate the input array with square
+    """Truncates the input array with square
 
     Args:
     arr (ndarray): image array
@@ -401,12 +417,12 @@ def truncate_square(arr: NDArray, rcut: int) -> None:
     """
     if len(arr.shape) != 2 or arr.shape[0] != arr.shape[1]:
         raise ValueError("Input array must be a 2D square array")
-    ngrid = arr.shape[0]
-    ngrid2 = ngrid // 2
-    assert rcut < ngrid2, "truncation radius too large."
-    if rcut < ngrid2 - 1:
-        arr[: ngrid2 - rcut, :] = 0
-        arr[ngrid2 + rcut + 1 :, :] = 0
-        arr[:, : ngrid2 - rcut] = 0
-        arr[:, ngrid2 + rcut + 1 :] = 0
+    npix = arr.shape[0]
+    npix2 = npix // 2
+    assert rcut < npix2, "truncation radius too large."
+    if rcut < npix2 - 1:
+        arr[: npix2 - rcut, :] = 0
+        arr[npix2 + rcut + 1 :, :] = 0
+        arr[:, : npix2 - rcut] = 0
+        arr[:, npix2 + rcut + 1 :] = 0
     return

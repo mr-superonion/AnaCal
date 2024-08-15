@@ -25,7 +25,7 @@ def test_fpfs_measure(seed):
         .array
     )
 
-    nord = 4
+    norder = 4
     det_nrot = 4
     mag_zero = 30.0
     sigma_as = 0.53
@@ -39,13 +39,13 @@ def test_fpfs_measure(seed):
         psf_data,
         pix_scale=scale,
         sigma_arcsec=sigma_as,
-        nord=nord,
+        nord=norder,
         det_nrot=det_nrot,
     )
     cov_element = np.ones((task.ncol, task.ncol)) * std**2.0
     cov_matrix_obj = anacal.fpfs.table.Covariance(
         array=cov_element,
-        nord=nord,
+        norder=norder,
         det_nrot=det_nrot,
         mag_zero=mag_zero,
         pixel_scale=scale,
@@ -74,10 +74,14 @@ def test_fpfs_measure(seed):
         mag_zero=mag_zero,
         pixel_scale=scale,
         sigma_arcsec=sigma_as,
-        nord=nord,
+        norder=norder,
         det_nrot=det_nrot,
     )
-    src1 = mtask.run(gal_array=gal_data, det=det1)
+    src1 = mtask.run(
+        gal_array=gal_data,
+        psf=psf_data,
+        det=det1,
+    )
 
     np.testing.assert_almost_equal(mtask.bfunc.real, task.bfunc.real)
     np.testing.assert_almost_equal(mtask.bfunc.imag, task.bfunc.imag)

@@ -84,7 +84,7 @@ namespace anacal {
         measure_source(
             const py::array_t<double>& gal_array,
             const py::array_t<std::complex<double>>& filter_image,
-            const std::optional<py::array_t<double>>& psf_array=std::nullopt,
+            const py::array_t<double>& psf_array,
             const std::optional<py::array_t<FpfsPeaks>>& det=std::nullopt,
             bool do_rotate=false
         );

@@ -3,7 +3,10 @@ requires = ["setuptools>=38", "pybind11>=2.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.flake8]
-ignore = ["N801", "N803", "N816", "W503", "W504", "E731", "E203", "E303"]
+ignore = [
+    "N801", "N802", "N803", "N806", "N815", "N816", "W503", "W504",
+    "E133", "E203", "E303", "E731", "E226", "E228"
+]
 exclude = [".git", "__pycache__", "docs", "build", "dist"]
 max-line-length = 80
 

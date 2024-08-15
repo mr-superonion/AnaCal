@@ -12,7 +12,7 @@ def test_catalog_shear():
     cov_matrix = np.abs(2.0 + np.random.randn(21, 21))
 
     # Setups
-    nord = 4
+    norder = 4
     det_nrot = 4
     snr_min = 12
     r2_min = 0.1
@@ -40,7 +40,7 @@ def test_catalog_shear():
 
     # New Task CatalogTask
     cov_obj = anacal.fpfs.table.Covariance(
-        nord=nord,
+        norder=norder,
         det_nrot=det_nrot,
         array=cov_matrix,
         mag_zero=mag_zero,
@@ -49,7 +49,7 @@ def test_catalog_shear():
     )
 
     meas_obj = anacal.fpfs.ctask.CatalogTask(
-        nord=nord,
+        norder=norder,
         det_nrot=det_nrot,
         cov_matrix=cov_obj,
     )
@@ -62,7 +62,7 @@ def test_catalog_shear():
 
     # primary catalog
     src_1 = anacal.fpfs.table.Catalog(
-        nord=nord,
+        norder=norder,
         det_nrot=det_nrot,
         array=mm,
         noise=nn,
@@ -72,7 +72,7 @@ def test_catalog_shear():
     )
     nshapelets = len(cat_obj.name_shapelets)
     src_2 = anacal.fpfs.table.Catalog(
-        nord=nord,
+        norder=norder,
         array=mm[:, :nshapelets],
         noise=nn[:, :nshapelets],
         mag_zero=mag_zero,
@@ -144,7 +144,7 @@ def test_catalog_mag():
         .array
     )
 
-    nord = 4
+    norder = 4
     det_nrot = 4
     std = 1
     bound = 0
@@ -155,7 +155,7 @@ def test_catalog_mag():
     cov_matrix = np.ones((21, 21)) * std**2.0 * pixel_scale**4.0
     cov_matrix = anacal.fpfs.table.Covariance(
         array=cov_matrix,
-        nord=nord,
+        norder=norder,
         det_nrot=det_nrot,
         mag_zero=mag_zero,
         pixel_scale=pixel_scale,
@@ -182,15 +182,19 @@ def test_catalog_mag():
         psf_array=psf_data,
         pixel_scale=pixel_scale,
         sigma_arcsec=sigma_arcsec,
-        nord=nord,
+        norder=norder,
         det_nrot=det_nrot,
     )
-    src = mtask1.run(gal_array=gal_data, det=det)
+    src = mtask1.run(
+        gal_array=gal_data,
+        psf=psf_data,
+        det=det,
+    )
 
     cat_obj = anacal.fpfs.CatalogTask(
         cov_matrix=cov_matrix,
         det_nrot=det_nrot,
-        nord=nord,
+        norder=norder,
     )
 
     cat_obj.update_parameters(

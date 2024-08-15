@@ -13,10 +13,10 @@ class FpfsObject(object):
         pixel_scale: float,
         sigma_arcsec: float,
         mag_zero: float,
-        nord: int = -1,
+        norder: int = -1,
         det_nrot: int = -1,
     ):
-        self.nord = nord
+        self.norder = norder
         self.det_nrot = det_nrot
         self.pixel_scale = pixel_scale
         self.sigma_arcsec = sigma_arcsec
@@ -28,8 +28,8 @@ class FpfsObject(object):
             )
 
         self.colnames = []
-        if self.nord >= 4:
-            snames, _ = get_shapelets_col_names(self.nord)
+        if self.norder >= 4:
+            snames, _ = get_shapelets_col_names(self.norder)
             self.colnames = self.colnames + snames
         if self.det_nrot >= 4:
             dnames = get_det_col_names(self.det_nrot)
@@ -49,12 +49,12 @@ class Catalog(FpfsObject):
         pixel_scale: float,
         sigma_arcsec: float,
         mag_zero: float,
-        nord: int = -1,
+        norder: int = -1,
         det_nrot: int = -1,
         noise: None | NDArray[np.float64] = None,
     ):
         super().__init__(
-            nord=nord,
+            norder=norder,
             det_nrot=det_nrot,
             mag_zero=mag_zero,
             pixel_scale=pixel_scale,
@@ -86,14 +86,14 @@ class Catalog(FpfsObject):
             else:
                 noise = None
             header = fits[0].read_header()
-            nord = header["nord"]
+            norder = header["norder"]
             det_nrot = header["det_nrot"]
             pixel_scale = header["pixel_scale"]
             mag_zero = header["mag_zero"]
             sigma_arcsec = header["sigma_arcsec"]
         return cls(
             array,
-            nord=nord,
+            norder=norder,
             det_nrot=det_nrot,
             pixel_scale=pixel_scale,
             mag_zero=mag_zero,
@@ -108,7 +108,7 @@ class Catalog(FpfsObject):
             if self.noise is not None:
                 fits.write(self.noise, extname="noise")
             header = fits[0].read_header()
-            header["nord"] = self.nord
+            header["norder"] = self.norder
             header["det_nrot"] = self.det_nrot
             header["colnames"] = self.colnames
             header["pixel_scale"] = self.pixel_scale
@@ -125,11 +125,11 @@ class Covariance(FpfsObject):
         pixel_scale: float,
         sigma_arcsec: float,
         mag_zero: float,
-        nord: int = -1,
+        norder: int = -1,
         det_nrot: int = -1,
     ):
         super().__init__(
-            nord=nord,
+            norder=norder,
             det_nrot=det_nrot,
             mag_zero=mag_zero,
             pixel_scale=pixel_scale,
@@ -142,9 +142,9 @@ class Covariance(FpfsObject):
         assert self.array.shape[1] == self.ncol, "array has wrong shape"
 
         self.std_modes = np.sqrt(np.diagonal(self.array))
-        if nord >= 4 and "m00" in self.colnames:
+        if norder >= 4 and "m00" in self.colnames:
             self.std_m00 = self.std_modes[self.di["m00"]]
-        if nord >= 4 and "m20" in self.colnames:
+        if norder >= 4 and "m20" in self.colnames:
             self.std_r2 = np.sqrt(
                 self.array[self.di["m00"], self.di["m00"]]
                 + self.array[self.di["m20"], self.di["m20"]]
@@ -169,14 +169,14 @@ class Covariance(FpfsObject):
             assert "covariance" in fits
             array = fits["covariance"].read()
             header = fits[0].read_header()
-            nord = header["nord"]
+            norder = header["norder"]
             det_nrot = header["det_nrot"]
             pixel_scale = header["pixel_scale"]
             mag_zero = header["mag_zero"]
             sigma_arcsec = header["sigma_arcsec"]
         return cls(
             array,
-            nord=nord,
+            norder=norder,
             det_nrot=det_nrot,
             pixel_scale=pixel_scale,
             sigma_arcsec=sigma_arcsec,
@@ -188,7 +188,7 @@ class Covariance(FpfsObject):
             # Write data to a new extension with a specific name
             fits.write(self.array, extname="covariance")
             header = fits[0].read_header()
-            header["nord"] = self.nord
+            header["norder"] = self.norder
             header["det_nrot"] = self.det_nrot
             header["colnames"] = self.colnames
             header["pixel_scale"] = self.pixel_scale

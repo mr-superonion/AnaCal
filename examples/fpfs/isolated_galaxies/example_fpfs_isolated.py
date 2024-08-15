@@ -25,7 +25,7 @@ nrot_per_gal = 4  # number of rotation for each galaxy
 # Simulation
 ngrid = rcut * 2
 if not do_force_detect:
-    coords = None
+    detection = None
     buff = 15
 else:
     #
@@ -45,11 +45,11 @@ else:
             ("mask_value", np.int32),
         ]
     )
-    coords = np.empty(ns, dtype=dtype)
-    coords["y"] = yx[0]
-    coords["x"] = yx[1]
-    coords["is_peak"] = np.ones(ns)
-    coords["mask_value"] = np.zeros(ns)
+    detection = np.empty(ns, dtype=dtype)
+    detection["y"] = yx[0]
+    detection["x"] = yx[1]
+    detection["is_peak"] = np.ones(ns)
+    detection["mask_value"] = np.zeros(ns)
 
 fpfs_config = anacal.fpfs.FpfsConfig(
     sigma_arcsec=0.52,  # The first measurement scale (also for detection)
@@ -101,12 +101,13 @@ for gname in ["g%d-1" % test_component, "g%d-0" % test_component]:
     out.append(
         anacal.fpfs.process_image(
             fpfs_config=fpfs_config,
+            mag_zero=30.0,
             gal_array=gal_array,
             psf_array=psf_array,
             pixel_scale=pixel_scale,
             noise_variance=max(noise_variance, 0.23),
             noise_array=noise_array,
-            coords=coords,
+            detection=detection,
         )
     )
 
@@ -128,6 +129,20 @@ print("    Multiplicative bias is %.3f e-3" % (mbias * 1e3))
 cbias = (np.sum(e1_0) + np.sum(e1_1)) / (np.sum(e1g1_0) + np.sum(e1g1_1))
 print("    Additive bias is %.3f e-5" % (cbias * 1e5))
 assert mbias < 2e-3
+if do_force_detect:
+    print("Test for no weigtht")
+    print(len(out[0]))
+    e1_0 = out[0][ename]
+    e1_1 = out[1][ename]
+    e1g1_0 = out[0][egname]
+    e1g1_1 = out[1][egname]
+    mbias = (np.sum(e1_0) - np.sum(e1_1)) / (
+        np.sum(e1g1_0) + np.sum(e1g1_1)
+    ) / 0.02 - 1  # 0.02 is the input shear
+    print("    Multiplicative bias is %.3f e-3" % (mbias * 1e3))
+    cbias = (np.sum(e1_0) + np.sum(e1_1)) / (np.sum(e1g1_0) + np.sum(e1g1_1))
+    print("    Additive bias is %.3f e-5" % (cbias * 1e5))
+
 
 print("Measurement with sigma_arcsec=%.2f:" % fpfs_config.sigma_arcsec2)
 ename = "e%d_2" % test_component

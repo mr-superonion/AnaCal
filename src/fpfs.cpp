@@ -267,7 +267,7 @@ py::array_t<double>
 FpfsImage::measure_source(
     const py::array_t<double>& gal_array,
     const py::array_t<std::complex<double>>& filter_image,
-    const std::optional<py::array_t<double>>& psf_array,
+    const py::array_t<double>& psf_array,
     const std::optional<py::array_t<FpfsPeaks>>& det,
     bool do_rotate
 ) {
@@ -279,9 +279,7 @@ FpfsImage::measure_source(
     }
 
 
-    const py::array_t<double>&
-        psf_use = psf_array.has_value() ? *psf_array : this->psf_array;
-    img_obj.set_r(psf_use, -1, -1, false);
+    img_obj.set_r(psf_array, -1, -1, false);
     img_obj.fft();
     if (do_rotate){
         img_obj.rotate90_f();
@@ -347,8 +345,8 @@ FpfsImage::measure_source(
     for (ssize_t j = 0; j < nrow; ++j) {
         int y = det_r(j).y; int x = det_r(j).x;
         {
-            py::array_t<double> psf_use = psf_obj.draw(x, y);
-            img_obj.set_r(psf_use, -1, -1, false);
+            py::array_t<double> psf_array = psf_obj.draw(x, y);
+            img_obj.set_r(psf_array, -1, -1, false);
         }
         img_obj.fft();
         if (do_rotate){
@@ -436,14 +434,14 @@ pyExportFpfs(py::module& m) {
             py::overload_cast<
                 const py::array_t<double>&,
                 const py::array_t<std::complex<double>>&,
-                const std::optional<py::array_t<double>>&,
+                const py::array_t<double>&,
                 const std::optional<py::array_t<FpfsPeaks>>&,
                 bool
             >(&FpfsImage::measure_source),
             "measure source properties using filter at the position of det",
             py::arg("gal_array"),
             py::arg("filter_image"),
-            py::arg("psf_array")=py::none(),
+            py::arg("psf_array"),
             py::arg("det")=py::none(),
             py::arg("do_rotate")=false
         )

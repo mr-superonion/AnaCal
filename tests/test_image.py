@@ -104,14 +104,14 @@ def test_deconvolve_image(seed=1):
     indy = np.arange(ngrid // 2, ngrid, ngrid)
     inds = np.meshgrid(indy, indx, indexing="ij")
     coords = np.vstack(inds).T
-    nord = 4
+    norder = 4
     det_nrot = 4
     # test shear estimation
     task = fpfs.image.measure_source(
         psf_data,
         pix_scale=scale,
         sigma_arcsec=0.53,
-        nord=nord,
+        nord=norder,
         det_nrot=det_nrot,
     )
     # linear observables

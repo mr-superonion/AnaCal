@@ -1,3 +1,4 @@
+import numpy as np
 import numpy.lib.recfunctions as rfn
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
@@ -28,24 +29,17 @@ __all__ = [
 
 
 class FpfsConfig(BaseModel):
-    rcut: int = Field(
-        default=32,
-        description="""Galaxies are put into stamp before measurement, rcut
-            is the radius of the cut
+    npix: int = Field(
+        default=64,
+        description="""size of the stamp before Fourier Transform
         """,
     )
-    nord: int = Field(
+    norder: int = Field(
         default=4,
         description="""Maximum radial number `n` to use for the shapelet basis
         """,
     )
-    det_nrot: int = Field(
-        default=4,
-        description="""Number of directions to calculate when detecting the
-            peaks.
-        """,
-    )
-    klim_thres: float = Field(
+    kmax_thres: float = Field(
         default=1e-12,
         description="""The threshold used to define the upper limit of k we use
         in Fourier space.
@@ -97,146 +91,139 @@ class FpfsConfig(BaseModel):
 
 
 def detect_sources(
+    *,
     fpfs_config: FpfsConfig,
-    gal_array: NDArray,
-    psf_array: NDArray,
     pixel_scale: float,
     cov_matrix: table.Covariance,
+    gal_array: NDArray,
+    psf_array: NDArray,
+    mask_array: NDArray | None = None,
+    star_catalog: NDArray | None = None,
     noise_array: NDArray | None = None,
     mag_zero: float = 30.0,
+    **kwargs,
 ):
-    ny, nx = gal_array.shape
-    # Detection
     dtask = FpfsDetect(
         mag_zero=mag_zero,
-        psf_array=psf_array,
         pixel_scale=pixel_scale,
         sigma_arcsec=fpfs_config.sigma_arcsec,
         cov_matrix=cov_matrix,
-        det_nrot=fpfs_config.det_nrot,
-        klim_thres=fpfs_config.klim_thres,
+        det_nrot=4,
+        psf_array=psf_array,
+        kmax_thres=fpfs_config.kmax_thres,
         bound=fpfs_config.bound,
     )
-    coords = dtask.run(
+    detection = dtask.run(
         gal_array=gal_array,
-        fthres=fpfs_config.fthres,
+        fthres=8.0,
         pthres=fpfs_config.pthres,
         noise_array=noise_array,
+        mask_array=mask_array,
+        star_cat=star_catalog,
     )
-    return coords
+    return detection
 
 
-def measure_linear_obs(
-    fpfs_config: FpfsConfig,
-    gal_array: NDArray,
-    psf_array: NDArray,
-    pixel_scale: float,
-    cov_matrix: table.Covariance,
-    noise_array: NDArray | None = None,
-    coords: NDArray | None = None,
-    mag_zero: float = 30.0,
+def _measure_one_gal(
+    *,
+    gal_array,
+    this_psf_array,
+    det_array,
+    noise_array,
+    mtask,
+    ctask,
 ):
-    ny, nx = gal_array.shape
-    mtask_1 = FpfsMeasure(
-        mag_zero=mag_zero,
-        psf_array=psf_array,
-        pixel_scale=pixel_scale,
-        sigma_arcsec=fpfs_config.sigma_arcsec,
-        klim_thres=fpfs_config.klim_thres,
-        nord=fpfs_config.nord,
-        det_nrot=fpfs_config.det_nrot,
-    )
-    src1 = mtask_1.run(
+    srow, nrow = mtask.run_single_psf(
         gal_array=gal_array,
-        det=coords,
+        psf_array=this_psf_array,
+        det=det_array,
         noise_array=noise_array,
     )
-    del mtask_1
-
-    if fpfs_config.sigma_arcsec2 > 0.0:
-        mtask_2 = FpfsMeasure(
-            mag_zero=mag_zero,
-            psf_array=psf_array,
-            pixel_scale=pixel_scale,
-            sigma_arcsec=fpfs_config.sigma_arcsec2,
-            klim_thres=fpfs_config.klim_thres,
-            nord=fpfs_config.nord,
-            det_nrot=-1,
-        )
-        src2 = mtask_2.run(
-            gal_array=gal_array,
-            det=coords,
-            noise_array=noise_array,
-        )
-        del mtask_2
+    srow = srow[0]
+    if nrow is None:
+        nrow = 0.0
     else:
-        src2 = None
-    return {
-        "src1": src1,
-        "src2": src2,
-    }
+        nrow = nrow[0]
+    return tuple(ctask._run(srow, nrow))
 
 
 def process_image(
+    *,
     fpfs_config: FpfsConfig,
-    gal_array: NDArray,
-    psf_array: NDArray,
     pixel_scale: float,
     noise_variance: float,
+    mag_zero: float,
+    gal_array: NDArray,
+    psf_array: NDArray,
     noise_array: NDArray | None = None,
-    coords: NDArray | None = None,
-    mag_zero: float = 30.0,
+    mask_array: NDArray | None = None,
+    star_catalog: NDArray | None = None,
+    detection: NDArray | None = None,
+    psf_object: BasePsf | None = None,
+    **kwargs,
 ):
-    # Preparing
-    ngrid = fpfs_config.rcut * 2
-    if not psf_array.shape == (ngrid, ngrid):
-        raise ValueError("psf arry has a wrong shape")
+    """Run measurement algorithms on the input exposure, and optionally
+    populate the resulting catalog with extra information.
 
-    # Shapelet Covariance matrix
-    if noise_variance <= 0:
-        raise ValueError(
-            "To enable detection, noise variance should be positive, ",
-            "even though image is noiseless.",
-        )
+    Args:
 
-    noise_task = FpfsNoiseCov(
+    Returns:
+    """
+
+    cov_task = FpfsNoiseCov(
         mag_zero=mag_zero,
-        psf_array=psf_array,
         pixel_scale=pixel_scale,
         sigma_arcsec=fpfs_config.sigma_arcsec,
-        nord=fpfs_config.nord,
-        det_nrot=fpfs_config.det_nrot,
-        klim_thres=fpfs_config.klim_thres,
+        norder=fpfs_config.norder,
+        det_nrot=4,
+        psf_array=psf_array,
+        kmax_thres=fpfs_config.kmax_thres,
     )
-    cov_matrix = noise_task.measure(variance=noise_variance)
-    del noise_task
+    # Since we have additional layer of noise, we need to multiply by two
+    cov_matrix = cov_task.measure(variance=noise_variance * 2.0)
+    del cov_task
 
-    if coords is None:
-        coords = detect_sources(
+    if detection is None:
+        detection = detect_sources(
             fpfs_config=fpfs_config,
-            gal_array=gal_array,
-            psf_array=psf_array,
             pixel_scale=pixel_scale,
             cov_matrix=cov_matrix,
+            gal_array=gal_array,
+            psf_array=psf_array,
+            mask_array=mask_array,
+            star_catalog=star_catalog,
             noise_array=noise_array,
             mag_zero=mag_zero,
         )
 
-    result = measure_linear_obs(
-        fpfs_config=fpfs_config,
-        gal_array=gal_array,
-        psf_array=psf_array,
-        pixel_scale=pixel_scale,
-        cov_matrix=cov_matrix,
-        noise_array=noise_array,
-        coords=coords,
+    # Measurement Tasks
+    # First Measurement comes with detection
+    mtask_d = FpfsMeasure(
         mag_zero=mag_zero,
+        pixel_scale=pixel_scale,
+        sigma_arcsec=fpfs_config.sigma_arcsec,
+        psf_array=psf_array,
+        kmax_thres=fpfs_config.kmax_thres,
+        norder=fpfs_config.norder,
+        det_nrot=4,
     )
+    if fpfs_config.sigma_arcsec2 > 0.0:
+        mtask_m = FpfsMeasure(
+            mag_zero=mag_zero,
+            pixel_scale=pixel_scale,
+            sigma_arcsec=fpfs_config.sigma_arcsec2,
+            psf_array=psf_array,
+            kmax_thres=fpfs_config.kmax_thres,
+            norder=fpfs_config.norder,
+            det_nrot=-1,
+        )
+    else:
+        mtask_m = None
 
-    # Catalog
+    # Catalog Task
     cat_task = CatalogTask(
-        nord=fpfs_config.nord,
-        det_nrot=fpfs_config.det_nrot,
+        norder=fpfs_config.norder,
+        det_nrot=4,
         cov_matrix=cov_matrix,
     )
     cat_task.update_parameters(
@@ -245,10 +232,56 @@ def process_image(
         c0=fpfs_config.c0,
         pthres=fpfs_config.pthres,
     )
-    meas = cat_task.run(catalog=result["src1"], catalog2=result["src2"])
+    assert cat_task.det_task is not None
+
+    cat_task.det_task.pixel_scale = pixel_scale
+    cat_task.det_task.sigma_arcsec = fpfs_config.sigma_arcsec
+    out_dtype = cat_task.det_task.dtype + cat_task.meas_task.dtype
+    if (psf_object is not None) and (not psf_object.crun):
+        meas = []
+        det_dtype = detection.dtype
+        for det in detection:
+            this_psf_array = psf_object.draw(x=det["x"], y=det["y"])
+            det_array = np.array([det], dtype=det_dtype)
+            meas_row = _measure_one_gal(
+                gal_array=gal_array,
+                this_psf_array=this_psf_array,
+                det_array=det_array,
+                noise_array=noise_array,
+                mtask=mtask_d,
+                ctask=cat_task.det_task,
+            )
+            if mtask_m is not None:
+                meas_row = meas_row + _measure_one_gal(
+                    gal_array=gal_array,
+                    this_psf_array=this_psf_array,
+                    det_array=det_array,
+                    noise_array=noise_array,
+                    mtask=mtask_m,
+                    ctask=cat_task.meas_task,
+                )
+            meas.append(meas_row)
+        meas = np.array(meas, dtype=out_dtype)
+    else:
+        src1 = mtask_d.run(
+            gal_array=gal_array,
+            psf=psf_array,
+            det=detection,
+            noise_array=noise_array,
+        )
+        if mtask_m is not None:
+            src2 = mtask_m.run(
+                gal_array=gal_array,
+                psf=psf_array,
+                det=detection,
+                noise_array=noise_array,
+            )
+        else:
+            src2 = None
+        meas = cat_task.run(catalog=src1, catalog2=src2)
 
     return rfn.merge_arrays(
-        [coords, meas],
+        [detection, meas],
         flatten=True,
         usemask=False,
     )

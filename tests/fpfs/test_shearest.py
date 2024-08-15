@@ -61,7 +61,7 @@ def do_test(scale, seed, rcut, gcomp):
     gal_data, psf_data, coords = simulate_gal_psf(
         scale, seed, rcut, gcomp, nrot
     )
-    nord = 6
+    norder = 6
     # Since we do not run detection
     # no detection weight
     det_nrot = -1
@@ -70,13 +70,14 @@ def do_test(scale, seed, rcut, gcomp):
         mag_zero=mag_zero,
         pixel_scale=scale,
         sigma_arcsec=sigma_arcsec,
-        nord=nord,
+        norder=norder,
         det_nrot=det_nrot,
     )
 
     # Run as an exposure
     mms = mtask.run(
         gal_array=gal_data,
+        psf=psf_data,
         det=coords,
     )
 
@@ -84,14 +85,14 @@ def do_test(scale, seed, rcut, gcomp):
     cov_matrix = np.ones((12, 12)) * std**2.0 * scale**4.0
     cov_matrix = anacal.fpfs.table.Covariance(
         array=cov_matrix,
-        nord=nord,
+        norder=norder,
         det_nrot=det_nrot,
         mag_zero=mag_zero,
         pixel_scale=scale,
         sigma_arcsec=sigma_arcsec,
     )
     ctask = anacal.fpfs.CatalogTask(
-        nord=nord,
+        norder=norder,
         det_nrot=det_nrot,
         cov_matrix=cov_matrix,
     )
@@ -119,6 +120,7 @@ def do_test(scale, seed, rcut, gcomp):
     psf_list = [psf_data] * nrot
     mms = mtask.run(
         gal_array=gal_data,
+        psf=psf_data,
         det=coords,
     )
     array2 = np.vstack(

@@ -17,7 +17,7 @@ psf_array = (
     .array
 )
 
-nord = 4
+norder = 4
 det_nrot = 4
 sigma_as = 0.53
 
@@ -25,7 +25,7 @@ task = fpfs.image.measure_source(
     psf_array,
     pix_scale=scale,
     sigma_arcsec=sigma_as,
-    nord=nord,
+    nord=norder,
     det_nrot=det_nrot,
 )
 

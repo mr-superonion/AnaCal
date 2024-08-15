@@ -3,7 +3,7 @@
 
 namespace anacal {
 
-    BasePsf::BasePsf(){
+    BasePsf::BasePsf(): crun(true) {
         // Constructor implementation. Can be empty if nothing to initialize.
     }
 
@@ -61,11 +61,11 @@ namespace anacal {
         return result;
     }
 
-
     void pyExportPsf(py::module& m) {
         py::module_ model = m.def_submodule("psf", "submodule for models");
         py::class_<BasePsf>(model, "BasePsf")
-            .def(py::init<>());
+            .def(py::init<>())
+            .def_readonly("crun", &BasePsf::crun);
 
         py::class_<GridPsf, BasePsf>(model, "GridPsf")
             .def(py::init<
@@ -80,7 +80,13 @@ namespace anacal {
             .def("draw", &GridPsf::draw,
                 "draw the PSF model image",
                 py::arg("x"), py::arg("y")
-            );
+            )
+            .def_readonly("crun", &GridPsf::crun);
+
+         py::class_<PyPsf, BasePsf>(model, "PyPsf")
+            .def(py::init<>())
+            .def("draw", &PyPsf::draw)
+            .def_readonly("crun", &PyPsf::crun);
     }
 
 

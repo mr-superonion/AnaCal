@@ -12,18 +12,20 @@ fpfs_config = anacal.fpfs.FpfsConfig(
 )
 gal_array = fitsio.read(os.path.join(data_dir, "image-00000_g1-0_rot0_i.fits"))
 psf_array = fitsio.read(os.path.join(data_dir, "PSF_Fixed.fits"))
+mag_zero = 30.0
 pixel_scale = 0.2
 noise_variance = 0.23
 noise_array = None
-coords = None
+detection = None
 out = anacal.fpfs.process_image(
     fpfs_config=fpfs_config,
+    mag_zero=mag_zero,
     gal_array=gal_array,
     psf_array=psf_array,
     pixel_scale=pixel_scale,
     noise_variance=noise_variance,
     noise_array=noise_array,
-    coords=coords,
+    detection=detection,
 )
 
 e1 = out["w"] * out["e1"]
