@@ -94,6 +94,7 @@ class FpfsNoiseCov(ImgBase):
             klim=self.kmax / self.pixel_scale,
         )
         noise_pf_deconv = img_obj.draw_f().real
+        del img_obj
 
         _w = np.ones(self.psf_pow.shape) * 2.0
         _w[:, 0] = 1.0
@@ -373,7 +374,7 @@ class FpfsMeasure(ImgBase):
                 noise_array=noise_array,
                 det=det,
             )
-        elif (isinstance(psf, BasePsf) and psf.crun):
+        elif isinstance(psf, BasePsf) and psf.crun:
             src_g, src_n = self.run_spacial_psf(
                 gal_array=gal_array,
                 psf_obj=psf,
