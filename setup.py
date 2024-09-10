@@ -88,6 +88,7 @@ def find_fftw_lib():
 
 
 fftw_lib = find_fftw_lib()
+print(fftw_lib)
 if fftw_lib is not None:
     fftw_libpath, fftw_libname = os.path.split(fftw_lib)
     include_dirs.append(
