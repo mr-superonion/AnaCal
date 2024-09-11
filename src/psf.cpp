@@ -20,7 +20,7 @@ namespace anacal {
         double dx,
         double dy,
         py::array_t<double> model_array
-    ) : x0(x0), y0(y0), dx(dx), dy(dy), model_array(model_array) {
+    ) : x0(x0), y0(y0), dx(dx), dy(dy), model_array(model_array), crun(true) {
         int ndim = model_array.ndim();
         if (ndim != 4) {
             throw std::runtime_error("PSF model array has wrong shape");
