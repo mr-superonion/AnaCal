@@ -1,5 +1,5 @@
 # run the following command:
-# conda install -c conda-forge --file conda_requirements.txt
+# conda install -c conda-forge --file requirements.txt
 # prior to running pip install .
 
 # If your server uses very old compiler, please install # gcc from conda-forge
