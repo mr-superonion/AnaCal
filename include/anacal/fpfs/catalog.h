@@ -5,6 +5,94 @@
 #include "defaults.h"
 
 namespace anacal {
+    struct FpfsShapelets {
+        double m00;
+        double m20;
+        double m22c;
+        double m22s;
+        double m40;
+        double m42c;
+        double m42s;
+        double m44c;
+        double m44s;
+        double m60;
+        double m64c;
+        double m64s;
+    };
+
+
+    struct FpfsShapeletsResponse {
+        double m00_g1;
+        double m00_g2;
+        double m20_g1;
+        double m20_g2;
+        double m22c_g1;
+        double m22s_g2;
+        double m42c_g1;
+        double m42s_g2;
+    };
+
+    struct FpfsDetect {
+        // Fields from FpfsShapelets
+        double m00;
+        double m20;
+        double m22c;
+        double m22s;
+        double m40;
+        double m42c;
+        double m42s;
+        double m44c;
+        double m44s;
+        double m60;
+        double m64c;
+        double m64s;
+        double v0;
+        double v1;
+        double v2;
+        double v3;
+        double v0_g1;
+        double v1_g1;
+        double v2_g1;
+        double v3_g1;
+        double v0_g2;
+        double v1_g2;
+        double v2_g2;
+        double v3_g2;
+    };
+
+
+    struct FpfsShape {
+        double e1;
+        double e1_g1;
+        double e2;
+        double e2_g2;
+        double q1;
+        double q1_g1;
+        double q2;
+        double q2_g2;
+    };
+
+    struct FpfsWeight {
+        double w;
+        double w_g1;
+        double w_g2;
+    };
+
+    struct FpfsCatalog {
+        double e1;
+        double e1_g1;
+        double e2;
+        double e2_g2;
+        double q1;
+        double q1_g1;
+        double q2;
+        double q2_g2;
+        double w;
+        double w_g1;
+        double w_g2;
+    };
+
+
     inline FpfsShapeletsResponse calculate_shapelets_dg(
         const FpfsShapelets& x
     ) {
@@ -79,7 +167,7 @@ namespace anacal {
         };
     };
 
-    inline FpfsShapeCatalog calculate_fpfs_ell(
+    inline FpfsShape calculate_fpfs_ell(
         const FpfsShapelets& x, const FpfsShapeletsResponse& x_dg, double C0
     ) {
         // Denominator
@@ -105,11 +193,13 @@ namespace anacal {
         double q2_g2 = x_dg.m42s_g2 / denom
             - (x_dg.m00_g2 * x.m42s) / (denom * denom);
 
-        // Return the result as FpfsShapeCatalog
-        return FpfsShapeCatalog{e1, e1_g1, e2_g2, q1, q1_g1, q2_g2};
+        // Return the result as FpfsShape
+        return FpfsShape{
+            e1, e1_g1, e2, e2_g2, q1, q1_g1, q2, q2_g2
+        };
     }
 
-    inline FpfsShapeCatalog calculate_fpfs_ell(
+    inline FpfsShape calculate_fpfs_ell(
         const FpfsDetect& x, const FpfsShapeletsResponse& x_dg, double C0
     ) {
         // Denominator
@@ -135,8 +225,10 @@ namespace anacal {
         double q2_g2 = x_dg.m42s_g2 / denom
             - (x_dg.m00_g2 * x.m42s) / (denom * denom);
 
-        // Return the result as FpfsShapeCatalog
-        return FpfsShapeCatalog{e1, e1_g1, e2_g2, q1, q1_g1, q2_g2};
+        // Return the result as FpfsShape
+        return FpfsShape{
+            e1, e1_g1, e2, e2_g2, q1, q1_g1, q2, q2_g2
+        };
     }
 
 
@@ -231,54 +323,54 @@ namespace anacal {
     };
 
 
-    FpfsWeight calculate_wdet(
+    inline FpfsWeight calculate_wdet(
         const FpfsDetect &x,
         const FpfsDetect &y,
         double sigma_v,
         double pcut,
-        double pthres,
+        double pthres
     ) {
-    // det0 computation
-    double det0 = ssfunc2(x.v0, sigma_v - pcut, sigma_v);
-    double det0_deriv = ssfunc2_deriv(x.v0, sigma_v - pcut, sigma_v);
-    double det0_g1 = det0_deriv * (x.v0r1 - 2.0 * y.v0r1);
-    double det0_g2 = det0_deriv * (x.v0r2 - 2.0 * y.v0r2);
+        // det0 computation
+        double det0 = math::ssfunc2(x.v0, sigma_v - pcut, sigma_v);
+        double det0_deriv = math::ssfunc2_deriv(x.v0, sigma_v - pcut, sigma_v);
+        double det0_g1 = det0_deriv * (x.v0_g1 - 2.0 * y.v0_g1);
+        double det0_g2 = det0_deriv * (x.v0_g2 - 2.0 * y.v0_g2);
 
-    // det1 computation
-    double det1 = ssfunc2(x.v1, sigma_v - pcut, sigma_v);
-    double det1_deriv = ssfunc2_deriv(x.v1, sigma_v - pcut, sigma_v);
-    double det1_g1 = det1_deriv * (x.v1r1 - 2.0 * y.v1r1);
-    double det1_g2 = det1_deriv * (x.v1r2 - 2.0 * y.v1r2);
+        // det1 computation
+        double det1 = math::ssfunc2(x.v1, sigma_v - pcut, sigma_v);
+        double det1_deriv = math::ssfunc2_deriv(x.v1, sigma_v - pcut, sigma_v);
+        double det1_g1 = det1_deriv * (x.v1_g1 - 2.0 * y.v1_g1);
+        double det1_g2 = det1_deriv * (x.v1_g2 - 2.0 * y.v1_g2);
 
-    // det2 computation
-    double det2 = ssfunc2(x.v2, sigma_v - pcut, sigma_v);
-    double det2_deriv = ssfunc2_deriv(x.v2, sigma_v - pcut, sigma_v);
-    double det2_g1 = det2_deriv * (x.v2r1 - 2.0 * y.v2r1);
-    double det2_g2 = det2_deriv * (x.v2r2 - 2.0 * y.v2r2);
+        // det2 computation
+        double det2 = math::ssfunc2(x.v2, sigma_v - pcut, sigma_v);
+        double det2_deriv = math::ssfunc2_deriv(x.v2, sigma_v - pcut, sigma_v);
+        double det2_g1 = det2_deriv * (x.v2_g1 - 2.0 * y.v2_g1);
+        double det2_g2 = det2_deriv * (x.v2_g2 - 2.0 * y.v2_g2);
 
-    // det3 computation
-    double det3 = ssfunc2(x.v3, sigma_v - pcut, sigma_v);
-    double det3_deriv = ssfunc2_deriv(x.v3, sigma_v - pcut, sigma_v);
-    double det3_g1 = det3_deriv * (x.v3r1 - 2.0 * y.v3r1);
-    double det3_g2 = det3_deriv * (x.v3r2 - 2.0 * y.v3r2);
+        // det3 computation
+        double det3 = math::ssfunc2(x.v3, sigma_v - pcut, sigma_v);
+        double det3_deriv = math::ssfunc2_deriv(x.v3, sigma_v - pcut, sigma_v);
+        double det3_g1 = det3_deriv * (x.v3_g1 - 2.0 * y.v3_g1);
+        double det3_g2 = det3_deriv * (x.v3_g2 - 2.0 * y.v3_g2);
 
-    // Compute the weights
-    double w = det0 * det1 * det2 * det3;
-    double w_g1 = (
-        det0_g1 * det1 * det2 * det3 + det0 * det1_g1 * det2 * det3
-    ) + (det0 * det1 * det2_g1 * det3 + det0 * det1 * det2 * det3_g1);
-    double w_g2 = (
-        det0_g2 * det1 * det2 * det3 + det0 * det1_g2 * det2 * det3
-    ) + (det0 * det1 * det2_g2 * det3 + det0 * det1 * det2 * det3_g2);
+        // Compute the weights
+        double w = det0 * det1 * det2 * det3;
+        double w_g1 = (
+            det0_g1 * det1 * det2 * det3 + det0 * det1_g1 * det2 * det3
+        ) + (det0 * det1 * det2_g1 * det3 + det0 * det1 * det2 * det3_g1);
+        double w_g2 = (
+            det0_g2 * det1 * det2 * det3 + det0 * det1_g2 * det2 * det3
+        ) + (det0 * det1 * det2_g2 * det3 + det0 * det1 * det2 * det3_g2);
 
-    // Final selection based on w
-    double wdet = ssfunc2(w, pthres, fpfs_det_sigma2);
-    double wdet_deriv = ssfunc2_deriv(w, pthres, fpfs_det_sigma2);
+        // Final selection based on w
+        double wdet = math::ssfunc2(w, pthres, fpfs_det_sigma2);
+        double wdet_deriv = math::ssfunc2_deriv(w, pthres, fpfs_det_sigma2);
 
-    return FpfsWeight{
-        wdet, wdet_deriv * w_g1, wdet_deriv * w_g2
+        return FpfsWeight{
+            wdet, wdet_deriv * w_g1, wdet_deriv * w_g2
+        };
     };
-}
 
 
     void pybindFpfsCatalog(py::module_& fpfs);
