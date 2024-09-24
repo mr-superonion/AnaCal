@@ -28,15 +28,15 @@ pybindFpfsCatalog(py::module_& fpfs) {
         m20_g1, m20_g2, m22c_g1, m22s_g2,
         m42c_g1, m42s_g2
     );
-    fpfs.def(
-        "calculate_shapelets_dg",
-        py::overload_cast<const FpfsShapelets&>(&calculate_shapelets_dg),
-        "Compute shear response for FpfsShapelets"
-    );
-    fpfs.def(
-        "calculate_shapelets_dg",
-        py::overload_cast<const FpfsDetect&>(&calculate_shapelets_dg),
-        "Compute shear response for FpfsDetect"
-    );
+    /* fpfs.def( */
+    /*     "calculate_shapelets_dg", */
+    /*     py::overload_cast<const FpfsShapelets&>(&calculate_shapelets_dg), */
+    /*     "Compute shear response for FpfsShapelets" */
+    /* ); */
+    /* fpfs.def( */
+    /*     "calculate_shapelets_dg", */
+    /*     py::overload_cast<const FpfsDetect&>(&calculate_shapelets_dg), */
+    /*     "Compute shear response for FpfsDetect" */
+    /* ); */
 }
 }

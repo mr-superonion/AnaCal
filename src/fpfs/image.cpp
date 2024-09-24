@@ -47,7 +47,6 @@ FpfsImage::smooth_image(
     int ycen
 ) {
     const Gaussian gauss_model(sigma_f);
-    std::optional<py::array_t<double>> noise_conv;
     // Prepare PSF
     img_obj.set_r(psf_array, -1, -1, true);
     img_obj.fft();
