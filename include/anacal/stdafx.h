@@ -97,7 +97,7 @@ struct FpfsShapeCatalog {
 };
 
 
-struct FpfsDetectCatalog {
+struct FpfsWeight {
     double w;
     double w_g1;
     double w_g2;

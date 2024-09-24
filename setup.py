@@ -106,6 +106,8 @@ ext_modules.append(
             "src/image.cpp",
             "src/model.cpp",
             "src/fpfs.cpp",
+            "src/fpfs/image.cpp",
+            "src/fpfs/catalog.cpp",
             "src/noise.cpp",
             "src/psf.cpp",
             "src/mask.cpp",
