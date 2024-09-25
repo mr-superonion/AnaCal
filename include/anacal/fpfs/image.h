@@ -5,6 +5,7 @@
 #include "defaults.h"
 
 namespace anacal {
+
     class FpfsImage {
     private:
         // Preventing copy (implement these if you need copy semantics)

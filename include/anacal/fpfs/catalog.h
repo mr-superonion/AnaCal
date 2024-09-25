@@ -318,7 +318,7 @@ namespace anacal {
     }
 
     template <typename T>
-    inline FpfsWeight calculate_wsel(
+    inline FpfsWeight calculate_fpfs_wsel(
         double m00_min,
         double sigma_m00,
         double r2_min,
@@ -363,7 +363,7 @@ namespace anacal {
         };
     };
 
-    inline FpfsWeight calculate_wdet(
+    inline FpfsWeight calculate_fpfs_wdet(
         double sigma_v,
         double pcut,
         double pthres,
@@ -414,7 +414,7 @@ namespace anacal {
         };
     };
 
-    inline FpfsCatalog m2e(
+    inline FpfsShape m2e(
         double C0,
         const FpfsShapelets &x,
         const std::optional<FpfsShapelets> &y
@@ -425,8 +425,102 @@ namespace anacal {
         FpfsShape ell = calculate_fpfs_ell(
             C0, x, x_dg
         );
-
+        return ell;
     };
+
+    inline FpfsCatalog m2e(
+        double C0,
+        double sigma_v,
+        double pcut,
+        double pthres,
+        double m00_min,
+        double sigma_m00,
+        double r2_min,
+        double sigma_r2,
+        const FpfsDetect &x,
+        const std::optional<FpfsDetect> &y
+    ){
+        FpfsShapeletsResponse x_dg = calculate_shapelets_dg(
+            x, y
+        );
+        FpfsShape ell = calculate_fpfs_ell(
+            C0, x, x_dg
+        );
+        FpfsWeight wsel =  calculate_fpfs_wsel(
+            m00_min,
+            sigma_m00,
+            r2_min,
+            sigma_r2,
+            x,
+            x_dg
+        );
+        FpfsWeight wdet = calculate_fpfs_wdet(
+            sigma_v,
+            pcut,
+            pthres,
+            x,
+            y
+        );
+
+        double w = wdet.w * wsel.w;
+        double w_g1 = wdet.w * wsel.w_g1 + wdet.w_g1 * wsel.w;
+        double w_g2 = wdet.w * wsel.w_g2 + wdet.w_g2 * wsel.w;
+        return FpfsCatalog{
+            ell.e1,
+            ell.e1_g1,
+            ell.e2,
+            ell.e2_g2,
+            ell.q1,
+            ell.q1_g1,
+            ell.q2,
+            ell.q2_g2,
+            w,
+            w_g1,
+            w_g2
+        };
+    };
+
+
+    /* inline py::array_t<FpfsCatalog> m2e_run( */
+    /*     py::array_t<int16_t>& mask_array, */
+    /*     const py::array_t<BrightStar>& star_array */
+    /* ) { */
+    /*     auto star_r = star_array.unchecked<1>(); */
+    /*     int nn = star_array.shape(0); */
+    /*     int ndim = mask_array.ndim(); */
+    /*     if (ndim != 2) { */
+    /*         throw std::runtime_error( */
+    /*             "Mask Error: The input mask array has an invalid shape." */
+    /*         ); */
+    /*     } */
+    /*     auto m_r = mask_array.mutable_unchecked<2>(); */
+    /*     int ny = m_r.shape(0); */
+    /*     int nx = m_r.shape(1); */
+    /*     for (int k = 0; k < nn; ++k) { */
+    /*         int x = int(star_r(k).x + 0.5); */
+    /*         int y = int(star_r(k).y + 0.5); */
+    /*         int r = int(star_r(k).r + 0.5); */
+    /*         int r2 = r * r; */
+    /*         for (int j = y-r; j <= y+r; ++j) { */
+    /*             if ((j < 0) || (j >= ny)) { */
+    /*                 continue; */
+    /*             } */
+    /*             int dy2 = (j - y) * (j - y); */
+    /*             for (int i = x-r; i <= x+r; ++i) { */
+    /*                 if ((i < 0) || (i >= nx)) { */
+    /*                     continue; */
+    /*                 } */
+    /*                 int dx2 = (i - x) * (i - x); */
+    /*                 int d2 = dx2 + dy2; */
+    /*                 if (d2 < r2) { */
+    /*                     m_r(j, i) = m_r(j, i) | 1; */
+    /*                 } */
+    /*             } */
+    /*         } */
+    /*     } */
+    /*     return; */
+    /* }; */
+
 
 
     void pybindFpfsCatalog(py::module_& fpfs);
