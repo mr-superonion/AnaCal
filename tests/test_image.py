@@ -2,9 +2,10 @@ import gc
 import time
 
 import anacal
-import fpfs
 import galsim
 import numpy as np
+
+import fpfs
 
 from . import mem_used, print_mem
 from .sim import gauss_tophat_kernel_rfft

@@ -1,7 +1,8 @@
 import anacal
-import fpfs
 import numpy as np
 import pytest
+
+import fpfs
 
 
 def rfft2_to_fft2(rfft2_output, original_shape):

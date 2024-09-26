@@ -1,7 +1,8 @@
 import anacal
-import fpfs
 import galsim
 import numpy as np
+
+import fpfs
 
 
 def test_noise_covariance():

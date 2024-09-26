@@ -1,5 +1,6 @@
-import fpfs
 import jax.numpy as jnp
+
+import fpfs
 
 
 def smooth(

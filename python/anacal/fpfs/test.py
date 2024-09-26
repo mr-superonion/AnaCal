@@ -1,4 +1,5 @@
 import math
+
 import numpy as np
 
 
@@ -96,19 +97,27 @@ def _ell(self, x, x_dg, C0):
     _denom = x["m00"] + C0
     # ellipticity1
     e1 = x["m22c"] / _denom
-    e1_g1 = x_dg["m22c_g1"] / _denom - x_dg["m00_g1"] * x["m22c"] / (_denom) ** 2.0
+    e1_g1 = (
+        x_dg["m22c_g1"] / _denom - x_dg["m00_g1"] * x["m22c"] / (_denom) ** 2.0
+    )
 
     # ellipticity2
     e2 = x["m22s"] / _denom
-    e2_g2 = x_dg["m22s_g2"] / _denom - x_dg["m00_g2"] * x["m22s"] / (_denom) ** 2.0
+    e2_g2 = (
+        x_dg["m22s_g2"] / _denom - x_dg["m00_g2"] * x["m22s"] / (_denom) ** 2.0
+    )
 
     # ellipticity1 (4th order)
     q1 = x["m42c"] / _denom
-    q1_g1 = x_dg["m42c_g1"] / _denom - x_dg["m00_g1"] * x["m42c"] / (_denom) ** 2.0
+    q1_g1 = (
+        x_dg["m42c_g1"] / _denom - x_dg["m00_g1"] * x["m42c"] / (_denom) ** 2.0
+    )
 
     # ellipticity2 (4th order)
     q2 = x["m42s"] / _denom
-    q2_g2 = x_dg["m42s_g2"] / _denom - x_dg["m00_g2"] * x["m42s"] / (_denom) ** 2.0
+    q2_g2 = (
+        x_dg["m42s_g2"] / _denom - x_dg["m00_g2"] * x["m42s"] / (_denom) ** 2.0
+    )
     return e1, e1_g1, e2, e2_g2
 
 
@@ -218,8 +227,9 @@ def _wdet(self, x, y):
 
 
 def _run(self, x, y):
-    m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2, m42c_g1, m42s_g2 \
-        = self._dg(x - 2.0 * y)
+    m00_g1, m00_g2, m20_g1, m20_g2, m22c_g1, m22s_g2, m42c_g1, m42s_g2 = (
+        self._dg(x - 2.0 * y)
+    )
     e1, e1_g1, e2, e2_g2 = self._ell(
         x,
         m00_g1,
@@ -236,9 +246,7 @@ def _run(self, x, y):
         m42s_g2,
     )
     out.extend([q1, q1_g1, q2, q2_g2])
-    wsel, wsel_g1, wsel_g2 = self._wsel(
-        x, m00_g1, m00_g2, m20_g1, m20_g2
-    )
+    wsel, wsel_g1, wsel_g2 = self._wsel(x, m00_g1, m00_g2, m20_g1, m20_g2)
     wdet, wdet_g1, wdet_g2 = self._wdet(x, y)
     w = wdet * wsel
     w = wdet * wsel

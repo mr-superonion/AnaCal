@@ -9,12 +9,11 @@ from .._anacal.fpfs import (
     fpfs_det_sigma2,
     fpfs_pnr,
     measure_fpfs,
+    measure_fpfs_shape,
     measure_fpfs_wdet,
     measure_fpfs_wsel,
-    measure_fpfs_shape,
     measure_shapelets_dg,
 )
-
 from .._anacal.image import Image
 from .._anacal.mask import mask_galaxy_image
 from .._anacal.psf import BasePsf

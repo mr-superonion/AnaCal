@@ -1,8 +1,9 @@
 import anacal
-import fpfs
 import galsim
 import numpy as np
 import numpy.lib.recfunctions as rfn
+
+import fpfs
 
 from . import smooth
 

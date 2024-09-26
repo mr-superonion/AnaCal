@@ -1,8 +1,9 @@
 import anacal
-import fpfs
 import galsim
 import numpy as np
 import pytest
+
+import fpfs
 
 
 @pytest.mark.parametrize("seed", [1, 43, 162])

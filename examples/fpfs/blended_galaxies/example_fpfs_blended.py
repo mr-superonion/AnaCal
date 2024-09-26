@@ -4,7 +4,6 @@ import anacal
 import fitsio
 import numpy as np
 
-
 data_dir = os.path.dirname(os.path.abspath(__file__))
 
 fpfs_config = anacal.fpfs.FpfsConfig(

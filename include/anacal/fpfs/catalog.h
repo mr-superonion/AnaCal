@@ -74,6 +74,44 @@ namespace anacal {
                 m64s * scalar,
             };
         };
+
+        // Define left multiplication by a scalar (scalar * FpfsShapelets)
+        template <typename T>
+        friend FpfsShapelets operator*(const T &scalar, const FpfsShapelets &shapelets) {
+            return FpfsShapelets{
+                shapelets.m00 * scalar,
+                shapelets.m20 * scalar,
+                shapelets.m22c * scalar,
+                shapelets.m22s * scalar,
+                shapelets.m40 * scalar,
+                shapelets.m42c * scalar,
+                shapelets.m42s * scalar,
+                shapelets.m44c * scalar,
+                shapelets.m44s * scalar,
+                shapelets.m60 * scalar,
+                shapelets.m64c * scalar,
+                shapelets.m64s * scalar,
+            };
+        };
+
+        // Define division by a scalar (FpfsShapelets / scalar)
+        template <typename T>
+        FpfsShapelets operator/(const T &scalar) const {
+            return FpfsShapelets{
+                m00 / scalar,
+                m20 / scalar,
+                m22c / scalar,
+                m22s / scalar,
+                m40 / scalar,
+                m42c / scalar,
+                m42s / scalar,
+                m44c / scalar,
+                m44s / scalar,
+                m60 / scalar,
+                m64c / scalar,
+                m64s / scalar,
+            };
+        };
     };
 
 

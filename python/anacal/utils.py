@@ -1,4 +1,5 @@
 from typing import Any
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -45,4 +46,3 @@ def resize_array(array: NDArray[Any], target_shape: tuple[int, int] = (64, 64)):
             mode="constant",
         )
     return array
-
