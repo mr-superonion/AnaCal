@@ -8,11 +8,11 @@ from .._anacal.fpfs import (
     fpfs_cut_sigma_ratio,
     fpfs_det_sigma2,
     fpfs_pnr,
-    measure_fpfs_shape,
+    measure_fpfs,
     measure_fpfs_wdet,
     measure_fpfs_wsel,
+    measure_fpfs_shape,
     measure_shapelets_dg,
-    measure_shear,
 )
 
 from .._anacal.image import Image

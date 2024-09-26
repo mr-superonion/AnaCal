@@ -2,7 +2,7 @@
 #define ANACAL_FPFS_CAT_H
 
 
-#include "defaults.h"
+#include "base.h"
 
 namespace anacal {
     struct FpfsShapelets {
@@ -18,7 +18,6 @@ namespace anacal {
         double m60;
         double m64c;
         double m64s;
-
 
         // Define the addition operator
         FpfsShapelets operator+(const FpfsShapelets &other) const {
@@ -209,7 +208,6 @@ namespace anacal {
         };
     };
 
-
     struct FpfsShape {
         double e1;
         double e1_g1;
@@ -283,6 +281,33 @@ namespace anacal {
     };
 
     template <typename T>
+    inline py::array_t<FpfsShapeletsResponse> measure_shapelets_dg(
+        const py::array_t<T> &x_array,
+        const std::optional<py::array_t<T>> &y_array=std::nullopt
+    ) {
+        auto x_r = x_array.template unchecked<1>();
+        int nn = x_array.shape(0);
+        py::array_t<FpfsShapeletsResponse> out(nn);
+        auto out_r = out.template mutable_unchecked<1>();
+        if (y_array.has_value()) {
+            auto y_r = y_array->template unchecked<1>();
+            for (ssize_t i = 0; i < nn; ++i) {
+                out_r(i) = measure_shapelets_dg<T>(
+                    x_r(i),
+                    y_r(i)
+                );
+            }
+        } else {
+            for (ssize_t i = 0; i < nn; ++i) {
+                out_r(i) = measure_shapelets_dg<T>(
+                    x_r(i)
+                );
+            }
+        }
+        return out;
+    };
+
+    template <typename T>
     inline FpfsShape measure_fpfs_shape(
         double C0,
         const T& x,
@@ -318,14 +343,38 @@ namespace anacal {
     }
 
     template <typename T>
+    inline py::array_t<FpfsShape> measure_fpfs_shape(
+        double C0,
+        const py::array_t<T> &x_array,
+        const py::array_t<FpfsShapeletsResponse> &x_dg_array
+    ) {
+        auto x_r = x_array.template unchecked<1>();
+        int nn = x_array.shape(0);
+        py::array_t<FpfsShape> out(nn);
+        auto out_r = out.mutable_unchecked<1>();
+        auto xdg_r =  x_dg_array.unchecked<1>();
+        for (ssize_t i = 0; i < nn; ++i) {
+            out_r(i) = measure_fpfs_shape(
+                C0,
+                x_r(i),
+                xdg_r(i)
+            );
+        }
+        return out;
+    };
+
+    template <typename T>
     inline FpfsWeight measure_fpfs_wsel(
         double m00_min,
-        double sigma_m00,
+        double std_m00,
         double r2_min,
-        double sigma_r2,
+        double std_r2,
         const T &x,
         const FpfsShapeletsResponse &x_dg
     ) {
+
+        double sigma_m00 = fpfs_cut_sigma_ratio * std_m00;
+        double sigma_r2 = fpfs_cut_sigma_ratio * std_r2;
         // Selection on flux
         double w0l = math::ssfunc2(x.m00, m00_min, sigma_m00);
         double dw0l = math::ssfunc2_deriv(x.m00, m00_min, sigma_m00);
@@ -364,13 +413,14 @@ namespace anacal {
     };
 
     inline FpfsWeight measure_fpfs_wdet(
-        double sigma_v,
-        double pcut,
+        double std_v,
         double pthres,
         const FpfsDetect &x,
         const std::optional<FpfsDetect> &y=std::nullopt
     ) {
 
+        double sigma_v = fpfs_cut_sigma_ratio * std_v;
+        double pcut = fpfs_pnr * std_v;
         FpfsDetect xx = y.has_value() ? x - *y * 2.0 : x;
         // det0 computation
         double det0 = math::ssfunc2(x.v0, sigma_v - pcut, sigma_v);
@@ -414,7 +464,7 @@ namespace anacal {
         };
     };
 
-    inline FpfsShape measure_shear(
+    inline FpfsShape measure_fpfs(
         double C0,
         const FpfsShapelets &x,
         const std::optional<FpfsShapelets> &y=std::nullopt
@@ -428,15 +478,14 @@ namespace anacal {
         return ell;
     };
 
-    inline FpfsCatalog measure_shear(
+    inline FpfsCatalog measure_fpfs(
         double C0,
-        double sigma_v,
-        double pcut,
+        double std_v,
         double pthres,
         double m00_min,
-        double sigma_m00,
+        double std_m00,
         double r2_min,
-        double sigma_r2,
+        double std_r2,
         const FpfsDetect &x,
         const std::optional<FpfsDetect> &y=std::nullopt
     ){
@@ -448,15 +497,14 @@ namespace anacal {
         );
         FpfsWeight wsel =  measure_fpfs_wsel(
             m00_min,
-            sigma_m00,
+            std_m00,
             r2_min,
-            sigma_r2,
+            std_r2,
             x,
             x_dg
         );
         FpfsWeight wdet = measure_fpfs_wdet(
-            sigma_v,
-            pcut,
+            std_v,
             pthres,
             x,
             y
@@ -481,7 +529,7 @@ namespace anacal {
     };
 
 
-    inline py::array_t<FpfsShape> measure_shear(
+    inline py::array_t<FpfsShape> measure_fpfs(
         double C0,
         const py::array_t<FpfsShapelets> &x_array,
         const std::optional<py::array_t<FpfsShapelets>> &y_array=std::nullopt
@@ -493,26 +541,25 @@ namespace anacal {
         if (y_array.has_value()) {
             auto y_r = y_array->unchecked<1>();
             for (ssize_t i = 0; i < nn; ++i) {
-                out_r(i) = measure_shear(C0, x_r(i), y_r(i));
+                out_r(i) = measure_fpfs(C0, x_r(i), y_r(i));
             }
         } else {
             for (ssize_t i = 0; i < nn; ++i) {
-                out_r(i) = measure_shear(C0, x_r(i));
+                out_r(i) = measure_fpfs(C0, x_r(i));
             }
         }
         return out;
     };
 
 
-    inline py::array_t<FpfsCatalog> measure_shear(
+    inline py::array_t<FpfsCatalog> measure_fpfs(
         double C0,
-        double sigma_v,
-        double pcut,
+        double std_v,
         double pthres,
         double m00_min,
-        double sigma_m00,
+        double std_m00,
         double r2_min,
-        double sigma_r2,
+        double std_r2,
         const py::array_t<FpfsDetect> &x_array,
         const std::optional<py::array_t<FpfsDetect>> &y_array=std::nullopt
     ) {
@@ -523,30 +570,28 @@ namespace anacal {
         if (y_array.has_value()) {
             auto y_r = y_array->unchecked<1>();
             for (ssize_t i = 0; i < nn; ++i) {
-                out_r(i) = measure_shear(
+                out_r(i) = measure_fpfs(
                     C0,
-                    sigma_v,
-                    pcut,
+                    std_v,
                     pthres,
                     m00_min,
-                    sigma_m00,
+                    std_m00,
                     r2_min,
-                    sigma_r2,
+                    std_r2,
                     x_r(i),
                     y_r(i)
                 );
             }
         } else {
             for (ssize_t i = 0; i < nn; ++i) {
-                out_r(i) = measure_shear(
+                out_r(i) = measure_fpfs(
                     C0,
-                    sigma_v,
-                    pcut,
+                    std_v,
                     pthres,
                     m00_min,
-                    sigma_m00,
+                    std_m00,
                     r2_min,
-                    sigma_r2,
+                    std_r2,
                     x_r(i)
                 );
             }

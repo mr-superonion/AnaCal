@@ -2,7 +2,7 @@
 #define ANACAL_FPFS_IMG_H
 
 
-#include "defaults.h"
+#include "base.h"
 
 namespace anacal {
 

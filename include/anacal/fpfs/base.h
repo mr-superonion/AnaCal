@@ -1,5 +1,5 @@
-#ifndef ANACAL_FPFS_DEFAULTS_H
-#define ANACAL_FPFS_DEFAULTS_H
+#ifndef ANACAL_FPFS_BASE_H
+#define ANACAL_FPFS_BASE_H
 
 #include "../image.h"
 #include "../psf.h"
@@ -13,4 +13,4 @@ namespace anacal {
     inline constexpr double fpfs_pnr = 0.8;
 }
 
-#endif // ANACAL_FPFS_DEFAULTS_H
+#endif // ANACAL_FPFS_BASE_H
