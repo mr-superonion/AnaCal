@@ -18,7 +18,6 @@ from .._anacal.image import Image
 from .._anacal.mask import mask_galaxy_image
 from .._anacal.psf import BasePsf
 from . import base, table
-from .ctask import CatalogTask
 from .itask import FpfsDetect, FpfsMeasure, FpfsNoiseCov
 
 __all__ = [
@@ -29,7 +28,6 @@ __all__ = [
     "FpfsDetect",
     "FpfsMeasure",
     "FpfsConfig",
-    "CatalogTask",
 ]
 
 
@@ -136,7 +134,6 @@ def _measure_one_gal(
     det_array,
     noise_array,
     mtask,
-    ctask,
 ):
     srow, nrow = mtask.run_single_psf(
         gal_array=gal_array,
@@ -225,23 +222,7 @@ def process_image(
     else:
         mtask_m = None
 
-    # Catalog Task
-    cat_task = CatalogTask(
-        norder=fpfs_config.norder,
-        det_nrot=4,
-        cov_matrix=cov_matrix,
-    )
-    cat_task.update_parameters(
-        snr_min=fpfs_config.snr_min,
-        r2_min=fpfs_config.r2_min,
-        c0=fpfs_config.c0,
-        pthres=fpfs_config.pthres,
-    )
-    assert cat_task.det_task is not None
 
-    cat_task.det_task.pixel_scale = pixel_scale
-    cat_task.det_task.sigma_arcsec = fpfs_config.sigma_arcsec
-    out_dtype = cat_task.det_task.dtype + cat_task.meas_task.dtype
     if (psf_object is not None) and (not psf_object.crun):
         meas = []
         det_dtype = detection.dtype
@@ -254,7 +235,6 @@ def process_image(
                 det_array=det_array,
                 noise_array=noise_array,
                 mtask=mtask_d,
-                ctask=cat_task.det_task,
             )
             if mtask_m is not None:
                 meas_row = meas_row + _measure_one_gal(
@@ -263,7 +243,6 @@ def process_image(
                     det_array=det_array,
                     noise_array=noise_array,
                     mtask=mtask_m,
-                    ctask=cat_task.meas_task,
                 )
             meas.append(meas_row)
         meas = np.array(meas, dtype=out_dtype)
@@ -274,6 +253,7 @@ def process_image(
             det=detection,
             noise_array=noise_array,
         )
+        meas1 =
         if mtask_m is not None:
             src2 = mtask_m.run(
                 gal_array=gal_array,
@@ -281,12 +261,11 @@ def process_image(
                 det=detection,
                 noise_array=noise_array,
             )
-        else:
-            src2 = None
-        meas = cat_task.run(catalog=src1, catalog2=src2)
+            meas2 =
+            meas1 =
 
     return rfn.merge_arrays(
-        [detection, meas],
+        [detection, meas1],
         flatten=True,
         usemask=False,
     )
