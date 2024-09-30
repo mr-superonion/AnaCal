@@ -1,6 +1,5 @@
-import jax.numpy as jnp
-
-import fpfs
+import anacal
+import numpy as np
 
 
 def smooth(
@@ -23,30 +22,30 @@ def smooth(
     npadx = (nx - psf_array.shape[1]) // 2
 
     if noise_array is not None:
-        img_conv = jnp.fft.irfft2(
+        img_conv = np.fft.irfft2(
             (
-                jnp.fft.rfft2(img_array)
-                / jnp.fft.rfft2(
-                    jnp.fft.ifftshift(
-                        jnp.pad(
+                np.fft.rfft2(img_array)
+                / np.fft.rfft2(
+                    np.fft.ifftshift(
+                        np.pad(
                             psf_array,
                             (npady, npadx),
                             mode="constant",
                         ),
                     )
                 )
-                + jnp.fft.rfft2(noise_array)
-                / jnp.fft.rfft2(
-                    jnp.fft.ifftshift(
-                        jnp.pad(
-                            fpfs.image.util.rotate90(psf_array),
+                + np.fft.rfft2(noise_array)
+                / np.fft.rfft2(
+                    np.fft.ifftshift(
+                        np.pad(
+                            anacal.utils.rotate90(psf_array),
                             (npady, npadx),
                             mode="constant",
                         ),
                     )
                 )
             )
-            * fpfs.image.util.gauss_kernel_rfft(
+            * anacal.fpfs.base.gauss_kernel_rfft(
                 ny,
                 nx,
                 task.sigmaf,
@@ -56,18 +55,18 @@ def smooth(
             (ny, nx),
         )
     else:
-        img_conv = jnp.fft.irfft2(
-            jnp.fft.rfft2(img_array)
-            / jnp.fft.rfft2(
-                jnp.fft.ifftshift(
-                    jnp.pad(
+        img_conv = np.fft.irfft2(
+            np.fft.rfft2(img_array)
+            / np.fft.rfft2(
+                np.fft.ifftshift(
+                    np.pad(
                         psf_array,
                         (npady, npadx),
                         mode="constant",
                     ),
                 )
             )
-            * fpfs.image.util.gauss_kernel_rfft(
+            * anacal.fpfs.base.gauss_kernel_rfft(
                 ny,
                 nx,
                 task.sigmaf,

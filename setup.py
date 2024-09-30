@@ -145,8 +145,6 @@ setup(
     install_requires=[
         "pybind11>=2.2",
         "numpy",
-        "jax",
-        "jaxlib",
         "galsim",
         "fitsio",
         "pydantic",

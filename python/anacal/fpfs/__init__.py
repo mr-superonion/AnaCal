@@ -150,6 +150,7 @@ def process_image(
     Returns:
     """
 
+    out_list = []
     kernel = FpfsKernel(
         npix=fpfs_config.npix,
         pixel_scale=pixel_scale,
@@ -176,15 +177,15 @@ def process_image(
             star_catalog=star_catalog,
             noise_array=noise_array,
         )
+    out_list.append(detection)
+
+    if psf_object is None:
+        psf_object = psf_array
 
     # Measurement Tasks
     meas_task = FpfsMeasure(
         kernel=kernel,
     )
-
-    if psf_object is None:
-        psf_object = psf_array
-
     src_g, src_n = meas_task.run(
         gal_array=gal_array,
         psf=psf_object,
@@ -202,9 +203,71 @@ def process_image(
         x_array=src_g,
         y_array=src_n,
     )
+    del kernel, meas_task, src_g, src_n
+    out_list.append(meas)
+
+    if fpfs_config.sigma_arcsec1 > 0:
+        kernel = FpfsKernel(
+            npix=fpfs_config.npix,
+            pixel_scale=pixel_scale,
+            sigma_arcsec=fpfs_config.sigma_arcsec1,
+            psf_array=psf_array,
+            kmax_thres=fpfs_config.kmax_thres,
+            compute_detect_kernel=False,
+        )
+        kernel.prepare_fpfs_bases()
+
+        # Measurement Tasks
+        meas_task = FpfsMeasure(
+            kernel=kernel,
+        )
+        src_g, src_n = meas_task.run(
+            gal_array=gal_array,
+            psf=psf_object,
+            det=detection,
+            noise_array=noise_array,
+        )
+        meas1 = measure_fpfs(
+            C0=fpfs_c0,
+            x_array=src_g,
+            y_array=src_n,
+        )
+        del kernel, meas_task, src_g, src_n
+        map_dict = {name: name + "_1" for name in meas1.dtype.names}
+        out_list.append(rfn.rename_fields(meas1, map_dict))
+
+    if fpfs_config.sigma_arcsec2 > 0:
+        kernel = FpfsKernel(
+            npix=fpfs_config.npix,
+            pixel_scale=pixel_scale,
+            sigma_arcsec=fpfs_config.sigma_arcsec2,
+            psf_array=psf_array,
+            kmax_thres=fpfs_config.kmax_thres,
+            compute_detect_kernel=False,
+        )
+        kernel.prepare_fpfs_bases()
+
+        # Measurement Tasks
+        meas_task = FpfsMeasure(
+            kernel=kernel,
+        )
+        src_g, src_n = meas_task.run(
+            gal_array=gal_array,
+            psf=psf_object,
+            det=detection,
+            noise_array=noise_array,
+        )
+        meas2 = measure_fpfs(
+            C0=fpfs_c0,
+            x_array=src_g,
+            y_array=src_n,
+        )
+        del kernel, meas_task, src_g, src_n
+        map_dict = {name: name + "_2" for name in meas2.dtype.names}
+        out_list.append(rfn.rename_fields(meas2, map_dict))
 
     return rfn.merge_arrays(
-        [detection, meas],
+        out_list,
         flatten=True,
         usemask=False,
     )
