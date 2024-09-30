@@ -117,7 +117,7 @@ pixel_scale = 0.2
 pthres = 0.12
 
 
-def test_catalog_cpp():
+def test_catalog():
     dm_dg = anacal.fpfs.measure_shapelets_dg(mm_st, nn_st)
     ell = anacal.fpfs.measure_fpfs_shape(c0 * std_m00, mm_st, dm_dg)
     cat = anacal.fpfs.measure_fpfs(

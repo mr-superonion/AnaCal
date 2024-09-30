@@ -2,8 +2,6 @@ import anacal
 import numpy as np
 import pytest
 
-import fpfs
-
 
 def rfft2_to_fft2(rfft2_output, original_shape):
     """
@@ -87,7 +85,7 @@ def test_noise_sim_correlated(noise_std):
     np.testing.assert_allclose(0.0, np.average(noise_array2), atol=1e-3, rtol=0)
 
     np.testing.assert_almost_equal(
-        fpfs.image.util.rotate90(noise_array)[1:, 1:],
+        anacal.utils.rotate90(noise_array)[1:, 1:],
         noise_array2[1:, 1:],
     )
     noise_imag = rfft2_to_fft2(noise_array2, (ngrid2, ngrid2)).imag

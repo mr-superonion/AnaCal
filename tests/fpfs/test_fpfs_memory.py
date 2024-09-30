@@ -44,9 +44,9 @@ def func():
     e1g1 = out["w_g1"] * out["e1"] + out["w"] * out["e1_g1"]
     print(np.sum(e1) / np.sum(e1g1))
 
-    e1 = out["w"] * out["e1_2"]
-    e1g1 = out["w_g1"] * out["e1_2"] + out["w"] * out["e1_g1_2"]
-    print(np.sum(e1) / np.sum(e1g1))
+    # e1 = out["w"] * out["e1_2"]
+    # e1g1 = out["w_g1"] * out["e1_2"] + out["w"] * out["e1_g1_2"]
+    # print(np.sum(e1) / np.sum(e1g1))
     return
 
 

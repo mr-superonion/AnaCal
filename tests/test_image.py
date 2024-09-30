@@ -183,7 +183,7 @@ def test_memory(
     for _ in range(3):
         img_obj = anacal.image.Image(nx=nx, ny=ny, scale=1.0)
         data = np.zeros((ny, nx), dtype=np.float64)
-        data[0, 0] = np.random.random(1)
+        data[0, 0] = np.random.random()
         img_obj.set_r(data)
         img_obj.fft()
         gt_model = anacal.model.GaussianTopHat(d=d, sigma=sigma)

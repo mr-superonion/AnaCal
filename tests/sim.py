@@ -10,16 +10,16 @@ def tophat(x):
     return y
 
 
-def gaussian_top_hat_convolution_1D(d, sigma, values):
+def gaussian_top_hat_convolution_1d(d, sigma, values):
     return 0.5 * (
         erf((values + d) / (np.sqrt(2) * sigma))
         - erf((values - d) / (np.sqrt(2) * sigma))
     )
 
 
-def gaussian_top_hat_convolution_2D(d, sigma, x, y):
-    gx = gaussian_top_hat_convolution_1D(d, sigma, x)
-    gy = gaussian_top_hat_convolution_1D(d, sigma, y)
+def gaussian_top_hat_convolution_2d(d, sigma, x, y):
+    gx = gaussian_top_hat_convolution_1d(d, sigma, x)
+    gy = gaussian_top_hat_convolution_1d(d, sigma, y)
     return gx * gy
 
 
@@ -95,5 +95,5 @@ def gauss_tophat_kernel_rfft(
     y = np.fft.fftfreq(ny, 1 / np.pi / 2.0)
     ygrid, xgrid = np.meshgrid(y, x, indexing="ij")
     x2, y2 = apply_transformations(xgrid, ygrid, theta, gamma1, gamma2)
-    out = gaussian_top_hat_convolution_2D(d, sigma, x2, y2)
+    out = gaussian_top_hat_convolution_2d(d, sigma, x2, y2)
     return out

@@ -46,3 +46,9 @@ def resize_array(array: NDArray[Any], target_shape: tuple[int, int] = (64, 64)):
             mode="constant",
         )
     return array
+
+
+def rotate90(image):
+    rotated_image = np.zeros_like(image)
+    rotated_image[1:, 1:] = np.rot90(m=image[1:, 1:], k=-1)
+    return rotated_image

@@ -5,8 +5,7 @@ import galsim
 import numpy as np
 
 
-class my_psf(anacal.psf.PyPsf):
-
+class MyPsf(anacal.psf.PyPsf):
     def __init__(self, psf_array):
         super().__init__()
         self.psf_array = psf_array
@@ -20,7 +19,7 @@ def test_fpfs_init():
     seed = 2  # seed for galaxy
     noise_seed = 1  # seed for noise
     pixel_scale = 0.2  # LSST image pixel scale
-    # noise variance for r-bands 10 year LSST coadd (magnitude zero point at 30)
+    # noise variance for r-bands 10 year LSST coadd (mag zero point at 30)
     noise_std = 0.37
     noise_variance = noise_std**2.0
 
@@ -82,7 +81,7 @@ def test_fpfs_init():
         noise_variance=max(noise_variance, 0.23),
         noise_array=noise_array,
     )
-    psf_object = my_psf(psf_array=psf_array)
+    psf_object = MyPsf(psf_array=psf_array)
     t0 = time.time()
     out1 = anacal.fpfs.process_image(
         fpfs_config=fpfs_config,

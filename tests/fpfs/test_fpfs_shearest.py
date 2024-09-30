@@ -12,17 +12,17 @@ def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=4):
         e1=0.02, e2=-0.02
     )
 
-    psf_data = (
+    psf_array = (
         psf_obj.shift(0.5 * scale, 0.5 * scale)
         .drawImage(nx=ngrid, ny=ngrid, scale=scale)
         .array
     )
-    psf_data = psf_data[
+    psf_array = psf_array[
         ngrid // 2 - rcut : ngrid // 2 + rcut,
         ngrid // 2 - rcut : ngrid // 2 + rcut,
     ]
     gname = "%s-0" % gcomp
-    gal_data = anacal.simulation.make_isolated_sim(
+    gal_array = anacal.simulation.make_isolated_sim(
         gal_type="mixed",
         sim_method="fft",
         psf_obj=psf_obj,
@@ -42,7 +42,7 @@ def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=4):
     inds = np.meshgrid(indy, indx, indexing="ij")
     coords = np.vstack(inds).T
     coords = [(cc[0], cc[1], True, 0) for cc in coords]
-    return gal_data, psf_data, coords
+    return gal_array, psf_array, coords
 
 
 def do_test(scale, seed, rcut, gcomp):
@@ -55,81 +55,59 @@ def do_test(scale, seed, rcut, gcomp):
     else:
         raise ValueError("gcomp should be g1 or g2")
     sigma_arcsec = 0.53
-    mag_zero = 30.0
 
     nrot = 12
-    gal_data, psf_data, coords = simulate_gal_psf(
+    gal_array, psf_array, coords = simulate_gal_psf(
         scale, seed, rcut, gcomp, nrot
     )
-    norder = 6
-    # Since we do not run detection
-    # no detection weight
-    det_nrot = -1
-    mtask = anacal.fpfs.FpfsMeasure(
-        psf_array=psf_data,
-        mag_zero=mag_zero,
+
+    kernel = anacal.fpfs.FpfsKernel(
+        npix=64,
         pixel_scale=scale,
         sigma_arcsec=sigma_arcsec,
-        norder=norder,
-        det_nrot=det_nrot,
+        psf_array=psf_array,
+        compute_detect_kernel=False,
+    )
+    kernel.prepare_fpfs_bases()
+
+    mtask = anacal.fpfs.FpfsMeasure(
+        kernel=kernel,
     )
 
-    # Run as an exposure
-    mms = mtask.run(
-        gal_array=gal_data,
-        psf=psf_data,
+    src_g, src_n = mtask.run(
+        gal_array=gal_array,
+        psf=psf_array,
         det=coords,
     )
 
-    std = 0.1
-    cov_matrix = np.ones((12, 12)) * std**2.0 * scale**4.0
-    cov_matrix = anacal.fpfs.table.Covariance(
-        array=cov_matrix,
-        norder=norder,
-        det_nrot=det_nrot,
-        mag_zero=mag_zero,
-        pixel_scale=scale,
-        sigma_arcsec=sigma_arcsec,
+    ells = anacal.fpfs.measure_fpfs(
+        C0=4,
+        x_array=src_g,
+        y_array=src_n,
     )
-    ctask = anacal.fpfs.CatalogTask(
-        norder=norder,
-        det_nrot=det_nrot,
-        cov_matrix=cov_matrix,
-    )
-    ctask.update_parameters(
-        snr_min=0.0,
-        r2_min=-0.1,
-        c0=4,
-    )
-    ells = ctask.run(catalog2=mms)
 
     # The 2nd order shear estimator
-    g1_est = np.average(ells["e1_2"]) / np.average(ells["e1_g1_2"])
-    g2_est = np.average(ells["e2_2"]) / np.average(ells["e2_g2_2"])
+    g1_est = np.average(ells["e1"]) / np.average(ells["e1_g1"])
+    g2_est = np.average(ells["e2"]) / np.average(ells["e2_g2"])
     assert np.abs(g1_est - g1) < 3e-5
     assert np.abs(g2_est - g2) < 3e-5
 
     # The 4th order shear estimator
-    g1_est = np.average(ells["q1_2"]) / np.average(ells["q1_g1_2"])
-    g2_est = np.average(ells["q2_2"]) / np.average(ells["q2_g2_2"])
+    g1_est = np.average(ells["q1"]) / np.average(ells["q1_g1"])
+    g2_est = np.average(ells["q2"]) / np.average(ells["q2_g2"])
     assert np.abs(g1_est - g1) < 3e-5
     assert np.abs(g2_est - g2) < 3e-5
 
     # run as a list
-    gal_list = [gal_data[:, i * ngrid : (i + 1) * ngrid] for i in range(nrot)]
-    psf_list = [psf_data] * nrot
-    mms = mtask.run(
-        gal_array=gal_data,
-        psf=psf_data,
-        det=coords,
-    )
-    array2 = np.vstack(
+    gal_list = [gal_array[:, i * ngrid : (i + 1) * ngrid] for i in range(nrot)]
+    psf_list = [psf_array] * nrot
+    src_g_2 = np.array(
         [
-            mtask.run(gal_array=gal_list[i], psf=psf_list[i]).array
+            mtask.run(gal_array=gal_list[i], psf=psf_list[i])[0][0]
             for i in range(nrot)
-        ]
+        ], dtype=src_g.dtype
     )
-    np.testing.assert_almost_equal(mms.array, array2)
+    assert np.all(src_g == src_g_2)
     return
 
 

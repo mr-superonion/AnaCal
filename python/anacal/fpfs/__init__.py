@@ -4,10 +4,10 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
 from .._anacal.fpfs import (
-    FpfsImage,
     fpfs_cut_sigma_ratio,
     fpfs_det_sigma2,
     fpfs_pnr,
+    FpfsImage,
     measure_fpfs,
     measure_fpfs_shape,
     measure_fpfs_wdet,
@@ -17,14 +17,12 @@ from .._anacal.fpfs import (
 from .._anacal.image import Image
 from .._anacal.mask import mask_galaxy_image
 from .._anacal.psf import BasePsf
-from . import base, table
-from .itask import FpfsDetect, FpfsMeasure, FpfsNoiseCov
+from .base import FpfsKernel
+from .itask import FpfsDetect, FpfsMeasure
 
 __all__ = [
     "base",
-    "table",
     "FpfsImage",
-    "FpfsNoiseCov",
     "FpfsDetect",
     "FpfsMeasure",
     "FpfsConfig",
@@ -59,9 +57,14 @@ class FpfsConfig(BaseModel):
         description="""Smoothing scale of the shapelet and detection kernel.
         """,
     )
-    sigma_arcsec2: float = Field(
+    sigma_arcsec1: float = Field(
         default=-1,
         description="""Smoothing scale of the second shapelet kernel.
+        """,
+    )
+    sigma_arcsec2: float = Field(
+        default=-1,
+        description="""Smoothing scale of the third shapelet kernel.
         """,
     )
     pthres: float = Field(
@@ -71,7 +74,7 @@ class FpfsConfig(BaseModel):
         """,
     )
     fthres: float = Field(
-        default=8.5,
+        default=8.0,
         description="""Detection threshold (minimum signal-to-noise ratio) for
         the first pooling.
         """,
@@ -96,57 +99,33 @@ class FpfsConfig(BaseModel):
 def detect_sources(
     *,
     fpfs_config: FpfsConfig,
-    pixel_scale: float,
-    cov_matrix: table.Covariance,
+    kernel: FpfsKernel,
     gal_array: NDArray,
-    psf_array: NDArray,
     mask_array: NDArray | None = None,
     star_catalog: NDArray | None = None,
     noise_array: NDArray | None = None,
-    mag_zero: float = 30.0,
-    **kwargs,
 ):
+    """Detect sources from exposure
+    fpfs_config (FpfsConfig):  configuration object
+    kernel (FpfsKernel): kernel object
+    gal_array (NDArray[float64]): galaxy exposure array
+    mask_array (NDArray[int]): mask array (1 for masked)
+    star_catalog (NDArray[BrightStar]): bright star catalog
+    noise_array (NDArray[float64]): pure noise array
+    """
     dtask = FpfsDetect(
-        mag_zero=mag_zero,
-        pixel_scale=pixel_scale,
-        sigma_arcsec=fpfs_config.sigma_arcsec,
-        cov_matrix=cov_matrix,
-        det_nrot=4,
-        psf_array=psf_array,
-        kmax_thres=fpfs_config.kmax_thres,
+        kernel=kernel,
         bound=fpfs_config.bound,
     )
     detection = dtask.run(
         gal_array=gal_array,
-        fthres=8.0,
+        fthres=fpfs_config.fthres,
         pthres=fpfs_config.pthres,
         noise_array=noise_array,
         mask_array=mask_array,
         star_cat=star_catalog,
     )
     return detection
-
-
-def _measure_one_gal(
-    *,
-    gal_array,
-    this_psf_array,
-    det_array,
-    noise_array,
-    mtask,
-):
-    srow, nrow = mtask.run_single_psf(
-        gal_array=gal_array,
-        psf_array=this_psf_array,
-        det=det_array,
-        noise_array=noise_array,
-    )
-    srow = srow[0]
-    if nrow is None:
-        nrow = 0.0
-    else:
-        nrow = nrow[0]
-    return tuple(ctask._run(srow, nrow))
 
 
 def process_image(
@@ -162,7 +141,6 @@ def process_image(
     star_catalog: NDArray | None = None,
     detection: NDArray | None = None,
     psf_object: BasePsf | None = None,
-    **kwargs,
 ):
     """Run measurement algorithms on the input exposure, and optionally
     populate the resulting catalog with extra information.
@@ -172,100 +150,61 @@ def process_image(
     Returns:
     """
 
-    cov_task = FpfsNoiseCov(
-        mag_zero=mag_zero,
+    kernel = FpfsKernel(
+        npix=fpfs_config.npix,
         pixel_scale=pixel_scale,
         sigma_arcsec=fpfs_config.sigma_arcsec,
-        norder=fpfs_config.norder,
-        det_nrot=4,
         psf_array=psf_array,
         kmax_thres=fpfs_config.kmax_thres,
+        compute_detect_kernel=True,
     )
-    # Since we have additional layer of noise, we need to multiply by two
-    cov_matrix = cov_task.measure(variance=noise_variance * 2.0)
-    del cov_task
+    kernel.prepare_fpfs_bases()
+    kernel.prepare_covariance(variance=noise_variance * 2.0)
+
+    fpfs_c0 = fpfs_config.c0 * kernel.cov_matrix.std_m00
+    std_v = kernel.cov_matrix.std_v
+    m00_min = fpfs_config.snr_min * kernel.cov_matrix.std_m00
+    std_m00 = kernel.cov_matrix.std_m00
+    std_r2 = kernel.cov_matrix.std_r2
 
     if detection is None:
         detection = detect_sources(
             fpfs_config=fpfs_config,
-            pixel_scale=pixel_scale,
-            cov_matrix=cov_matrix,
+            kernel=kernel,
             gal_array=gal_array,
-            psf_array=psf_array,
             mask_array=mask_array,
             star_catalog=star_catalog,
             noise_array=noise_array,
-            mag_zero=mag_zero,
         )
 
     # Measurement Tasks
-    # First Measurement comes with detection
-    mtask_d = FpfsMeasure(
-        mag_zero=mag_zero,
-        pixel_scale=pixel_scale,
-        sigma_arcsec=fpfs_config.sigma_arcsec,
-        psf_array=psf_array,
-        kmax_thres=fpfs_config.kmax_thres,
-        norder=fpfs_config.norder,
-        det_nrot=4,
+    meas_task = FpfsMeasure(
+        kernel=kernel,
     )
-    if fpfs_config.sigma_arcsec2 > 0.0:
-        mtask_m = FpfsMeasure(
-            mag_zero=mag_zero,
-            pixel_scale=pixel_scale,
-            sigma_arcsec=fpfs_config.sigma_arcsec2,
-            psf_array=psf_array,
-            kmax_thres=fpfs_config.kmax_thres,
-            norder=fpfs_config.norder,
-            det_nrot=-1,
-        )
-    else:
-        mtask_m = None
 
+    if psf_object is None:
+        psf_object = psf_array
 
-    if (psf_object is not None) and (not psf_object.crun):
-        meas = []
-        det_dtype = detection.dtype
-        for det in detection:
-            this_psf_array = psf_object.draw(x=det["x"], y=det["y"])
-            det_array = np.array([det], dtype=det_dtype)
-            meas_row = _measure_one_gal(
-                gal_array=gal_array,
-                this_psf_array=this_psf_array,
-                det_array=det_array,
-                noise_array=noise_array,
-                mtask=mtask_d,
-            )
-            if mtask_m is not None:
-                meas_row = meas_row + _measure_one_gal(
-                    gal_array=gal_array,
-                    this_psf_array=this_psf_array,
-                    det_array=det_array,
-                    noise_array=noise_array,
-                    mtask=mtask_m,
-                )
-            meas.append(meas_row)
-        meas = np.array(meas, dtype=out_dtype)
-    else:
-        src1 = mtask_d.run(
-            gal_array=gal_array,
-            psf=psf_array,
-            det=detection,
-            noise_array=noise_array,
-        )
-        meas1 =
-        if mtask_m is not None:
-            src2 = mtask_m.run(
-                gal_array=gal_array,
-                psf=psf_array,
-                det=detection,
-                noise_array=noise_array,
-            )
-            meas2 =
-            meas1 =
+    src_g, src_n = meas_task.run(
+        gal_array=gal_array,
+        psf=psf_object,
+        det=detection,
+        noise_array=noise_array,
+    )
+    meas = measure_fpfs(
+        C0=fpfs_c0,
+        std_v=std_v,
+        pthres=fpfs_config.pthres,
+        m00_min=m00_min,
+        std_m00=std_m00,
+        r2_min=fpfs_config.r2_min,
+        std_r2=std_r2,
+        x_array=src_g,
+        y_array=src_n,
+    )
 
     return rfn.merge_arrays(
-        [detection, meas1],
+        [detection, meas],
         flatten=True,
         usemask=False,
     )

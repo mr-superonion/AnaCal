@@ -11,7 +11,7 @@ from .. import mem_used, print_mem
 ny = 5000
 nx = 5000
 
-std = 0.4
+std = 0.2
 norder = 4
 det_nrot = 4
 bound = 40
@@ -22,7 +22,7 @@ sigma_arcsec = 0.55
 psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
     e1=0.02, e2=-0.02
 )
-psf_data = (
+psf_array = (
     psf_obj.shift(0.5 * pixel_scale, 0.5 * pixel_scale)
     .drawImage(nx=64, ny=64, scale=pixel_scale)
     .array
@@ -33,7 +33,7 @@ gal_obj = (
     + psf_obj.shift(-2, -0.5) * 4
     + psf_obj.shift(-3.2, 0.5) * 6
 )
-gal_data = gal_obj.drawImage(
+gal_array = gal_obj.drawImage(
     nx=nx,
     ny=ny,
     scale=pixel_scale,
@@ -45,51 +45,46 @@ def test_benchmark():
     initial_memory_usage = mem_used()
 
     def func():
-        noise_data = np.random.randn(ny, nx)
+        noise_array = np.random.randn(ny, nx)
         t0 = time.time()
+        noise_variance = std ** 2.0
 
-        cov_matrix = np.ones((21, 21)) * (std * pixel_scale) ** 2.0
-        cov_matrix = anacal.fpfs.table.Covariance(
-            array=cov_matrix,
-            norder=norder,
-            det_nrot=det_nrot,
+        kernel = anacal.fpfs.FpfsKernel(
+            npix=64,
             pixel_scale=pixel_scale,
-            mag_zero=mag_zero,
             sigma_arcsec=sigma_arcsec,
+            psf_array=psf_array,
+            compute_detect_kernel=True,
         )
+        kernel.prepare_fpfs_bases()
+        kernel.prepare_covariance(variance=noise_variance * 2.0)
+
         dtask = anacal.fpfs.FpfsDetect(
-            mag_zero=mag_zero,
-            psf_array=psf_data,
-            pixel_scale=pixel_scale,
-            cov_matrix=cov_matrix,
-            sigma_arcsec=sigma_arcsec,
-            det_nrot=det_nrot,
+            kernel=kernel,
             bound=bound,
         )
+
         t1 = time.time()
         print("Detection Time: ", t1 - t0)
         det = dtask.run(
-            gal_array=gal_data,
+            gal_array=gal_array,
             fthres=1.0,
             pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,
-            noise_array=noise_data,
+            noise_array=noise_array,
         )[0:30000]
+
+        # Measurement Tasks
         mtask = anacal.fpfs.FpfsMeasure(
-            mag_zero=mag_zero,
-            psf_array=psf_data,
-            pixel_scale=pixel_scale,
-            sigma_arcsec=sigma_arcsec,
-            norder=norder,
-            det_nrot=det_nrot,
+            kernel=kernel,
         )
-        src = mtask.run(
-            gal_array=gal_data,
-            psf=psf_data,
+        src_g, src_n = mtask.run(
+            gal_array=gal_array,
+            psf=psf_array,
             det=det,
+            noise_array=noise_array,
         )
         t2 = time.time()
         print("Final Time: ", t2 - t0)
-        del noise_data, det, src, dtask, mtask
         return
 
     print("Initial Mem:")
