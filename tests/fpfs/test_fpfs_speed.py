@@ -1,4 +1,3 @@
-import gc
 import time
 
 import anacal
@@ -40,52 +39,53 @@ gal_array = gal_obj.drawImage(
 ).array.astype(np.float32)
 
 
-def test_benchmark():
+def func():
+    noise_array = np.random.randn(ny, nx)
+    t0 = time.time()
+    noise_variance = std ** 2.0
+
+    kernel = anacal.fpfs.FpfsKernel(
+        npix=64,
+        pixel_scale=pixel_scale,
+        sigma_arcsec=sigma_arcsec,
+        psf_array=psf_array,
+        compute_detect_kernel=True,
+    )
+    kernel.prepare_fpfs_bases()
+    kernel.prepare_covariance(variance=noise_variance * 2.0)
+
+    dtask = anacal.fpfs.FpfsDetect(
+        kernel=kernel,
+        bound=bound,
+    )
+
+    t1 = time.time()
+    print("Detection Time: ", t1 - t0)
+    det = dtask.run(
+        gal_array=gal_array,
+        fthres=1.0,
+        pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,
+        noise_array=noise_array,
+    )[0:10000]
+
+    # Measurement Tasks
+    mtask = anacal.fpfs.FpfsMeasure(
+        kernel=kernel,
+    )
+    src_g, src_n = mtask.run(
+        gal_array=gal_array,
+        psf=psf_array,
+        det=det,
+        noise_array=noise_array,
+    )
+    t2 = time.time()
+    print("Final Time: ", t2 - t0)
+    return
+
+
+def test_speed():
     print("")
     initial_memory_usage = mem_used()
-
-    def func():
-        noise_array = np.random.randn(ny, nx)
-        t0 = time.time()
-        noise_variance = std ** 2.0
-
-        kernel = anacal.fpfs.FpfsKernel(
-            npix=64,
-            pixel_scale=pixel_scale,
-            sigma_arcsec=sigma_arcsec,
-            psf_array=psf_array,
-            compute_detect_kernel=True,
-        )
-        kernel.prepare_fpfs_bases()
-        kernel.prepare_covariance(variance=noise_variance * 2.0)
-
-        dtask = anacal.fpfs.FpfsDetect(
-            kernel=kernel,
-            bound=bound,
-        )
-
-        t1 = time.time()
-        print("Detection Time: ", t1 - t0)
-        det = dtask.run(
-            gal_array=gal_array,
-            fthres=1.0,
-            pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,
-            noise_array=noise_array,
-        )[0:30000]
-
-        # Measurement Tasks
-        mtask = anacal.fpfs.FpfsMeasure(
-            kernel=kernel,
-        )
-        src_g, src_n = mtask.run(
-            gal_array=gal_array,
-            psf=psf_array,
-            det=det,
-            noise_array=noise_array,
-        )
-        t2 = time.time()
-        print("Final Time: ", t2 - t0)
-        return
 
     print("Initial Mem:")
     print_mem(initial_memory_usage)
@@ -93,7 +93,6 @@ def test_benchmark():
 
     peak_memory_usage = max(memory_usage(proc=(func,)))
     print("Peak Mem:", peak_memory_usage, "M")
-    gc.collect()
     final_memory_usage = mem_used()
     print("Additional Mem:")
     print_mem(final_memory_usage - initial_memory_usage)
@@ -101,4 +100,4 @@ def test_benchmark():
 
 
 if __name__ == "__main__":
-    test_benchmark()
+    test_speed()

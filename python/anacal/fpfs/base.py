@@ -3,6 +3,7 @@ import math
 import numpy as np
 from numpy.typing import NDArray
 from . import Image
+from ..base import AnacalBase
 
 
 # M_{nm}
@@ -40,27 +41,34 @@ ind_s = [
 ]
 
 det_nrot = 4
-name_d = []
-for irot in range(det_nrot):
-    name_d.append("v%d" % irot)
-for irot in range(det_nrot):
-    name_d.append("v%dr1" % irot)
-for irot in range(det_nrot):
-    name_d.append("v%dr2" % irot)
+name_d = [
+    "v0",
+    "v1",
+    "v2",
+    "v3",
+    "v0r1",
+    "v1r1",
+    "v2r1",
+    "v3r1",
+    "v0r2",
+    "v1r2",
+    "v2r2",
+    "v3r2",
+]
 
 
 class Covariance(object):
     def __init__(
         self,
         array: NDArray,
-        compute_detect_kernel: bool = True,
+        do_detection: bool = True,
     ):
 
         self.colnames = []
         self.colnames = self.colnames + name_s
 
         det_nrot = 4
-        if compute_detect_kernel:
+        if do_detection:
             self.colnames = self.colnames + name_d
 
         self.ncol = len(self.colnames)
@@ -82,7 +90,7 @@ class Covariance(object):
             + self.array[self.di["m00"], self.di["m20"]]
             + self.array[self.di["m20"], self.di["m00"]]
         )
-        if compute_detect_kernel:
+        if do_detection:
             self.std_v = np.average(
                 np.array(
                     [
@@ -94,7 +102,7 @@ class Covariance(object):
         return
 
 
-class FpfsKernel(object):
+class FpfsKernel(AnacalBase):
     """Fpfs measurement kernel object
 
     Args:
@@ -104,7 +112,7 @@ class FpfsKernel(object):
     kmax (float | None): maximum k
     psf_array (ndarray): an average PSF image [default: None]
     kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
-    compute_detect_kernel (bool): whether compute detection kernel
+    do_detection (bool): whether compute detection kernel
     """
 
     def __init__(
@@ -116,10 +124,12 @@ class FpfsKernel(object):
         kmax: float | None = None,
         psf_array: NDArray | None = None,
         kmax_thres: float = 1e-20,
-        compute_detect_kernel: bool = True,
+        do_detection: bool = True,
+        verbose=False,
     ) -> None:
+        super().__init__(verbose=verbose)
         self.npix = npix
-        self.compute_detect_kernel = compute_detect_kernel
+        self.do_detection = do_detection
 
         self.sigma_arcsec = sigma_arcsec
         if self.sigma_arcsec > 3.0:
@@ -171,7 +181,7 @@ class FpfsKernel(object):
         )
         bfunc.append(sfunc)
         self.colnames = self.colnames + snames
-        if self.compute_detect_kernel:
+        if self.do_detection:
             dfunc, dnames = detlets2d(
                 npix=self.npix,
                 sigma=self.sigmaf,
@@ -235,7 +245,7 @@ class FpfsKernel(object):
         )
         self.cov_matrix = Covariance(
             array=cov_elems,
-            compute_detect_kernel=self.compute_detect_kernel
+            do_detection=self.do_detection
         )
         return
 

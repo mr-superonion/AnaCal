@@ -7,50 +7,84 @@ from numpy.typing import NDArray
 from . import BasePsf, FpfsImage, Image, mask_galaxy_image
 from .base import FpfsKernel, name_s, name_d
 import numpy.lib.recfunctions as rfn
-from ..base import AnacalBase
 
 npix_patch = 256
 npix_overlap = 64
 npix_default = 64
 
 
-class FpfsDetect(AnacalBase):
+class FpfsMeasure(FpfsKernel):
     """A base class for measurement
 
     Args:
-    kernel (FpfsKernel): Fpfs kernel
+    npix (int): number of pixels in a postage stamp
+    pixel_scale (float): pixel scale in arcsec
+    sigma_arcsec (float): Shapelet kernel size
+    noise_variance (float): variance of image noise
+    kmax (float | None): maximum k
+    psf_array (ndarray): an average PSF image [default: None]
+    kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
+    do_detection (bool): whether compute detection kernel
     bound (int): minimum distance to boundary [default: 0]
     verbose (bool): whether print out INFO
     """
 
     def __init__(
         self,
-        kernel: FpfsKernel,
+        *,
+        npix: int,
+        pixel_scale: float,
+        sigma_arcsec: float,
+        noise_variance: float,
+        kmax: float | None = None,
+        psf_array: NDArray | None = None,
+        kmax_thres: float = 1e-20,
+        do_detection: bool = True,
         bound: int = 0,
         verbose: bool = False,
     ) -> None:
-        super().__init__(verbose)
-        if not hasattr(kernel, "cov_matrix"):
-            raise ValueError("kernel does not has covariance matrix")
-        self.kernel = kernel
-
-        self.dtask = FpfsImage(
-            nx=npix_patch,
-            ny=npix_patch,
-            scale=self.kernel.pixel_scale,
-            sigma_arcsec=self.kernel.sigma_arcsec,
-            klim=self.kernel.kmax / self.kernel.pixel_scale,
-            psf_array=self.kernel.psf_array,
-            use_estimate=True,
-            npix_overlap=npix_overlap,
-            bound=bound,
+        super().__init__(
+            npix=npix,
+            pixel_scale=pixel_scale,
+            sigma_arcsec=sigma_arcsec,
+            kmax=kmax,
+            psf_array=psf_array,
+            kmax_thres=kmax_thres,
+            do_detection=do_detection,
+            verbose=verbose,
         )
+        self.prepare_fpfs_bases()
 
-        self.std_m00 = self.kernel.cov_matrix.std_m00
-        self.std_v = self.kernel.cov_matrix.std_v
+        if self.do_detection:
+            self.dtask = FpfsImage(
+                nx=npix_patch,
+                ny=npix_patch,
+                scale=self.pixel_scale,
+                sigma_arcsec=self.sigma_arcsec,
+                klim=self.kmax / self.pixel_scale,
+                psf_array=self.psf_array,
+                use_estimate=True,
+                npix_overlap=npix_overlap,
+                bound=bound,
+            )
+            self.prepare_covariance(variance=noise_variance)
+            self.std_m00 = self.cov_matrix.std_m00
+            self.std_v = self.cov_matrix.std_v
+        else:
+            self.dtask = None
+
+        self.mtask = FpfsImage(
+            nx=self.npix,
+            ny=self.npix,
+            scale=self.pixel_scale,
+            sigma_arcsec=self.sigma_arcsec,
+            klim=self.kmax / self.pixel_scale,
+            psf_array=self.psf_array,
+            use_estimate=True,
+        )
         return
 
-    def run(
+    def detect(
         self,
         gal_array: NDArray,
         fthres: float,
@@ -72,58 +106,28 @@ class FpfsDetect(AnacalBase):
         Returns:
         (NDArray): galaxy detection catalog
         """
-
         if mask_array is not None:
             # Set the value inside star mask to zero
             mask_galaxy_image(gal_array, mask_array, True, star_cat)
             if noise_array is not None:
                 # Also do it for pure noise image
                 mask_galaxy_image(noise_array, mask_array, False, star_cat)
-
+        assert self.dtask is not None
         return self.dtask.detect_source(
             gal_array=gal_array,
             fthres=fthres,
             pthres=pthres,
-            std_m00=self.std_m00 * self.kernel.pixel_scale**2.0,
-            std_v=self.std_v * self.kernel.pixel_scale**2.0,
+            std_m00=self.std_m00 * self.pixel_scale**2.0,
+            std_v=self.std_v * self.pixel_scale**2.0,
             noise_array=noise_array,
             mask_array=mask_array,
         )
-
-
-class FpfsMeasure(AnacalBase):
-    """A base class for measurement
-
-    Args:
-    kernel (FpfsKernel): Fpfs kernel
-    verbose (bool): whether print out INFO
-    """
-
-    def __init__(
-        self,
-        kernel: FpfsKernel,
-        verbose: bool = False,
-    ) -> None:
-        super().__init__(verbose)
-        if not hasattr(kernel, "bfunc_use"):
-            raise ValueError("kernel does not has base functions")
-        self.kernel = kernel
-        self.mtask = FpfsImage(
-            nx=self.kernel.npix,
-            ny=self.kernel.npix,
-            scale=self.kernel.pixel_scale,
-            sigma_arcsec=self.kernel.sigma_arcsec,
-            klim=self.kernel.kmax / self.kernel.pixel_scale,
-            psf_array=self.kernel.psf_array,
-            use_estimate=True,
-        )
-        return
 
     def run_psf_array(
         self,
         gal_array: NDArray,
         psf_array: NDArray,
-        det: NDArray,
+        det: NDArray | None = None,
         noise_array: NDArray | None = None,
     ) -> tuple[NDArray, NDArray | None]:
         """This function measure galaxy shapes at the position of the detection
@@ -142,7 +146,7 @@ class FpfsMeasure(AnacalBase):
         # self.logger.warning("Input PSF is array")
         src_g = self.mtask.measure_source(
             gal_array=gal_array,
-            filter_image=self.kernel.bfunc_use,
+            filter_image=self.bfunc_use,
             psf_array=psf_array,
             det=det,
             do_rotate=False,
@@ -150,7 +154,7 @@ class FpfsMeasure(AnacalBase):
         if noise_array is not None:
             src_n = self.mtask.measure_source(
                 gal_array=noise_array,
-                filter_image=self.kernel.bfunc_use,
+                filter_image=self.bfunc_use,
                 psf_array=psf_array,
                 det=det,
                 do_rotate=True,
@@ -190,7 +194,7 @@ class FpfsMeasure(AnacalBase):
             det_array = np.array([_d], dtype=det_dtype)
             srow = self.mtask.measure_source(
                 gal_array=gal_array,
-                filter_image=self.kernel.bfunc_use,
+                filter_image=self.bfunc_use,
                 psf_array=this_psf_array,
                 det=det_array,
                 do_rotate=False,
@@ -198,7 +202,7 @@ class FpfsMeasure(AnacalBase):
             if noise_array is not None:
                 nrow = self.mtask.measure_source(
                     gal_array=noise_array,
-                    filter_image=self.kernel.bfunc_use,
+                    filter_image=self.bfunc_use,
                     psf_array=this_psf_array,
                     det=det_array,
                     do_rotate=True,
@@ -238,7 +242,7 @@ class FpfsMeasure(AnacalBase):
         # self.logger.warning("Input PSF is cpp object")
         src_g = self.mtask.measure_source(
             gal_array=gal_array,
-            filter_image=self.kernel.bfunc_use,
+            filter_image=self.bfunc_use,
             psf_obj=psf_obj,
             det=det,
             do_rotate=False,
@@ -246,7 +250,7 @@ class FpfsMeasure(AnacalBase):
         if noise_array is not None:
             src_n = self.mtask.measure_source(
                 gal_array=noise_array,
-                filter_image=self.kernel.bfunc_use,
+                filter_image=self.bfunc_use,
                 psf_obj=psf_obj,
                 det=det,
                 do_rotate=True,
@@ -304,12 +308,12 @@ class FpfsMeasure(AnacalBase):
             raise RuntimeError("psf does not have a correct type")
         src_g = rfn.unstructured_to_structured(
             arr=src_g,
-            dtype=self.kernel.dtype,
+            dtype=self.dtype,
         )
         if src_n is not None:
             src_n = rfn.unstructured_to_structured(
                 arr=src_n,
-                dtype=self.kernel.dtype
+                dtype=self.dtype
             )
 
         return src_g, src_n
