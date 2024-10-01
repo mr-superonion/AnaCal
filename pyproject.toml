@@ -5,6 +5,8 @@ readme = "README.md"
 authors = [
     { name = "Xiangchong Li", email = "mr.superonion@hotmail.com" }
 ]
+version = "4.0.0"
+
 
 [project.urls]
 "Source Code" = "https://github.com/mr-superonion/AnaCal"
