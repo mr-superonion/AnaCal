@@ -3,11 +3,10 @@
 # prior to running pip install .
 
 # If your server uses very old compiler, please install # gcc from conda-forge
-# as fllows (I do not know how it works on mac or windows):
 
-gcc_linux-64
-gxx_linux-64
-libxcrypt
+# gcc_linux-64
+# gxx_linux-64
+# libxcrypt
 
 fitsio
 galsim
