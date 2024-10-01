@@ -7,7 +7,7 @@
 
 Analytic Calibration for Perturbation Estimation from Galaxy Images.
 
-This framework is devised to measure the responses for shape estimators that 
+This framework is devised to measure the responses for shape estimators that
 have been developed or are anticipated to be created in the future. We intend to
 develop a suite of analytical shear estimators capable of inferring shear with
 subpercent accuracy, all while maintaining minimal computational time. The
@@ -35,7 +35,7 @@ pip install anacal
 ```
 
 ## Examples
-Examples can be found [here](https://github.com/mr-superonion/AnaCal/blob/main/docs/examples/).
+Examples can be found [here](https://github.com/mr-superonion/AnaCal/blob/main/examples/).
 
 ## Reference
 
@@ -53,6 +53,4 @@ for the tests:
 flake8
 pytest -vv
 ```
-
-
 ----
