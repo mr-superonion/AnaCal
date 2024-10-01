@@ -11,8 +11,6 @@ ny = 5000
 nx = 5000
 
 std = 0.2
-norder = 4
-det_nrot = 4
 bound = 40
 mag_zero = 30.0
 pixel_scale = 0.2
@@ -36,50 +34,56 @@ gal_array = gal_obj.drawImage(
     nx=nx,
     ny=ny,
     scale=pixel_scale,
-).array.astype(np.float32)
+).array.astype(np.float64)
 
 
 def func():
     noise_array = np.random.randn(ny, nx)
-    t0 = time.time()
-    noise_variance = std ** 2.0
+    # t0 = time.time()
+    noise_variance = std**2.0
 
-    kernel = anacal.fpfs.FpfsKernel(
+    ftask = anacal.fpfs.FpfsTask(
         npix=64,
         pixel_scale=pixel_scale,
         sigma_arcsec=sigma_arcsec,
         psf_array=psf_array,
-        compute_detect_kernel=True,
-    )
-    kernel.prepare_fpfs_bases()
-    kernel.prepare_covariance(variance=noise_variance * 2.0)
-
-    dtask = anacal.fpfs.FpfsDetect(
-        kernel=kernel,
+        do_detection=True,
+        noise_variance=noise_variance,
         bound=bound,
     )
 
-    t1 = time.time()
-    print("Detection Time: ", t1 - t0)
-    det = dtask.run(
+    # t1 = time.time()
+    # print("Detection Time: ", t1 - t0)
+    det = ftask.detect(
         gal_array=gal_array,
-        fthres=1.0,
+        fthres=5.0,
         pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,
         noise_array=noise_array,
     )[0:10000]
 
-    # Measurement Tasks
-    mtask = anacal.fpfs.FpfsMeasure(
-        kernel=kernel,
-    )
-    src_g, src_n = mtask.run(
-        gal_array=gal_array,
-        psf=psf_array,
-        det=det,
-        noise_array=noise_array,
-    )
-    t2 = time.time()
-    print("Final Time: ", t2 - t0)
+    # # Measurement Tasks
+    # src = ftask.run(
+    #     gal_array=gal_array,
+    #     psf=psf_array,
+    #     det=det,
+    #     noise_array=noise_array,
+    # )
+    # t2 = time.time()
+    # print("Shapelets measurement time: ", t2 - t1)
+
+    # meas = anacal.fpfs.measure_fpfs(
+    #     C0=4.0,
+    #     std_v=0.2,
+    #     pthres=0.2,
+    #     m00_min=0,
+    #     std_m00=0.1,
+    #     r2_min=0.1,
+    #     std_r2=0.2,
+    #     x_array=src["data"],
+    #     y_array=src["noise"],
+    # )
+    # t3 = time.time()
+    # print("Ellipticify measurement time: ", t3 - t2)
     return
 
 

@@ -2,9 +2,9 @@ import math
 
 import numpy as np
 from numpy.typing import NDArray
-from . import Image
-from ..base import AnacalBase
 
+from ..base import AnacalBase
+from . import Image
 
 # M_{nm}
 # nm = n*(norder+1)+m
@@ -55,51 +55,6 @@ name_d = [
     "v2r2",
     "v3r2",
 ]
-
-
-class Covariance(object):
-    def __init__(
-        self,
-        array: NDArray,
-        do_detection: bool = True,
-    ):
-
-        self.colnames = []
-        self.colnames = self.colnames + name_s
-
-        det_nrot = 4
-        if do_detection:
-            self.colnames = self.colnames + name_d
-
-        self.ncol = len(self.colnames)
-        self.di = {
-            element: index for index, element in enumerate(self.colnames)
-        }
-
-        if not isinstance(array, np.ndarray):
-            raise TypeError("Input array has a wrong type")
-        self.array = np.atleast_2d(array)
-        assert self.array.shape[1] == self.ncol, \
-            "covariance array has wrong shape"
-
-        self.std_modes = np.sqrt(np.diagonal(self.array))
-        self.std_m00 = self.std_modes[self.di["m00"]]
-        self.std_r2 = np.sqrt(
-            self.array[self.di["m00"], self.di["m00"]]
-            + self.array[self.di["m20"], self.di["m20"]]
-            + self.array[self.di["m00"], self.di["m20"]]
-            + self.array[self.di["m20"], self.di["m00"]]
-        )
-        if do_detection:
-            self.std_v = np.average(
-                np.array(
-                    [
-                        self.std_modes[self.di["v%d" % _]]
-                        for _ in range(det_nrot)
-                    ]
-                )
-            )
-        return
 
 
 class FpfsKernel(AnacalBase):
@@ -193,6 +148,9 @@ class FpfsKernel(AnacalBase):
         self.ncol = len(self.colnames)
         self.dtype = [(name, "f8") for name in self.colnames]
         self.bfunc_use = np.transpose(self.bfunc, (1, 2, 0))
+        self.di = {
+            element: index for index, element in enumerate(self.colnames)
+        }
         return
 
     def prepare_covariance(
@@ -205,6 +163,7 @@ class FpfsKernel(AnacalBase):
         noise_pf (NDArray | None): Power spectrum (assuming homogeneous) of
         noise
         """
+        variance = variance * 2.0
         if noise_pf is not None:
             if noise_pf.shape == (self.npix, self.npix // 2 + 1):
                 # rfft
@@ -243,11 +202,24 @@ class FpfsKernel(AnacalBase):
             ).real
             / self.pixel_scale**4.0
         )
-        self.cov_matrix = Covariance(
-            array=cov_elems,
-            do_detection=self.do_detection
+        self.std_modes = np.sqrt(np.diagonal(cov_elems))
+        self.std_m00 = self.std_modes[self.di["m00"]]
+        self.std_r2 = np.sqrt(
+            cov_elems[self.di["m00"], self.di["m00"]]
+            + cov_elems[self.di["m20"], self.di["m20"]]
+            + cov_elems[self.di["m00"], self.di["m20"]]
+            + cov_elems[self.di["m20"], self.di["m00"]]
         )
-        return
+        if self.do_detection:
+            self.std_v = np.average(
+                np.array(
+                    [
+                        self.std_modes[self.di["v%d" % _]]
+                        for _ in range(det_nrot)
+                    ]
+                )
+            )
+        return cov_elems
 
 
 def gauss_kernel_rfft(
@@ -428,9 +400,9 @@ def get_kmax(
     sigma: float,
     kmax_thres: float = 1e-20,
 ) -> float:
-    """Measure kmax, the region outside kmax is supressed by the shaplet Gaussian
-    kernel in FPFS shear estimation method; therefore we set values in this
-    region to zeros
+    """Measure kmax, the region outside kmax is supressed by the shaplet
+    Gaussian kernel in FPFS shear estimation method; therefore we set values in
+    this region to zeros
 
     Args:
     psf_pow (ndarray): PSF's Fourier power (rfft)

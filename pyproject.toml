@@ -1,3 +1,14 @@
+[project]
+name = "AnaCal"
+license = {file = "LICENSE"}
+readme = "README.md"
+authors = [
+    { name = "Xiangchong Li", email = "mr.superonion@hotmail.com" }
+]
+
+[project.urls]
+"Source Code" = "https://github.com/mr-superonion/AnaCal"
+
 [build-system]
 requires = ["setuptools>=38", "pybind11>=2.2", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -19,6 +30,6 @@ profile = "black"
 line_length = 80
 
 [tool.pytest.ini_options]
-python_files = ["test_*.py", "example*.py"]
+python_files = ["test_*.py", "example*.py", "example*.ipynb"]
 testpaths = ["tests", "examples"]
-addopts = "-vv -s"
+addopts = "--nbval --nbval-lax --current-env -vv -s"

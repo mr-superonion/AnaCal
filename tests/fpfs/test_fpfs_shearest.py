@@ -61,20 +61,15 @@ def do_test(scale, seed, rcut, gcomp):
         scale, seed, rcut, gcomp, nrot
     )
 
-    kernel = anacal.fpfs.FpfsKernel(
+    ftask = anacal.fpfs.FpfsTask(
         npix=64,
         pixel_scale=scale,
         sigma_arcsec=sigma_arcsec,
         psf_array=psf_array,
-        compute_detect_kernel=False,
-    )
-    kernel.prepare_fpfs_bases()
-
-    mtask = anacal.fpfs.FpfsMeasure(
-        kernel=kernel,
+        do_detection=False,
     )
 
-    src_g, src_n = mtask.run(
+    src = ftask.run(
         gal_array=gal_array,
         psf=psf_array,
         det=coords,
@@ -82,8 +77,8 @@ def do_test(scale, seed, rcut, gcomp):
 
     ells = anacal.fpfs.measure_fpfs(
         C0=4,
-        x_array=src_g,
-        y_array=src_n,
+        x_array=src["data"],
+        y_array=src["noise"],
     )
 
     # The 2nd order shear estimator
@@ -101,13 +96,14 @@ def do_test(scale, seed, rcut, gcomp):
     # run as a list
     gal_list = [gal_array[:, i * ngrid : (i + 1) * ngrid] for i in range(nrot)]
     psf_list = [psf_array] * nrot
-    src_g_2 = np.array(
+    src_g = np.array(
         [
-            mtask.run(gal_array=gal_list[i], psf=psf_list[i])[0][0]
+            ftask.run(gal_array=gal_list[i], psf=psf_list[i])["data"][0]
             for i in range(nrot)
-        ], dtype=src_g.dtype
+        ],
+        dtype=src["data"].dtype,
     )
-    assert np.all(src_g == src_g_2)
+    assert np.all(src["data"] == src_g)
     return
 
 

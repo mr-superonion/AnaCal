@@ -75,7 +75,8 @@ mm_st = np.array(
             14.63340806,
             17.81840394,
         )
-    ], dtype=dtype
+    ],
+    dtype=dtype,
 )
 nn_st = np.array(
     [

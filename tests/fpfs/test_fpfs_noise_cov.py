@@ -1,12 +1,13 @@
+import os
+
 import anacal
+import fitsio
 import galsim
 import numpy as np
-import fitsio
-import os
 
 
 def test_noise_covariance():
-    variance = 0.22**2.0
+    variance = 0.22**2.0 / 2.0
     sigma_as = 0.55
     pixel_scale = 0.2
     ngrid = 64
@@ -23,17 +24,20 @@ def test_noise_covariance():
     )
     cov_elem = fitsio.read(test_fname)
 
-    kernel = anacal.fpfs.FpfsKernel(
+    ftask = anacal.fpfs.FpfsTask(
         npix=psf_array.shape[0],
         psf_array=psf_array,
         pixel_scale=pixel_scale,
         sigma_arcsec=sigma_as,
-        compute_detect_kernel=True,
+        do_detection=True,
         kmax_thres=1e-20,
+        noise_variance=variance,
     )
-    kernel.prepare_fpfs_bases()
-    kernel.prepare_covariance(variance=variance)
-    cov_elem2 = kernel.cov_matrix.array
+    cov_elem2 = ftask.prepare_covariance(variance=variance)
     np.testing.assert_allclose(cov_elem, cov_elem2, atol=1e-6, rtol=0)
     np.testing.assert_allclose(np.diag(cov_elem), np.diag(cov_elem2), rtol=1e-6)
+    np.testing.assert_allclose(
+        np.sqrt(np.diagonal(cov_elem)),
+        ftask.std_modes,
+    )
     return
