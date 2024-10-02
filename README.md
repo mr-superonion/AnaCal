@@ -30,9 +30,13 @@ conda install -c conda-forge --file requirements.txt
 conda install -c conda-forge --file requirements_test.txt
 pip install . --user
 ```
-or install stable verion from pypi
+or install stable verion
 ```
 pip install anacal
+```
+or
+```
+conda install -c conda-forge anacal
 ```
 
 ## Examples
