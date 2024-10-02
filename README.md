@@ -1,7 +1,8 @@
 # AnaCal
 [![docs](https://readthedocs.org/projects/anacal/badge/?version=latest)](https://anacal.readthedocs.io/en/latest/?badge=latest)
 [![tests](https://github.com/mr-superonion/AnaCal/actions/workflows/tests.yml/badge.svg)](https://github.com/mr-superonion/AnaCal/actions/workflows/tests.yml)
-[![pypi](https://github.com/mr-superonion/AnaCal/actions/workflows/pypi.yml/badge.svg?event=release)](https://github.com/mr-superonion/AnaCal/actions/workflows/pypi.yml)
+[![pypi](https://img.shields.io/pypi/v/anacal)](https://pypi.org/project/anacal/)
+
 [![conda-forge](https://anaconda.org/conda-forge/anacal/badges/version.svg)](https://anaconda.org/conda-forge/anacal)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
