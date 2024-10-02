@@ -328,11 +328,6 @@ class FpfsConfig(BaseModel):
         description="""size of the stamp before Fourier Transform
         """,
     )
-    norder: int = Field(
-        default=4,
-        description="""Maximum radial number `n` to use for the shapelet basis
-        """,
-    )
     kmax_thres: float = Field(
         default=1e-12,
         description="""The threshold used to define the upper limit of k we use
