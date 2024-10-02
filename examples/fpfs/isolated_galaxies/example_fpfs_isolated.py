@@ -52,8 +52,9 @@ else:
     detection["mask_value"] = np.zeros(ns)
 
 fpfs_config = anacal.fpfs.FpfsConfig(
-    sigma_arcsec=0.52,  # The first measurement scale (also for detection)
-    sigma_arcsec1=0.45,  # The second measurement scale
+    sigma_arcsec=0.52,  # base measurement kernel (also for detection)
+    sigma_arcsec1=0.45,  # kernel 1
+    sigma_arcsec2=0.55,  # kernel 2
 )
 
 
@@ -144,9 +145,25 @@ if do_force_detect:
     print("    Additive bias is %.3f e-5" % (cbias * 1e5))
 
 
-print("Measurement with sigma_arcsec=%.2f:" % fpfs_config.sigma_arcsec2)
+print("Measurement with sigma_arcsec=%.2f:" % fpfs_config.sigma_arcsec1)
 ename = "e%d_1" % test_component
 egname = "e%d_g%d_1" % (test_component, test_component)
+e1_0 = out[0]["w"] * out[0][ename]
+e1_1 = out[1]["w"] * out[1][ename]
+e1g1_0 = out[0][wgname] * out[0][ename] + out[0]["w"] * out[0][egname]
+e1g1_1 = out[1][wgname] * out[1][ename] + out[1]["w"] * out[1][egname]
+
+mbias = (np.sum(e1_0) - np.sum(e1_1)) / (
+    np.sum(e1g1_0) + np.sum(e1g1_1)
+) / 0.02 - 1  # 0.02 is the input shear
+print("    Multiplicative bias is %.3f e-3" % (mbias * 1e3))
+cbias = (np.sum(e1_0) + np.sum(e1_1)) / (np.sum(e1g1_0) + np.sum(e1g1_1))
+print("    Additive bias is %.3f e-5" % (cbias * 1e5))
+assert mbias < 2e-3
+
+print("Measurement with sigma_arcsec=%.2f:" % fpfs_config.sigma_arcsec2)
+ename = "e%d_2" % test_component
+egname = "e%d_g%d_2" % (test_component, test_component)
 e1_0 = out[0]["w"] * out[0][ename]
 e1_1 = out[1]["w"] * out[1][ename]
 e1g1_0 = out[0][wgname] * out[0][ename] + out[0]["w"] * out[0][egname]
