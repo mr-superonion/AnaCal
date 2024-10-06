@@ -13,6 +13,9 @@ npix_patch = 256
 npix_overlap = 64
 npix_default = 64
 
+std_v_30 = 0.6
+std_r2_30 = 3.2
+
 
 class FpfsTask(FpfsKernel):
     """A base class for measurement
@@ -430,6 +433,12 @@ def process_image(
         do_detection=True,
         bound=fpfs_config.bound,
     )
+
+    ratio = 1.0 / (10 ** ((30 - mag_zero) / 2.5))
+    ftask.std_r2 = std_r2_30 * ratio
+    if ftask.do_detection:
+        ftask.std_v = std_v_30 * ratio
+
     fpfs_c0 = fpfs_config.c0 * ftask.std_m00
     std_v = ftask.std_v
     m00_min = fpfs_config.snr_min * ftask.std_m00

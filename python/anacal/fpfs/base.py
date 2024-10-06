@@ -219,6 +219,8 @@ class FpfsKernel(AnacalBase):
                     ]
                 )
             )
+        else:
+            self.std_v = -1.0
         return cov_elems
 
 

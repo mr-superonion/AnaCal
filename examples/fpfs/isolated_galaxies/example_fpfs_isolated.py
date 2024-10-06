@@ -132,7 +132,6 @@ print("    Additive bias is %.3f e-5" % (cbias * 1e5))
 assert mbias < 2e-3
 if do_force_detect:
     print("Test for no weigtht")
-    print(len(out[0]))
     e1_0 = out[0][ename]
     e1_1 = out[1][ename]
     e1g1_0 = out[0][egname]
