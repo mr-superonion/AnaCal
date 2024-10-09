@@ -13,8 +13,9 @@ npix_patch = 256
 npix_overlap = 64
 npix_default = 64
 
-std_v_30 = 0.6
+std_m00_30 = 1.6
 std_r2_30 = 3.2
+std_v_30 = 0.6
 
 
 class FpfsTask(FpfsKernel):
@@ -400,6 +401,7 @@ def process_image(
     star_catalog: NDArray | None = None,
     detection: NDArray | None = None,
     psf_object: BasePsf | None = None,
+    do_compute_detection_mode: bool = True,
 ):
     """Run measurement algorithms on the input exposure, and optionally
     populate the resulting catalog with extra information.
@@ -417,68 +419,75 @@ def process_image(
     star_catalog (NDArray | None): bright star catalog [default: None]
     detection (NDArray | None): detection catalog [default: None]
     psf_object (BasePsf | None): PSF object [default: None]
+    do_compute_detection_mode (bool): whether to compute detection modes
 
     Returns:
     (NDArray) FPFS catalog
     """
-
-    out_list = []
-    ftask = FpfsTask(
-        npix=fpfs_config.npix,
-        pixel_scale=pixel_scale,
-        sigma_arcsec=fpfs_config.sigma_arcsec,
-        noise_variance=noise_variance,
-        psf_array=psf_array,
-        kmax_thres=fpfs_config.kmax_thres,
-        do_detection=True,
-        bound=fpfs_config.bound,
-    )
-
-    ratio = 1.0 / (10 ** ((30 - mag_zero) / 2.5))
-    ftask.std_r2 = std_r2_30 * ratio
-    if ftask.do_detection:
-        ftask.std_v = std_v_30 * ratio
-
-    fpfs_c0 = fpfs_config.c0 * ftask.std_m00
-    std_v = ftask.std_v
-    m00_min = fpfs_config.snr_min * ftask.std_m00
-    std_m00 = ftask.std_m00
-    std_r2 = ftask.std_r2
-
-    if detection is None:
-        detection = ftask.detect(
-            gal_array=gal_array,
-            fthres=fpfs_config.fthres,
-            pthres=fpfs_config.pthres,
-            noise_array=noise_array,
-            mask_array=mask_array,
-            star_cat=star_catalog,
-        )
-    out_list.append(detection)
-
     if psf_object is None:
         psf_object = psf_array
 
-    # Measurement Tasks
-    src = ftask.run(
-        gal_array=gal_array,
-        psf=psf_object,
-        det=detection,
-        noise_array=noise_array,
-    )
-    meas = measure_fpfs(
-        C0=fpfs_c0,
-        std_v=std_v,
-        pthres=fpfs_config.pthres,
-        m00_min=m00_min,
-        std_m00=std_m00,
-        r2_min=fpfs_config.r2_min,
-        std_r2=std_r2,
-        x_array=src["data"],
-        y_array=src["noise"],
-    )
-    del src, ftask
-    out_list.append(meas)
+    out_list = []
+    ratio = 1.0 / (10 ** ((30 - mag_zero) / 2.5))
+    std_m00 = std_m00_30 * ratio
+    std_r2 = std_r2_30 * ratio
+    std_v = std_v_30 * ratio
+    fpfs_c0 = fpfs_config.c0 * std_m00
+
+    if do_compute_detection_mode or (detection is None):
+        ftask = FpfsTask(
+            npix=fpfs_config.npix,
+            pixel_scale=pixel_scale,
+            sigma_arcsec=fpfs_config.sigma_arcsec,
+            noise_variance=noise_variance,
+            psf_array=psf_array,
+            kmax_thres=fpfs_config.kmax_thres,
+            do_detection=True,
+            bound=fpfs_config.bound,
+        )
+
+        ftask.std_r2 = std_r2
+        ftask.std_v = std_v
+
+        std_v = ftask.std_v
+        m00_min = fpfs_config.snr_min * ftask.std_m00
+        std_m00 = ftask.std_m00
+        std_r2 = ftask.std_r2
+
+        if detection is None:
+            detection = ftask.detect(
+                gal_array=gal_array,
+                fthres=fpfs_config.fthres,
+                pthres=fpfs_config.pthres,
+                noise_array=noise_array,
+                mask_array=mask_array,
+                star_cat=star_catalog,
+            )
+        out_list.append(detection)
+
+        if do_compute_detection_mode:
+            # Measurement Tasks
+            src = ftask.run(
+                gal_array=gal_array,
+                psf=psf_object,
+                det=detection,
+                noise_array=noise_array,
+            )
+            meas = measure_fpfs(
+                C0=fpfs_c0,
+                std_v=std_v,
+                pthres=fpfs_config.pthres,
+                m00_min=m00_min,
+                std_m00=std_m00,
+                r2_min=fpfs_config.r2_min,
+                std_r2=std_r2,
+                x_array=src["data"],
+                y_array=src["noise"],
+            )
+            del src
+            out_list.append(meas)
+
+        del ftask
 
     if fpfs_config.sigma_arcsec1 > 0:
         ftask = FpfsTask(

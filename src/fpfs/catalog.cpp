@@ -39,7 +39,13 @@ pybindFpfsCatalog(py::module_& fpfs) {
         q1,
         q1_g1,
         q2,
-        q2_g2
+        q2_g2,
+        m00,
+        m00_g1,
+        m00_g2,
+        m20,
+        m20_g1,
+        m20_g2
     );
 
     PYBIND11_NUMPY_DTYPE(

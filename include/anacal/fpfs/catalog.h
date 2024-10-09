@@ -255,6 +255,12 @@ namespace anacal {
         double q1_g1;
         double q2;
         double q2_g2;
+        double m00;
+        double m00_g1;
+        double m00_g2;
+        double m20;
+        double m20_g1;
+        double m20_g2;
     };
 
     struct FpfsWeight {
@@ -376,7 +382,9 @@ namespace anacal {
 
         // Return the result as FpfsShape
         return FpfsShape{
-            e1, e1_g1, e2, e2_g2, q1, q1_g1, q2, q2_g2
+            e1, e1_g1, e2, e2_g2, q1, q1_g1, q2, q2_g2,
+            x.m00, x_dg.m00_g1, x_dg.m00_g2,
+            x.m20, x_dg.m20_g1, x_dg.m20_g2
         };
     }
 
