@@ -281,6 +281,12 @@ namespace anacal {
         double w;
         double w_g1;
         double w_g2;
+        double m00;
+        double m00_g1;
+        double m00_g2;
+        double m20;
+        double m20_g1;
+        double m20_g2;
     };
 
 
@@ -568,9 +574,9 @@ namespace anacal {
             ell.q1_g1,
             ell.q2,
             ell.q2_g2,
-            w,
-            w_g1,
-            w_g2
+            w, w_g1, w_g2,
+            x.m00, x_dg.m00_g1, x_dg.m00_g2,
+            x.m20, x_dg.m20_g1, x_dg.m20_g2
         };
     };
 

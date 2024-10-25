@@ -67,7 +67,13 @@ pybindFpfsCatalog(py::module_& fpfs) {
         q2_g2,
         w,
         w_g1,
-        w_g2
+        w_g2,
+        m00,
+        m00_g1,
+        m00_g2,
+        m20,
+        m20_g1,
+        m20_g2
     );
 
     // Bind measure_shapelets_dg for FpfsShapelets

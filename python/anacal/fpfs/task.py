@@ -401,7 +401,7 @@ def process_image(
     star_catalog: NDArray | None = None,
     detection: NDArray | None = None,
     psf_object: BasePsf | None = None,
-    do_compute_detection_mode: bool = True,
+    do_compute_detect_weight: bool = True,
 ):
     """Run measurement algorithms on the input exposure, and optionally
     populate the resulting catalog with extra information.
@@ -419,7 +419,7 @@ def process_image(
     star_catalog (NDArray | None): bright star catalog [default: None]
     detection (NDArray | None): detection catalog [default: None]
     psf_object (BasePsf | None): PSF object [default: None]
-    do_compute_detection_mode (bool): whether to compute detection modes
+    do_compute_detect_weight (bool): whether to compute detection weight
 
     Returns:
     (NDArray) FPFS catalog
@@ -429,31 +429,28 @@ def process_image(
 
     out_list = []
     ratio = 1.0 / (10 ** ((30 - mag_zero) / 2.5))
-    std_m00 = std_m00_30 * ratio
     std_r2 = std_r2_30 * ratio
     std_v = std_v_30 * ratio
+    ftask = FpfsTask(
+        npix=fpfs_config.npix,
+        pixel_scale=pixel_scale,
+        sigma_arcsec=fpfs_config.sigma_arcsec,
+        noise_variance=noise_variance,
+        psf_array=psf_array,
+        kmax_thres=fpfs_config.kmax_thres,
+        do_detection=True,
+        bound=fpfs_config.bound,
+    )
+
+    std_m00 = ftask.std_m00
+
+    ftask.std_r2 = std_r2
+    ftask.std_v = std_v
+    std_m00 = ftask.std_m00
+    m00_min = fpfs_config.snr_min * std_m00
     fpfs_c0 = fpfs_config.c0 * std_m00
 
-    if do_compute_detection_mode or (detection is None):
-        ftask = FpfsTask(
-            npix=fpfs_config.npix,
-            pixel_scale=pixel_scale,
-            sigma_arcsec=fpfs_config.sigma_arcsec,
-            noise_variance=noise_variance,
-            psf_array=psf_array,
-            kmax_thres=fpfs_config.kmax_thres,
-            do_detection=True,
-            bound=fpfs_config.bound,
-        )
-
-        ftask.std_r2 = std_r2
-        ftask.std_v = std_v
-
-        std_v = ftask.std_v
-        m00_min = fpfs_config.snr_min * ftask.std_m00
-        std_m00 = ftask.std_m00
-        std_r2 = ftask.std_r2
-
+    if do_compute_detect_weight or (detection is None):
         if detection is None:
             detection = ftask.detect(
                 gal_array=gal_array,
@@ -465,7 +462,7 @@ def process_image(
             )
         out_list.append(detection)
 
-        if do_compute_detection_mode:
+        if do_compute_detect_weight:
             # Measurement Tasks
             src = ftask.run(
                 gal_array=gal_array,
@@ -487,7 +484,7 @@ def process_image(
             del src
             out_list.append(meas)
 
-        del ftask
+    del ftask
 
     if fpfs_config.sigma_arcsec1 > 0:
         ftask = FpfsTask(
