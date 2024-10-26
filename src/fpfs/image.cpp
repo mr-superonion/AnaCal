@@ -252,7 +252,7 @@ FpfsImage::detect_source(
     }
 
     if (mask_array.has_value()) {
-        add_pixel_mask_column(
+        detection = add_pixel_mask_column(
             detection,
             *mask_array,
             sigma_arcsec,
@@ -303,10 +303,13 @@ FpfsImage::measure_source(
     py::array_t<double> src({nrow, ncol});
     auto src_r = src.mutable_unchecked<2>();
     for (ssize_t j = 0; j < nrow; ++j) {
-        int y = det_r(j).y; int x = det_r(j).x;
+        int y = static_cast<int>(std::round(det_r(j).y));
+        int x = static_cast<int>(std::round(det_r(j).x));
+        double dy = det_r(j).y - y;
+        double dx = det_r(j).x - x;
         img_obj.set_r(gal_array, x, y, false);
         img_obj.fft();
-        py::array_t<double> row = img_obj.measure(fimg);
+        py::array_t<double> row = img_obj.measure(fimg, dy, dx);
         auto row_r = row.unchecked<1>();
         for (ssize_t i = 0; i < ncol; ++i) {
             src_r(j, i) = row_r(i) * fft_ratio;
@@ -342,7 +345,10 @@ FpfsImage::measure_source(
     py::array_t<double> src({nrow, ncol});
     auto src_r = src.mutable_unchecked<2>();
     for (ssize_t j = 0; j < nrow; ++j) {
-        int y = det_r(j).y; int x = det_r(j).x;
+        int y = static_cast<int>(std::round(det_r(j).y));
+        int x = static_cast<int>(std::round(det_r(j).x));
+        double dy = det_r(j).y - y;
+        double dx = det_r(j).x - x;
         {
             py::array_t<double> psf_array = psf_obj.draw(x, y);
             img_obj.set_r(psf_array, -1, -1, false);
@@ -357,7 +363,7 @@ FpfsImage::measure_source(
             img_obj.fft();
             img_obj.deconvolve(parr, klim);
         }
-        py::array_t<double> row = img_obj.measure(filter_image);
+        py::array_t<double> row = img_obj.measure(filter_image, dy, dx);
         auto row_r = row.unchecked<1>();
         for (ssize_t i = 0; i < ncol; ++i) {
             src_r(j, i) = row_r(i) * fft_ratio;

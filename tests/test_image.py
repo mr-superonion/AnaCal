@@ -5,8 +5,6 @@ import anacal
 import galsim
 import numpy as np
 
-import fpfs
-
 from . import mem_used, print_mem
 from .sim import gauss_tophat_kernel_rfft
 
@@ -101,23 +99,7 @@ def test_deconvolve_image(seed=1):
         nrot_per_gal=nrot,
     )[0]
 
-    indx = np.arange(ngrid // 2, ngrid * nrot, ngrid)
-    indy = np.arange(ngrid // 2, ngrid, ngrid)
-    inds = np.meshgrid(indy, indx, indexing="ij")
-    coords = np.vstack(inds).T
-    norder = 4
-    det_nrot = 4
-    # test shear estimation
-    task = fpfs.image.measure_source(
-        psf_data,
-        pix_scale=scale,
-        sigma_arcsec=0.53,
-        nord=norder,
-        det_nrot=det_nrot,
-    )
     # linear observables
-    mms = task.measure(gal_data, coords)
-
     dec_obj = anacal.image.Image(nx=ngrid, ny=ngrid, scale=1.0)
     dec_obj.set_r(psf_data, ishift=True)
     dec_obj.fft()
@@ -125,13 +107,15 @@ def test_deconvolve_image(seed=1):
     img_obj = anacal.image.Image(nx=ngrid, ny=ngrid, scale=1.0)
     img_obj.set_r(gal_data)
     img_obj.fft()
-    gt_model = anacal.model.Gaussian(sigma=task.sigmaf)
+    sigmaf = 0.37735849056603776
+    gt_model = anacal.model.Gaussian(sigma=sigmaf)
     img_obj.filter(filter_model=gt_model)
-    img_obj.deconvolve(psf_image=dec_obj.draw_f(), klim=task.klim)
+    klim = 2.84706834231575
+    img_obj.deconvolve(psf_image=dec_obj.draw_f(), klim=klim)
     img_obj.ifft()
     img = img_obj.draw_r()
     obs = img[ngrid // 2, ngrid // 2] / scale**2.0
-    np.testing.assert_almost_equal(obs, mms[0, 0], decimal=4)
+    np.testing.assert_almost_equal(obs, 19.011662644585865, decimal=4)
     return
 
 

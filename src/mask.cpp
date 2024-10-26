@@ -19,9 +19,9 @@ namespace anacal {
         int ny = m_r.shape(0);
         int nx = m_r.shape(1);
         for (int k = 0; k < nn; ++k) {
-            int x = int(star_r(k).x + 0.5);
-            int y = int(star_r(k).y + 0.5);
-            int r = int(star_r(k).r + 0.5);
+            int x = static_cast<int>(star_r(k).x + 0.5);
+            int y = static_cast<int>(star_r(k).y + 0.5);
+            int r = static_cast<int>(star_r(k).r + 0.5);
             int r2 = r * r;
             for (int j = y-r; j <= y+r; ++j) {
                 if ((j < 0) || (j >= ny)) {
@@ -181,9 +181,9 @@ namespace anacal {
         return mask_conv;
     }
 
-    void
+    py::array_t<FpfsPeaks>
     add_pixel_mask_column(
-        py::array_t<FpfsPeaks>& det,
+        const py::array_t<FpfsPeaks>& det,
         const py::array_t<int16_t>& mask_array,
         double sigma,
         double scale
@@ -196,16 +196,25 @@ namespace anacal {
         int ny = conv_r.shape(0);
         int nx = conv_r.shape(1);
 
-        auto det_r = det.mutable_unchecked<1>();
+        auto det_r = det.unchecked<1>();
         ssize_t nrow = det_r.shape(0);
+
+        py::array_t<FpfsPeaks> out(nrow);
+        auto out_r = out.template mutable_unchecked<1>();
+
         for (ssize_t j = 0; j < nrow; ++j) {
-            int y = det_r(j).y; int x = det_r(j).x;
+            out_r(j).mask_value = det_r(j).mask_value;
+            out_r(j).is_peak = det_r(j).is_peak;
+            out_r(j).y = det_r(j).y;
+            out_r(j).x = det_r(j).x;
+            int y = static_cast<int>(std::round(det_r(j).y));
+            int x = static_cast<int>(std::round(det_r(j).x));
             if (y>=0 && y< ny && x>=0 && x<nx) {
-                det_r(j).mask_value = int(conv_r(y, x) * 1000);
+                out_r(j).mask_value = int(conv_r(y, x) * 1000);
                 /* std::cout<<det_r(j).mask_value<<std::endl; */
             }
         }
-        return;
+        return out;
     }
 
     void

@@ -29,9 +29,9 @@ namespace anacal {
         double scale
     );
 
-    void
+    py::array_t<FpfsPeaks>
     add_pixel_mask_column(
-        py::array_t<FpfsPeaks>& det,
+        const py::array_t<FpfsPeaks>& det,
         const py::array_t<int16_t>& mask_array,
         double sigma,
         double scale

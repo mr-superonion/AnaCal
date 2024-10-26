@@ -23,8 +23,8 @@ struct BrightStar {
 };
 
 struct FpfsPeaks {
-    int y;
-    int x;
+    double y;
+    double x;
     int is_peak;
     int mask_value;
 };

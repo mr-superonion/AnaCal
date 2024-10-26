@@ -71,7 +71,9 @@ namespace anacal {
         void filter(const BaseModel&);
 
         py::array_t<double> measure(
-            const py::array_t<std::complex<double>>&
+            const py::array_t<std::complex<double>>&,
+            double dy=0.0,
+            double dx=0.0
         ) const;
 
         void deconvolve(

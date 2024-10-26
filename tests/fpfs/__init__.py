@@ -3,7 +3,8 @@ import numpy as np
 
 
 def smooth(
-    task,
+    sigmaf,
+    kmax,
     img_array,
     psf_array,
     noise_array=None,
@@ -11,9 +12,11 @@ def smooth(
     """This function convolves an image to transform the PSF to a Gaussian
 
     Args:
-    img_array (ndarray):     image data
-    psf_array (ndarray):     psf data
-    noise_array (ndarray):   noise data
+    sigmaf (float):         Gaussian Sigma in Fourier space [1/pixel]
+    kmax (float):           truncation in Fourier space [1/pixel]
+    img_array (ndarray):    image data
+    psf_array (ndarray):    psf data
+    noise_array (ndarray):  noise data
     """
 
     ny, nx = img_array.shape
@@ -48,8 +51,8 @@ def smooth(
             * anacal.fpfs.base.gauss_kernel_rfft(
                 ny,
                 nx,
-                task.sigmaf,
-                task.klim,
+                sigmaf,
+                kmax,
                 return_grid=False,
             ),
             (ny, nx),
@@ -69,8 +72,8 @@ def smooth(
             * anacal.fpfs.base.gauss_kernel_rfft(
                 ny,
                 nx,
-                task.sigmaf,
-                task.klim,
+                sigmaf,
+                kmax,
                 return_grid=False,
             ),
             (ny, nx),

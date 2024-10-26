@@ -228,13 +228,13 @@ def gauss_kernel_rfft(
     ny: int, nx: int, sigma: float, kmax: float, return_grid: bool = False
 ):
     """Generate a Gaussian kernel on grids for np.fft.rfft transform
-    The kernel is truncated at radius kmax.
+    The kernel is truncated at radius kmax. The pixel scale is set to 1
 
     Args:
     ny (int): grid size in y-direction
     nx (int): grid size in x-direction
     sigma (float): scale of Gaussian in Fourier space (pixel scale=1)
-    kmax (float): upper limit of k
+    kmax (float): upper limit of k times scale (klim * scale)
     return_grid (bool): return grids or not
 
     Returns:
@@ -255,14 +255,15 @@ def gauss_kernel_rfft(
 
 def shapelets2d_func(npix: int, norder: int, sigma: float, kmax: float):
     """Generate complex shapelets function in Fourier space, chi00 are
-    normalized to 1
+    normalized to 1. The kernel is truncated at radius kmax. The pixel scale is
+    set to 1
     [only support square stamps: ny=nx=npix]
 
     Args:
     npix (int): number of pixels in x and y direction
     norder (int): radial order of the shaplets
     sigma (float): scale of shapelets in Fourier space
-    kmax (float): upper limit of |k|
+    kmax (float): upper limit of k times scale (klim * scale)
 
     Returns:
     chi (ndarray): 2d shapelet basis
@@ -324,14 +325,15 @@ def shapelets2d_func(npix: int, norder: int, sigma: float, kmax: float):
 
 def shapelets2d(norder: int, npix: int, sigma: float, kmax: float):
     """Generate real shapelets function in Fourier space, chi00 are
-    normalized to 1
+    normalized to 1. The kernel is truncated at radius kmax. The pixel scale is
+    set to 1
     [only support square stamps: ny=nx=npix]
 
     Args:
     npix (int): number of pixels in x and y direction
     norder (int): radial order of the shaplets
     sigma (float): scale of shapelets in Fourier space
-    kmax (float): upper limit of |k|
+    kmax (float): upper limit of k times scale (klim * scale)
 
     Returns:
     chi_2 (ndarray): 2d shapelet basis w/ shape [n,npix,npix]
@@ -356,12 +358,13 @@ def detlets2d(
     kmax: float,
 ):
     """Generate shapelets function in Fourier space, chi00 are normalized to 1
-    This function only supports square stamps: ny=nx=npix.
+    This function only supports square stamps: ny=nx=npix. The kernel is
+    truncated at radius kmax. The pixel scale is set to 1
 
     Args:
     npix (int): number of pixels in x and y direction
     sigma (float): radius of shapelets in Fourier space
-    kmax (float): upper limit of |k|
+    kmax (float): upper limit of k times scale (klim * scale)
 
     Returns:
     psi (ndarray): 2d detlets basis in shape of [det_nrot,3,npix,npix]

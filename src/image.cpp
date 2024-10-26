@@ -388,7 +388,9 @@ Image::filter(
 
 py::array_t<double>
 Image::measure(
-    const py::array_t<std::complex<double>>& filter_image
+    const py::array_t<std::complex<double>>& filter_image,
+    double dy,
+    double dx
 ) const {
     assert_mode(this->mode & 2);
     if ((filter_image.shape()[0] != ky_length) ||
@@ -396,6 +398,7 @@ Image::measure(
     ) {
         throw std::runtime_error("Error: input filter shape not correct");
     }
+    const double two_pi = 2.0 * M_PI;
 
     int ncol = filter_image.shape()[2];
 
@@ -408,19 +411,27 @@ Image::measure(
     auto fr = filter_image.unchecked<3>();
     for (int j = 0; j < ky_length; ++j) {
         int ji = j * kx_length;
+        double kj = two_pi * (j <= ny / 2 ? j : j - ny) / ny;
+        double cosp = std::cos(kj * dy);
         for (int i = -1; i < 1; ++i) {
             int ii = (i + kx_length) % kx_length;
             int index = ji + ii;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
+            double ki = two_pi * ii / nx;
+            double sinp = std::sin(-1.0 * ki * dx);
+            std::complex<double> phase(cosp, sinp);
             for (int z = 0; z < ncol; ++z) {
-                meas_r(z) = meas_r(z) + (fr(j, ii, z) * val).real();
+                meas_r(z) = meas_r(z) + (fr(j, ii, z) * phase * val).real();
             }
         }
         for (int i = 1; i < kx_length - 1; ++i) {
             int index = ji + i;
             std::complex<double> val(data_f[index][0], data_f[index][1]);
+            double ki = two_pi * i / nx;
+            double sinp = std::sin(-1.0 * ki * dx);
+            std::complex<double> phase(cosp, sinp);
             for (int z = 0; z < ncol; ++z) {
-                meas_r(z) = meas_r(z) + (fr(j, i, z) * val).real() * 2.0;
+                meas_r(z) = meas_r(z) + (fr(j, i, z) * phase * val).real() * 2.0;
             }
         }
     }
@@ -727,7 +738,9 @@ pyExportImage(py::module& m) {
         )
         .def("measure", &Image::measure,
             "Meausure moments using filter image",
-            py::arg("filter_image")
+            py::arg("filter_image"),
+            py::arg("dy")=0.0,
+            py::arg("dx")=0.0
         )
         .def("add_image_f",
             py::overload_cast<const py::array_t<std::complex<double>>&>

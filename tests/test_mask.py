@@ -25,7 +25,7 @@ def test_mask():
             ("mask_value", np.int32),
         ],
     )
-    anacal.mask.add_pixel_mask_column(src, mask, sigma_arcsec, scale)
+    src = anacal.mask.add_pixel_mask_column(src, mask, sigma_arcsec, scale)
     assert src["mask_value"][0] == 23
     star_array = np.array(
         [
