@@ -9,3 +9,6 @@
 + remove dependency on jax
 
 
+## v0.4.1
++ Detections can have double coordinates in image plane
++ remove dependence on FPFS for unit tests
