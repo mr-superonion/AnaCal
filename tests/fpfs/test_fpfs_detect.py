@@ -92,11 +92,13 @@ def test_detect():
     out1 = out1[:, :-1]
     out1 = out1[np.lexsort((out1[:, 0], out1[:, 1]))]
     assert out1.shape == (48666, 3)
-    arr = np.array([
-        [50,  21, 0],
-        [67,  21, 0],
-        [111,  21, 1],
-    ])
+    arr = np.array(
+        [
+            [50, 21, 0],
+            [67, 21, 0],
+            [111, 21, 1],
+        ]
+    )
     np.testing.assert_almost_equal(out1[:3], arr)
     return
 
