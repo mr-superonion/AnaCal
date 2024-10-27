@@ -13,3 +13,5 @@
 + Returns M00, M20 and their shear responses
 + Detections can have double coordinates in image plane
 + remove dependence on FPFS for unit tests
++ Enable Force measurement
+
