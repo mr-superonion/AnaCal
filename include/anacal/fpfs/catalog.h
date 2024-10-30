@@ -420,29 +420,28 @@ namespace anacal {
         double m00_min,
         double std_m00,
         double r2_min,
-        double std_r2,
+        double omega_r2,
         const T &x,
         const FpfsShapeletsResponse &x_dg
     ) {
 
-        double sigma_m00 = fpfs_cut_sigma_ratio * std_m00;
-        double sigma_r2 = fpfs_cut_sigma_ratio * std_r2;
+        double omega_m00 = fpfs_cut_sigma_ratio * std_m00;
         // Selection on flux
-        double w0l = math::ssfunc2(x.m00, m00_min, sigma_m00);
-        double dw0l = math::ssfunc2_deriv(x.m00, m00_min, sigma_m00);
+        double w0l = math::ssfunc2(x.m00, m00_min, omega_m00);
+        double dw0l = math::ssfunc2_deriv(x.m00, m00_min, omega_m00);
         double w0l_g1 = dw0l * x_dg.m00_g1;
         double w0l_g2 = dw0l * x_dg.m00_g2;
 
-        double w0u = math::ssfunc2(-x.m00, -500, sigma_m00);
-        double dw0u = math::ssfunc2_deriv(-x.m00, -500, sigma_m00);
+        double w0u = math::ssfunc2(-x.m00, -500, omega_m00);
+        double dw0u = math::ssfunc2_deriv(-x.m00, -500, omega_m00);
         double w0u_g1 = dw0u * -x_dg.m00_g1;
         double w0u_g2 = dw0u * -x_dg.m00_g2;
 
         // Selection on size (lower limit)
         // (M00 + M20) / M00 > r2_min
         double r2l = x.m00 * (1.0 - r2_min) + x.m20;
-        double w2l = math::ssfunc2(r2l, sigma_r2, sigma_r2);
-        double dw2l = math::ssfunc2_deriv(r2l, sigma_r2, sigma_r2);
+        double w2l = math::ssfunc2(r2l, omega_r2, omega_r2);
+        double dw2l = math::ssfunc2_deriv(r2l, omega_r2, omega_r2);
         double w2l_g1 = dw2l * (
             x_dg.m00_g1 * (1.0 - r2_min) + x_dg.m20_g1
         );
@@ -464,37 +463,35 @@ namespace anacal {
         };
     };
 
-    inline FpfsWeight measure_fpfs_wdet(
-        double std_v,
-        double pthres,
+    inline FpfsWeight measure_fpfs_wdet0(
+        double v_min,
+        double omega_v,
         const FpfsDetect &x,
         const std::optional<FpfsDetect> &y=std::nullopt
     ) {
 
-        double sigma_v = fpfs_cut_sigma_ratio * std_v;
-        double pcut = fpfs_pnr * std_v;
         FpfsDetect xx = y.has_value() ? x - *y * 2.0 : x;
         // det0 computation
-        double det0 = math::ssfunc2(x.v0, sigma_v - pcut, sigma_v);
-        double det0_deriv = math::ssfunc2_deriv(x.v0, sigma_v - pcut, sigma_v);
+        double det0 = math::ssfunc2(x.v0, v_min, omega_v);
+        double det0_deriv = math::ssfunc2_deriv(x.v0, v_min, omega_v);
         double det0_g1 = det0_deriv * (xx.v0_g1);
         double det0_g2 = det0_deriv * (xx.v0_g2);
 
         // det1 computation
-        double det1 = math::ssfunc2(x.v1, sigma_v - pcut, sigma_v);
-        double det1_deriv = math::ssfunc2_deriv(x.v1, sigma_v - pcut, sigma_v);
+        double det1 = math::ssfunc2(x.v1, v_min, omega_v);
+        double det1_deriv = math::ssfunc2_deriv(x.v1, v_min, omega_v);
         double det1_g1 = det1_deriv * (xx.v1_g1);
         double det1_g2 = det1_deriv * (xx.v1_g2);
 
         // det2 computation
-        double det2 = math::ssfunc2(x.v2, sigma_v - pcut, sigma_v);
-        double det2_deriv = math::ssfunc2_deriv(x.v2, sigma_v - pcut, sigma_v);
+        double det2 = math::ssfunc2(x.v2, v_min, omega_v);
+        double det2_deriv = math::ssfunc2_deriv(x.v2, v_min, omega_v);
         double det2_g1 = det2_deriv * (xx.v2_g1);
         double det2_g2 = det2_deriv * (xx.v2_g2);
 
         // det3 computation
-        double det3 = math::ssfunc2(x.v3, sigma_v - pcut, sigma_v);
-        double det3_deriv = math::ssfunc2_deriv(x.v3, sigma_v - pcut, sigma_v);
+        double det3 = math::ssfunc2(x.v3, v_min, omega_v);
+        double det3_deriv = math::ssfunc2_deriv(x.v3, v_min, omega_v);
         double det3_g1 = det3_deriv * (xx.v3_g1);
         double det3_g2 = det3_deriv * (xx.v3_g2);
 
@@ -507,12 +504,48 @@ namespace anacal {
             det0_g2 * det1 * det2 * det3 + det0 * det1_g2 * det2 * det3
         ) + (det0 * det1 * det2_g2 * det3 + det0 * det1 * det2 * det3_g2);
 
-        // Final selection based on w
-        double wdet = math::ssfunc2(w, pthres, fpfs_det_sigma2);
-        double wdet_deriv = math::ssfunc2_deriv(w, pthres, fpfs_det_sigma2);
 
         return FpfsWeight{
-            wdet, wdet_deriv * w_g1, wdet_deriv * w_g2
+            w, w_g1, w_g2
+        };
+    };
+
+    inline py::array_t<FpfsWeight> measure_fpfs_wdet0(
+        double v_min,
+        double omega_v,
+        const py::array_t<FpfsDetect> &x_array,
+        const std::optional<py::array_t<FpfsDetect>> &y_array=std::nullopt
+    ) {
+        auto x_r = x_array.unchecked<1>();
+        int nn = x_array.shape(0);
+        py::array_t<FpfsWeight> out(nn);
+        auto out_r = out.mutable_unchecked<1>();
+        if (y_array.has_value()) {
+            auto y_r = y_array->unchecked<1>();
+            for (ssize_t i = 0; i < nn; ++i) {
+                out_r(i) = measure_fpfs_wdet0(v_min, omega_v, x_r(i), y_r(i));
+            }
+        } else {
+            for (ssize_t i = 0; i < nn; ++i) {
+                out_r(i) = measure_fpfs_wdet0(v_min, omega_v, x_r(i));
+            }
+        }
+        return out;
+    };
+
+    inline FpfsWeight measure_fpfs_wdet(
+        double v_min,
+        double omega_v,
+        double pthres,
+        const FpfsDetect &x,
+        const std::optional<FpfsDetect> &y=std::nullopt
+    ) {
+
+        FpfsWeight w0 =  measure_fpfs_wdet0(v_min, omega_v, x, y);
+        double wdet = math::ssfunc2(w0.w, pthres, fpfs_det_sigma2);
+        double wdet_deriv = math::ssfunc2_deriv(w0.w, pthres, fpfs_det_sigma2);
+        return FpfsWeight{
+            wdet, wdet_deriv * w0.w_g1, wdet_deriv * w0.w_g2
         };
     };
 
@@ -532,12 +565,13 @@ namespace anacal {
 
     inline FpfsCatalog measure_fpfs(
         double C0,
-        double std_v,
+        double v_min,
+        double omega_v,
         double pthres,
         double m00_min,
         double std_m00,
         double r2_min,
-        double std_r2,
+        double omega_r2,
         const FpfsDetect &x,
         const std::optional<FpfsDetect> &y=std::nullopt
     ){
@@ -551,12 +585,13 @@ namespace anacal {
             m00_min,
             std_m00,
             r2_min,
-            std_r2,
+            omega_r2,
             x,
             x_dg
         );
         FpfsWeight wdet = measure_fpfs_wdet(
-            std_v,
+            v_min,
+            omega_v,
             pthres,
             x,
             y
@@ -606,12 +641,13 @@ namespace anacal {
 
     inline py::array_t<FpfsCatalog> measure_fpfs(
         double C0,
-        double std_v,
+        double v_min,
+        double omega_v,
         double pthres,
         double m00_min,
         double std_m00,
         double r2_min,
-        double std_r2,
+        double omega_r2,
         const py::array_t<FpfsDetect> &x_array,
         const std::optional<py::array_t<FpfsDetect>> &y_array=std::nullopt
     ) {
@@ -624,12 +660,13 @@ namespace anacal {
             for (ssize_t i = 0; i < nn; ++i) {
                 out_r(i) = measure_fpfs(
                     C0,
-                    std_v,
+                    v_min,
+                    omega_v,
                     pthres,
                     m00_min,
                     std_m00,
                     r2_min,
-                    std_r2,
+                    omega_r2,
                     x_r(i),
                     y_r(i)
                 );
@@ -638,12 +675,13 @@ namespace anacal {
             for (ssize_t i = 0; i < nn; ++i) {
                 out_r(i) = measure_fpfs(
                     C0,
-                    std_v,
+                    v_min,
+                    omega_v,
                     pthres,
                     m00_min,
                     std_m00,
                     r2_min,
-                    std_r2,
+                    omega_r2,
                     x_r(i)
                 );
             }

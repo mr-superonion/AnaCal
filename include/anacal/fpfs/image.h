@@ -59,7 +59,8 @@ namespace anacal {
             double fthres,
             double pthres,
             double std_m00,
-            double std_v,
+            double v_min,
+            double omega_v,
             int xcen,
             int ycen
         );
@@ -70,7 +71,8 @@ namespace anacal {
             double fthres,
             double pthres,
             double std_m00,
-            double std_v,
+            double v_min,
+            double omega_v,
             const std::optional<py::array_t<double>>& noise_array=std::nullopt,
             const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
         );

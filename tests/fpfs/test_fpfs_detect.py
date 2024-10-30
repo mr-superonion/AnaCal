@@ -86,7 +86,8 @@ def test_detect():
         fthres=1.0,
         pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,  # effectively v>0
         std_m00=std * scale**2.0,
-        std_v=std * scale**2.0,
+        omega_v=std * scale**2.0 * 1.6,
+        v_min=std * scale**2.0 * 0.8,
     )
     out1 = rfn.structured_to_unstructured(out1)
     out1 = out1[:, :-1]

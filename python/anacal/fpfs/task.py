@@ -13,10 +13,6 @@ npix_patch = 256
 npix_overlap = 64
 npix_default = 64
 
-std_m00_30 = 1.6
-std_r2_30 = 3.2
-std_v_30 = 0.6
-
 
 class FpfsTask(FpfsKernel):
     """A base class for measurement
@@ -95,6 +91,8 @@ class FpfsTask(FpfsKernel):
         gal_array: NDArray,
         fthres: float,
         pthres: float,
+        omega_v: float,
+        v_min: float,
         noise_array: NDArray | None = None,
         mask_array: NDArray | None = None,
         star_cat: NDArray | None = None,
@@ -105,6 +103,8 @@ class FpfsTask(FpfsKernel):
         gal_array (NDArray): galaxy image data
         fthres (float): flux threshold
         pthres (float): peak threshold
+        omega_v (float): smoothness parameter for pixel difference
+        omega_v (float): smoothness parameter for pixel difference
         noise_array (NDArray|None): pure noise image
         mask_array (NDArray|None): mask image
         star_cat (NDArray|None): bright star catalog
@@ -124,7 +124,8 @@ class FpfsTask(FpfsKernel):
             fthres=fthres,
             pthres=pthres,
             std_m00=self.std_m00 * self.pixel_scale**2.0,
-            std_v=self.std_v * self.pixel_scale**2.0,
+            omega_v=omega_v * self.pixel_scale**2.0,
+            v_min=v_min * self.pixel_scale**2.0,
             noise_array=noise_array,
             mask_array=mask_array,
         )
@@ -371,14 +372,31 @@ class FpfsConfig(BaseModel):
         the first pooling.
         """,
     )
-    snr_min: float = Field(
-        default=12,
-        description="""Minimum Signal-to-Noise Ratio.
+    omega_r2: float = Field(
+        default=4.8,
+        description="""
+        smoothness parameter for r2 cut
         """,
     )
     r2_min: float = Field(
         default=0.1,
-        description="""Minimum resolution.
+        description="""Minimum trace radius.
+        """,
+    )
+    omega_v: float = Field(
+        default=0.9,
+        description="""
+        smoothness parameter for v cut
+        """,
+    )
+    v_min: float = Field(
+        default=0.45,
+        description="""Minimum of v
+        """,
+    )
+    snr_min: float = Field(
+        default=12,
+        description="""Minimum Signal-to-Noise Ratio.
         """,
     )
     c0: float = Field(
@@ -402,6 +420,7 @@ def process_image(
     detection: NDArray | None = None,
     psf_object: BasePsf | None = None,
     do_compute_detect_weight: bool = True,
+    only_return_detection_modes: bool = False,
 ):
     """Run measurement algorithms on the input exposure, and optionally
     populate the resulting catalog with extra information.
@@ -414,23 +433,28 @@ def process_image(
     do_detection (bool): whether compute detection kernel
     gal_array (NDArray[float64]): galaxy exposure array
     psf_array (ndarray): an average PSF image
-    noise_array (NDArray | None): pure noise array [default: None]
-    mask_array (NDArray | None): mask array (1 for masked) [default: None]
-    star_catalog (NDArray | None): bright star catalog [default: None]
-    detection (NDArray | None): detection catalog [default: None]
-    psf_object (BasePsf | None): PSF object [default: None]
+    noise_array (NDArray | None): pure noise array
+    mask_array (NDArray | None): mask array (1 for masked)
+    star_catalog (NDArray | None): bright star catalog
+    detection (NDArray | None): detection catalog
+    psf_object (BasePsf | None): PSF object
     do_compute_detect_weight (bool): whether to compute detection weight
+    only_return_detection_modes (bool): only return linear modes for detection
 
     Returns:
     (NDArray) FPFS catalog
     """
+    ratio = 1.0 / (10 ** ((30 - mag_zero) / 2.5))
+    r2_min = fpfs_config.r2_min * ratio
+    omega_r2 = fpfs_config.omega_r2 * ratio
+    v_min = fpfs_config.v_min * ratio
+    omega_v = fpfs_config.omega_v * ratio
+
     if psf_object is None:
         psf_object = psf_array
 
     out_list = []
-    ratio = 1.0 / (10 ** ((30 - mag_zero) / 2.5))
-    std_r2 = std_r2_30 * ratio
-    std_v = std_v_30 * ratio
+
     ftask = FpfsTask(
         npix=fpfs_config.npix,
         pixel_scale=pixel_scale,
@@ -443,10 +467,6 @@ def process_image(
     )
 
     std_m00 = ftask.std_m00
-
-    ftask.std_r2 = std_r2
-    ftask.std_v = std_v
-    std_m00 = ftask.std_m00
     m00_min = fpfs_config.snr_min * std_m00
     fpfs_c0 = fpfs_config.c0 * std_m00
 
@@ -457,6 +477,8 @@ def process_image(
                 fthres=fpfs_config.fthres,
                 pthres=fpfs_config.pthres,
                 noise_array=noise_array,
+                v_min=v_min,
+                omega_v=omega_v,
                 mask_array=mask_array,
                 star_cat=star_catalog,
             )
@@ -470,14 +492,17 @@ def process_image(
                 det=detection,
                 noise_array=noise_array,
             )
+            if only_return_detection_modes:
+                return src
             meas = measure_fpfs(
                 C0=fpfs_c0,
-                std_v=std_v,
+                v_min=v_min,
+                omega_v=omega_v,
                 pthres=fpfs_config.pthres,
                 m00_min=m00_min,
                 std_m00=std_m00,
-                r2_min=fpfs_config.r2_min,
-                std_r2=std_r2,
+                r2_min=r2_min,
+                omega_r2=omega_r2,
                 x_array=src["data"],
                 y_array=src["noise"],
             )

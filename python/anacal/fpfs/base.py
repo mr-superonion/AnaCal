@@ -204,23 +204,6 @@ class FpfsKernel(AnacalBase):
         )
         self.std_modes = np.sqrt(np.diagonal(cov_elems))
         self.std_m00 = self.std_modes[self.di["m00"]]
-        self.std_r2 = np.sqrt(
-            cov_elems[self.di["m00"], self.di["m00"]]
-            + cov_elems[self.di["m20"], self.di["m20"]]
-            + cov_elems[self.di["m00"], self.di["m20"]]
-            + cov_elems[self.di["m20"], self.di["m00"]]
-        )
-        if self.do_detection:
-            self.std_v = np.average(
-                np.array(
-                    [
-                        self.std_modes[self.di["v%d" % _]]
-                        for _ in range(det_nrot)
-                    ]
-                )
-            )
-        else:
-            self.std_v = -1.0
         return cov_elems
 
 

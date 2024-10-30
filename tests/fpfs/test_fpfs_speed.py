@@ -56,32 +56,11 @@ def func():
         gal_array=gal_array,
         fthres=5.0,
         pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,
+        omega_v=0.2557259133327884 * 1.6,
+        v_min=0.2557259133327884 * 0.8,
         noise_array=noise_array,
     )[0:10000]
-
-    # # Measurement Tasks
-    # src = ftask.run(
-    #     gal_array=gal_array,
-    #     psf=psf_array,
-    #     det=det,
-    #     noise_array=noise_array,
-    # )
-    # t2 = time.time()
-    # print("Shapelets measurement time: ", t2 - t1)
-
-    # meas = anacal.fpfs.measure_fpfs(
-    #     C0=4.0,
-    #     std_v=0.2,
-    #     pthres=0.2,
-    #     m00_min=0,
-    #     std_m00=0.1,
-    #     r2_min=0.1,
-    #     std_r2=0.2,
-    #     x_array=src["data"],
-    #     y_array=src["noise"],
-    # )
-    # t3 = time.time()
-    # print("Ellipticify measurement time: ", t3 - t2)
+    del det
     return
 
 

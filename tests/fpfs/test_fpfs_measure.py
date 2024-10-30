@@ -55,6 +55,8 @@ def test_fpfs_measure():
         gal_array=gal_array,
         fthres=10.0,
         pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,
+        omega_v=0.5114518266655768,
+        v_min=0.2557259133327884,
         noise_array=None,
     )
 

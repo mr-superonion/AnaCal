@@ -123,12 +123,13 @@ def test_catalog():
     ell = anacal.fpfs.measure_fpfs_shape(c0 * std_m00, mm_st, dm_dg)
     cat = anacal.fpfs.measure_fpfs(
         C0=c0 * std_m00,
-        std_v=std_v,
+        v_min=std_v * 0.8,
+        omega_v=std_v * 1.6,
         pthres=pthres,
         m00_min=snr_min * std_m00,
         std_m00=std_m00,
         r2_min=r2_min,
-        std_r2=std_r2,
+        omega_r2=std_r2 * 1.6,
         x_array=mm_st,
         y_array=nn_st,
     )

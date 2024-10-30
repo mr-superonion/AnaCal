@@ -165,7 +165,7 @@ pybindFpfsCatalog(py::module_& fpfs) {
         "measure_fpfs_wsel",
         &measure_fpfs_wsel<FpfsShapelets>,
         py::arg("m00_min"), py::arg("std_m00"),
-        py::arg("r2_min"), py::arg("std_r2"),
+        py::arg("r2_min"), py::arg("omega_r2"),
         py::arg("x"), py::arg("x_dg")
     );
 
@@ -174,15 +174,46 @@ pybindFpfsCatalog(py::module_& fpfs) {
         "measure_fpfs_wsel",
         &measure_fpfs_wsel<FpfsDetect>,
         py::arg("m00_min"), py::arg("std_m00"),
-        py::arg("r2_min"), py::arg("std_r2"),
+        py::arg("r2_min"), py::arg("omega_r2"),
         py::arg("x"), py::arg("x_dg")
+    );
+
+    // Bind measure_fpfs_wdet0 for FpfsDetect
+    fpfs.def(
+        "measure_fpfs_wdet0",
+        py::overload_cast<
+            double,
+            double,
+            const FpfsDetect&,
+            const std::optional<FpfsDetect>&
+        >(&measure_fpfs_wdet0),
+        py::arg("v_min"),
+        py::arg("omega_v"),
+        py::arg("x"),
+        py::arg("y") = std::nullopt
+    );
+
+    // Bind measure_fpfs_wdet0 for FpfsDetect array
+    fpfs.def(
+        "measure_fpfs_wdet0",
+        py::overload_cast<
+            double,
+            double,
+            const py::array_t<FpfsDetect>&,
+            const std::optional<py::array_t<FpfsDetect>>&
+        >(&measure_fpfs_wdet0),
+        py::arg("v_min"),
+        py::arg("omega_v"),
+        py::arg("x_array"),
+        py::arg("y_array") = std::nullopt
     );
 
     // Bind measure_fpfs_wdet for FpfsDetect
     fpfs.def(
         "measure_fpfs_wdet",
         &measure_fpfs_wdet,
-        py::arg("std_v"),
+        py::arg("v_min"),
+        py::arg("omega_v"),
         py::arg("pthres"),
         py::arg("x"),
         py::arg("y") = std::nullopt
@@ -198,21 +229,25 @@ pybindFpfsCatalog(py::module_& fpfs) {
         py::arg("C0"), py::arg("x"), py::arg("y") = std::nullopt
     );
 
-    // Overload 2: measure_fpfs for FpfsDetect (FpfsCatalog)
+    // Overload 2: measure_fpfs for FpfsDetect
     fpfs.def(
         "measure_fpfs",
         py::overload_cast<
-            double, double, double,
+            double, double, double, double,
             double, double, double, double,
             const FpfsDetect&,
             const std::optional<FpfsDetect>&
         >(&measure_fpfs),
         py::arg("C0"),
-        py::arg("std_v"),
+        py::arg("v_min"),
+        py::arg("omega_v"),
         py::arg("pthres"),
-        py::arg("m00_min"), py::arg("std_m00"),
-        py::arg("r2_min"), py::arg("std_r2"),
-        py::arg("x"), py::arg("y") = std::nullopt
+        py::arg("m00_min"),
+        py::arg("std_m00"),
+        py::arg("r2_min"),
+        py::arg("omega_r2"),
+        py::arg("x"),
+        py::arg("y") = std::nullopt
     );
 
     // Overload 3: measure_fpfs for FpfsShapelets (array version)
@@ -222,23 +257,29 @@ pybindFpfsCatalog(py::module_& fpfs) {
             double, const py::array_t<FpfsShapelets>&,
             const std::optional<py::array_t<FpfsShapelets>>&
         >(&measure_fpfs),
-        py::arg("C0"), py::arg("x_array"), py::arg("y_array") = std::nullopt
+        py::arg("C0"),
+        py::arg("x_array"),
+        py::arg("y_array") = std::nullopt
     );
 
     // Overload 4: measure_fpfs for FpfsDetect (array version)
     fpfs.def(
         "measure_fpfs",
         py::overload_cast<
-            double, double, double, double, double, double, double,
+            double, double, double, double, double, double, double, double,
             const py::array_t<FpfsDetect>&,
             const std::optional<py::array_t<FpfsDetect>>&
         >(&measure_fpfs),
         py::arg("C0"),
-        py::arg("std_v"),
+        py::arg("v_min"),
+        py::arg("omega_v"),
         py::arg("pthres"),
-        py::arg("m00_min"), py::arg("std_m00"),
-        py::arg("r2_min"), py::arg("std_r2"),
-        py::arg("x_array"), py::arg("y_array") = std::nullopt
+        py::arg("m00_min"),
+        py::arg("std_m00"),
+        py::arg("r2_min"),
+        py::arg("omega_r2"),
+        py::arg("x_array"),
+        py::arg("y_array") = std::nullopt
     );
 }
 }

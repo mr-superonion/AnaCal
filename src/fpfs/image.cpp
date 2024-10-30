@@ -107,7 +107,8 @@ FpfsImage::find_peaks(
     double fthres,
     double pthres,
     double std_m00,
-    double std_v,
+    double v_min,
+    double omega_v,
     int xcen,
     int ycen
 ) {
@@ -124,8 +125,6 @@ FpfsImage::find_peaks(
     int xmin = xcen - this->nx2;
 
     double fcut = fthres * std_m00;
-    double pcut = fpfs_pnr * std_v;
-    double sigma_v = fpfs_cut_sigma_ratio * std_v;
     double wdet_cut = pthres - fpfs_det_sigma2 - 0.02;
 
     if (std::fabs(wdet_cut) < 1e-10) {
@@ -149,8 +148,8 @@ FpfsImage::find_peaks(
                     if ((dr2 <= drmax2) && (dr2 != 0)) {
                         double zv = math::ssfunc2(
                             c - r(j + dj, i + di),
-                            sigma_v - pcut,
-                            sigma_v
+                            v_min,
+                            omega_v
                         );
                         wdet = wdet * zv;
                     }
@@ -185,7 +184,8 @@ FpfsImage::detect_source(
     double fthres,
     double pthres,
     double std_m00,
-    double std_v,
+    double v_min,
+    double omega_v,
     const std::optional<py::array_t<double>>& noise_array,
     const std::optional<py::array_t<int16_t>>& mask_array
 ) {
@@ -232,7 +232,8 @@ FpfsImage::detect_source(
                 fthres,
                 pthres,
                 std_m00,
-                std_v,
+                v_min,
+                omega_v,
                 xcen,
                 ycen
             );
@@ -427,7 +428,8 @@ pybindFpfsImage(py::module_& fpfs) {
             py::arg("fthres"),
             py::arg("pthres"),
             py::arg("std_m00"),
-            py::arg("std_v"),
+            py::arg("v_min"),
+            py::arg("omega_v"),
             py::arg("noise_array")=py::none(),
             py::arg("mask_array")=py::none()
         )

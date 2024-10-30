@@ -8,9 +8,8 @@
 #include "../stdafx.h"
 
 namespace anacal {
-    inline constexpr double fpfs_cut_sigma_ratio = 1.6;
     inline constexpr double fpfs_det_sigma2 = 0.04;
-    inline constexpr double fpfs_pnr = 0.8;
+    inline constexpr double fpfs_cut_sigma_ratio = 1.6;
 }
 
 #endif // ANACAL_FPFS_BASE_H
