@@ -380,7 +380,7 @@ class FpfsConfig(BaseModel):
     )
     r2_min: float = Field(
         default=0.1,
-        description="""Minimum trace radius.
+        description="""Minimum trace moment matrix
         """,
     )
     omega_v: float = Field(
@@ -396,7 +396,7 @@ class FpfsConfig(BaseModel):
     )
     snr_min: float = Field(
         default=12,
-        description="""Minimum Signal-to-Noise Ratio.
+        description="""Minimum Signal-to-Noise Ratio for detection.
         """,
     )
     c0: float = Field(
@@ -421,6 +421,7 @@ def process_image(
     psf_object: BasePsf | None = None,
     do_compute_detect_weight: bool = True,
     only_return_detection_modes: bool = False,
+    base_column_name: str | None = None,
 ):
     """Run measurement algorithms on the input exposure, and optionally
     populate the resulting catalog with extra information.
@@ -440,6 +441,7 @@ def process_image(
     psf_object (BasePsf | None): PSF object
     do_compute_detect_weight (bool): whether to compute detection weight
     only_return_detection_modes (bool): only return linear modes for detection
+    base_column_name (str | None): base column name
 
     Returns:
     (NDArray) FPFS catalog
@@ -559,8 +561,16 @@ def process_image(
         map_dict = {name: name + "_2" for name in meas2.dtype.names}
         out_list.append(rfn.rename_fields(meas2, map_dict))
 
-    return rfn.merge_arrays(
+    result = rfn.merge_arrays(
         out_list,
         flatten=True,
         usemask=False,
     )
+    if base_column_name is not None:
+        map_dict = {
+            name: base_column_name + name for name in result.dtype.names
+        }
+        result = rfn.rename_fields(result, map_dict)
+
+
+    return result
