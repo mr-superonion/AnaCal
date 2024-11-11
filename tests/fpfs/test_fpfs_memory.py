@@ -43,16 +43,25 @@ def func():
         detection=detection,
     )
 
-    e1 = out["w"] * out["e1"]
-    e1g1 = out["w_g1"] * out["e1"] + out["w"] * out["e1_g1"]
+    e1 = out["fpfs_w"] * out["fpfs_e1"]
+    e1g1 = (
+        out["fpfs_dw_dg1"] * out["fpfs_e1"]
+        + out["fpfs_w"] * out["fpfs_de1_dg1"]
+    )
     print(np.sum(e1) / np.sum(e1g1))
 
-    e1 = out["w"] * out["e1_1"]
-    e1g1 = out["w_g1"] * out["e1_1"] + out["w"] * out["e1_g1_1"]
+    e1 = out["fpfs_w"] * out["fpfs1_e1"]
+    e1g1 = (
+        out["fpfs_dw_dg1"] * out["fpfs1_e1"]
+        + out["fpfs_w"] * out["fpfs1_de1_dg1"]
+    )
     print(np.sum(e1) / np.sum(e1g1))
 
-    e1 = out["w"] * out["e1_2"]
-    e1g1 = out["w_g1"] * out["e1_2"] + out["w"] * out["e1_g1_2"]
+    e1 = out["fpfs_w"] * out["fpfs2_e1"]
+    e1g1 = (
+        out["fpfs_dw_dg1"] * out["fpfs2_e1"]
+        + out["fpfs_w"] * out["fpfs2_de1_dg1"]
+    )
     print(np.sum(e1) / np.sum(e1g1))
     del out, fpfs_config
     return

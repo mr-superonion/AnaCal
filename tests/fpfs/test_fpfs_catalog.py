@@ -139,7 +139,7 @@ def test_catalog():
         e1,
     )
     np.testing.assert_array_almost_equal(
-        ell["e1_g1"],
+        ell["de1_dg1"],
         e1_g1,
     )
     np.testing.assert_array_almost_equal(
@@ -147,7 +147,7 @@ def test_catalog():
         e2,
     )
     np.testing.assert_array_almost_equal(
-        ell["e2_g2"],
+        ell["de2_dg2"],
         e2_g2,
     )
     np.testing.assert_array_almost_equal(
@@ -155,7 +155,7 @@ def test_catalog():
         q1,
     )
     np.testing.assert_array_almost_equal(
-        ell["q1_g1"],
+        ell["dq1_dg1"],
         q1_g1,
     )
     np.testing.assert_array_almost_equal(
@@ -163,7 +163,7 @@ def test_catalog():
         q2,
     )
     np.testing.assert_array_almost_equal(
-        ell["q2_g2"],
+        ell["dq2_dg2"],
         q2_g2,
     )
 
@@ -172,7 +172,7 @@ def test_catalog():
         e1,
     )
     np.testing.assert_array_almost_equal(
-        cat["e1_g1"],
+        cat["de1_dg1"],
         e1_g1,
     )
     np.testing.assert_array_almost_equal(
@@ -180,7 +180,7 @@ def test_catalog():
         e2,
     )
     np.testing.assert_array_almost_equal(
-        cat["e2_g2"],
+        cat["de2_dg2"],
         e2_g2,
     )
     np.testing.assert_array_almost_equal(
@@ -188,7 +188,7 @@ def test_catalog():
         q1,
     )
     np.testing.assert_array_almost_equal(
-        cat["q1_g1"],
+        cat["dq1_dg1"],
         q1_g1,
     )
     np.testing.assert_array_almost_equal(
@@ -196,7 +196,7 @@ def test_catalog():
         q2,
     )
     np.testing.assert_array_almost_equal(
-        cat["q2_g2"],
+        cat["dq2_dg2"],
         q2_g2,
     )
 
@@ -205,11 +205,11 @@ def test_catalog():
         w,
     )
     np.testing.assert_array_almost_equal(
-        cat["w_g1"],
+        cat["dw_dg1"],
         w_g1,
     )
     np.testing.assert_array_almost_equal(
-        cat["w_g2"],
+        cat["dw_dg2"],
         w_g2,
     )
     return

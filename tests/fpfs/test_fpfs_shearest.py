@@ -82,14 +82,14 @@ def do_test(scale, seed, rcut, gcomp):
     )
 
     # The 2nd order shear estimator
-    g1_est = np.average(ells["e1"]) / np.average(ells["e1_g1"])
-    g2_est = np.average(ells["e2"]) / np.average(ells["e2_g2"])
+    g1_est = np.average(ells["e1"]) / np.average(ells["de1_dg1"])
+    g2_est = np.average(ells["e2"]) / np.average(ells["de2_dg2"])
     assert np.abs(g1_est - g1) < 3e-5
     assert np.abs(g2_est - g2) < 3e-5
 
     # The 4th order shear estimator
-    g1_est = np.average(ells["q1"]) / np.average(ells["q1_g1"])
-    g2_est = np.average(ells["q2"]) / np.average(ells["q2_g2"])
+    g1_est = np.average(ells["q1"]) / np.average(ells["dq1_dg1"])
+    g2_est = np.average(ells["q2"]) / np.average(ells["dq2_dg2"])
     assert np.abs(g1_est - g1) < 3e-5
     assert np.abs(g2_est - g2) < 3e-5
 

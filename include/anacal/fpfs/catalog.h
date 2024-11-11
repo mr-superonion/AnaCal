@@ -116,14 +116,14 @@ namespace anacal {
 
 
     struct FpfsShapeletsResponse {
-        double m00_g1;
-        double m00_g2;
-        double m20_g1;
-        double m20_g2;
-        double m22c_g1;
-        double m22s_g2;
-        double m42c_g1;
-        double m42s_g2;
+        double dm00_dg1;
+        double dm00_dg2;
+        double dm20_dg1;
+        double dm20_dg2;
+        double dm22c_dg1;
+        double dm22s_dg2;
+        double dm42c_dg1;
+        double dm42s_dg2;
     };
 
     struct FpfsDetect {
@@ -144,14 +144,14 @@ namespace anacal {
         double v1;
         double v2;
         double v3;
-        double v0_g1;
-        double v1_g1;
-        double v2_g1;
-        double v3_g1;
-        double v0_g2;
-        double v1_g2;
-        double v2_g2;
-        double v3_g2;
+        double dv0_dg1;
+        double dv1_dg1;
+        double dv2_dg1;
+        double dv3_dg1;
+        double dv0_dg2;
+        double dv1_dg2;
+        double dv2_dg2;
+        double dv3_dg2;
 
         // Define the addition operator
         FpfsDetect operator+(const FpfsDetect &other) const {
@@ -172,14 +172,14 @@ namespace anacal {
                 v1 + other.v1,
                 v2 + other.v2,
                 v3 + other.v3,
-                v0_g1 + other.v0_g1,
-                v1_g1 + other.v1_g1,
-                v2_g1 + other.v2_g1,
-                v3_g1 + other.v3_g1,
-                v0_g2 + other.v0_g2,
-                v1_g2 + other.v1_g2,
-                v2_g2 + other.v2_g2,
-                v3_g2 + other.v3_g2,
+                dv0_dg1 + other.dv0_dg1,
+                dv1_dg1 + other.dv1_dg1,
+                dv2_dg1 + other.dv2_dg1,
+                dv3_dg1 + other.dv3_dg1,
+                dv0_dg2 + other.dv0_dg2,
+                dv1_dg2 + other.dv1_dg2,
+                dv2_dg2 + other.dv2_dg2,
+                dv3_dg2 + other.dv3_dg2,
             };
         };
 
@@ -202,14 +202,14 @@ namespace anacal {
                 v1 - other.v1,
                 v2 - other.v2,
                 v3 - other.v3,
-                v0_g1 - other.v0_g1,
-                v1_g1 - other.v1_g1,
-                v2_g1 - other.v2_g1,
-                v3_g1 - other.v3_g1,
-                v0_g2 - other.v0_g2,
-                v1_g2 - other.v1_g2,
-                v2_g2 - other.v2_g2,
-                v3_g2 - other.v3_g2,
+                dv0_dg1 - other.dv0_dg1,
+                dv1_dg1 - other.dv1_dg1,
+                dv2_dg1 - other.dv2_dg1,
+                dv3_dg1 - other.dv3_dg1,
+                dv0_dg2 - other.dv0_dg2,
+                dv1_dg2 - other.dv1_dg2,
+                dv2_dg2 - other.dv2_dg2,
+                dv3_dg2 - other.dv3_dg2,
             };
         };
 
@@ -234,59 +234,59 @@ namespace anacal {
                 v1 * scalar,
                 v2 * scalar,
                 v3 * scalar,
-                v0_g1 * scalar,
-                v1_g1 * scalar,
-                v2_g1 * scalar,
-                v3_g1 * scalar,
-                v0_g2 * scalar,
-                v1_g2 * scalar,
-                v2_g2 * scalar,
-                v3_g2 * scalar,
+                dv0_dg1 * scalar,
+                dv1_dg1 * scalar,
+                dv2_dg1 * scalar,
+                dv3_dg1 * scalar,
+                dv0_dg2 * scalar,
+                dv1_dg2 * scalar,
+                dv2_dg2 * scalar,
+                dv3_dg2 * scalar,
             };
         };
     };
 
     struct FpfsShape {
         double e1;
-        double e1_g1;
+        double de1_dg1;
         double e2;
-        double e2_g2;
+        double de2_dg2;
         double q1;
-        double q1_g1;
+        double dq1_dg1;
         double q2;
-        double q2_g2;
+        double dq2_dg2;
         double m00;
-        double m00_g1;
-        double m00_g2;
+        double dm00_dg1;
+        double dm00_dg2;
         double m20;
-        double m20_g1;
-        double m20_g2;
+        double dm20_dg1;
+        double dm20_dg2;
     };
 
     struct FpfsWeight {
         double w;
-        double w_g1;
-        double w_g2;
+        double dw_dg1;
+        double dw_dg2;
     };
 
     struct FpfsCatalog {
         double e1;
-        double e1_g1;
+        double de1_dg1;
         double e2;
-        double e2_g2;
+        double de2_dg2;
         double q1;
-        double q1_g1;
+        double dq1_dg1;
         double q2;
-        double q2_g2;
+        double dq2_dg2;
         double w;
-        double w_g1;
-        double w_g2;
+        double dw_dg1;
+        double dw_dg2;
         double m00;
-        double m00_g1;
-        double m00_g2;
+        double dm00_dg1;
+        double dm00_dg2;
         double m20;
-        double m20_g1;
-        double m20_g2;
+        double dm20_dg1;
+        double dm20_dg2;
     };
 
 
@@ -296,37 +296,37 @@ namespace anacal {
         const std::optional<T>& y=std::nullopt
     ) {
         T xx = y.has_value() ? x - *y * 2.0 : x;
-        double m00_g1 = -std::sqrt(2.0) * xx.m22c;
-        double m00_g2 = -std::sqrt(2.0) * xx.m22s;
-        double m20_g1 = -std::sqrt(6.0) * xx.m42c;
-        double m20_g2 = -std::sqrt(6.0) * xx.m42s;
+        double dm00_dg1 = -std::sqrt(2.0) * xx.m22c;
+        double dm00_dg2 = -std::sqrt(2.0) * xx.m22s;
+        double dm20_dg1 = -std::sqrt(6.0) * xx.m42c;
+        double dm20_dg2 = -std::sqrt(6.0) * xx.m42s;
 
-        double m22c_g1 = (
+        double dm22c_dg1 = (
             1.0 / std::sqrt(2.0)
         ) * (xx.m00 - xx.m40) - std::sqrt(3.0) * xx.m44c;
-        double m22s_g2 = (
+        double dm22s_dg2 = (
             1.0 / std::sqrt(2.0)
         ) * (xx.m00 - xx.m40) + std::sqrt(3.0) * xx.m44c;
 
         // Off-diagonal terms
-        // double m22c_g2 = -std::sqrt(3.0) * xx.m44s;
-        // double m22s_g1 = -std::sqrt(3.0) * xx.m44s;
+        // double dm22c_dg2 = -std::sqrt(3.0) * xx.m44s;
+        // double dm22s_dg1 = -std::sqrt(3.0) * xx.m44s;
 
-        double m42c_g1 = (
+        double dm42c_dg1 = (
             std::sqrt(6.0) / 2.0
         ) * (xx.m20 - xx.m60) - std::sqrt(5.0) * xx.m64c;
-        double m42s_g2 = (
+        double dm42s_dg2 = (
             std::sqrt(6.0) / 2.0
         ) * (xx.m20 - xx.m60) + std::sqrt(5.0) * xx.m64c;
 
         // Off-diagonal terms
-        // double m42c_g2 = -std::sqrt(5.0) * xx.m64s;
-        // double m42s_g1 = -std::sqrt(5.0) * xx.m64s;
+        // double dm42c_dg2 = -std::sqrt(5.0) * xx.m64s;
+        // double dm42s_dg1 = -std::sqrt(5.0) * xx.m64s;
 
         return FpfsShapeletsResponse{
-            m00_g1, m00_g2, m20_g1,
-            m20_g2, m22c_g1, m22s_g2,
-            m42c_g1, m42s_g2
+            dm00_dg1, dm00_dg2, dm20_dg1,
+            dm20_dg2, dm22c_dg1, dm22s_dg2,
+            dm42c_dg1, dm42s_dg2
         };
     };
 
@@ -368,29 +368,29 @@ namespace anacal {
 
         // Compute ellipticity 1
         double e1 = x.m22c / denom;
-        double e1_g1 = x_dg.m22c_g1 / denom
-            - (x_dg.m00_g1 * x.m22c) / (denom * denom);
+        double e1_dg1 = x_dg.dm22c_dg1 / denom
+            - (x_dg.dm00_dg1 * x.m22c) / (denom * denom);
 
         // Compute ellipticity 2
         double e2 = x.m22s / denom;
-        double e2_g2 = x_dg.m22s_g2 / denom
-            - (x_dg.m00_g2 * x.m22s) / (denom * denom);
+        double e2_dg2 = x_dg.dm22s_dg2 / denom
+            - (x_dg.dm00_dg2 * x.m22s) / (denom * denom);
 
         // Compute ellipticity 1 (4th order)
         double q1 = x.m42c / denom;
-        double q1_g1 = x_dg.m42c_g1 / denom
-            - (x_dg.m00_g1 * x.m42c) / (denom * denom);
+        double q1_dg1 = x_dg.dm42c_dg1 / denom
+            - (x_dg.dm00_dg1 * x.m42c) / (denom * denom);
 
         // Compute ellipticity 2 (4th order)
         double q2 = x.m42s / denom;
-        double q2_g2 = x_dg.m42s_g2 / denom
-            - (x_dg.m00_g2 * x.m42s) / (denom * denom);
+        double q2_dg2 = x_dg.dm42s_dg2 / denom
+            - (x_dg.dm00_dg2 * x.m42s) / (denom * denom);
 
         // Return the result as FpfsShape
         return FpfsShape{
-            e1, e1_g1, e2, e2_g2, q1, q1_g1, q2, q2_g2,
-            x.m00, x_dg.m00_g1, x_dg.m00_g2,
-            x.m20, x_dg.m20_g1, x_dg.m20_g2
+            e1, e1_dg1, e2, e2_dg2, q1, q1_dg1, q2, q2_dg2,
+            x.m00, x_dg.dm00_dg1, x_dg.dm00_dg2,
+            x.m20, x_dg.dm20_dg1, x_dg.dm20_dg2
         };
     }
 
@@ -429,37 +429,37 @@ namespace anacal {
         // Selection on flux
         double w0l = math::ssfunc2(x.m00, m00_min, omega_m00);
         double dw0l = math::ssfunc2_deriv(x.m00, m00_min, omega_m00);
-        double w0l_g1 = dw0l * x_dg.m00_g1;
-        double w0l_g2 = dw0l * x_dg.m00_g2;
+        double w0l_dg1 = dw0l * x_dg.dm00_dg1;
+        double w0l_dg2 = dw0l * x_dg.dm00_dg2;
 
         double w0u = math::ssfunc2(-x.m00, -500, omega_m00);
         double dw0u = math::ssfunc2_deriv(-x.m00, -500, omega_m00);
-        double w0u_g1 = dw0u * -x_dg.m00_g1;
-        double w0u_g2 = dw0u * -x_dg.m00_g2;
+        double w0u_dg1 = dw0u * -x_dg.dm00_dg1;
+        double w0u_dg2 = dw0u * -x_dg.dm00_dg2;
 
         // Selection on size (lower limit)
         // (M00 + M20) / M00 > r2_min
         double r2l = x.m00 * (1.0 - r2_min) + x.m20;
         double w2l = math::ssfunc2(r2l, omega_r2, omega_r2);
         double dw2l = math::ssfunc2_deriv(r2l, omega_r2, omega_r2);
-        double w2l_g1 = dw2l * (
-            x_dg.m00_g1 * (1.0 - r2_min) + x_dg.m20_g1
+        double w2l_dg1 = dw2l * (
+            x_dg.dm00_dg1 * (1.0 - r2_min) + x_dg.dm20_dg1
         );
-        double w2l_g2 = dw2l * (
-            x_dg.m00_g2 * (1.0 - r2_min) + x_dg.m20_g2
+        double w2l_dg2 = dw2l * (
+            x_dg.dm00_dg2 * (1.0 - r2_min) + x_dg.dm20_dg2
         );
 
         // Compute the selection weights
         double wsel = w0l * w0u * w2l;
-        double wsel_g1 = (
-            w0l_g1 * w0u * w2l + w0l * w0u_g1 * w2l + w0l * w0u * w2l_g1
+        double wsel_dg1 = (
+            w0l_dg1 * w0u * w2l + w0l * w0u_dg1 * w2l + w0l * w0u * w2l_dg1
         );
-        double wsel_g2 = (
-            w0l_g2 * w0u * w2l + w0l * w0u_g2 * w2l + w0l * w0u * w2l_g2
+        double wsel_dg2 = (
+            w0l_dg2 * w0u * w2l + w0l * w0u_dg2 * w2l + w0l * w0u * w2l_dg2
         );
 
         return FpfsWeight{
-            wsel, wsel_g1, wsel_g2
+            wsel, wsel_dg1, wsel_dg2
         };
     };
 
@@ -474,39 +474,39 @@ namespace anacal {
         // det0 computation
         double det0 = math::ssfunc2(x.v0, v_min, omega_v);
         double det0_deriv = math::ssfunc2_deriv(x.v0, v_min, omega_v);
-        double det0_g1 = det0_deriv * (xx.v0_g1);
-        double det0_g2 = det0_deriv * (xx.v0_g2);
+        double det0_dg1 = det0_deriv * (xx.dv0_dg1);
+        double det0_dg2 = det0_deriv * (xx.dv0_dg2);
 
         // det1 computation
         double det1 = math::ssfunc2(x.v1, v_min, omega_v);
         double det1_deriv = math::ssfunc2_deriv(x.v1, v_min, omega_v);
-        double det1_g1 = det1_deriv * (xx.v1_g1);
-        double det1_g2 = det1_deriv * (xx.v1_g2);
+        double det1_dg1 = det1_deriv * (xx.dv1_dg1);
+        double det1_dg2 = det1_deriv * (xx.dv1_dg2);
 
         // det2 computation
         double det2 = math::ssfunc2(x.v2, v_min, omega_v);
         double det2_deriv = math::ssfunc2_deriv(x.v2, v_min, omega_v);
-        double det2_g1 = det2_deriv * (xx.v2_g1);
-        double det2_g2 = det2_deriv * (xx.v2_g2);
+        double det2_dg1 = det2_deriv * (xx.dv2_dg1);
+        double det2_dg2 = det2_deriv * (xx.dv2_dg2);
 
         // det3 computation
         double det3 = math::ssfunc2(x.v3, v_min, omega_v);
         double det3_deriv = math::ssfunc2_deriv(x.v3, v_min, omega_v);
-        double det3_g1 = det3_deriv * (xx.v3_g1);
-        double det3_g2 = det3_deriv * (xx.v3_g2);
+        double det3_dg1 = det3_deriv * (xx.dv3_dg1);
+        double det3_dg2 = det3_deriv * (xx.dv3_dg2);
 
         // Compute the weights
         double w = det0 * det1 * det2 * det3;
-        double w_g1 = (
-            det0_g1 * det1 * det2 * det3 + det0 * det1_g1 * det2 * det3
-        ) + (det0 * det1 * det2_g1 * det3 + det0 * det1 * det2 * det3_g1);
-        double w_g2 = (
-            det0_g2 * det1 * det2 * det3 + det0 * det1_g2 * det2 * det3
-        ) + (det0 * det1 * det2_g2 * det3 + det0 * det1 * det2 * det3_g2);
+        double w_dg1 = (
+            det0_dg1 * det1 * det2 * det3 + det0 * det1_dg1 * det2 * det3
+        ) + (det0 * det1 * det2_dg1 * det3 + det0 * det1 * det2 * det3_dg1);
+        double w_dg2 = (
+            det0_dg2 * det1 * det2 * det3 + det0 * det1_dg2 * det2 * det3
+        ) + (det0 * det1 * det2_dg2 * det3 + det0 * det1 * det2 * det3_dg2);
 
 
         return FpfsWeight{
-            w, w_g1, w_g2
+            w, w_dg1, w_dg2
         };
     };
 
@@ -545,7 +545,7 @@ namespace anacal {
         double wdet = math::ssfunc2(w0.w, pthres, fpfs_det_sigma2);
         double wdet_deriv = math::ssfunc2_deriv(w0.w, pthres, fpfs_det_sigma2);
         return FpfsWeight{
-            wdet, wdet_deriv * w0.w_g1, wdet_deriv * w0.w_g2
+            wdet, wdet_deriv * w0.dw_dg1, wdet_deriv * w0.dw_dg2
         };
     };
 
@@ -598,20 +598,20 @@ namespace anacal {
         );
 
         double w = wdet.w * wsel.w;
-        double w_g1 = wdet.w * wsel.w_g1 + wdet.w_g1 * wsel.w;
-        double w_g2 = wdet.w * wsel.w_g2 + wdet.w_g2 * wsel.w;
+        double w_dg1 = wdet.w * wsel.dw_dg1 + wdet.dw_dg1 * wsel.w;
+        double w_dg2 = wdet.w * wsel.dw_dg2 + wdet.dw_dg2 * wsel.w;
         return FpfsCatalog{
             ell.e1,
-            ell.e1_g1,
+            ell.de1_dg1,
             ell.e2,
-            ell.e2_g2,
+            ell.de2_dg2,
             ell.q1,
-            ell.q1_g1,
+            ell.dq1_dg1,
             ell.q2,
-            ell.q2_g2,
-            w, w_g1, w_g2,
-            x.m00, x_dg.m00_g1, x_dg.m00_g2,
-            x.m20, x_dg.m20_g1, x_dg.m20_g2
+            ell.dq2_dg2,
+            w, w_dg1, w_dg2,
+            x.m00, x_dg.dm00_dg1, x_dg.dm00_dg2,
+            x.m20, x_dg.dm20_dg1, x_dg.dm20_dg2
         };
     };
 

@@ -115,13 +115,16 @@ for gname in ["g%d-1" % test_component, "g%d-0" % test_component]:
 # Printing the results
 print("Testing for shear component: %d" % test_component)
 print("Measurement with sigma_arcsec=%.2f:" % fpfs_config.sigma_arcsec)
-ename = "e%d" % test_component
-egname = "e%d_g%d" % (test_component, test_component)
-wgname = "w_g%d" % test_component
-e1_0 = out[0]["w"] * out[0][ename]
-e1_1 = out[1]["w"] * out[1][ename]
-e1g1_0 = out[0][wgname] * out[0][ename] + out[0]["w"] * out[0][egname]
-e1g1_1 = out[1][wgname] * out[1][ename] + out[1]["w"] * out[1][egname]
+
+wname = "fpfs_w"
+wgname = "fpfs_dw_dg%d" % test_component
+
+ename = "fpfs_e%d" % test_component
+egname = "fpfs_de%d_dg%d" % (test_component, test_component)
+e1_0 = out[0][wname] * out[0][ename]
+e1_1 = out[1][wname] * out[1][ename]
+e1g1_0 = out[0][wgname] * out[0][ename] + out[0][wname] * out[0][egname]
+e1g1_1 = out[1][wgname] * out[1][ename] + out[1][wname] * out[1][egname]
 
 mbias = (np.sum(e1_0) - np.sum(e1_1)) / (
     np.sum(e1g1_0) + np.sum(e1g1_1)
@@ -145,12 +148,12 @@ if do_force_detect:
 
 
 print("Measurement with sigma_arcsec=%.2f:" % fpfs_config.sigma_arcsec1)
-ename = "e%d_1" % test_component
-egname = "e%d_g%d_1" % (test_component, test_component)
-e1_0 = out[0]["w"] * out[0][ename]
-e1_1 = out[1]["w"] * out[1][ename]
-e1g1_0 = out[0][wgname] * out[0][ename] + out[0]["w"] * out[0][egname]
-e1g1_1 = out[1][wgname] * out[1][ename] + out[1]["w"] * out[1][egname]
+ename = "fpfs1_e%d" % test_component
+egname = "fpfs1_de%d_dg%d" % (test_component, test_component)
+e1_0 = out[0][wname] * out[0][ename]
+e1_1 = out[1][wname] * out[1][ename]
+e1g1_0 = out[0][wgname] * out[0][ename] + out[0][wname] * out[0][egname]
+e1g1_1 = out[1][wgname] * out[1][ename] + out[1][wname] * out[1][egname]
 
 mbias = (np.sum(e1_0) - np.sum(e1_1)) / (
     np.sum(e1g1_0) + np.sum(e1g1_1)
@@ -161,12 +164,12 @@ print("    Additive bias is %.3f e-5" % (cbias * 1e5))
 assert mbias < 2e-3
 
 print("Measurement with sigma_arcsec=%.2f:" % fpfs_config.sigma_arcsec2)
-ename = "e%d_2" % test_component
-egname = "e%d_g%d_2" % (test_component, test_component)
-e1_0 = out[0]["w"] * out[0][ename]
-e1_1 = out[1]["w"] * out[1][ename]
-e1g1_0 = out[0][wgname] * out[0][ename] + out[0]["w"] * out[0][egname]
-e1g1_1 = out[1][wgname] * out[1][ename] + out[1]["w"] * out[1][egname]
+ename = "fpfs2_e%d" % test_component
+egname = "fpfs2_de%d_dg%d" % (test_component, test_component)
+e1_0 = out[0][wname] * out[0][ename]
+e1_1 = out[1][wname] * out[1][ename]
+e1g1_0 = out[0][wgname] * out[0][ename] + out[0][wname] * out[0][egname]
+e1g1_1 = out[1][wgname] * out[1][ename] + out[1][wname] * out[1][egname]
 
 mbias = (np.sum(e1_0) - np.sum(e1_1)) / (
     np.sum(e1g1_0) + np.sum(e1g1_1)

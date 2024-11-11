@@ -18,62 +18,62 @@ pybindFpfsCatalog(py::module_& fpfs) {
         m40, m42c, m42s, m44c, m44s,
         m60, m64c, m64s,
         v0, v1, v2, v3,
-        v0_g1, v1_g1, v2_g1, v3_g1,
-        v0_g2, v1_g2, v2_g2, v3_g2
+        dv0_dg1, dv1_dg1, dv2_dg1, dv3_dg1,
+        dv0_dg2, dv1_dg2, dv2_dg2, dv3_dg2
     );
 
     PYBIND11_NUMPY_DTYPE(
         FpfsShapeletsResponse,
-        m00_g1, m00_g2,
-        m20_g1, m20_g2,
-        m22c_g1, m22s_g2,
-        m42c_g1, m42s_g2
+        dm00_dg1, dm00_dg2,
+        dm20_dg1, dm20_dg2,
+        dm22c_dg1, dm22s_dg2,
+        dm42c_dg1, dm42s_dg2
     );
 
     PYBIND11_NUMPY_DTYPE(
         FpfsShape,
         e1,
-        e1_g1,
+        de1_dg1,
         e2,
-        e2_g2,
+        de2_dg2,
         q1,
-        q1_g1,
+        dq1_dg1,
         q2,
-        q2_g2,
+        dq2_dg2,
         m00,
-        m00_g1,
-        m00_g2,
+        dm00_dg1,
+        dm00_dg2,
         m20,
-        m20_g1,
-        m20_g2
+        dm20_dg1,
+        dm20_dg2
     );
 
     PYBIND11_NUMPY_DTYPE(
         FpfsWeight,
         w,
-        w_g1,
-        w_g2
+        dw_dg1,
+        dw_dg2
     );
 
     PYBIND11_NUMPY_DTYPE(
         FpfsCatalog,
         e1,
-        e1_g1,
+        de1_dg1,
         e2,
-        e2_g2,
+        de2_dg2,
         q1,
-        q1_g1,
+        dq1_dg1,
         q2,
-        q2_g2,
+        dq2_dg2,
         w,
-        w_g1,
-        w_g2,
+        dw_dg1,
+        dw_dg2,
         m00,
-        m00_g1,
-        m00_g2,
+        dm00_dg1,
+        dm00_dg2,
         m20,
-        m20_g1,
-        m20_g2
+        dm20_dg1,
+        dm20_dg2
     );
 
     // Bind measure_shapelets_dg for FpfsShapelets

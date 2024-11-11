@@ -25,9 +25,9 @@ class FpfsTask(FpfsKernel):
     kmax (float | None): maximum k
     psf_array (ndarray): an average PSF image [default: None]
     kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
-    do_detection (bool): whether compute detection kernel
+    do_detection (bool): whether compute detection kernels
     bound (int): minimum distance to boundary [default: 0]
-    verbose (bool): whether print out INFO
+    verbose (bool): whether display INFO
     """
 
     def __init__(
@@ -400,7 +400,7 @@ class FpfsConfig(BaseModel):
         """,
     )
     c0: float = Field(
-        default=5.0,
+        default=8.4,
         description="""Weighting parameter for m00 for ellipticity definition.
         """,
     )
@@ -446,33 +446,34 @@ def process_image(
     Returns:
     (NDArray) FPFS catalog
     """
+    if only_return_detection_modes:
+        assert do_compute_detect_weight
+
     ratio = 1.0 / (10 ** ((30 - mag_zero) / 2.5))
     r2_min = fpfs_config.r2_min * ratio
     omega_r2 = fpfs_config.omega_r2 * ratio
     v_min = fpfs_config.v_min * ratio
     omega_v = fpfs_config.omega_v * ratio
+    fpfs_c0 = fpfs_config.c0 * ratio
 
     if psf_object is None:
         psf_object = psf_array
 
     out_list = []
 
-    ftask = FpfsTask(
-        npix=fpfs_config.npix,
-        pixel_scale=pixel_scale,
-        sigma_arcsec=fpfs_config.sigma_arcsec,
-        noise_variance=noise_variance,
-        psf_array=psf_array,
-        kmax_thres=fpfs_config.kmax_thres,
-        do_detection=True,
-        bound=fpfs_config.bound,
-    )
-
-    std_m00 = ftask.std_m00
-    m00_min = fpfs_config.snr_min * std_m00
-    fpfs_c0 = fpfs_config.c0 * std_m00
-
     if do_compute_detect_weight or (detection is None):
+        ftask = FpfsTask(
+            npix=fpfs_config.npix,
+            pixel_scale=pixel_scale,
+            sigma_arcsec=fpfs_config.sigma_arcsec,
+            noise_variance=noise_variance,
+            psf_array=psf_array,
+            kmax_thres=fpfs_config.kmax_thres,
+            do_detection=True,
+            bound=fpfs_config.bound,
+        )
+        std_m00 = ftask.std_m00
+        m00_min = fpfs_config.snr_min * std_m00
         if detection is None:
             detection = ftask.detect(
                 gal_array=gal_array,
@@ -484,10 +485,9 @@ def process_image(
                 mask_array=mask_array,
                 star_cat=star_catalog,
             )
-        out_list.append(detection)
+            out_list.append(detection)
 
         if do_compute_detect_weight:
-            # Measurement Tasks
             src = ftask.run(
                 gal_array=gal_array,
                 psf=psf_object,
@@ -509,9 +509,10 @@ def process_image(
                 y_array=src["noise"],
             )
             del src
-            out_list.append(meas)
+            map_dict = {name: "fpfs_" + name for name in meas.dtype.names}
+            out_list.append(rfn.rename_fields(meas, map_dict))
 
-    del ftask
+        del ftask
 
     if fpfs_config.sigma_arcsec1 > 0:
         ftask = FpfsTask(
@@ -534,8 +535,9 @@ def process_image(
             y_array=src["noise"],
         )
         del src, ftask
-        map_dict = {name: name + "_1" for name in meas1.dtype.names}
+        map_dict = {name: "fpfs1_" + name for name in meas1.dtype.names}
         out_list.append(rfn.rename_fields(meas1, map_dict))
+        del meas1
 
     if fpfs_config.sigma_arcsec2 > 0:
         ftask = FpfsTask(
@@ -558,8 +560,9 @@ def process_image(
             y_array=src["noise"],
         )
         del src, ftask
-        map_dict = {name: name + "_2" for name in meas2.dtype.names}
+        map_dict = {name: "fpfs2_" + name for name in meas2.dtype.names}
         out_list.append(rfn.rename_fields(meas2, map_dict))
+        del meas2
 
     result = rfn.merge_arrays(
         out_list,
@@ -567,10 +570,10 @@ def process_image(
         usemask=False,
     )
     if base_column_name is not None:
+        assert result.dtype.names is not None
         map_dict = {
             name: base_column_name + name for name in result.dtype.names
         }
         result = rfn.rename_fields(result, map_dict)
-
 
     return result

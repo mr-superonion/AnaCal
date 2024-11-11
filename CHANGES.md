@@ -20,3 +20,4 @@
 
 ## v0.5.2
 + Add option for base column name
++ Change column name to fpfs_de_dg
