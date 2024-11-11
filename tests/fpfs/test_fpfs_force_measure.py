@@ -18,9 +18,7 @@ def simulate_gal_psf(scale, shift_x, shift_y):
         .array
     )
 
-    gal_obj = galsim.Gaussian(fwhm=0.6).shear(
-        e1=0.2, e2=-0.24
-    )
+    gal_obj = galsim.Gaussian(fwhm=0.6).shear(e1=0.2, e2=-0.24)
     gal_array = (
         gal_obj.shift((0.5 + shift_x) * scale, (0.5 + shift_y) * scale)
         .drawImage(nx=ngrid, ny=ngrid, scale=scale)
@@ -31,8 +29,11 @@ def simulate_gal_psf(scale, shift_x, shift_y):
     coords = np.array(
         [(ngrid / 2.0 + shift_y, ngrid / 2.0 + shift_x, True, 0)],
         dtype=[
-            ("y", "f8"), ("x", "f8"), ("is_peak", "i4"), ("mask_value", "i4")
-        ]
+            ("y", "f8"),
+            ("x", "f8"),
+            ("is_peak", "i4"),
+            ("mask_value", "i4"),
+        ],
     )
     return gal_array, psf_array, coords
 
@@ -41,7 +42,9 @@ def do_test(scale, shift_x, shift_y):
     sigma_arcsec = 0.53
 
     gal_array, psf_array, coords = simulate_gal_psf(
-        scale, shift_x, shift_y,
+        scale,
+        shift_x,
+        shift_y,
     )
 
     ftask = anacal.fpfs.FpfsTask(

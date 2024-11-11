@@ -31,9 +31,7 @@ out = anacal.fpfs.process_image(
 
 # base kernel scale
 e1 = out["fpfs_w"] * out["fpfs_e1"]
-e1g1 = (
-    out["fpfs_dw_dg1"] * out["fpfs_e1"] + out["fpfs_w"] * out["fpfs_de1_dg1"]
-)
+e1g1 = out["fpfs_dw_dg1"] * out["fpfs_e1"] + out["fpfs_w"] * out["fpfs_de1_dg1"]
 print(np.sum(e1) / np.sum(e1g1))
 
 # kernel 1

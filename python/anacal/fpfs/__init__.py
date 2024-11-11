@@ -4,8 +4,8 @@ from .._anacal.fpfs import (
     fpfs_det_sigma2,
     measure_fpfs,
     measure_fpfs_shape,
-    measure_fpfs_wdet0,
     measure_fpfs_wdet,
+    measure_fpfs_wdet0,
     measure_fpfs_wsel,
     measure_shapelets_dg,
 )
