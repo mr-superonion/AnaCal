@@ -486,7 +486,7 @@ def process_image(
                 star_cat=star_catalog,
             )
         else:
-            det_names = ["y", "x", "is_peak", "mask_value"]
+            det_names = ("y", "x", "is_peak", "mask_value")
             if detection.dtype.names != det_names:
                 raise ValueError("detection has wrong cloumn names")
         out_list.append(detection)
