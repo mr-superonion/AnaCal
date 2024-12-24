@@ -485,7 +485,11 @@ def process_image(
                 mask_array=mask_array,
                 star_cat=star_catalog,
             )
-            out_list.append(detection)
+        else:
+            det_names = ["y", "x", "is_peak", "mask_value"]
+            if detection.dtype.names != det_names:
+                raise ValueError("detection has wrong cloumn names")
+        out_list.append(detection)
 
         if do_compute_detect_weight:
             src = ftask.run(
