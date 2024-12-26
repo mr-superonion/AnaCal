@@ -7,7 +7,6 @@
 namespace anacal {
 namespace math {
 
-
 struct qnumber {
     double v, g1, g2, x1, x2;
 
@@ -54,10 +53,10 @@ struct qnumber {
         double f = 1.0 / (other.v * other.v);
         return qnumber(
             this->v / other.v,
-            (this->g1 * other.v - this->v * other.g1) * f,
-            (this->g2 * other.v - this->v * other.g2) * f,
-            (this->x1 * other.v - this->v * other.x1) * f,
-            (this->x2 * other.v - this->v * other.x2) * f
+            (other.v * this->g1 - this->v * other.g1) * f,
+            (other.v * this->g2 - this->v * other.g2) * f,
+            (other.v * this->x1 - this->v * other.x1) * f,
+            (other.v * this->x2 - this->v * other.x2) * f
         );
     }
 
@@ -226,6 +225,19 @@ struct qnumber {
         return os;
     }
 };
+
+inline qnumber exp(
+    const qnumber& qn
+) {
+    double expv = std::exp(qn.v);
+    return qnumber(
+        expv,
+        expv * qn.g1,
+        expv * qn.g2,
+        expv * qn.x1,
+        expv * qn.x2
+    );
+}
 
 
 } // namespace math
