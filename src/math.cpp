@@ -40,5 +40,15 @@ namespace anacal {
             .def(py::self / double())
             .def(double() / py::self);
         math.def("exp", &math::exp, "Compute the exponential of a qnumber");
+        math.def(
+            "qnumber_to_array",
+            &math::qnumber_to_array,
+            "from qnumber to numpy array"
+        );
+        math.def(
+            "array_to_qnumber",
+            &math::array_to_qnumber,
+            "from numpy array to qnumber"
+        );
     }
 }

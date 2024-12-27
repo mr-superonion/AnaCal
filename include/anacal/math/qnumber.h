@@ -4,6 +4,8 @@
 #include <cmath>
 #include <ostream>
 
+// Class for Quintuple number
+
 namespace anacal {
 namespace math {
 
@@ -176,7 +178,35 @@ inline qnumber exp(
         expv * qn.x1,
         expv * qn.x2
     );
-}
+} // exponential function
+
+
+inline py::array_t<double> qnumber_to_array(
+    const qnumber& qn
+) {
+    py::array_t<double> out(5);
+    auto out_r = out.mutable_unchecked<1>();
+    out_r(0) = qn.v;
+    out_r(1) = qn.g1;
+    out_r(2) = qn.g2;
+    out_r(3) = qn.x1;
+    out_r(4) = qn.x2;
+    return out;
+};  // qnumber_to_array
+
+
+inline qnumber array_to_qnumber(
+    const py::array_t<double>& array
+) {
+    auto array_r = array.unchecked<1>();
+    return qnumber(
+        array_r(0),
+        array_r(1),
+        array_r(2),
+        array_r(3),
+        array_r(4)
+    );
+}; // array_to_qnumber
 
 
 } // namespace math
