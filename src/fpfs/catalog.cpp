@@ -4,7 +4,7 @@
 namespace anacal {
 
 void
-pybindFpfsCatalog(py::module_& fpfs) {
+pyExportFpfsCatalog(py::module_& fpfs) {
     PYBIND11_NUMPY_DTYPE(
         FpfsShapelets,
         m00, m20, m22c, m22s,

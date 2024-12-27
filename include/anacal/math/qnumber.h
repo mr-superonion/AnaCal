@@ -157,67 +157,6 @@ struct qnumber {
         );
     }
 
-    // Templated comparison operators
-    template <typename T>
-    friend bool operator==(const qnumber& lhs, T rhs) {
-        return lhs.v == rhs;
-    }
-
-    template <typename T>
-    friend bool operator==(T lhs, const qnumber& rhs) {
-        return lhs == rhs.v;
-    }
-
-    template <typename T>
-    friend bool operator!=(const qnumber& lhs, T rhs) {
-        return lhs.v != rhs;
-    }
-
-    template <typename T>
-    friend bool operator!=(T lhs, const qnumber& rhs) {
-        return lhs != rhs.v;
-    }
-
-    template <typename T>
-    friend bool operator<(const qnumber& lhs, T rhs) {
-        return lhs.v < rhs;
-    }
-
-    template <typename T>
-    friend bool operator<(T lhs, const qnumber& rhs) {
-        return lhs < rhs.v;
-    }
-
-    template <typename T>
-    friend bool operator<=(const qnumber& lhs, T rhs) {
-        return lhs.v <= rhs;
-    }
-
-    template <typename T>
-    friend bool operator<=(T lhs, const qnumber& rhs) {
-        return lhs <= rhs.v;
-    }
-
-    template <typename T>
-    friend bool operator>(const qnumber& lhs, T rhs) {
-        return lhs.v > rhs;
-    }
-
-    template <typename T>
-    friend bool operator>(T lhs, const qnumber& rhs) {
-        return lhs > rhs.v;
-    }
-
-    template <typename T>
-    friend bool operator>=(const qnumber& lhs, T rhs) {
-        return lhs.v >= rhs;
-    }
-
-    template <typename T>
-    friend bool operator>=(T lhs, const qnumber& rhs) {
-        return lhs >= rhs.v;
-    }
-
     // Stream insertion operator for printing
     friend std::ostream& operator<<(std::ostream& os, const qnumber& q) {
         os << "v: " << q.v << ", g1: " << q.g1 << ", g2: " << q.g2

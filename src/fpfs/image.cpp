@@ -379,7 +379,7 @@ FpfsImage::~FpfsImage() {
 
 
 void
-pybindFpfsImage(py::module_& fpfs) {
+pyExportFpfsImage(py::module_& fpfs) {
     py::class_<FpfsImage>(fpfs, "FpfsImage")
         .def(py::init<
                 int, int, double, double, double, const py::array_t<double>&,

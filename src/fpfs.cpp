@@ -8,7 +8,7 @@ pyExportFpfs(py::module_& m) {
     );
     fpfs.attr("fpfs_cut_sigma_ratio") = fpfs_cut_sigma_ratio;
     fpfs.attr("fpfs_det_sigma2") = fpfs_det_sigma2;
-    pybindFpfsCatalog(fpfs);
-    pybindFpfsImage(fpfs);
+    pyExportFpfsCatalog(fpfs);
+    pyExportFpfsImage(fpfs);
 }
 }

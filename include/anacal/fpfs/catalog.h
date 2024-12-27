@@ -689,7 +689,7 @@ namespace anacal {
         return out;
     };
 
-    void pybindFpfsCatalog(py::module_& fpfs);
+    void pyExportFpfsCatalog(py::module_& fpfs);
 }
 
 #endif // ANACAL_FPFS_CAT_H

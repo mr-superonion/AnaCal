@@ -62,12 +62,15 @@ namespace anacal {
     }
 
     void pyExportPsf(py::module& m) {
-        py::module_ model = m.def_submodule("psf", "submodule for models");
-        py::class_<BasePsf>(model, "BasePsf")
+        py::module_ psf = m.def_submodule(
+            "psf",
+            "submodule for psf"
+        );
+        py::class_<BasePsf>(psf, "BasePsf")
             .def(py::init<>())
             .def_readonly("crun", &BasePsf::crun);
 
-        py::class_<GridPsf, BasePsf>(model, "GridPsf")
+        py::class_<GridPsf, BasePsf>(psf, "GridPsf")
             .def(py::init<
                     double, double, double, double,
                     py::array_t<double>
@@ -83,7 +86,7 @@ namespace anacal {
             )
             .def_readonly("crun", &GridPsf::crun);
 
-         py::class_<PyPsf, BasePsf>(model, "PyPsf")
+         py::class_<PyPsf, BasePsf>(psf, "PyPsf")
             .def(py::init<>())
             .def("draw", &PyPsf::draw)
             .def_readonly("crun", &PyPsf::crun);

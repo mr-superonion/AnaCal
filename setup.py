@@ -111,6 +111,7 @@ ext_modules.append(
             "src/noise.cpp",
             "src/psf.cpp",
             "src/mask.cpp",
+            "src/math.cpp",
         ],
         include_dirs=include_dirs,
         libraries=["fftw3"],

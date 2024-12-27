@@ -101,7 +101,7 @@ namespace anacal {
         ~FpfsImage();
     };
 
-    void pybindFpfsImage(py::module_& fpfs);
+    void pyExportFpfsImage(py::module_& fpfs);
 }
 
 #endif // ANACAL_FPFS_IMG_H
