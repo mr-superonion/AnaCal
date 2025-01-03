@@ -93,7 +93,6 @@ namespace anacal {
         return;
     }
 
-
     void
     mask_galaxy_image(
         py::array_t<double>& gal_array,

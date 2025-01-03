@@ -43,12 +43,14 @@ namespace anacal {
         math.def(
             "qnumber_to_array",
             &math::qnumber_to_array,
-            "from qnumber to numpy array"
+            "from qnumber to numpy array",
+            py::arg("input")
         );
         math.def(
             "array_to_qnumber",
             &math::array_to_qnumber,
-            "from numpy array to qnumber"
+            "from numpy array to qnumber",
+            py::arg("input")
         );
     }
 }

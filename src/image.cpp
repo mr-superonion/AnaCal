@@ -248,7 +248,7 @@ Image::ifft() {
     assert_mode(this->mode == 3);
     fftw_execute(plan_backward);
     for (int i = 0; i < npixels; ++i){
-        data_r[i] = data_r[i] * norm_factor;
+        data_r[i] = data_r[i] * this->norm_factor;
     }
     return;
 }
@@ -671,6 +671,7 @@ deconvolve_filter(
     return output;
 }
 
+
 void
 pyExportImage(py::module& m) {
     py::module_ image = m.def_submodule("image", "submodule for convolution");
@@ -779,6 +780,27 @@ pyExportImage(py::module& m) {
         )
         .def("draw_f", &Image::draw_f,
             "This function draws the image's real fft"
+        );
+    py::class_<ImageQ>(image, "ImageQ")
+        .def(py::init<
+                int, int, double, double, double, const py::array_t<double>&,
+                bool
+            >(),
+            "Initialize the ImageQ object using an ndarray",
+            py::arg("nx"), py::arg("ny"),
+            py::arg("scale"),
+            py::arg("sigma_arcsec"),
+            py::arg("klim"),
+            py::arg("psf_array"),
+            py::arg("use_estimate")=true
+        )
+        .def("prepare_qnumber_image",
+            &ImageQ::prepare_qnumber_image,
+            "prepare the qnumber images",
+            py::arg("gal_array"),
+            py::arg("noise_array")=py::none(),
+            py::arg("xcen")=-1,
+            py::arg("ycen")=-1
         );
 }
 

@@ -86,7 +86,7 @@ namespace anacal {
             )
             .def_readonly("crun", &GridPsf::crun);
 
-         py::class_<PyPsf, BasePsf>(psf, "PyPsf")
+        py::class_<PyPsf, BasePsf>(psf, "PyPsf")
             .def(py::init<>())
             .def("draw", &PyPsf::draw)
             .def_readonly("crun", &PyPsf::crun);

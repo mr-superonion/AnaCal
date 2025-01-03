@@ -1,6 +1,6 @@
 from . import _anacal, base, fpfs, simulation, utils
 from .__version__ import __version__
-from ._anacal import image, mask, model, noise, psf, math
+from ._anacal import image, mask, math, model, noise, psf
 
 __all__ = [
     "_anacal",

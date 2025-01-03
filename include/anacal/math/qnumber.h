@@ -178,7 +178,7 @@ inline qnumber exp(
         expv * qn.x1,
         expv * qn.x2
     );
-} // exponential function
+}; // exponential function
 
 
 inline py::array_t<double> qnumber_to_array(
@@ -207,6 +207,8 @@ inline qnumber array_to_qnumber(
         array_r(4)
     );
 }; // array_to_qnumber
+
+
 
 
 } // namespace math
