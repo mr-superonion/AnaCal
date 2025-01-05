@@ -1,0 +1,188 @@
+#ifndef ANACAL_NGMIX_RMODEL_H
+#define ANACAL_NGMIX_RMODEL_H
+
+#include "../stdafx.h"
+
+namespace anacal {
+namespace ngmix {
+
+
+struct frDeriv {
+    math::qnumber fr = {0.0, 0.0, 0.0, 0.0, 0.0};
+    math::qnumber dfr = {0.0, 0.0, 0.0, 0.0, 0.0};
+    math::qnumber ddfr = {0.0, 0.0, 0.0, 0.0, 0.0};
+
+    frDeriv(
+        math::qnumber fr, math::qnumber dfr, math::qnumber ddfr
+    )
+        : fr(fr), dfr(dfr), ddfr(ddfr) {}
+};
+
+struct vDeriv {
+    math::qnumber v = {0.0, 0.0, 0.0, 0.0, 0.0};
+
+    math::qnumber v_rho = {0.0, 0.0, 0.0, 0.0, 0.0};
+    math::qnumber v_g1 = {0.0, 0.0, 0.0, 0.0, 0.0};
+    math::qnumber v_g2 = {0.0, 0.0, 0.0, 0.0, 0.0};
+    math::qnumber v_x = {0.0, 0.0, 0.0, 0.0, 0.0};
+    math::qnumber v_y = {0.0, 0.0, 0.0, 0.0, 0.0};
+
+    math::qnumber v_rhorho = {0.0, 0.0, 0.0, 0.0, 0.0};
+    math::qnumber v_g1g1 = {0.0, 0.0, 0.0, 0.0, 0.0};
+    math::qnumber v_g2g2 = {0.0, 0.0, 0.0, 0.0, 0.0};
+    math::qnumber v_xx = {0.0, 0.0, 0.0, 0.0, 0.0};
+    math::qnumber v_yy = {0.0, 0.0, 0.0, 0.0, 0.0};
+
+    vDeriv(
+        math::qnumber f,
+        math::qnumber v_rho,
+        math::qnumber v_g1,
+        math::qnumber v_g2,
+        math::qnumber v_x,
+        math::qnumber v_y,
+        math::qnumber v_rhorho,
+        math::qnumber v_g1g1,
+        math::qnumber v_g2g2,
+        math::qnumber v_xx,
+        math::qnumber v_yy
+    ) : v(v), v_rho(v_rho), v_g1(v_g1), v_g2(v_g2),
+        v_x(v_x), v_y(v_y),
+        v_rhorho(v_rhorho), v_g1g1(v_g1g1), v_g2g2(v_g2g2),
+        v_xx(v_xx), v_yy(v_yy) {}
+};
+
+
+class NgmixModel {
+private:
+    math::qnumber rho = {0.0, 0.0, 0.0, 0.0, 0.0};       // convergence
+    math::qnumber Gamma1 = {0.0, 0.0, 0.0, 0.0, 0.0};    // g1
+    math::qnumber Gamma2 = {0.0, 0.0, 0.0, 0.0, 0.0};    // g2
+    math::qnumber x0 = {0.0, 0.0, 0.0, 0.0, 0.0};        // position x
+    math::qnumber y0 = {0.0, 0.0, 0.0, 0.0, 0.0};        // position y
+
+    // Preventing copy (implement these if you need copy semantics)
+    NgmixModel(const NgmixModel&) = delete;
+    NgmixModel& operator=(const NgmixModel&) = delete;
+
+    virtual frDeriv get_fr(
+        math::qnumber r2
+    ) const {
+        return frDeriv(r2, r2, r2);
+    };
+
+public:
+    NgmixModel() {};
+
+    void set_params(
+        std::vector<math::qnumber> params
+    ) {
+        this->rho = params[0];
+        this->Gamma1 = params[1];
+        this->Gamma2 = params[2];
+        this->x0 = params[3];
+        this->y0 = params[4];
+    };
+
+    vDeriv get_r2(
+        double x,
+        double y
+    ) const {
+
+        // Center Shifting
+        math::qnumber x_s = x - x0;
+        math::qnumber y_s = y - y0;
+        // Shearing
+        math::qnumber x_transformed = (
+            x_s * (1.0 - Gamma1) + y_s * Gamma2 * -1.0
+        ) / rho;
+        math::qnumber y_transformed = (
+            x_s * Gamma2 * -1.0 + y_s * (1.0 + Gamma1)
+        ) / rho;
+        math::qnumber q = {0.0, 0.0, 0.0, 0.0, 0.0};
+        vDeriv res{q, q, q, q, q, q, q, q, q, q, q};
+
+        res.v = x_transformed * x_transformed + y_transformed * y_transformed;
+
+        // First-order derivatives
+        math::qnumber r1 = 2.0 / rho;
+        math::qnumber r2 = r1 / rho;
+        res.v_rho = -1.0 * r1 * res.v;
+        res.v_g1 = r1 * (-x_s * x_transformed + y_s * y_transformed);
+        res.v_g2 = r1 * (-y_s * x_transformed - x_s * y_transformed);
+        res.v_x = r1 * (
+            -(1.0 - Gamma1) * x_transformed + Gamma2 * y_transformed
+        );
+        res.v_y = r1 * (
+            (Gamma2) * x_transformed - (1.0 + Gamma1) * y_transformed
+        );
+        math::qnumber r2_s = x_s * x_s + y_s * y_s;
+
+        // Second-order derivatives
+        res.v_rhorho = 3.0 * r2 * res.v;
+        res.v_g1g1 = r2 * r2_s;
+        res.v_g2g2 = r2 * r2_s;
+        res.v_xx = r2 * (
+            (1.0 - Gamma1) * (1.0 - Gamma1) + Gamma2 * Gamma2
+        );
+        res.v_yy = r2 * (
+            (1.0 + Gamma1) * (1.0 + Gamma1) + Gamma2 * Gamma2
+        );
+        return res;
+    };
+
+    vDeriv apply(
+        double x, double y
+    ) const {
+
+        vDeriv r2 = this->get_r2(x, y);
+        frDeriv fr =  this->get_fr(r2.v);
+        math::qnumber q = {0.0, 0.0, 0.0, 0.0, 0.0};
+        vDeriv res{q, q, q, q, q, q, q, q, q, q, q};
+        res.v = fr.fr;
+
+        res.v_rho = fr.dfr * r2.v_rho;
+        res.v_g1 = fr.dfr * r2.v_g1;
+        res.v_g2 = fr.dfr * r2.v_g2;
+        res.v_x = fr.dfr * r2.v_x;
+        res.v_y = fr.dfr * r2.v_y;
+
+        res.v_rhorho = fr.ddfr * r2.v_rho * r2.v_rho + fr.dfr * r2.v_rhorho;
+        res.v_g1g1 = fr.ddfr * r2.v_g1 * r2.v_g1 + fr.dfr * r2.v_g1g1;
+        res.v_g2g2 = fr.ddfr * r2.v_g2 * r2.v_g2 + fr.dfr * r2.v_g2g2;
+        res.v_xx = fr.ddfr * r2.v_x * r2.v_x + fr.dfr * r2.v_xx;
+        res.v_yy = fr.ddfr * r2.v_y * r2.v_y + fr.dfr * r2.v_yy;
+        return res;
+    };
+
+    NgmixModel(NgmixModel&& other) noexcept = default;
+    NgmixModel& operator=(NgmixModel&& other) noexcept = default;
+
+    virtual ~NgmixModel() = default;
+
+};
+
+
+/// NgmixGaussian Function
+class NgmixGaussian : public NgmixModel {
+private:
+    double sigma;
+    double _p0;
+    frDeriv get_fr(
+        math::qnumber r2
+    ) const {
+        math::qnumber fr = math::exp(r2 * this->_p0);
+        math::qnumber dfr = fr * this->_p0;
+        math::qnumber ddfr = dfr * this->_p0;
+        return frDeriv(fr, dfr, ddfr);
+    };
+public:
+    // NgmixGaussian Profile
+    NgmixGaussian(double sigma) : sigma(sigma) {
+        _p0 = -1.0 / (2 * sigma * sigma);
+    };
+
+};
+
+}
+}
+#endif // ANACAL_NGMIX_RMODEL_H

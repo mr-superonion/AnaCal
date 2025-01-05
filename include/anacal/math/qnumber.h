@@ -10,7 +10,11 @@ namespace anacal {
 namespace math {
 
 struct qnumber {
-    double v, g1, g2, x1, x2;
+    double v  = 0.0;
+    double g1 = 0.0;
+    double g2 = 0.0;
+    double x1 = 0.0;
+    double x2 = 0.0;
 
     qnumber(
         double v, double g1, double g2, double x1, double x2
@@ -36,6 +40,17 @@ struct qnumber {
             this->g2 - other.g2,
             this->x1 - other.x1,
             this->x2 - other.x2
+        );
+    }
+
+    // Define unary negation for -qnumber
+    qnumber operator-() const {
+        return qnumber(
+            -this->v,
+            -this->g1,
+            -this->g2,
+            -this->x1,
+            -this->x2
         );
     }
 

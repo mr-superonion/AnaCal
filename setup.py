@@ -112,6 +112,7 @@ ext_modules.append(
             "src/psf.cpp",
             "src/mask.cpp",
             "src/math.cpp",
+            "src/ngmix.cpp",
         ],
         include_dirs=include_dirs,
         libraries=["fftw3"],

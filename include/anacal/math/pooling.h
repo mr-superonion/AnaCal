@@ -2,7 +2,6 @@
 #define ANACAL_MATH_POOLING_H
 
 #include <cmath>
-/* #include "qnumber.h" */
 
 namespace anacal {
 namespace math {

@@ -11,5 +11,6 @@ namespace anacal {
         pyExportPsf(m);
         pyExportMask(m);
         pyExportMath(m);
+        pyExportNgmix(m);
     }
 }

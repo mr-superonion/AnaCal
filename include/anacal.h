@@ -6,5 +6,6 @@
 #include "anacal/noise.h"
 #include "anacal/psf.h"
 #include "anacal/mask.h"
+#include "anacal/ngmix.h"
 
 #endif // ANACAL_H
