@@ -7,25 +7,31 @@ pyExportNgmix(py::module_& m) {
         "ngmix", "submodule for ngmix shape, flux estimation"
     );
 
-    py::class_<ngmix::vDeriv>(ngmix, "vDeriv")
-    .def(py::init<math::qnumber, math::qnumber, math::qnumber, math::qnumber,
-                  math::qnumber, math::qnumber, math::qnumber, math::qnumber,
-                  math::qnumber, math::qnumber, math::qnumber>(),
-         py::arg("v"), py::arg("v_rho"), py::arg("v_g1"), py::arg("v_g2"),
-         py::arg("v_x"), py::arg("v_y"), py::arg("v_rhorho"), py::arg("v_g1g1"),
-         py::arg("v_g2g2"), py::arg("v_xx"), py::arg("v_yy")
+    py::class_<ngmix::modelNumber>(ngmix, "modelNumber")
+    .def(py::init<
+        math::qnumber, math::qnumber, math::qnumber, math::qnumber,
+        math::qnumber, math::qnumber, math::qnumber, math::qnumber,
+        math::qnumber, math::qnumber, math::qnumber, math::qnumber,
+        math::qnumber>(),
+        py::arg("v"),
+        py::arg("v_A"), py::arg("v_rho"), py::arg("v_g1"), py::arg("v_g2"),
+        py::arg("v_x"), py::arg("v_y"),
+        py::arg("v_AA"), py::arg("v_rhorho"), py::arg("v_g1g1"),
+        py::arg("v_g2g2"), py::arg("v_xx"), py::arg("v_yy")
     )
-    .def_readwrite("v", &ngmix::vDeriv::v)
-    .def_readwrite("v_rho", &ngmix::vDeriv::v_rho)
-    .def_readwrite("v_g1", &ngmix::vDeriv::v_g1)
-    .def_readwrite("v_g2", &ngmix::vDeriv::v_g2)
-    .def_readwrite("v_x", &ngmix::vDeriv::v_x)
-    .def_readwrite("v_y", &ngmix::vDeriv::v_y)
-    .def_readwrite("v_rhorho", &ngmix::vDeriv::v_rhorho)
-    .def_readwrite("v_g1g1", &ngmix::vDeriv::v_g1g1)
-    .def_readwrite("v_g2g2", &ngmix::vDeriv::v_g2g2)
-    .def_readwrite("v_xx", &ngmix::vDeriv::v_xx)
-    .def_readwrite("v_yy", &ngmix::vDeriv::v_yy);
+    .def_readwrite("v", &ngmix::modelNumber::v)
+    .def_readwrite("v_A", &ngmix::modelNumber::v_A)
+    .def_readwrite("v_rho", &ngmix::modelNumber::v_rho)
+    .def_readwrite("v_g1", &ngmix::modelNumber::v_g1)
+    .def_readwrite("v_g2", &ngmix::modelNumber::v_g2)
+    .def_readwrite("v_x", &ngmix::modelNumber::v_x)
+    .def_readwrite("v_y", &ngmix::modelNumber::v_y)
+    .def_readwrite("v_AA", &ngmix::modelNumber::v_AA)
+    .def_readwrite("v_rhorho", &ngmix::modelNumber::v_rhorho)
+    .def_readwrite("v_g1g1", &ngmix::modelNumber::v_g1g1)
+    .def_readwrite("v_g2g2", &ngmix::modelNumber::v_g2g2)
+    .def_readwrite("v_xx", &ngmix::modelNumber::v_xx)
+    .def_readwrite("v_yy", &ngmix::modelNumber::v_yy);
 
     py::class_<ngmix::NgmixModel>(ngmix, "NgmixModel")
         .def(py::init<>())
@@ -37,8 +43,13 @@ pyExportNgmix(py::module_& m) {
             "Returns the r squared value at x, y",
             py::arg("x"), py::arg("y")
         )
-        .def("apply", &ngmix::NgmixModel::apply,
-            "Returns the distorted function value at x, y",
+        .def("model", &ngmix::NgmixModel::model,
+            "Returns the distorted model value at x, y",
+            py::arg("x"), py::arg("y")
+        )
+        .def("loss", &ngmix::NgmixModel::loss,
+            "Returns the loss function value and the derivatives wrt params",
+            py::arg("image_val"), py::arg("variance_val"),
             py::arg("x"), py::arg("y")
         );
 

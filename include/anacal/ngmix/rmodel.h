@@ -8,6 +8,7 @@ namespace ngmix {
 
 
 struct frDeriv {
+    // f(r) and its derivatives
     math::qnumber fr = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber dfr = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber ddfr = {0.0, 0.0, 0.0, 0.0, 0.0};
@@ -18,48 +19,47 @@ struct frDeriv {
         : fr(fr), dfr(dfr), ddfr(ddfr) {}
 };
 
-struct vDeriv {
+struct modelNumber {
+    // value with derivatives to Gaussian model parameters
     math::qnumber v = {0.0, 0.0, 0.0, 0.0, 0.0};
 
+    math::qnumber v_A = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber v_rho = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber v_g1 = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber v_g2 = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber v_x = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber v_y = {0.0, 0.0, 0.0, 0.0, 0.0};
 
+    math::qnumber v_AA = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber v_rhorho = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber v_g1g1 = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber v_g2g2 = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber v_xx = {0.0, 0.0, 0.0, 0.0, 0.0};
     math::qnumber v_yy = {0.0, 0.0, 0.0, 0.0, 0.0};
 
-    vDeriv(
-        math::qnumber f,
+    modelNumber(
+        math::qnumber v,
+        math::qnumber v_A,
         math::qnumber v_rho,
         math::qnumber v_g1,
         math::qnumber v_g2,
         math::qnumber v_x,
         math::qnumber v_y,
+        math::qnumber v_AA,
         math::qnumber v_rhorho,
         math::qnumber v_g1g1,
         math::qnumber v_g2g2,
         math::qnumber v_xx,
         math::qnumber v_yy
-    ) : v(v), v_rho(v_rho), v_g1(v_g1), v_g2(v_g2),
+    ) : v(v), v_A(v_A), v_rho(v_rho), v_g1(v_g1), v_g2(v_g2),
         v_x(v_x), v_y(v_y),
-        v_rhorho(v_rhorho), v_g1g1(v_g1g1), v_g2g2(v_g2g2),
+        v_AA(v_AA), v_rhorho(v_rhorho), v_g1g1(v_g1g1), v_g2g2(v_g2g2),
         v_xx(v_xx), v_yy(v_yy) {}
 };
 
 
 class NgmixModel {
 private:
-    math::qnumber rho = {0.0, 0.0, 0.0, 0.0, 0.0};       // convergence
-    math::qnumber Gamma1 = {0.0, 0.0, 0.0, 0.0, 0.0};    // g1
-    math::qnumber Gamma2 = {0.0, 0.0, 0.0, 0.0, 0.0};    // g2
-    math::qnumber x0 = {0.0, 0.0, 0.0, 0.0, 0.0};        // position x
-    math::qnumber y0 = {0.0, 0.0, 0.0, 0.0, 0.0};        // position y
-
     // Preventing copy (implement these if you need copy semantics)
     NgmixModel(const NgmixModel&) = delete;
     NgmixModel& operator=(const NgmixModel&) = delete;
@@ -71,19 +71,27 @@ private:
     };
 
 public:
+    math::qnumber A = {0.0, 0.0, 0.0, 0.0, 0.0};         // Amplitude
+    math::qnumber rho = {0.0, 0.0, 0.0, 0.0, 0.0};       // convergence
+    math::qnumber Gamma1 = {0.0, 0.0, 0.0, 0.0, 0.0};    // g1
+    math::qnumber Gamma2 = {0.0, 0.0, 0.0, 0.0, 0.0};    // g2
+    math::qnumber x0 = {0.0, 0.0, 0.0, 0.0, 0.0};        // position x
+    math::qnumber y0 = {0.0, 0.0, 0.0, 0.0, 0.0};        // position y
+
     NgmixModel() {};
 
     void set_params(
         std::vector<math::qnumber> params
     ) {
-        this->rho = params[0];
-        this->Gamma1 = params[1];
-        this->Gamma2 = params[2];
-        this->x0 = params[3];
-        this->y0 = params[4];
+        this->A = params[0];
+        this->rho = params[1];
+        this->Gamma1 = params[2];
+        this->Gamma2 = params[3];
+        this->x0 = params[4];
+        this->y0 = params[5];
     };
 
-    vDeriv get_r2(
+    modelNumber get_r2(
         double x,
         double y
     ) const {
@@ -99,11 +107,13 @@ public:
             x_s * Gamma2 * -1.0 + y_s * (1.0 + Gamma1)
         ) / rho;
         math::qnumber q = {0.0, 0.0, 0.0, 0.0, 0.0};
-        vDeriv res{q, q, q, q, q, q, q, q, q, q, q};
+        modelNumber res{q, q, q, q, q, q, q, q, q, q, q, q, q};
+
 
         res.v = x_transformed * x_transformed + y_transformed * y_transformed;
 
         // First-order derivatives
+        res.v_A = q;
         math::qnumber r1 = 2.0 / rho;
         math::qnumber r2 = r1 / rho;
         res.v_rho = -1.0 * r1 * res.v;
@@ -118,6 +128,7 @@ public:
         math::qnumber r2_s = x_s * x_s + y_s * y_s;
 
         // Second-order derivatives
+        res.v_AA = q;
         res.v_rhorho = 3.0 * r2 * res.v;
         res.v_g1g1 = r2 * r2_s;
         res.v_g2g2 = r2 * r2_s;
@@ -130,27 +141,82 @@ public:
         return res;
     };
 
-    vDeriv apply(
+    modelNumber model(
         double x, double y
     ) const {
 
-        vDeriv r2 = this->get_r2(x, y);
+        modelNumber r2 = this->get_r2(x, y);
         frDeriv fr =  this->get_fr(r2.v);
         math::qnumber q = {0.0, 0.0, 0.0, 0.0, 0.0};
-        vDeriv res{q, q, q, q, q, q, q, q, q, q, q};
+        modelNumber res{q, q, q, q, q, q, q, q, q, q, q, q, q};
         res.v = fr.fr;
 
+        // First-order derivatives
+        res.v_A = fr.fr / this->A;
         res.v_rho = fr.dfr * r2.v_rho;
         res.v_g1 = fr.dfr * r2.v_g1;
         res.v_g2 = fr.dfr * r2.v_g2;
         res.v_x = fr.dfr * r2.v_x;
         res.v_y = fr.dfr * r2.v_y;
 
+        // Second-order derivatives
+        res.v_AA = q;
         res.v_rhorho = fr.ddfr * r2.v_rho * r2.v_rho + fr.dfr * r2.v_rhorho;
         res.v_g1g1 = fr.ddfr * r2.v_g1 * r2.v_g1 + fr.dfr * r2.v_g1g1;
         res.v_g2g2 = fr.ddfr * r2.v_g2 * r2.v_g2 + fr.dfr * r2.v_g2g2;
         res.v_xx = fr.ddfr * r2.v_x * r2.v_x + fr.dfr * r2.v_xx;
         res.v_yy = fr.ddfr * r2.v_y * r2.v_y + fr.dfr * r2.v_yy;
+        return res;
+    };
+
+    modelNumber loss(
+        math::qnumber img_val,
+        double variance_val,
+        double x, double y
+    ) const {
+
+        modelNumber theory_val = this->model(x, y);
+        math::qnumber residual = img_val - theory_val.v;
+
+        math::qnumber q = {0.0, 0.0, 0.0, 0.0, 0.0};
+        modelNumber res{q, q, q, q, q, q, q, q, q, q, q, q, q};
+
+        res.v = 0.5 * residual * residual / variance_val;
+
+        // First-order derivatives
+        math::qnumber tmp = -1.0 * residual / variance_val;
+        res.v_A =  tmp * theory_val.v_A ;
+        res.v_rho = tmp * theory_val.v_rho;
+        res.v_g1 = tmp * theory_val.v_g1;
+        res.v_g2 = tmp * theory_val.v_g2;
+        res.v_x = tmp * theory_val.v_x;
+        res.v_y = tmp * theory_val.v_y;
+
+        // Second-order derivatives
+        res.v_AA = (
+            (theory_val.v_A * theory_val.v_A) / variance_val
+            + tmp * theory_val.v_AA
+        );
+        res.v_rhorho = (
+            (theory_val.v_rho * theory_val.v_rho) / variance_val
+            + tmp * theory_val.v_rhorho
+        );
+        res.v_g1g1 = (
+            (theory_val.v_g1 * theory_val.v_g1) / variance_val
+            + tmp * theory_val.v_g1g1
+        );
+        res.v_g2g2 = (
+            (theory_val.v_g2 * theory_val.v_g2) / variance_val
+            + tmp * theory_val.v_g2g2
+        );
+        res.v_xx = (
+            (theory_val.v_x * theory_val.v_x) / variance_val
+            + tmp * theory_val.v_xx
+        );
+        res.v_yy = (
+            (theory_val.v_y * theory_val.v_y) / variance_val
+            + tmp * theory_val.v_yy
+        );
         return res;
     };
 
@@ -170,7 +236,7 @@ private:
     frDeriv get_fr(
         math::qnumber r2
     ) const {
-        math::qnumber fr = math::exp(r2 * this->_p0);
+        math::qnumber fr = this->A * math::exp(r2 * this->_p0);
         math::qnumber dfr = fr * this->_p0;
         math::qnumber ddfr = dfr * this->_p0;
         return frDeriv(fr, dfr, ddfr);
