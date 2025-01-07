@@ -59,5 +59,22 @@ pyExportNgmix(py::module_& m) {
             py::arg("sigma")
         );
 
+    py::class_<ngmix::Fitting>(ngmix, "Fitting")
+        .def(
+            py::init< int, int, double, double, double, bool >(),
+            py::arg("nx"),
+            py::arg("ny"),
+            py::arg("scale"),
+            py::arg("sigma_arcsec"),
+            py::arg("klim"),
+            py::arg("use_estimate")=true
+        )
+        .def("run", &ngmix::Fitting::run,
+            "Run iteration for fitting",
+            py::arg("params0"), py::arg("xcen"), py::arg("ycen"),
+            py::arg("img_array"), py::arg("psf_array"),
+            py::arg("noise_array")=py::none(), py::arg("num_epochs")=5,
+            py::arg("learning_rate")=1.0
+        );
 }
 }

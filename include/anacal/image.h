@@ -122,7 +122,6 @@ private:
     ImageQ& operator=(const ImageQ&) = delete;
     Image img_obj;
     double fft_ratio;
-    const py::array_t<double> psf_array;
     int nx_array, ny_array;
     int nx2, ny2;
     int kx_length, ky_length;
@@ -139,9 +138,8 @@ public:
         double scale,
         double sigma_arcsec,
         double klim,
-        const py::array_t<double>& psf_array,
         bool use_estimate = true
-    ): img_obj(nx, ny, scale, use_estimate), psf_array(psf_array) {
+    ): img_obj(nx, ny, scale, use_estimate) {
         if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
             throw std::runtime_error(
                 "FPFS Error: invalid input sigma_arcsec"
@@ -163,9 +161,10 @@ public:
     py::array_t<double>
     prepare_qnumber_image(
         const py::array_t<double>& img_array,
-        const std::optional<py::array_t<double>>& noise_array,
-        int xcen,
-        int ycen
+        const py::array_t<double>& psf_array,
+        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+        int xcen=-1,
+        int ycen=-1
     ) {
         const Gaussian gauss_model(sigma_f);
         const GaussianG1 gauss_g1_model(sigma_f);
@@ -280,19 +279,31 @@ public:
                 }
             }
         }
+
+        // update two shear responses
+        for (ssize_t j = 0; j < this->ny; ++j) {
+            double y = (j - this->ny2) * this->scale;
+            for (ssize_t i = 0; i < this->nx; ++i) {
+                double x = (i - this->nx2) * this->scale;
+                r(1, j, i) = r(1, j, i) + x * r(3, j, i) - y * r(4, j, i);
+                r(2, j, i) = r(2, j, i) + x * r(4, j, i) + y * r(3, j, i);
+            }
+        }
         return result;
     };
 
     std::vector<math::qnumber>
     prepare_qnumber_vector(
         const py::array_t<double>& img_array,
-        const std::optional<py::array_t<double>>& noise_array,
-        int xcen,
-        int ycen
+        const py::array_t<double>& psf_array,
+        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+        int xcen=-1,
+        int ycen=-1
     ) {
 
         py::array_t<double> qimage = prepare_qnumber_image(
             img_array,
+            psf_array,
             noise_array,
             xcen,
             ycen

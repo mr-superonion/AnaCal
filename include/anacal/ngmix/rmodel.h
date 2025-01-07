@@ -55,6 +55,63 @@ struct modelNumber {
         v_x(v_x), v_y(v_y),
         v_AA(v_AA), v_rhorho(v_rhorho), v_g1g1(v_g1g1), v_g2g2(v_g2g2),
         v_xx(v_xx), v_yy(v_yy) {}
+
+    // Define addition for modelNumber + modelNumber
+    modelNumber operator+(const modelNumber& other) const {
+        return modelNumber(
+            this->v + other.v,
+            this->v_A + other.v_A,
+            this->v_rho + other.v_rho,
+            this->v_g1 + other.v_g1,
+            this->v_g2 + other.v_g2,
+            this->v_x + other.v_x,
+            this->v_y + other.v_y,
+            this->v_AA + other.v_AA,
+            this->v_rhorho + other.v_rhorho,
+            this->v_g1g1 + other.v_g1g1,
+            this->v_g2g2 + other.v_g2g2,
+            this->v_xx + other.v_xx,
+            this->v_yy + other.v_yy
+        );
+    }
+
+    // Define subtraction for modelNumber - modelNumber
+    modelNumber operator-(const modelNumber& other) const {
+        return modelNumber(
+            this->v - other.v,
+            this->v_A - other.v_A,
+            this->v_rho - other.v_rho,
+            this->v_g1 - other.v_g1,
+            this->v_g2 - other.v_g2,
+            this->v_x - other.v_x,
+            this->v_y - other.v_y,
+            this->v_AA - other.v_AA,
+            this->v_rhorho - other.v_rhorho,
+            this->v_g1g1 - other.v_g1g1,
+            this->v_g2g2 - other.v_g2g2,
+            this->v_xx - other.v_xx,
+            this->v_yy - other.v_yy
+        );
+    }
+
+    // Define unary negation for -modelNumber
+    modelNumber operator-() const {
+        return modelNumber(
+            -this->v,
+            -this->v_A,
+            -this->v_rho,
+            -this->v_g1,
+            -this->v_g2,
+            -this->v_x,
+            -this->v_y,
+            -this->v_AA,
+            -this->v_rhorho,
+            -this->v_g1g1,
+            -this->v_g2g2,
+            -this->v_xx,
+            -this->v_yy
+        );
+    }
 };
 
 
