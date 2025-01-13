@@ -9,27 +9,29 @@
 
 namespace anacal {
 namespace ngmix {
-class Fitting {
+
+class GaussFit {
 public:
 
     int nx, ny;
-    double sigma;
+    double sigma_arcsec;
     double scale;
-    NgmixGaussian model;
     ImageQ image;
+    NgmixGaussian model;
 
-    Fitting(
+    GaussFit(
         int nx,
         int ny,
         double scale,
         double sigma_arcsec,
         double klim,
         bool use_estimate = true
-    ) : image(nx, ny, scale, sigma_arcsec, klim, use_estimate),
+    ) : image(nx, ny, scale, sigma_arcsec, klim, use_estimate, true),
         model(sigma_arcsec)
     {
         this->nx = nx;
         this->ny = ny;
+        this->sigma_arcsec = sigma_arcsec;
         this->scale = scale;
         if (sigma_arcsec <= 0) {
             throw std::invalid_argument("sigma_arcsec must be positive");

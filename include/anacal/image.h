@@ -118,43 +118,92 @@ deconvolve_filter(
 class ImageQ {
 private:
     // Preventing copy (implement these if you need copy semantics)
-    ImageQ(const ImageQ&) = delete;
-    ImageQ& operator=(const ImageQ&) = delete;
+    double klim;
+    int nx, ny;
+    double scale;
+    bool use_estimate;
     Image img_obj;
-    double fft_ratio;
-    int nx_array, ny_array;
+    double sigma_arcsec;
+
+    const Gaussian gauss_model;
+    const GaussianG1 gauss_g1_model;
+    const GaussianG2 gauss_g2_model;
+    const GaussianX1 gauss_x1_model;
+    const GaussianX2 gauss_x2_model;
+
     int nx2, ny2;
     int kx_length, ky_length;
+    bool store_kernel;
+    py::array_t<std::complex<double>> gauss_ker;
+    py::array_t<std::complex<double>> gauss_g1_ker;
+    py::array_t<std::complex<double>> gauss_g2_ker;
+    py::array_t<std::complex<double>> gauss_x1_ker;
+    py::array_t<std::complex<double>> gauss_x2_ker;
+    ImageQ(const ImageQ&) = delete;
+    ImageQ& operator=(const ImageQ&) = delete;
 public:
-    double scale = 1.0;
-    double sigma_arcsec;
-    double klim;
-    double sigma_f;
-    int nx, ny;
-
     ImageQ(
         int nx,
         int ny,
         double scale,
         double sigma_arcsec,
         double klim,
-        bool use_estimate = true
-    ): img_obj(nx, ny, scale, use_estimate) {
+        bool use_estimate = true,
+        bool store_kernel = false
+    ) :
+        nx(nx), ny(ny), scale(scale), use_estimate(use_estimate),
+        img_obj(nx, ny, scale, use_estimate),
+        sigma_arcsec(sigma_arcsec),
+        gauss_model(1.0 / sigma_arcsec),
+        gauss_g1_model(1.0 / sigma_arcsec),
+        gauss_g2_model(1.0 / sigma_arcsec)
+    {
         if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
             throw std::runtime_error(
                 "FPFS Error: invalid input sigma_arcsec"
             );
         }
-        this->nx = nx;
-        this->ny = ny;
         this->nx2 = nx / 2;
         this->ny2 = ny / 2;
-        this->scale = scale;
-        this->sigma_arcsec = sigma_arcsec;
-        this->klim = klim;
-        this->sigma_f = 1.0 / sigma_arcsec;
         this->kx_length = nx / 2 + 1;
         this->ky_length = ny;
+        this->klim = klim;
+        this->store_kernel = store_kernel;
+
+        double dkx = 2.0 * M_PI / nx / scale;
+        double dky = 2.0 * M_PI / ny / scale;
+        if (store_kernel) {
+            gauss_ker = py::array_t<std::complex<double>>({this->ky_length, this->kx_length});
+            gauss_g1_ker = py::array_t<std::complex<double>>({this->ky_length, this->kx_length});
+            gauss_g2_ker = py::array_t<std::complex<double>>({this->ky_length, this->kx_length});
+            gauss_x1_ker = py::array_t<std::complex<double>>({this->ky_length, this->kx_length});
+            gauss_x2_ker = py::array_t<std::complex<double>>({this->ky_length, this->kx_length});
+
+            auto k_r = gauss_ker.mutable_unchecked<2>();
+            auto g1k_r = gauss_g1_ker.mutable_unchecked<2>();
+            auto g2k_r = gauss_g2_ker.mutable_unchecked<2>();
+            auto x1k_r = gauss_x1_ker.mutable_unchecked<2>();
+            auto x2k_r = gauss_x2_ker.mutable_unchecked<2>();
+
+
+            for (int j = 0; j < this->ky_length; ++j) {
+                double ky = ((j < this->ny2) ? j : (j - ny)) * dky ;
+                for (int i = 0; i < kx_length; ++i) {
+                    double kx = i * dkx;
+                    k_r(j, i) = this->gauss_model.apply(kx, ky);
+                    g1k_r(j, i) = this->gauss_g1_model.apply(kx, ky);
+                    g2k_r(j, i) = this->gauss_g2_model.apply(kx, ky);
+                    x1k_r(j, i) = this->gauss_x1_model.apply(kx, ky);
+                    x2k_r(j, i) = this->gauss_x2_model.apply(kx, ky);
+                }
+            }
+        } else {
+            gauss_ker = py::array_t<std::complex<double>>(0);
+            gauss_g1_ker = py::array_t<std::complex<double>>(0);
+            gauss_g2_ker = py::array_t<std::complex<double>>(0);
+            gauss_x1_ker = py::array_t<std::complex<double>>(0);
+            gauss_x2_ker = py::array_t<std::complex<double>>(0);
+        }
         return;
     };
 
@@ -166,11 +215,6 @@ public:
         int xcen=-1,
         int ycen=-1
     ) {
-        const Gaussian gauss_model(sigma_f);
-        const GaussianG1 gauss_g1_model(sigma_f);
-        const GaussianG2 gauss_g2_model(sigma_f);
-        const GaussianX1 gauss_x1_model;
-        const GaussianX2 gauss_x2_model;
         // Prepare PSF
         img_obj.set_r(psf_array, -1, -1, true);
         img_obj.fft();
@@ -182,7 +226,12 @@ public:
         // Deconvolve the PSF
         img_obj.deconvolve(parr, klim);
         // Convolve Gaussian
-        img_obj.filter(gauss_model);
+        std::cout<<store_kernel<<std::endl;
+        if (store_kernel) {
+            img_obj.filter(gauss_ker);
+        } else {
+            img_obj.filter(gauss_model);
+        }
         py::array_t<std::complex<double>> imgcov_f = img_obj.draw_f();
 
         if (noise_array.has_value()){
@@ -197,7 +246,11 @@ public:
             // Deconvolve the PSF
             img_obj.deconvolve(parr_n, klim);
             // Convolve Gaussian
-            img_obj.filter(gauss_model);
+            if (store_kernel) {
+                img_obj.filter(gauss_ker);
+            } else {
+                img_obj.filter(gauss_model);
+            }
             const py::array_t<std::complex<double>> imgcov_f_n = img_obj.draw_f();
 
             auto r = imgcov_f.mutable_unchecked<2>();
@@ -227,7 +280,11 @@ public:
         // g1
         {
             img_obj.set_f(imgcov_f);
-            img_obj.filter(gauss_g1_model);
+            if (store_kernel) {
+                img_obj.filter(gauss_g1_ker);
+            } else {
+                img_obj.filter(gauss_g1_model);
+            }
             img_obj.ifft();
             py::array_t<double> tmp = img_obj.draw_r();
             auto tmp_r = tmp.unchecked<2>();
@@ -241,7 +298,11 @@ public:
         // g2
         {
             img_obj.set_f(imgcov_f);
-            img_obj.filter(gauss_g2_model);
+            if (store_kernel) {
+                img_obj.filter(gauss_g2_ker);
+            } else {
+                img_obj.filter(gauss_g2_model);
+            }
             img_obj.ifft();
             py::array_t<double> tmp = img_obj.draw_r();
             auto tmp_r = tmp.unchecked<2>();
@@ -255,7 +316,11 @@ public:
         // x1
         {
             img_obj.set_f(imgcov_f);
-            img_obj.filter(gauss_x1_model);
+            if (store_kernel) {
+                img_obj.filter(gauss_x1_ker);
+            } else {
+                img_obj.filter(gauss_x1_model);
+            }
             img_obj.ifft();
             py::array_t<double> tmp = img_obj.draw_r();
             auto tmp_r = tmp.unchecked<2>();
@@ -269,7 +334,11 @@ public:
         // x2
         {
             img_obj.set_f(imgcov_f);
-            img_obj.filter(gauss_x2_model);
+            if (store_kernel) {
+                img_obj.filter(gauss_x2_ker);
+            } else {
+                img_obj.filter(gauss_x2_model);
+            }
             img_obj.ifft();
             py::array_t<double> tmp = img_obj.draw_r();
             auto tmp_r = tmp.unchecked<2>();

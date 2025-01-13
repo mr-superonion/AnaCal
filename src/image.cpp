@@ -783,14 +783,15 @@ pyExportImage(py::module& m) {
         );
     py::class_<ImageQ>(image, "ImageQ")
         .def(py::init<
-                int, int, double, double, double, bool
+                int, int, double, double, double, bool, bool
             >(),
             "Initialize the ImageQ object using an ndarray",
             py::arg("nx"), py::arg("ny"),
             py::arg("scale"),
             py::arg("sigma_arcsec"),
             py::arg("klim"),
-            py::arg("use_estimate")=true
+            py::arg("use_estimate")=true,
+            py::arg("store_kernel")=true
         )
         .def("prepare_qnumber_image",
             &ImageQ::prepare_qnumber_image,

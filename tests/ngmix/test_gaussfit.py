@@ -3,7 +3,7 @@ import galsim
 import numpy as np
 
 
-def test_ngmix_gaussian():
+def test_ngmix_gaussian_fit():
     nx = 32
     ny = 32
     scale = 0.2
@@ -18,12 +18,12 @@ def test_ngmix_gaussian():
         nx=nx, ny=ny, scale=scale, method="no_pixel"
     ).array
 
-    fitter = anacal.ngmix.Fitting(
+    fitter = anacal.ngmix.GaussFit(
         nx=nx, ny=ny, scale=scale, sigma_arcsec=sigma_arcsec, klim=klim,
     )
 
     # initialize parameters
-    params0=[
+    params0 = [
         anacal.math.qnumber(1.0, 0.0, 0.0, 0.0, 0.0),  # A
         anacal.math.qnumber(1.0, 0.0, 0.0, 0.0, 0.0),  # rho
         anacal.math.qnumber(0.0, 0.0, 0.0, 0.0, 0.0),  # G1

@@ -288,8 +288,9 @@ public:
 /// NgmixGaussian Function
 class NgmixGaussian : public NgmixModel {
 private:
-    double sigma;
+    const double sigma;
     double _p0;
+    const double one_over_erms2;
     frDeriv get_fr(
         math::qnumber r2
     ) const {
@@ -300,7 +301,8 @@ private:
     };
 public:
     // NgmixGaussian Profile
-    NgmixGaussian(double sigma) : sigma(sigma) {
+    NgmixGaussian(double sigma, double one_over_erms2=0.0)
+    : sigma(sigma), one_over_erms2(one_over_erms2) {
         _p0 = -1.0 / (2 * sigma * sigma);
     };
 

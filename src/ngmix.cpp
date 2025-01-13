@@ -59,7 +59,7 @@ pyExportNgmix(py::module_& m) {
             py::arg("sigma")
         );
 
-    py::class_<ngmix::Fitting>(ngmix, "Fitting")
+    py::class_<ngmix::GaussFit>(ngmix, "GaussFit")
         .def(
             py::init< int, int, double, double, double, bool >(),
             py::arg("nx"),
@@ -69,7 +69,7 @@ pyExportNgmix(py::module_& m) {
             py::arg("klim"),
             py::arg("use_estimate")=true
         )
-        .def("run", &ngmix::Fitting::run,
+        .def("run", &ngmix::GaussFit::run,
             "Run iteration for fitting",
             py::arg("params0"), py::arg("xcen"), py::arg("ycen"),
             py::arg("img_array"), py::arg("psf_array"),
