@@ -14,6 +14,7 @@ class GaussFit {
 public:
 
     int nx, ny;
+    double nx2, ny2;
     double sigma_arcsec;
     double scale;
     ImageQ image;
@@ -31,6 +32,8 @@ public:
     {
         this->nx = nx;
         this->ny = ny;
+        this->nx2 = nx / 2;
+        this->ny2 = ny / 2;
         this->sigma_arcsec = sigma_arcsec;
         this->scale = scale;
         if (sigma_arcsec <= 0) {
@@ -39,8 +42,27 @@ public:
 
     };
 
+    modelNumber get_loss(
+        const std::vector<math::qnumber>& data
+    ) {
+
+        modelNumber loss;
+        for (int j = 0; j < this->ny; ++j) {
+            double y = (j - this->ny2) * this->scale;
+            for (int i = 0; i < this->nx; ++i) {
+                int index = j * this->ny + i;
+                double x = (i - this->nx2) * this->scale;
+                loss = loss + this->model.loss(
+                    data[index], 1.0, x, y
+                );
+            }
+        }
+        return loss;
+
+    }
+
     std::vector<math::qnumber> run(
-        const std::vector<math::qnumber> & params0,
+        const std::array<math::qnumber, 6> & params0,
         int xcen,
         int ycen,
         const py::array_t<double>& img_array,
@@ -59,16 +81,7 @@ public:
         this->model.set_params(params0);
         // Iterative optimization loop
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
-            const math::qnumber q = {0.0, 0.0, 0.0, 0.0, 0.0};
-            modelNumber loss = {q, q, q, q, q, q, q, q, q, q, q, q, q};
-            for (int j = 0; j < this->ny; ++j) {
-                double y = (j - this->ny / 2) * this->scale;
-                for (int i = 0; i < this->nx; ++i) {
-                    int index = j * this->ny + i;
-                    double x = (i - this->nx / 2) * this->scale;
-                    loss = loss + this->model.loss(data[index], 1.0, x, y);
-                }
-            }
+            modelNumber loss = this->get_loss(data);
             this->model.A = this->model.A - (loss.v_A / loss.v_AA / 2.0 * learning_rate);
             this->model.rho = this->model.rho - (loss.v_rho / loss.v_rhorho / 2.0 * learning_rate);
             this->model.Gamma1 = this->model.Gamma1 - (loss.v_g1 / loss.v_g1g1 / 2.0 * learning_rate);

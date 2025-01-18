@@ -226,7 +226,6 @@ public:
         // Deconvolve the PSF
         img_obj.deconvolve(parr, klim);
         // Convolve Gaussian
-        std::cout<<store_kernel<<std::endl;
         if (store_kernel) {
             img_obj.filter(gauss_ker);
         } else {
@@ -378,10 +377,7 @@ public:
             ycen
         );
 
-        std::vector<math::qnumber> result(
-            this->ny * this->nx,
-            math::qnumber(0.0, 0.0, 0.0, 0.0, 0.0)
-        );
+        std::vector<math::qnumber> result(this->ny * this->nx);
         auto q_r = qimage.unchecked<3>();
         for (ssize_t j = 0; j < this->ny; ++j) {
             for (ssize_t i = 0; i < this->nx; ++i) {
