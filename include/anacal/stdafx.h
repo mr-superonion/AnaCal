@@ -10,6 +10,7 @@
 #include <random>
 #include <iostream>
 #include <algorithm>
+#include <stdexcept>
 
 namespace py = pybind11;
 

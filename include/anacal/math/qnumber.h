@@ -197,54 +197,6 @@ inline qnumber exp(
     );
 }; // exponential function
 
-template <size_t M, size_t N, size_t P>
-inline std::array<qnumber, M * P> mat_dot(
-    const std::array<qnumber, M * N>& mat1,
-    const std::array<qnumber, N * P>& mat2) {
-
-    std::array<qnumber, M * P> result = {};
-
-    for (size_t k = 0; k < N; ++k) {
-        for (size_t i = 0; i < M; ++i) {
-            for (size_t j = 0; j < P; ++j) {
-                result[i * P + j] += mat1[i * N + k] * mat2[k * P + j];
-            }
-        }
-    }
-
-    return result;
-}; // matrix multiplication
-
-
-// Inner product of two vectors of length N
-template <size_t N>
-inline qnumber vec_inner_dot(
-    const std::array<qnumber, N>& vec1,
-    const std::array<qnumber, N>& vec2
-) {
-    qnumber result;
-    for (size_t i = 0; i < N; ++i) {
-        result += vec1[i] * vec2[i];
-    }
-    return result;
-};
-
-// Outer product of two vectors of length M and N
-template <size_t M, size_t N>
-inline std::array<qnumber, M * N>
-vec_outer_dot(
-    const std::array<qnumber, M>& vec1,
-    const std::array<qnumber, N>& vec2
-) {
-    std::array<qnumber, M * N> result={};
-    for (size_t j = 0; j < M; ++j) {
-        for (size_t i = 0; i < N; ++i) {
-            result[j * N + i] = vec1[j] * vec2[i];
-        }
-    }
-    return result;
-};
-
 inline py::array_t<double> qnumber_to_array(
     const qnumber& qn
 ) {

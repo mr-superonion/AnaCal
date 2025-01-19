@@ -121,10 +121,6 @@ struct modelNumber {
 
 class NgmixModel {
 private:
-    // Preventing copy (implement these if you need copy semantics)
-    NgmixModel(const NgmixModel&) = delete;
-    NgmixModel& operator=(const NgmixModel&) = delete;
-
     virtual frDeriv get_fr(
         math::qnumber r2
     ) const {
@@ -267,9 +263,6 @@ public:
         return res;
     };
 
-    NgmixModel(NgmixModel&& other) noexcept = default;
-    NgmixModel& operator=(NgmixModel&& other) noexcept = default;
-
     virtual ~NgmixModel() = default;
 
 };
@@ -278,9 +271,9 @@ public:
 /// NgmixGaussian Function
 class NgmixGaussian : public NgmixModel {
 private:
-    const double sigma;
+    double sigma;
+    double one_over_erms2;
     double _p0;
-    const double one_over_erms2;
     frDeriv get_fr(
         math::qnumber r2
     ) const {

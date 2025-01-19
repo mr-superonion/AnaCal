@@ -12,7 +12,6 @@ namespace ngmix {
 
 class GaussFit {
 public:
-
     int nx, ny;
     double nx2, ny2;
     double sigma_arcsec;
@@ -61,15 +60,37 @@ public:
 
     }
 
-    std::vector<math::qnumber> run(
+    void update_model_params(
+        const modelNumber& loss
+    ) {
+        this->model.A = this->model.A - (
+            loss.v_A / loss.v_AA / 2.0
+        );
+        this->model.rho = this->model.rho - (
+            loss.v_rho / loss.v_rhorho / 2.0
+        );
+        this->model.Gamma1 = this->model.Gamma1 - (
+            loss.v_g1 / loss.v_g1g1 / 2.0
+        );
+        this->model.Gamma2 = this->model.Gamma2 - (
+            loss.v_g2 / loss.v_g2g2 / 2.0
+        );
+        this->model.x0 = this->model.x0 - (
+            loss.v_x  / loss.v_xx / 2.0
+        );
+        this->model.y0 = this->model.y0 - (
+            loss.v_y  / loss.v_yy / 2.0
+        );
+    };
+
+    void run(
         const std::array<math::qnumber, 6> & params0,
         int xcen,
         int ycen,
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
-        int num_epochs = 5,
-        double learning_rate = 1.0
+        int num_epochs = 5
     ) {
         std::vector<math::qnumber> data = this->image.prepare_qnumber_vector(
             img_array,
@@ -82,22 +103,8 @@ public:
         // Iterative optimization loop
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
             modelNumber loss = this->get_loss(data);
-            this->model.A = this->model.A - (loss.v_A / loss.v_AA / 2.0 * learning_rate);
-            this->model.rho = this->model.rho - (loss.v_rho / loss.v_rhorho / 2.0 * learning_rate);
-            this->model.Gamma1 = this->model.Gamma1 - (loss.v_g1 / loss.v_g1g1 / 2.0 * learning_rate);
-            this->model.Gamma2 = this->model.Gamma2 - (loss.v_g2 / loss.v_g2g2 / 2.0 * learning_rate);
-            this->model.x0 = this->model.x0 - (loss.v_x  / loss.v_xx / 2.0 * learning_rate);
-            this->model.y0 = this->model.y0 - (loss.v_y  / loss.v_yy / 2.0 * learning_rate);
+            this->update_model_params(loss);
         }
-        std::vector<math::qnumber> result = {
-            this->model.A,
-            this->model.rho,
-            this->model.Gamma1,
-            this->model.Gamma2,
-            this->model.x0,
-            this->model.y0
-        };
-        return result;
     };
 };
 
