@@ -101,6 +101,94 @@ namespace anacal {
         ~FpfsImage();
     };
 
+    class FpfsDeepWideImage {
+    private:
+        // Preventing copy (implement these if you need copy semantics)
+        FpfsDeepWideImage(const FpfsDeepWideImage&) = delete;
+        FpfsDeepWideImage& operator=(const FpfsDeepWideImage&) = delete;
+        Image img_obj;
+        double fft_ratio;
+        int nx_array, ny_array;
+        int nx2, ny2;
+    public:
+        double scale = 1.0;
+        double sigma_arcsec;
+        double klim;
+        double sigma_f;
+        int nx, ny;
+        int npix_overlap, bound;
+
+        FpfsDeepWideImage(
+            int nx,
+            int ny,
+            double scale,
+            double sigma_arcsec,
+            double klim,
+            bool use_estimate=true,
+            int npix_overlap=0,
+            int bound=0
+        );
+
+        py::array_t<double>
+        smooth_image(
+            const py::array_t<double>& gal_array,
+            const py::array_t<double>& psf_array,
+            bool do_rotate,
+            int x,
+            int y
+        );
+
+        void
+        find_peaks(
+            std::vector<std::tuple<int, int, bool>>& peaks,
+            const py::array_t<double>& gal_conv,
+            double fthres,
+            double pthres,
+            double std_m00,
+            double v_min,
+            double omega_v,
+            int xcen,
+            int ycen
+        );
+
+        py::array_t<FpfsPeaks>
+        detect_source(
+            py::array_t<double>& gal_array,
+            py::array_t<double>& wide_psf_array,
+            py::array_t<double>& deep_psf_array,
+            double fthres,
+            double pthres,
+            double std_m00,
+            double v_min,
+            double omega_v,
+            const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+            const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
+        );
+
+        py::array_t<double>
+        measure_source(
+            const py::array_t<double>& gal_array,
+            const py::array_t<std::complex<double>>& filter_image,
+            const py::array_t<double>& psf_array,
+            const std::optional<py::array_t<FpfsPeaks>>& det=std::nullopt,
+            bool do_rotate=false
+        );
+
+        py::array_t<double>
+        measure_source(
+            const py::array_t<double>& gal_array,
+            const py::array_t<std::complex<double>>& filter_image,
+            const BasePsf& psf_obj,
+            const std::optional<py::array_t<FpfsPeaks>>& det=std::nullopt,
+            bool do_rotate=false
+        );
+
+        FpfsDeepWideImage(FpfsDeepWideImage&& other) noexcept = default;
+        FpfsDeepWideImage& operator=(FpfsDeepWideImage&& other) noexcept = default;
+
+        ~FpfsDeepWideImage();
+    };
+
     void pyExportFpfsImage(py::module_& fpfs);
 }
 

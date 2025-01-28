@@ -1,5 +1,6 @@
 from .._anacal.fpfs import (
     FpfsImage,
+    FpfsDeepWideImage,
     fpfs_cut_sigma_ratio,
     fpfs_det_sigma2,
     measure_fpfs,
