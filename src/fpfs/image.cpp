@@ -522,14 +522,14 @@ FpfsDeepWideImage::find_peaks(
 py::array_t<FpfsPeaks>
 FpfsDeepWideImage::detect_source(
     py::array_t<double>& gal_array,
-    py::array_t<double>& wide_psf_array,
-    py::array_t<double>& deep_psf_array,
+    py::array_t<double>& gal_psf_array,
     double fthres,
     double pthres,
     double std_m00,
     double v_min,
     double omega_v,
     const std::optional<py::array_t<double>>& noise_array,
+    const std::optional<py::array_t<double>>& noise_psf_array,
     const std::optional<py::array_t<int16_t>>& mask_array
 ) {
 
@@ -564,23 +564,25 @@ FpfsDeepWideImage::detect_source(
             int xcen = (this->nx - this->npix_overlap) * i + this->nx2 - npad_x;
             py::array_t<double> gal_conv = this->smooth_image(
                 gal_array,
-                wide_psf_array,
+                gal_psf_array,
                 false,
                 xcen,
                 ycen
             );
-            py::array_t<double> noise_conv = this->smooth_image(
-                *noise_array,
-                deep_psf_array,
-                false,
-                xcen,
-                ycen
-            );
-            auto g_r = gal_conv.mutable_unchecked<2>();
-            auto n_r = noise_conv.mutable_unchecked<2>();
-            for (ssize_t m = 0; m < this->ny; ++m) {
-                for (ssize_t n = 0; n < this->nx; ++n) {
-                    g_r(m, n) = g_r(m, n) + n_r(m, n);
+            if (noise_array.has_value() && noise_psf_array.has_value()) {
+                py::array_t<double> noise_conv = this->smooth_image(
+                    *noise_array,
+                    *noise_psf_array,
+                    false,
+                    xcen,
+                    ycen
+                );
+                auto g_r = gal_conv.mutable_unchecked<2>();
+                auto n_r = noise_conv.mutable_unchecked<2>();
+                for (ssize_t m = 0; m < this->ny; ++m) {
+                    for (ssize_t n = 0; n < this->nx; ++n) {
+                        g_r(m, n) = g_r(m, n) + n_r(m, n);
+                    }
                 }
             }
             this->find_peaks(
@@ -853,14 +855,14 @@ pyExportFpfsImage(py::module_& fpfs) {
             &FpfsDeepWideImage::detect_source,
             "Detect galaxy candidates from image",
             py::arg("gal_array"),
-            py::arg("wide_psf_array"),
-            py::arg("deep_psf_array"),
+            py::arg("gal_psf_array"),
             py::arg("fthres"),
             py::arg("pthres"),
             py::arg("std_m00"),
             py::arg("v_min"),
             py::arg("omega_v"),
             py::arg("noise_array")=py::none(),
+            py::arg("noise_psf_array")=py::none(),
             py::arg("mask_array")=py::none()
         )
         .def("measure_source",

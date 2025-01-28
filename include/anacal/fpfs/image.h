@@ -154,14 +154,14 @@ namespace anacal {
         py::array_t<FpfsPeaks>
         detect_source(
             py::array_t<double>& gal_array,
-            py::array_t<double>& wide_psf_array,
-            py::array_t<double>& deep_psf_array,
+            py::array_t<double>& gal_psf_array,
             double fthres,
             double pthres,
             double std_m00,
             double v_min,
             double omega_v,
             const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+            const std::optional<py::array_t<double>>& noise_psf_array=std::nullopt,
             const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
         );
 
