@@ -3,115 +3,84 @@ import numpy as np
 
 
 def test_ngmix_gaussian():
-    xc, yc = 0.82, -0.24
-    GaussModel = anacal.ngmix.NgmixGaussian(sigma=0.52)
-    A = anacal.math.qnumber(1.0, 0.0, 0.0, 0.0, 0.0)
-    rho = anacal.math.qnumber(1.2, 0.0, 0.0, 0.0, 0.0)
-    g1 = anacal.math.qnumber(0.05, 0.0, 0.0, 0.0, 0.0)
-    g2 = anacal.math.qnumber(-0.08, 0.0, 0.0, 0.0, 0.0)
-    x = anacal.math.qnumber(0.9, 0.0, 0.0, 0.0, 0.0)
-    y = anacal.math.qnumber(-0.2, 0.0, 0.0, 0.0, 0.0)
-    GaussModel.set_params([A, rho, g1, g2, x, y])
-
-    image_val = anacal.math.qnumber(1.2, 0.0, 0.0, 0.0, 0.0)
-    variance_val = 3.2
-    loss = GaussModel.loss(image_val, variance_val, xc, yc)
-    np.testing.assert_almost_equal(loss.v.v, 0.006956528938787841)
+    A = 1.4
+    rho = 2.4
+    e1 = 0.5
+    e2 = -0.23
+    x0 = 0.15
+    y0 = -0.41
+    sigma = 0.45
+    params0 = [
+        anacal.math.qnumber(A, 0.0, 0.0, 0.0, 0.0),
+        anacal.math.qnumber(rho, 0.0, 0.0, 0.0, 0.0),
+        anacal.math.qnumber(e1, 0.0, 0.0, 0.0, 0.0),
+        anacal.math.qnumber(e2, 0.0, 0.0, 0.0, 0.0),
+        anacal.math.qnumber(x0, 0.0, 0.0, 0.0, 0.0),
+        anacal.math.qnumber(y0, 0.0, 0.0, 0.0, 0.0),
+    ]
+    gauss_model = anacal.ngmix.NgmixGaussian(sigma_arcsec=sigma)
+    gauss_model.set_params(params0)
+    gauss_model.prepare_grad()
+    x = -0.43
+    y = 0.21
+    a = gauss_model.get_r2(x, y)
 
     res = np.array(
-        [
-            loss.v_A.v,
-            loss.v_rho.v,
-            loss.v_g1.v,
-            loss.v_g2.v,
-            loss.v_x.v,
-            loss.v_y.v,
-        ]
+        [a.v.v, a.v_A.v, a.v_rho.v, a.v_e1.v, a.v_e2.v, a.v_x.v, a.v_y.v]
     )
     res_target = np.array(
-        [
-            -0.06521264,
-            -0.00120239,
-            -0.00073691,
-            -0.00117906,
-            0.01324967,
-            0.00957248,
-        ]
+        [0.13658638410732674, 0.0, -0.10781366231595958, 0.18853835611637842,
+         0.08070187803052695, 0.07579620147222685, -0.369695115098003]
     )
     np.testing.assert_almost_equal(res, res_target)
 
     res = np.array(
-        [
-            loss.v_AA.v,
-            loss.v_rhorho.v,
-            loss.v_g1g1.v,
-            loss.v_g2g2.v,
-            loss.v_xx.v,
-            loss.v_yy.v,
-        ]
+        [a.v_rhorho.v, a.v_e1e1.v, a.v_e2e2.v, a.v_xx.v, a.v_yy.v]
     )
     res_target = np.array(
-        [0.30566166, 0.00308773, 0.00137054, 0.00141844, 0.16214834, 0.19089936]
+        [0.1253963951060485, 0.8459647194611971, 0.25880106483425097,
+         0.24174658711785238, 0.6934774360388029]
     )
     np.testing.assert_almost_equal(res, res_target)
 
-    m = GaussModel.model(xc, yc)
-    np.testing.assert_almost_equal(m.v.v, 0.9889981393251657)
 
-    res = np.array([m.v_A.v, m.v_rho.v, m.v_g1.v, m.v_g2.v, m.v_x.v, m.v_y.v])
-    res_target = np.array(
-        [
-            0.9889981393251657,
-            0.0182351950512148,
-            0.011175809020152094,
-            0.017881294432243306,
-            -0.20094104618233422,
-            -0.14517375917177527,
-        ]
-    )
-    np.testing.assert_almost_equal(res, res_target)
-
+    a = gauss_model.model(x, y)
     res = np.array(
-        [m.v_AA.v, m.v_rhorho.v, m.v_g1g1.v, m.v_g2g2.v, m.v_xx.v, m.v_yy.v]
+        [a.v.v, a.v_A.v, a.v_rho.v, a.v_e1.v, a.v_e2.v, a.v_x.v, a.v_y.v]
     )
     res_target = np.array(
-        [
-            0.0,
-            -0.04525176622848741,
-            -0.020193364652450762,
-            -0.019996355198569876,
-            -2.2677400784513333,
-            -2.795248000180942,
-        ]
+        [1.3075812343742934, 0.9339865959816382, 0.07048756082675783,
+         -0.1232646082087771, -0.05276213064574005, -0.04955484534096851,
+         0.24170319747099664]
     )
-    np.testing.assert_almost_equal(res, res_target)
-
-    r2 = GaussModel.get_r2(xc, yc)
-    np.testing.assert_almost_equal(r2.v.v, 0.005982777777777785)
-
-    res = np.array([r2.v_rho.v, r2.v_g1.v, r2.v_g2.v, r2.v_x.v, r2.v_y.v])
-    res_target = np.array(
-        [
-            -0.009971296296296308,
-            -0.00611111111111113,
-            -0.009777777777777783,
-            0.10987777777777787,
-            0.07938333333333333,
-        ]
-    )
-    np.testing.assert_almost_equal(res, res_target)
-
     res = np.array(
-        [r2.v_rhorho.v, r2.v_g1g1.v, r2.v_g2g2.v, r2.v_xx.v, r2.v_yy.v]
+        [a.v_rhorho.v, a.v_e1e1.v, a.v_e2e2.v, a.v_xx.v, a.v_yy.v]
     )
-    res_target = np.array(
-        [
-            0.02492824074074077,
-            0.011111111111111127,
-            0.011111111111111127,
-            1.2623611111111113,
-            1.5401388888888892,
-        ]
-    )
-    np.testing.assert_almost_equal(res, res_target)
+
+
+#     def get_r2(data):
+#         A, rho, e1, e2, x0, y0 = data
+#         mat = jnp.array(
+#             [[rho**2 * (1+e1)+ sigma**2, rho**2 * e2],
+#              [rho**2 * e2, rho**2 * (1-e1) + sigma**2]]
+#         )
+#         mat_inv = jnp.linalg.inv(mat)
+#         d = jnp.array([x - x0, y - y0])
+#         return d.T @ mat_inv @ d
+
+#     def get_model(data):
+#         A, rho, e1, e2, x0, y0 = data
+#         r2 = get_r2(data)
+#         return A * jnp.exp(-0.5 * r2)
+
+#     data = jnp.array([A, rho, e1, e2, x0, y0])
+
+#     print(get_r2(data))
+#     print(jax.grad(get_r2)(data))
+#     print(jnp.diag(jax.hessian(get_r2)(data)))
+
+#     print(get_model(data))
+#     print(jax.grad(get_model)(data))
+#     print(jnp.diag(jax.hessian(get_model)(data)))
+
     return

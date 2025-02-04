@@ -18,7 +18,7 @@ def test_ngmix_gaussian_fit():
         g1=0.02,
         g2=-0.02,
     )
-    psf_array = psf_obj.shift(0.5* scale,0.5 * scale).drawImage(
+    psf_array = psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(
         nx=nx, ny=ny, scale=scale,
     ).array
 
@@ -37,8 +37,8 @@ def test_ngmix_gaussian_fit():
     params0 = [
         anacal.math.qnumber(1.0, 0.0, 0.0, 0.0, 0.0),  # A
         anacal.math.qnumber(1.0, 0.0, 0.0, 0.0, 0.0),  # rho
-        anacal.math.qnumber(0.0, 0.0, 0.0, 0.0, 0.0),  # G1
-        anacal.math.qnumber(0.0, 0.0, 0.0, 0.0, 0.0),  # G2
+        anacal.math.qnumber(0.0, 0.0, 0.0, 0.0, 0.0),  # e1
+        anacal.math.qnumber(0.0, 0.0, 0.0, 0.0, 0.0),  # e2
         anacal.math.qnumber(0.0, 0.0, 0.0, 0.0, 0.0),  # x0
         anacal.math.qnumber(0.0, 0.0, 0.0, 0.0, 0.0),  # y0
     ]
@@ -51,8 +51,8 @@ def test_ngmix_gaussian_fit():
         psf_array=psf_array,
         num_epochs=15,
     )
-    e1 = fitter.model.Gamma1
-    e2 = fitter.model.Gamma2
+    e1 = fitter.model.e1
+    e2 = fitter.model.e2
     assert abs(e1.v / e1.g1 / 0.03 - 1.0) < 0.003
     assert abs(e2.v / e2.g2) < 1e-4
     return

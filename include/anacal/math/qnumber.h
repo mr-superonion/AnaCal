@@ -23,6 +23,14 @@ struct qnumber {
     )
         : v(v), g1(g1), g2(g2), x1(x1), x2(x2) {}
 
+    qnumber(const std::array<double, 5>& data) {
+        this->v = data[0];
+        this->g1 = data[1];
+        this->g2 = data[2];
+        this->x1 = data[3];
+        this->x2 = data[4];
+    };
+
     // Define addition for qnumber + qnumber
     qnumber operator+(const qnumber& other) const {
         return qnumber(
@@ -32,7 +40,7 @@ struct qnumber {
             this->x1 + other.x1,
             this->x2 + other.x2
         );
-    }
+    };
 
     // Define subtraction for qnumber - qnumber
     qnumber operator-(const qnumber& other) const {
@@ -43,7 +51,7 @@ struct qnumber {
             this->x1 - other.x1,
             this->x2 - other.x2
         );
-    }
+    };
 
     // Define unary negation for -qnumber
     qnumber operator-() const {
@@ -54,7 +62,7 @@ struct qnumber {
             -this->x1,
             -this->x2
         );
-    }
+    };
 
     // Define multiplication for qnumber * qnumber
     qnumber operator*(const qnumber& other) const {
@@ -65,7 +73,7 @@ struct qnumber {
             this->x1 * other.v + this->v * other.x1,
             this->x2 * other.v + this->v * other.x2
         );
-    }
+    };
 
     // Define division for qnumber / qnumber
     qnumber operator/(const qnumber& other) const {
@@ -77,11 +85,10 @@ struct qnumber {
             (other.v * this->x1 - this->v * other.x1) * f,
             (other.v * this->x2 - this->v * other.x2) * f
         );
-    }
+    };
 
-    // Friend function for addition: qnumber + T
-    template <typename T>
-    friend qnumber operator+(const qnumber& lhs, T rhs) {
+    // Friend function for addition: qnumber + double
+    friend qnumber operator+(const qnumber& lhs, double rhs) {
         return qnumber(
             lhs.v + rhs,
             lhs.g1,
@@ -89,11 +96,10 @@ struct qnumber {
             lhs.x1,
             lhs.x2
         );
-    }
+    };
 
-    // Friend functions for addition: T + qnumber
-    template <typename T>
-    friend qnumber operator+(T lhs, const qnumber& rhs) {
+    // Friend functions for addition: double + qnumber
+    friend qnumber operator+(double lhs, const qnumber& rhs) {
         return qnumber(
             lhs + rhs.v,
             rhs.g1,
@@ -101,11 +107,10 @@ struct qnumber {
             rhs.x1,
             rhs.x2
         );
-    }
+    };
 
-    // Friend function for subtraction: qnumber - T
-    template <typename T>
-    friend qnumber operator-(const qnumber& lhs, T rhs) {
+    // Friend function for subtraction: qnumber - double
+    friend qnumber operator-(const qnumber& lhs, double rhs) {
         return qnumber(
             lhs.v - rhs,
             lhs.g1,
@@ -113,11 +118,10 @@ struct qnumber {
             lhs.x1,
             lhs.x2
         );
-    }
+    };
 
-    // Friend functions for subtraction: T - qnumber
-    template <typename T>
-    friend qnumber operator-(T lhs, const qnumber& rhs) {
+    // Friend functions for subtraction: double - qnumber
+    friend qnumber operator-(double lhs, const qnumber& rhs) {
         return qnumber(
             lhs - rhs.v,
             -rhs.g1,
@@ -125,11 +129,10 @@ struct qnumber {
             -rhs.x1,
             -rhs.x2
         );
-    }
+    };
 
-    // Friend function for multiplication: qnumber * T
-    template <typename T>
-    friend qnumber operator*(const qnumber& lhs, T rhs) {
+    // Friend function for multiplication: qnumber * double
+    friend qnumber operator*(const qnumber& lhs, double rhs) {
         return qnumber(
             lhs.v * rhs,
             lhs.g1 * rhs,
@@ -137,11 +140,10 @@ struct qnumber {
             lhs.x1 * rhs,
             lhs.x2 * rhs
         );
-    }
+    };
 
-    // Friend functions for multiplication: T * qnumber
-    template <typename T>
-    friend qnumber operator*(T lhs, const qnumber& rhs) {
+    // Friend functions for multiplication: double * qnumber
+    friend qnumber operator*(double lhs, const qnumber& rhs) {
         return qnumber(
             lhs * rhs.v,
             lhs * rhs.g1,
@@ -149,11 +151,10 @@ struct qnumber {
             lhs * rhs.x1,
             lhs * rhs.x2
         );
-    }
+    };
 
-    // Friend function for division: qnumber / T
-    template <typename T>
-    friend qnumber operator/(const qnumber& lhs, T rhs) {
+    // Friend function for division: qnumber / double
+    friend qnumber operator/(const qnumber& lhs, double rhs) {
         return qnumber(
             lhs.v / rhs,
             lhs.g1 / rhs,
@@ -161,11 +162,10 @@ struct qnumber {
             lhs.x1 / rhs,
             lhs.x2 / rhs
         );
-    }
+    };
 
-    // Friend functions for division: T / qnumber
-    template <typename T>
-    friend qnumber operator/(T lhs, const qnumber& rhs) {
+    // Friend functions for division: double / qnumber
+    friend qnumber operator/(double lhs, const qnumber& rhs) {
         double f = -1.0 / (rhs.v * rhs.v);
         return qnumber(
             lhs / rhs.v,
@@ -174,14 +174,26 @@ struct qnumber {
             lhs * rhs.x1 * f,
             lhs * rhs.x2 * f
         );
-    }
+    };
+
+    // to array
+    py::array_t<double> to_array() const {
+        auto result = py::array_t<double>(5);
+        auto res_r = result.mutable_unchecked<1>();
+        res_r(0) = this->v;
+        res_r(1) = this->g1;
+        res_r(2) = this->g2;
+        res_r(3) = this->x1;
+        res_r(4) = this->x2;
+        return result;
+    };
 
     // Stream insertion operator for printing
     friend std::ostream& operator<<(std::ostream& os, const qnumber& q) {
         os << "v: " << q.v << ", g1: " << q.g1 << ", g2: " << q.g2
            << ", x1: " << q.x1 << ", x2: " << q.x2;
         return os;
-    }
+    };
 };
 
 inline qnumber exp(
@@ -197,33 +209,19 @@ inline qnumber exp(
     );
 }; // exponential function
 
-inline py::array_t<double> qnumber_to_array(
-    const qnumber& qn
+inline qnumber pow(
+    const qnumber& qn,
+    double n
 ) {
-    py::array_t<double> out(5);
-    auto out_r = out.mutable_unchecked<1>();
-    out_r(0) = qn.v;
-    out_r(1) = qn.g1;
-    out_r(2) = qn.g2;
-    out_r(3) = qn.x1;
-    out_r(4) = qn.x2;
-    return out;
-};  // qnumber_to_array
-
-
-inline qnumber array_to_qnumber(
-    const py::array_t<double>& array
-) {
-    auto array_r = array.unchecked<1>();
+    double tmp = n * std::pow(qn.v, n - 1);
     return qnumber(
-        array_r(0),
-        array_r(1),
-        array_r(2),
-        array_r(3),
-        array_r(4)
+        std::pow(qn.v, n),
+        tmp * qn.g1,
+        tmp * qn.g2,
+        tmp * qn.x1,
+        tmp * qn.x2
     );
-}; // array_to_qnumber
-
+}; // power function
 
 
 

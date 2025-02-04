@@ -14,30 +14,34 @@ pyExportNgmix(py::module_& m) {
             math::qnumber, math::qnumber, math::qnumber, math::qnumber,
             math::qnumber>(),
             py::arg("v"),
-            py::arg("v_A"), py::arg("v_rho"), py::arg("v_g1"), py::arg("v_g2"),
+            py::arg("v_A"), py::arg("v_rho"), py::arg("v_e1"), py::arg("v_e2"),
             py::arg("v_x"), py::arg("v_y"),
-            py::arg("v_AA"), py::arg("v_rhorho"), py::arg("v_g1g1"),
-            py::arg("v_g2g2"), py::arg("v_xx"), py::arg("v_yy")
+            py::arg("v_AA"), py::arg("v_rhorho"), py::arg("v_e1e1"),
+            py::arg("v_e2e2"), py::arg("v_xx"), py::arg("v_yy")
         )
         .def_readwrite("v", &ngmix::modelNumber::v)
         .def_readwrite("v_A", &ngmix::modelNumber::v_A)
         .def_readwrite("v_rho", &ngmix::modelNumber::v_rho)
-        .def_readwrite("v_g1", &ngmix::modelNumber::v_g1)
-        .def_readwrite("v_g2", &ngmix::modelNumber::v_g2)
+        .def_readwrite("v_e1", &ngmix::modelNumber::v_e1)
+        .def_readwrite("v_e2", &ngmix::modelNumber::v_e2)
         .def_readwrite("v_x", &ngmix::modelNumber::v_x)
         .def_readwrite("v_y", &ngmix::modelNumber::v_y)
         .def_readwrite("v_AA", &ngmix::modelNumber::v_AA)
         .def_readwrite("v_rhorho", &ngmix::modelNumber::v_rhorho)
-        .def_readwrite("v_g1g1", &ngmix::modelNumber::v_g1g1)
-        .def_readwrite("v_g2g2", &ngmix::modelNumber::v_g2g2)
+        .def_readwrite("v_e1e1", &ngmix::modelNumber::v_e1e1)
+        .def_readwrite("v_e2e2", &ngmix::modelNumber::v_e2e2)
         .def_readwrite("v_xx", &ngmix::modelNumber::v_xx)
         .def_readwrite("v_yy", &ngmix::modelNumber::v_yy);
 
     py::class_<ngmix::NgmixModel>(ngmix, "NgmixModel")
         .def(py::init<>())
+        .def_readonly("det", &ngmix::NgmixModel::det)
         .def("set_params", &ngmix::NgmixModel::set_params,
             "Sets the transform parameters",
             py::arg("params")
+        )
+        .def("prepare_grad", &ngmix::NgmixModel::prepare_grad,
+            "Prepare the gradient function"
         )
         .def("get_r2", &ngmix::NgmixModel::get_r2,
             "Returns the r squared value at x, y",
@@ -56,12 +60,12 @@ pyExportNgmix(py::module_& m) {
     py::class_<ngmix::NgmixGaussian, ngmix::NgmixModel>(ngmix, "NgmixGaussian")
         .def(py::init<double>(),
             "NgmixGaussian basis function",
-            py::arg("sigma")
+            py::arg("sigma_arcsec")
         )
         .def_readwrite("A", &ngmix::NgmixGaussian::A)
         .def_readwrite("rho", &ngmix::NgmixGaussian::rho)
-        .def_readwrite("Gamma1", &ngmix::NgmixGaussian::Gamma1)
-        .def_readwrite("Gamma2", &ngmix::NgmixGaussian::Gamma2)
+        .def_readwrite("e1", &ngmix::NgmixGaussian::e1)
+        .def_readwrite("e2", &ngmix::NgmixGaussian::e2)
         .def_readwrite("x0", &ngmix::NgmixGaussian::x0)
         .def_readwrite("y0", &ngmix::NgmixGaussian::y0);
 

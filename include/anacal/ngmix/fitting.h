@@ -64,22 +64,22 @@ public:
         const modelNumber& loss
     ) {
         this->model.A = this->model.A - (
-            loss.v_A / loss.v_AA / 2.0
+            loss.v_A / loss.v_AA / 4.0
         );
         this->model.rho = this->model.rho - (
-            loss.v_rho / loss.v_rhorho / 2.0
+            loss.v_rho / loss.v_rhorho / 4.0
         );
-        this->model.Gamma1 = this->model.Gamma1 - (
-            loss.v_g1 / loss.v_g1g1 / 2.0
+        this->model.e1 = this->model.e1 - (
+            loss.v_e1 / loss.v_e1e1 / 4.0
         );
-        this->model.Gamma2 = this->model.Gamma2 - (
-            loss.v_g2 / loss.v_g2g2 / 2.0
+        this->model.e2 = this->model.e2 - (
+            loss.v_e2 / loss.v_e2e2 / 4.0
         );
         this->model.x0 = this->model.x0 - (
-            loss.v_x  / loss.v_xx / 2.0
+            loss.v_x  / loss.v_xx / 4.0
         );
         this->model.y0 = this->model.y0 - (
-            loss.v_y  / loss.v_yy / 2.0
+            loss.v_y  / loss.v_yy / 4.0
         );
     };
 
@@ -102,6 +102,7 @@ public:
         this->model.set_params(params0);
         // Iterative optimization loop
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
+            this->model.prepare_grad();
             modelNumber loss = this->get_loss(data);
             this->update_model_params(loss);
         }
