@@ -2,6 +2,7 @@
 
 
 namespace anacal {
+namespace psf {
 
     BasePsf::BasePsf(): crun(true) {
         // Constructor implementation. Can be empty if nothing to initialize.
@@ -92,5 +93,5 @@ namespace anacal {
             .def_readonly("crun", &PyPsf::crun);
     }
 
-
-}
+} // end of psf
+} // end of anacal

@@ -104,7 +104,6 @@ class FpfsTask(FpfsKernel):
         fthres (float): flux threshold
         pthres (float): peak threshold
         omega_v (float): smoothness parameter for pixel difference
-        omega_v (float): smoothness parameter for pixel difference
         noise_array (NDArray|None): pure noise image
         mask_array (NDArray|None): mask image
         star_cat (NDArray|None): bright star catalog

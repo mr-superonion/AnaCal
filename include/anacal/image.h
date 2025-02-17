@@ -133,12 +133,6 @@ private:
 
     int nx2, ny2;
     int kx_length, ky_length;
-    bool store_kernel;
-    py::array_t<std::complex<double>> gauss_ker;
-    py::array_t<std::complex<double>> gauss_g1_ker;
-    py::array_t<std::complex<double>> gauss_g2_ker;
-    py::array_t<std::complex<double>> gauss_x1_ker;
-    py::array_t<std::complex<double>> gauss_x2_ker;
     ImageQ(const ImageQ&) = delete;
     ImageQ& operator=(const ImageQ&) = delete;
 public:
@@ -148,8 +142,7 @@ public:
         double scale,
         double sigma_arcsec,
         double klim,
-        bool use_estimate = true,
-        bool store_kernel = false
+        bool use_estimate = true
     ) :
         nx(nx), ny(ny), scale(scale), use_estimate(use_estimate),
         img_obj(nx, ny, scale, use_estimate),
@@ -157,6 +150,7 @@ public:
         gauss_model(1.0 / sigma_arcsec),
         gauss_g1_model(1.0 / sigma_arcsec),
         gauss_g2_model(1.0 / sigma_arcsec)
+
     {
         if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
             throw std::runtime_error(
@@ -168,47 +162,11 @@ public:
         this->kx_length = nx / 2 + 1;
         this->ky_length = ny;
         this->klim = klim;
-        this->store_kernel = store_kernel;
-
-        double dkx = 2.0 * M_PI / nx / scale;
-        double dky = 2.0 * M_PI / ny / scale;
-        if (store_kernel) {
-            gauss_ker = py::array_t<std::complex<double>>({this->ky_length, this->kx_length});
-            gauss_g1_ker = py::array_t<std::complex<double>>({this->ky_length, this->kx_length});
-            gauss_g2_ker = py::array_t<std::complex<double>>({this->ky_length, this->kx_length});
-            gauss_x1_ker = py::array_t<std::complex<double>>({this->ky_length, this->kx_length});
-            gauss_x2_ker = py::array_t<std::complex<double>>({this->ky_length, this->kx_length});
-
-            auto k_r = gauss_ker.mutable_unchecked<2>();
-            auto g1k_r = gauss_g1_ker.mutable_unchecked<2>();
-            auto g2k_r = gauss_g2_ker.mutable_unchecked<2>();
-            auto x1k_r = gauss_x1_ker.mutable_unchecked<2>();
-            auto x2k_r = gauss_x2_ker.mutable_unchecked<2>();
-
-
-            for (int j = 0; j < this->ky_length; ++j) {
-                double ky = ((j < this->ny2) ? j : (j - ny)) * dky ;
-                for (int i = 0; i < kx_length; ++i) {
-                    double kx = i * dkx;
-                    k_r(j, i) = this->gauss_model.apply(kx, ky);
-                    g1k_r(j, i) = this->gauss_g1_model.apply(kx, ky);
-                    g2k_r(j, i) = this->gauss_g2_model.apply(kx, ky);
-                    x1k_r(j, i) = this->gauss_x1_model.apply(kx, ky);
-                    x2k_r(j, i) = this->gauss_x2_model.apply(kx, ky);
-                }
-            }
-        } else {
-            gauss_ker = py::array_t<std::complex<double>>(0);
-            gauss_g1_ker = py::array_t<std::complex<double>>(0);
-            gauss_g2_ker = py::array_t<std::complex<double>>(0);
-            gauss_x1_ker = py::array_t<std::complex<double>>(0);
-            gauss_x2_ker = py::array_t<std::complex<double>>(0);
-        }
         return;
     };
 
-    py::array_t<double>
-    prepare_qnumber_image(
+    std::vector<math::qnumber>
+    prepare_qnumber_vector(
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
@@ -226,13 +184,10 @@ public:
         // Deconvolve the PSF
         img_obj.deconvolve(parr, klim);
         // Convolve Gaussian
-        if (store_kernel) {
-            img_obj.filter(gauss_ker);
-        } else {
-            img_obj.filter(gauss_model);
-        }
+        img_obj.filter(gauss_model);
         py::array_t<std::complex<double>> imgcov_f = img_obj.draw_f();
 
+        std::optional<py::array_t<std::complex<double>>> imgcov_f_n;
         if (noise_array.has_value()){
             img_obj.set_r(psf_array, -1, -1, true);
             img_obj.fft();
@@ -245,24 +200,20 @@ public:
             // Deconvolve the PSF
             img_obj.deconvolve(parr_n, klim);
             // Convolve Gaussian
-            if (store_kernel) {
-                img_obj.filter(gauss_ker);
-            } else {
-                img_obj.filter(gauss_model);
-            }
-            const py::array_t<std::complex<double>> imgcov_f_n = img_obj.draw_f();
+            img_obj.filter(gauss_model);
+            py::array_t<std::complex<double>> tmp_n = img_obj.draw_f();
 
             auto r = imgcov_f.mutable_unchecked<2>();
-            auto r_n = imgcov_f_n.unchecked<2>();
+            auto r_n = tmp_n.unchecked<2>();
             for (int j = 0; j < ky_length ; ++j) {
                 for (int i = 0; i < kx_length ; ++i) {
                     r(j, i) = r(j, i) + r_n(j, i);
                 }
             }
+            imgcov_f_n = tmp_n;
         }
-        auto result = py::array_t<double>({5, ny, nx});
-        auto r = result.mutable_unchecked<3>();
 
+        std::vector<math::qnumber> result(this->ny * this->nx);
         // v
         {
             img_obj.set_f(imgcov_f);
@@ -271,7 +222,18 @@ public:
             auto tmp_r = tmp.unchecked<2>();
             for (ssize_t j = 0; j < this->ny; ++j) {
                 for (ssize_t i = 0; i < this->nx; ++i) {
-                    r(0, j, i) = tmp_r(j, i);
+                    ssize_t index = j * this->nx + i;
+                    result[index].v = tmp_r(j, i);
+                }
+            }
+        }
+
+        if (imgcov_f_n) {
+            auto r = imgcov_f.mutable_unchecked<2>();
+            auto r_n = imgcov_f_n.value().unchecked<2>();
+            for (int j = 0; j < ky_length ; ++j) {
+                for (int i = 0; i < kx_length ; ++i) {
+                    r(j, i) = r(j, i) - 2.0 * r_n(j, i);
                 }
             }
         }
@@ -279,17 +241,14 @@ public:
         // g1
         {
             img_obj.set_f(imgcov_f);
-            if (store_kernel) {
-                img_obj.filter(gauss_g1_ker);
-            } else {
-                img_obj.filter(gauss_g1_model);
-            }
+            img_obj.filter(gauss_g1_model);
             img_obj.ifft();
             py::array_t<double> tmp = img_obj.draw_r();
             auto tmp_r = tmp.unchecked<2>();
             for (ssize_t j = 0; j < this->ny; ++j) {
                 for (ssize_t i = 0; i < this->nx; ++i) {
-                    r(1, j, i) = tmp_r(j, i);
+                    ssize_t index = j * this->nx + i;
+                    result[index].g1 = tmp_r(j, i);
                 }
             }
         }
@@ -297,17 +256,14 @@ public:
         // g2
         {
             img_obj.set_f(imgcov_f);
-            if (store_kernel) {
-                img_obj.filter(gauss_g2_ker);
-            } else {
-                img_obj.filter(gauss_g2_model);
-            }
+            img_obj.filter(gauss_g2_model);
             img_obj.ifft();
             py::array_t<double> tmp = img_obj.draw_r();
             auto tmp_r = tmp.unchecked<2>();
             for (ssize_t j = 0; j < this->ny; ++j) {
                 for (ssize_t i = 0; i < this->nx; ++i) {
-                    r(2, j, i) = tmp_r(j, i);
+                    ssize_t index = j * this->nx + i;
+                    result[index].g2 = tmp_r(j, i);
                 }
             }
         }
@@ -315,17 +271,14 @@ public:
         // x1
         {
             img_obj.set_f(imgcov_f);
-            if (store_kernel) {
-                img_obj.filter(gauss_x1_ker);
-            } else {
-                img_obj.filter(gauss_x1_model);
-            }
+            img_obj.filter(gauss_x1_model);
             img_obj.ifft();
             py::array_t<double> tmp = img_obj.draw_r();
             auto tmp_r = tmp.unchecked<2>();
             for (ssize_t j = 0; j < this->ny; ++j) {
                 for (ssize_t i = 0; i < this->nx; ++i) {
-                    r(3, j, i) = tmp_r(j, i);
+                    ssize_t index = j * this->nx + i;
+                    result[index].x1 = tmp_r(j, i);
                 }
             }
         }
@@ -333,17 +286,14 @@ public:
         // x2
         {
             img_obj.set_f(imgcov_f);
-            if (store_kernel) {
-                img_obj.filter(gauss_x2_ker);
-            } else {
-                img_obj.filter(gauss_x2_model);
-            }
+            img_obj.filter(gauss_x2_model);
             img_obj.ifft();
             py::array_t<double> tmp = img_obj.draw_r();
             auto tmp_r = tmp.unchecked<2>();
             for (ssize_t j = 0; j < this->ny; ++j) {
                 for (ssize_t i = 0; i < this->nx; ++i) {
-                    r(4, j, i) = tmp_r(j, i);
+                    ssize_t index = j * this->nx + i;
+                    result[index].x2 = tmp_r(j, i);
                 }
             }
         }
@@ -352,48 +302,50 @@ public:
         for (ssize_t j = 0; j < this->ny; ++j) {
             double y = (j - this->ny2) * this->scale;
             for (ssize_t i = 0; i < this->nx; ++i) {
+                ssize_t index = j * this->nx + i;
                 double x = (i - this->nx2) * this->scale;
-                r(1, j, i) = r(1, j, i) + x * r(3, j, i) - y * r(4, j, i);
-                r(2, j, i) = r(2, j, i) + x * r(4, j, i) + y * r(3, j, i);
+                result[index].g1 = result[index].g1 + (
+                    x * result[index].x1 - y * result[index].x2
+                );
+                result[index].g2 = result[index].g2 + (
+                    x * result[index].x2 + y * result[index].x1
+                );
             }
         }
         return result;
     };
 
-    std::vector<math::qnumber>
-    prepare_qnumber_vector(
+    py::array_t<double>
+    prepare_qnumber_image(
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
         int xcen=-1,
         int ycen=-1
     ) {
+        auto result = py::array_t<double>({5, ny, nx});
+        auto r = result.mutable_unchecked<3>();
 
-        py::array_t<double> qimage = prepare_qnumber_image(
+        std::vector<math::qnumber> qvec = prepare_qnumber_vector(
             img_array,
             psf_array,
             noise_array,
             xcen,
             ycen
         );
-
-        std::vector<math::qnumber> result(this->ny * this->nx);
-        auto q_r = qimage.unchecked<3>();
         for (ssize_t j = 0; j < this->ny; ++j) {
             for (ssize_t i = 0; i < this->nx; ++i) {
-                ssize_t index = j * this->ny + i;
-                result[index] = math::qnumber(
-                    q_r(0, j, i),
-                    q_r(1, j, i),
-                    q_r(2, j, i),
-                    q_r(3, j, i),
-                    q_r(4, j, i)
-                );
+                ssize_t index = j * this->nx + i;
+                r(0, j, i) = qvec[index].v;
+                r(1, j, i) = qvec[index].g1;
+                r(2, j, i) = qvec[index].g2;
+                r(3, j, i) = qvec[index].x1;
+                r(4, j, i) = qvec[index].x2;
             }
         }
         return result;
-
     };
+
 
     ImageQ(ImageQ&& other) noexcept = default;
     ImageQ& operator=(ImageQ&& other) noexcept = default;

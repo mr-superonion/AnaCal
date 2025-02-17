@@ -90,7 +90,7 @@ namespace anacal {
         measure_source(
             const py::array_t<double>& gal_array,
             const py::array_t<std::complex<double>>& filter_image,
-            const BasePsf& psf_obj,
+            const psf::BasePsf& psf_obj,
             const std::optional<py::array_t<FpfsPeaks>>& det=std::nullopt,
             bool do_rotate=false
         );

@@ -7,10 +7,10 @@ namespace anacal {
         pyExportModel(m);
         pyExportImage(m);
         pyExportFpfs(m);
-        pyExportNoise(m);
-        pyExportPsf(m);
-        pyExportMask(m);
-        pyExportMath(m);
-        pyExportNgmix(m);
+        math::pyExportMath(m);
+        noise::pyExportNoise(m);
+        psf::pyExportPsf(m);
+        mask::pyExportMask(m);
+        ngmix::pyExportNgmix(m);
     }
 }

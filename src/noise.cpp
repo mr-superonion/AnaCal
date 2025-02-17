@@ -2,6 +2,8 @@
 
 
 namespace anacal {
+namespace noise {
+
     py::array_t<double>
     simulate_noise(
         unsigned int seed,
@@ -120,4 +122,5 @@ namespace anacal {
             py::arg("scale")
         );
     }
-}
+} // noise
+} // anacal

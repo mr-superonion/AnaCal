@@ -7,7 +7,9 @@
 #include <pybind11/operators.h>
 
 namespace anacal {
+namespace math {
     void pyExportMath(py::module_& m);
+}
 }
 
 #endif // ANACAL_MATH_H

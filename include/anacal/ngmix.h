@@ -5,7 +5,9 @@
 #include "ngmix/fitting.h"
 
 namespace anacal {
+namespace ngmix {
     void pyExportNgmix(py::module_& m);
+}
 }
 
 #endif // ANACAL_NGMIX_H

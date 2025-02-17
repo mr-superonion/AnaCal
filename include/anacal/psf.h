@@ -4,6 +4,7 @@
 #include "stdafx.h"
 
 namespace anacal {
+namespace psf {
     class BasePsf {
     public:
         BasePsf();
@@ -53,5 +54,6 @@ namespace anacal {
     };
 
     void pyExportPsf(py::module& m);
-}
+} // end of psf
+} // end of anacal
 #endif // ANACAL_PSF_H

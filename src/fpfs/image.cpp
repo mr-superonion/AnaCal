@@ -253,7 +253,7 @@ FpfsImage::detect_source(
     }
 
     if (mask_array.has_value()) {
-        detection = add_pixel_mask_column(
+        detection = mask::add_pixel_mask_column(
             detection,
             *mask_array,
             sigma_arcsec,
@@ -323,7 +323,7 @@ py::array_t<double>
 FpfsImage::measure_source(
     const py::array_t<double>& gal_array,
     const py::array_t<std::complex<double>>& filter_image,
-    const BasePsf& psf_obj,
+    const psf::BasePsf& psf_obj,
     const std::optional<py::array_t<FpfsPeaks>>& det,
     bool do_rotate
 ) {
@@ -452,7 +452,7 @@ pyExportFpfsImage(py::module_& fpfs) {
             py::overload_cast<
                 const py::array_t<double>&,
                 const py::array_t<std::complex<double>>&,
-                const BasePsf&,
+                const psf::BasePsf&,
                 const std::optional<py::array_t<FpfsPeaks>>&,
                 bool
             >(&FpfsImage::measure_source),
