@@ -5,14 +5,6 @@
 
 namespace anacal {
 
-struct detPeak {
-    double y=0.0;
-    double x=0.0;
-    int mask_value=0;
-    bool down_weight=false;
-    math::qnumber wdet;
-};
-
 Detector::Detector(
     int nx,
     int ny,
@@ -22,7 +14,7 @@ Detector::Detector(
     const py::array_t<double>& psf_array,
     bool use_estimate,
     int npix_overlap,
-    int bound
+    int bound_image
 ): img_obj(nx, ny, scale, use_estimate), psf_array(psf_array) {
     if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
         throw std::runtime_error(
@@ -43,7 +35,7 @@ Detector::Detector(
         );
     }
     this->npix_overlap = npix_overlap;
-    this->bound = bound;
+    this->bound_image = bound_image;
     return;
 }
 
@@ -60,6 +52,9 @@ Detector::find_peaks(
     int xcen,
     int ycen
 ) {
+
+    arr_ny = gal_array.shape(0);
+    arr_nx = gal_array.shape(1);
     // Do not use detections that is too close to boundary
     int bound_patch = std::max(this->npix_overlap / 2, 3);
     auto r = gal_conv.unchecked<2>();
@@ -108,8 +103,8 @@ Detector::find_peaks(
             bool sel = (
                 (c > fcut) &&
                 (wdet > wdet_cut) &&
-                (y > this->bound) && (y < this->ny_array - this->bound) &&
-                (x > this->bound) && (x < this->nx_array - this->bound)
+                (y > this->bound_image) && (y < arr_ny - this->bound_image) &&
+                (x > this->bound_image) && (x < arr_nx - this->bound_image)
             );
             if (sel) {
                 bool is_peak = (
@@ -125,10 +120,10 @@ Detector::find_peaks(
     return;
 }
 
-
-std::vector<detPeak>
-Detector::detect_source(
+std::vector<table::galNumber>
+Detector::detect_from_block(
     py::array_t<double>& gal_array,
+    py::array_t<double>& psf_array,
     double fthres,
     double pthres,
     double v_min,
@@ -136,20 +131,16 @@ Detector::detect_source(
     const std::optional<py::array_t<double>>& noise_array
 ) {
 
-    auto r = gal_array.unchecked<2>();
-    this->ny_array = r.shape(0);
-    this->nx_array = r.shape(1);
-
-    py::array_t<double> gal_conv = this->smooth_image(
-        gal_array,
+    std::vector<math::qnumber> data = this->image.prepare_qnumber_vector(
+        img_array,
+        psf_array,
         noise_array,
         xcen,
         ycen
     );
 
-    this->find_peaks(
-        peaks,
-        gal_conv,
+    std::vector<table::galNumber> catalog = this->find_peaks(
+        data,
         fthres,
         pthres,
         std_m00,
@@ -158,10 +149,12 @@ Detector::detect_source(
         xcen,
         ycen
     );
-    return detection;
+    return catalog;
 }
 
+void pyExportDetector(py::module_& m);
 
-}
+} // detector
+} // anacal
 
 #endif // ANACAL_DETECTOR

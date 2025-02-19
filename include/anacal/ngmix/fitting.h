@@ -3,8 +3,8 @@
 
 #include "../image.h"
 #include "../math.h"
-#include "../mask.h"
 #include "../stdafx.h"
+#include "../table.h"
 
 
 namespace anacal {
@@ -14,7 +14,6 @@ class GaussFit {
 public:
     // block dimension
     int nx, ny;
-    double nx2, ny2;
     // stamp dimension
     int stamp_size, ss2;
     double sigma_arcsec;
@@ -44,8 +43,6 @@ public:
         if ((nx % 2 != 0) || (ny % 2 != 0)) {
             throw std::invalid_argument("nx or ny is not even number");
         }
-        this->nx2 = nx / 2;
-        this->ny2 = ny / 2;
         this->stamp_size = stamp_size;
         this->ss2 = stamp_size / 2;
         this->sigma_arcsec = sigma_arcsec;
@@ -168,38 +165,37 @@ public:
         return loss;
     };
 
-    std::vector<galNumber> process_block(
-        const std::vector<galNumber> & catalog,
+    std::vector<table::galNumber> process_block(
+        const std::vector<table::galNumber> & catalog,
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
         int num_epochs = 5,
-        int xcen=-1,
-        int ycen=-1,
-        double variance = 1.0
+        double variance = 1.0,
+        std::optional<table::block> block=std::nullopt
     ) {
+
         int arr_ny = img_array.shape(0);
         int arr_nx = img_array.shape(1);
-        if ((nx != arr_nx) || (ny != arr_ny)) {
-            throw std::invalid_argument("image_array has wrong shape");
-        }
-        if (xcen < 0 || xcen > arr_nx) {
-            xcen = arr_nx / 2;
-        }
-        if (ycen < 0 || ycen > arr_ny) {
-            ycen = arr_ny / 2;
+        table::block bb;
+        if (block) {
+            bb = *block;
+        } else {
+            bb = table::get_block_center_list(
+                arr_nx, arr_ny, arr_nx, arr_ny, 0
+            )[0];
         }
         std::vector<math::qnumber> data = this->image.prepare_qnumber_vector(
             img_array,
             psf_array,
             noise_array,
-            xcen,
-            ycen
+            bb.xcen,
+            bb.ycen
         );
         size_t ngal = catalog.size();
-        std::vector<galNumber> result(ngal);
+        std::vector<table::galNumber> result(ngal);
         for (size_t i = 0; i < ngal; i++) {
-            galNumber src = catalog[i];
+            table::galNumber src = catalog[i];
             // Iterative optimization loop
             for (int epoch = 0; epoch < num_epochs; ++epoch) {
                 int x_stamp = static_cast<int>(

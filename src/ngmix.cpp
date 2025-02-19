@@ -49,17 +49,6 @@ pyExportNgmix(py::module_& m) {
         .def_readwrite("v_x1x1", &lossNumber::v_x1x1)
         .def_readwrite("v_x2x2", &lossNumber::v_x2x2);
 
-    py::class_<galNumber>(ngmix, "galNumber")
-        .def(py::init<>())
-        .def(py::init<
-            modelNumber, math::qnumber, lossNumber
-            >(),
-            py::arg("params"), py::arg("wedt"), py::arg("loss")
-        )
-        .def_readwrite("params", &galNumber::params)
-        .def_readwrite("wdet", &galNumber::wdet)
-        .def_readwrite("loss", &galNumber::loss);
-
     py::class_<NgmixModel>(ngmix, "NgmixModel")
         .def(py::init<>())
         .def_readonly("det", &NgmixModel::det)
@@ -131,9 +120,8 @@ pyExportNgmix(py::module_& m) {
             py::arg("psf_array"),
             py::arg("noise_array")=py::none(),
             py::arg("num_epochs")=5,
-            py::arg("xcen")=-1,
-            py::arg("ycen")=-1,
-            py::arg("variance")=1.0
+            py::arg("variance")=1.0,
+            py::arg("block")=py::none()
         );
 }
 

@@ -12,5 +12,6 @@ namespace anacal {
         psf::pyExportPsf(m);
         mask::pyExportMask(m);
         ngmix::pyExportNgmix(m);
+        table::pyExportTable(m);
     }
 }

@@ -6,19 +6,6 @@
 namespace anacal {
 namespace ngmix {
 
-
-struct frDeriv {
-    // f(r) and its derivatives
-    math::qnumber fr, dfr, ddfr;
-
-    frDeriv() = default;
-
-    frDeriv(
-        math::qnumber fr, math::qnumber dfr, math::qnumber ddfr
-    )
-        : fr(fr), dfr(dfr), ddfr(ddfr) {}
-};
-
 struct lossNumber {
     // value with derivatives to Gaussian model parameters
     math::qnumber v, v_A, v_t, v_e1, v_e2, v_x1, v_x2;
@@ -106,7 +93,7 @@ struct lossNumber {
 struct modelNumber {
     // value with derivatives to Gaussian model parameters
     math::qnumber A = {1.0, 0.0, 0.0, 0.0, 0.0};
-    math::qnumber t = {-1.0, 0.0, 0.0, 0.0, 0.0};
+    math::qnumber t = {-0.5, 0.0, 0.0, 0.0, 0.0};
     math::qnumber e1, e2, x1, x2;
 
     modelNumber() = default;
@@ -121,21 +108,18 @@ struct modelNumber {
     ) : A(A), t(t), e1(e1), e2(e2), x1(x1), x2(x2) {}
 };
 
-struct galNumber {
-    // value with derivatives to Gaussian model parameters
-    modelNumber params;
-    math::qnumber wdet;
-    lossNumber loss;
 
-    galNumber() = default;
+struct frDeriv {
+    // f(r) and its derivatives
+    math::qnumber fr, dfr, ddfr;
 
-    galNumber(
-        modelNumber params,
-        math::qnumber wdet,
-        lossNumber loss
-    ) : params(params), wdet(wdet), loss(loss) {}
+    frDeriv() = default;
+
+    frDeriv(
+        math::qnumber fr, math::qnumber dfr, math::qnumber ddfr
+    )
+        : fr(fr), dfr(dfr), ddfr(ddfr) {}
 };
-
 
 class NgmixModel {
 private:
@@ -441,6 +425,6 @@ public:
     };
 };
 
-}
-}
+} // ngmix
+} // anacal
 #endif // ANACAL_NGMIX_RMODEL_H

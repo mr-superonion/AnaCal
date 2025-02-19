@@ -7,5 +7,6 @@
 #include "anacal/psf.h"
 #include "anacal/mask.h"
 #include "anacal/ngmix.h"
+#include "anacal/table.h"
 
 #endif // ANACAL_H

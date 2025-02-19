@@ -57,7 +57,7 @@ def test_ngmix_gaussian_fit1():
     )
 
     # initialize parameters
-    src = anacal.ngmix.galNumber()
+    src = anacal.table.galNumber()
     src.params.x1.v = 32 * scale
     src.params.x2.v = 32 * scale
     catalog = [src]
@@ -71,6 +71,7 @@ def test_ngmix_gaussian_fit1():
     )
     e1 = result[0].params.e1
     e2 = result[0].params.e2
+    print(result[0].params.x1.v, img_array[32, 32] / scale ** 2.0)
     np.testing.assert_allclose(
         result[0].params.x1.v / scale - 32,
         -0.1, atol=1e-6
@@ -117,7 +118,7 @@ def test_ngmix_gaussian_fit4():
     # initialize parameters
     catalog = []
     for center in centers:
-        src = anacal.ngmix.galNumber()
+        src = anacal.table.galNumber()
         src.params.x1.v = center[0] * scale
         src.params.x2.v = center[1] * scale
         src.params.A.v = 0.48
@@ -128,12 +129,12 @@ def test_ngmix_gaussian_fit4():
         catalog=catalog,
         img_array=img_array,
         psf_array=psf_array,
-        num_epochs=10,
+        num_epochs=30,
         variance=1.0 / scale ** 4.0,
     )
-    for i in range(4):
-        e1 = result[i].params.e1
-        e2 = result[i].params.e2
+    for rr in result:
+        e1 = rr.params.e1
+        e2 = rr.params.e2
         assert abs(e1.v / e1.g1 / 0.03 - 1.0) < 0.003
         assert abs(e2.v / e2.g2) < 1e-4
     return
