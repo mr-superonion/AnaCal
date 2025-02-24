@@ -8,5 +8,6 @@
 #include "anacal/mask.h"
 #include "anacal/ngmix.h"
 #include "anacal/table.h"
+#include "anacal/detector.h"
 
 #endif // ANACAL_H

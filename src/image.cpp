@@ -781,20 +781,20 @@ pyExportImage(py::module& m) {
         .def("draw_f", &Image::draw_f,
             "This function draws the image's real fft"
         );
-    py::class_<ImageQ>(image, "ImageQ")
+    py::class_<ImageT>(image, "ImageT")
         .def(py::init<
                 int, int, double, double, double, bool
             >(),
-            "Initialize the ImageQ object using an ndarray",
+            "Initialize the ImageT object using an ndarray",
             py::arg("nx"), py::arg("ny"),
             py::arg("scale"),
             py::arg("sigma_arcsec"),
             py::arg("klim"),
             py::arg("use_estimate")=true
         )
-        .def("prepare_qnumber_image",
-            &ImageQ::prepare_qnumber_image,
-            "prepare the qnumber image",
+        .def("prepare_tnumber_image",
+            &ImageT::prepare_tnumber_image,
+            "prepare the tnumber image",
             py::arg("gal_array"),
             py::arg("psf_array"),
             py::arg("noise_array")=py::none(),

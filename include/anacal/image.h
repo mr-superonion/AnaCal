@@ -3,6 +3,7 @@
 
 #include "model.h"
 #include "math.h"
+#include "geometry.h"
 #include <fftw3.h>
 
 namespace anacal {
@@ -115,7 +116,7 @@ deconvolve_filter(
 );
 
 
-class ImageQ {
+class ImageT {
 private:
     // Preventing copy (implement these if you need copy semantics)
     double klim;
@@ -133,10 +134,10 @@ private:
 
     int nx2, ny2;
     int kx_length, ky_length;
-    ImageQ(const ImageQ&) = delete;
-    ImageQ& operator=(const ImageQ&) = delete;
+    ImageT(const ImageT&) = delete;
+    ImageT& operator=(const ImageT&) = delete;
 public:
-    ImageQ(
+    ImageT(
         int nx,
         int ny,
         double scale,
@@ -154,7 +155,7 @@ public:
     {
         if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
             throw std::runtime_error(
-                "FPFS Error: invalid input sigma_arcsec"
+                "ImageT Error: invalid input sigma_arcsec"
             );
         }
         this->nx2 = nx / 2;
@@ -165,8 +166,8 @@ public:
         return;
     };
 
-    std::vector<math::qnumber>
-    prepare_qnumber_vector(
+    std::vector<math::tnumber>
+    prepare_tnumber_vector(
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
@@ -187,6 +188,7 @@ public:
         img_obj.filter(gauss_model);
         py::array_t<std::complex<double>> imgcov_f = img_obj.draw_f();
 
+        // image is derived from image + noise
         std::optional<py::array_t<std::complex<double>>> imgcov_f_n;
         if (noise_array.has_value()){
             img_obj.set_r(psf_array, -1, -1, true);
@@ -201,33 +203,31 @@ public:
             img_obj.deconvolve(parr_n, klim);
             // Convolve Gaussian
             img_obj.filter(gauss_model);
-            py::array_t<std::complex<double>> tmp_n = img_obj.draw_f();
+            imgcov_f_n = img_obj.draw_f();
 
             auto r = imgcov_f.mutable_unchecked<2>();
-            auto r_n = tmp_n.unchecked<2>();
+            auto r_n = imgcov_f_n.value().unchecked<2>();
             for (int j = 0; j < ky_length ; ++j) {
                 for (int i = 0; i < kx_length ; ++i) {
                     r(j, i) = r(j, i) + r_n(j, i);
                 }
             }
-            imgcov_f_n = tmp_n;
         }
 
-        std::vector<math::qnumber> result(this->ny * this->nx);
+        std::vector<math::tnumber> result(this->ny * this->nx);
         // v
         {
             img_obj.set_f(imgcov_f);
             img_obj.ifft();
-            py::array_t<double> tmp = img_obj.draw_r();
-            auto tmp_r = tmp.unchecked<2>();
-            for (ssize_t j = 0; j < this->ny; ++j) {
-                for (ssize_t i = 0; i < this->nx; ++i) {
-                    ssize_t index = j * this->nx + i;
-                    result[index].v = tmp_r(j, i);
+            auto tmp_r = img_obj.draw_r().unchecked<2>();
+            for (ssize_t j = 0, idx = 0; j < this->ny; ++j) {
+                for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
+                    result[idx].v = tmp_r(j, i);
                 }
             }
         }
 
+        // shear response are derived from image - noise
         if (imgcov_f_n) {
             auto r = imgcov_f.mutable_unchecked<2>();
             auto r_n = imgcov_f_n.value().unchecked<2>();
@@ -243,12 +243,10 @@ public:
             img_obj.set_f(imgcov_f);
             img_obj.filter(gauss_g1_model);
             img_obj.ifft();
-            py::array_t<double> tmp = img_obj.draw_r();
-            auto tmp_r = tmp.unchecked<2>();
-            for (ssize_t j = 0; j < this->ny; ++j) {
-                for (ssize_t i = 0; i < this->nx; ++i) {
-                    ssize_t index = j * this->nx + i;
-                    result[index].g1 = tmp_r(j, i);
+            auto tmp_r = img_obj.draw_r().unchecked<2>();
+            for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
+                for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
+                    result[idx].g1 = tmp_r(j, i);
                 }
             }
         }
@@ -258,12 +256,10 @@ public:
             img_obj.set_f(imgcov_f);
             img_obj.filter(gauss_g2_model);
             img_obj.ifft();
-            py::array_t<double> tmp = img_obj.draw_r();
-            auto tmp_r = tmp.unchecked<2>();
-            for (ssize_t j = 0; j < this->ny; ++j) {
-                for (ssize_t i = 0; i < this->nx; ++i) {
-                    ssize_t index = j * this->nx + i;
-                    result[index].g2 = tmp_r(j, i);
+            auto tmp_r = img_obj.draw_r().unchecked<2>();
+            for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
+                for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
+                    result[idx].g2 = tmp_r(j, i);
                 }
             }
         }
@@ -275,83 +271,97 @@ public:
             img_obj.ifft();
             py::array_t<double> tmp = img_obj.draw_r();
             auto tmp_r = tmp.unchecked<2>();
-            for (ssize_t j = 0; j < this->ny; ++j) {
-                for (ssize_t i = 0; i < this->nx; ++i) {
-                    ssize_t index = j * this->nx + i;
-                    result[index].x1 = tmp_r(j, i);
+            for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
+                double y = (j - this->ny2) * this->scale;
+                for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
+                    double x = (i - this->nx2) * this->scale;
+                    result[idx].g1 = result[idx].g1 + x * tmp_r(j, i);
+                    result[idx].g2 = result[idx].g2 + y * tmp_r(j, i);
                 }
             }
         }
 
-        // x2
+         // x2
         {
             img_obj.set_f(imgcov_f);
             img_obj.filter(gauss_x2_model);
             img_obj.ifft();
             py::array_t<double> tmp = img_obj.draw_r();
             auto tmp_r = tmp.unchecked<2>();
-            for (ssize_t j = 0; j < this->ny; ++j) {
-                for (ssize_t i = 0; i < this->nx; ++i) {
-                    ssize_t index = j * this->nx + i;
-                    result[index].x2 = tmp_r(j, i);
+            for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
+                double y = (j - this->ny2) * this->scale;
+                for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
+                    double x = (i - this->nx2) * this->scale;
+                    result[idx].g1 = result[idx].g1 - y * tmp_r(j, i);
+                    result[idx].g2 = result[idx].g2 + x * tmp_r(j, i);
                 }
             }
         }
 
-        // update two shear responses
-        for (ssize_t j = 0; j < this->ny; ++j) {
-            double y = (j - this->ny2) * this->scale;
-            for (ssize_t i = 0; i < this->nx; ++i) {
-                ssize_t index = j * this->nx + i;
-                double x = (i - this->nx2) * this->scale;
-                result[index].g1 = result[index].g1 + (
-                    x * result[index].x1 - y * result[index].x2
-                );
-                result[index].g2 = result[index].g2 + (
-                    x * result[index].x2 + y * result[index].x1
-                );
-            }
-        }
         return result;
     };
 
     py::array_t<double>
-    prepare_qnumber_image(
+    prepare_tnumber_image(
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
         int xcen=-1,
         int ycen=-1
     ) {
-        auto result = py::array_t<double>({5, ny, nx});
+        auto result = py::array_t<double>({3, ny, nx});
         auto r = result.mutable_unchecked<3>();
 
-        std::vector<math::qnumber> qvec = prepare_qnumber_vector(
+        std::vector<math::tnumber> tvec = prepare_tnumber_vector(
             img_array,
             psf_array,
             noise_array,
             xcen,
             ycen
         );
-        for (ssize_t j = 0; j < this->ny; ++j) {
-            for (ssize_t i = 0; i < this->nx; ++i) {
-                ssize_t index = j * this->nx + i;
-                r(0, j, i) = qvec[index].v;
-                r(1, j, i) = qvec[index].g1;
-                r(2, j, i) = qvec[index].g2;
-                r(3, j, i) = qvec[index].x1;
-                r(4, j, i) = qvec[index].x2;
+        for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
+            for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
+                r(0, j, i) = tvec[idx].v;
+                r(1, j, i) = tvec[idx].g1;
+                r(2, j, i) = tvec[idx].g2;
             }
         }
         return result;
     };
 
 
-    ImageQ(ImageQ&& other) noexcept = default;
-    ImageQ& operator=(ImageQ&& other) noexcept = default;
+    ImageT(ImageT&& other) noexcept = default;
+    ImageT& operator=(ImageT&& other) noexcept = default;
 
-    ~ImageQ() = default;
+    ~ImageT() = default;
 };
+
+inline std::vector<math::tnumber>
+prepare_data_block(
+    const py::array_t<double>& img_array,
+    const py::array_t<double>& psf_array,
+    double sigma_arcsec,
+    const geometry::block & block,
+    const std::optional<py::array_t<double>>& noise_array=std::nullopt
+){
+    ImageT img_obj(
+        block.nx,
+        block.ny,
+        block.scale,
+        sigma_arcsec,
+        1000.0,         // very large klim
+        true            // us estimate in FFTW
+    );
+    return img_obj.prepare_tnumber_vector(
+        img_array,
+        psf_array,
+        noise_array,
+        block.xcen,
+        block.ycen
+    );
+};
+
+
 
 void pyExportImage(py::module& m);
 }

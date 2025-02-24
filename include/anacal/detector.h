@@ -1,156 +1,155 @@
 #ifndef ANACAL_DETECTOR
 #define ANACAL_DETECTOR
 
-#include "anacal.h"
+#include "image.h"
+#include "math.h"
+#include "stdafx.h"
+#include "table.h"
 
 namespace anacal {
+namespace detector {
 
-Detector::Detector(
-    int nx,
-    int ny,
-    double scale,
-    double sigma_arcsec,
-    double klim,
+inline std::vector<table::galNumber>
+find_peaks(
+    const py::array_t<double>& img_array,
     const py::array_t<double>& psf_array,
-    bool use_estimate,
-    int npix_overlap,
-    int bound_image
-): img_obj(nx, ny, scale, use_estimate), psf_array(psf_array) {
-    if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
-        throw std::runtime_error(
-            "Detector Error: invalid input sigma_arcsec"
-        );
-    }
-    this->nx = nx;
-    this->ny = ny;
-    this->nx2 = nx / 2;
-    this->ny2 = ny / 2;
-    this->scale = scale;
-    this->sigma_arcsec = sigma_arcsec;
-    this->klim = klim;
-    this->sigma_f = 1.0 / sigma_arcsec;
-    if ((npix_overlap % 2 != 0) || (npix_overlap < 0)) {
-        throw std::runtime_error(
-            "Detector Error: npix_overlap is not an even number"
-        );
-    }
-    this->npix_overlap = npix_overlap;
-    this->bound_image = bound_image;
-    return;
-}
-
-
-void
-Detector::find_peaks(
-    std::vector<detPeak>>& peaks,
-    const py::array_t<double>& gal_conv,
-    double fthres,
-    double pthres,
-    double std_m00,
+    double sigma_arcsec,
+    double f_min,
+    double omega_f,
     double v_min,
     double omega_v,
-    int xcen,
-    int ycen
+    double pthres,
+    const geometry::block & block,
+    const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+    int image_bound=0
 ) {
+    std::vector<math::tnumber> data = prepare_data_block(
+        img_array,
+        psf_array,
+        sigma_arcsec,
+        block,
+        noise_array
+    );
 
-    arr_ny = gal_array.shape(0);
-    arr_nx = gal_array.shape(1);
-    // Do not use detections that is too close to boundary
-    int bound_patch = std::max(this->npix_overlap / 2, 3);
-    auto r = gal_conv.unchecked<2>();
-    if ((r.shape(0) != this->ny)  || (r.shape(1) != this->nx)) {
-        throw std::runtime_error(
-            "FPFS Error: convolved image has wrong shape in find_peaks."
-        );
-    }
+    // Secondary peak cut
+    double f_cut = f_min - omega_f;
+    double v_cut = v_min - omega_v;
+    double wdet_cut = pthres - fpfs_det_sigma2;
 
-    int ymin = ycen - this->ny2;
-    int xmin = xcen - this->nx2;
+    int image_ny = img_array.shape(0);
+    int image_nx = img_array.shape(1);
 
-    double fcut = fthres * std_m00;
-    double wdet_cut = pthres - fpfs_det_sigma2 - 0.02;
+    int ystart = std::max(image_bound, block.ymin_in);
+    int yend = std::min(image_ny - image_bound, block.ymax_in);
+    int xstart = std::max(image_bound, block.xmin_in);
+    int xend = std::min(image_nx - image_bound, block.xmax_in);
 
-    if (std::fabs(wdet_cut) < 1e-10) {
-        wdet_cut = 0.0;
-    }
-    if (wdet_cut < 0.0) {
-        throw std::runtime_error(
-            "FPFS Error: The second selection threshold pthres is too small."
-        );
-    }
     int drmax2 = 1;
-
-    for (int j = bound_patch; j < this->ny - bound_patch; ++j) {
-        for (int i = bound_patch; i < this->nx - bound_patch; ++i) {
-            double wdet = 1.0;
-            double c = r(j, i);
+    std::vector<table::galNumber> catalog;
+    for (int y = ystart; y < yend; ++y) {
+        int j = y - block.ymin;
+        for (int x = xstart; x < xend; ++x) {
+            int i = x - block.xmin;
+            // data index
+            int index = j * block.nx + i;
+            int id1 = j * block.nx + (i + 1);
+            int id2 = j * block.nx + (i - 1);
+            int id3 = (j + 1) * block.nx + i;
+            int id4 = (j - 1) * block.nx + i;
+            if (
+                (data[index].v <= f_cut) ||
+                (data[index].v - data[id1].v <= v_cut) ||
+                (data[index].v - data[id2].v <= v_cut) ||
+                (data[index].v - data[id3].v <= v_cut) ||
+                (data[index].v - data[id4].v <= v_cut)
+            ) {
+                continue;
+            }
+            // pixel value greater than threshold
+            math::tnumber wdet(1.0, 0.0, 0.0);
             for (int dj = -1; dj <= 1; dj++) {
                 int dj2 = dj * dj;
                 for (int di = -1; di <= 1; di++) {
                     int dr2 = di * di + dj2;
                     if ((dr2 <= drmax2) && (dr2 != 0)) {
-                        double zv = math::ssfunc2(
-                            c - r(j + dj, i + di),
+                        int index2 = (j + dj) * block.nx + (i + di);
+                        wdet = wdet * math::ssfunc2(
+                            data[index] - data[index2],
                             v_min,
                             omega_v
                         );
-                        wdet = wdet * zv;
                     }
                 }
             }
-            int y = j + ymin;
-            int x = i + xmin;
-            bool sel = (
-                (c > fcut) &&
-                (wdet > wdet_cut) &&
-                (y > this->bound_image) && (y < arr_ny - this->bound_image) &&
-                (x > this->bound_image) && (x < arr_nx - this->bound_image)
-            );
-            if (sel) {
-                bool is_peak = (
-                    (c > r(j-1, i)) &&
-                    (c > r(j+1, i)) &&
-                    (c > r(j, i-1)) &&
-                    (c > r(j, i+1))
+            if (wdet.v > wdet_cut) {
+                table::galNumber src;
+                src.model.x1.v = x * block.scale;
+                src.model.x2.v = y * block.scale;
+                src.model.A = data[index];
+                src.is_peak = (
+                    (data[index].v > data[id1].v) &&
+                    (data[index].v > data[id2].v) &&
+                    (data[index].v > data[id3].v) &&
+                    (data[index].v > data[id4].v)
                 );
-                peaks.emplace_back(y, x, is_peak);
+                src.wdet = math::ssfunc2(
+                    wdet,
+                    pthres,
+                    fpfs_det_sigma2
+                ) * math::ssfunc2(
+                    data[index],
+                    f_min,
+                    omega_f
+                );
+                catalog.push_back(src);
             }
         }
     }
-    return;
-}
-
-std::vector<table::galNumber>
-Detector::detect_from_block(
-    py::array_t<double>& gal_array,
-    py::array_t<double>& psf_array,
-    double fthres,
-    double pthres,
-    double v_min,
-    double omega_v,
-    const std::optional<py::array_t<double>>& noise_array
-) {
-
-    std::vector<math::qnumber> data = this->image.prepare_qnumber_vector(
-        img_array,
-        psf_array,
-        noise_array,
-        xcen,
-        ycen
-    );
-
-    std::vector<table::galNumber> catalog = this->find_peaks(
-        data,
-        fthres,
-        pthres,
-        std_m00,
-        v_min,
-        omega_v,
-        xcen,
-        ycen
-    );
     return catalog;
 }
+
+/* inline std::vector<table::galNumber> */
+/* run( */
+/*     py::array_t<double>& img_array, */
+/*     py::array_t<double>& psf_array, */
+/*     double f_min, */
+/*     double omega_f, */
+/*     double v_min, */
+/*     double omega_v, */
+/*     double pthres, */
+/*     const std::optional<std::vector<geometry::block>>& block_list=std::nullopt, */
+/*     const std::optional<py::array_t<double>>& noise_array=std::nullopt */
+/* ) { */
+
+/*     int image_ny = img_array.shape(0); */
+/*     int image_nx = img_array.shape(1); */
+
+/*     std::vector<geometry::block> bb_list; */
+/*     if (block_list) { */
+/*         bb_list = *block_list; */
+/*     } else { */
+/*         bb_list = geometry::get_block_center_list( */
+/*             image_nx, image_ny, image_nx, image_ny, 0 */
+/*         ); */
+/*     } */
+
+/*     std::vector<table::galNumber> catalog; */
+/*     for (const geometry::block & bb: bb_list) { */
+/*         this->find_peaks( */
+/*             data, */
+/*             catalog, */
+/*             f_min, */
+/*             omega_f, */
+/*             v_min, */
+/*             omega_v, */
+/*             pthres, */
+/*             bb, */
+/*             image_nx, */
+/*             image_ny */
+/*         ); */
+/*     } */
+/*     return catalog; */
+/* } */
 
 void pyExportDetector(py::module_& m);
 

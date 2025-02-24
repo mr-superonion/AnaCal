@@ -1,0 +1,198 @@
+#ifndef ANACAL_MATH_QN_H
+#define ANACAL_MATH_QN_H
+
+#include <cmath>
+#include <ostream>
+
+// Class for Quintuple number
+
+namespace anacal {
+namespace math {
+
+struct tnumber {
+    double v  = 0.0;
+    double g1 = 0.0;
+    double g2 = 0.0;
+
+    tnumber() = default;
+
+    tnumber(
+        double v
+    ) : v(v), g1(0), g2(0) {}
+
+    tnumber(
+        double v, double g1, double g2
+    ) : v(v), g1(g1), g2(g2) {}
+
+    tnumber(const std::array<double, 3>& data) {
+        this->v = data[0];
+        this->g1 = data[1];
+        this->g2 = data[2];
+    };
+
+    // Define addition for tnumber + tnumber
+    tnumber operator+(const tnumber& other) const {
+        return tnumber(
+            this->v + other.v,
+            this->g1 + other.g1,
+            this->g2 + other.g2
+        );
+    };
+
+    // Define subtraction for tnumber - tnumber
+    tnumber operator-(const tnumber& other) const {
+        return tnumber(
+            this->v - other.v,
+            this->g1 - other.g1,
+            this->g2 - other.g2
+        );
+    };
+
+    // Define unary negation for -tnumber
+    tnumber operator-() const {
+        return tnumber(
+            -this->v,
+            -this->g1,
+            -this->g2
+        );
+    };
+
+    // Define multiplication for tnumber * tnumber
+    tnumber operator*(const tnumber& other) const {
+        return tnumber(
+            this->v * other.v,
+            this->g1 * other.v + this->v * other.g1,
+            this->g2 * other.v + this->v * other.g2
+        );
+    };
+
+    // Define division for tnumber / tnumber
+    tnumber operator/(const tnumber& other) const {
+        double f = 1.0 / (other.v * other.v);
+        return tnumber(
+            this->v / other.v,
+            (other.v * this->g1 - this->v * other.g1) * f,
+            (other.v * this->g2 - this->v * other.g2) * f
+        );
+    };
+
+    // Friend function for addition: tnumber + double
+    friend tnumber operator+(const tnumber& lhs, double rhs) {
+        return tnumber(
+            lhs.v + rhs,
+            lhs.g1,
+            lhs.g2
+        );
+    };
+
+    // Friend functions for addition: double + tnumber
+    friend tnumber operator+(double lhs, const tnumber& rhs) {
+        return tnumber(
+            lhs + rhs.v,
+            rhs.g1,
+            rhs.g2
+        );
+    };
+
+    // Friend function for subtraction: tnumber - double
+    friend tnumber operator-(const tnumber& lhs, double rhs) {
+        return tnumber(
+            lhs.v - rhs,
+            lhs.g1,
+            lhs.g2
+        );
+    };
+
+    // Friend functions for subtraction: double - tnumber
+    friend tnumber operator-(double lhs, const tnumber& rhs) {
+        return tnumber(
+            lhs - rhs.v,
+            -rhs.g1,
+            -rhs.g2
+        );
+    };
+
+    // Friend function for multiplication: tnumber * double
+    friend tnumber operator*(const tnumber& lhs, double rhs) {
+        return tnumber(
+            lhs.v * rhs,
+            lhs.g1 * rhs,
+            lhs.g2 * rhs
+        );
+    };
+
+    // Friend functions for multiplication: double * tnumber
+    friend tnumber operator*(double lhs, const tnumber& rhs) {
+        return tnumber(
+            lhs * rhs.v,
+            lhs * rhs.g1,
+            lhs * rhs.g2
+        );
+    };
+
+    // Friend function for division: tnumber / double
+    friend tnumber operator/(const tnumber& lhs, double rhs) {
+        return tnumber(
+            lhs.v / rhs,
+            lhs.g1 / rhs,
+            lhs.g2 / rhs
+        );
+    };
+
+    // Friend functions for division: double / tnumber
+    friend tnumber operator/(double lhs, const tnumber& rhs) {
+        double f = -1.0 / (rhs.v * rhs.v);
+        return tnumber(
+            lhs / rhs.v,
+            lhs * rhs.g1 * f,
+            lhs * rhs.g2 * f
+        );
+    };
+
+    // to array
+    py::array_t<double> to_array() const {
+        auto result = py::array_t<double>(3);
+        auto res_r = result.mutable_unchecked<1>();
+        res_r(0) = this->v;
+        res_r(1) = this->g1;
+        res_r(2) = this->g2;
+        return result;
+    };
+
+    // Stream insertion operator for printing
+    friend std::ostream& operator<<(std::ostream& os, const tnumber& q) {
+        os << "v: " << q.v << ", g1: " << q.g1 << ", g2: " << q.g2;
+        return os;
+    };
+};
+
+inline tnumber exp(
+    const tnumber& tn
+) {
+    double expv = std::exp(tn.v);
+    return tnumber(
+        expv,
+        expv * tn.g1,
+        expv * tn.g2
+    );
+}; // exponential function
+
+inline tnumber pow(
+    const tnumber& tn,
+    double n
+) {
+    double tmp0 = std::pow(tn.v, n - 1);
+    double tmp = n * tmp0;
+    return tnumber(
+        tmp0 * tn.v,
+        tmp * tn.g1,
+        tmp * tn.g2
+    );
+}; // power function
+
+
+
+} // namespace math
+} // namespace anacal
+
+#endif // ANACAL_MATH_QN_H

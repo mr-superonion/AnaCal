@@ -13,5 +13,7 @@ namespace anacal {
         mask::pyExportMask(m);
         ngmix::pyExportNgmix(m);
         table::pyExportTable(m);
+        detector::pyExportDetector(m);
+        geometry::pyExportGeometry(m);
     }
 }

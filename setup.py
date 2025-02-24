@@ -114,6 +114,8 @@ ext_modules.append(
             "src/math.cpp",
             "src/ngmix.cpp",
             "src/table.cpp",
+            "src/detector.cpp",
+            "src/geometry.cpp",
         ],
         include_dirs=include_dirs,
         libraries=["fftw3"],

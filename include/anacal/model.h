@@ -150,6 +150,7 @@ public:
 
     std::complex<double>
     fValue(double kx, double ky) const {
+        (void)ky;
         double ipart = -kx;
         return std::complex<double>(0.0, ipart);
     };
@@ -164,6 +165,7 @@ public:
 
     std::complex<double>
     fValue(double kx, double ky) const {
+        (void)kx;
         double ipart = -ky;
         return std::complex<double>(0.0, ipart);
     };
