@@ -38,33 +38,42 @@ def test_ngmix_gaussian():
         [a.v.v, a.v_A.v, a.v_t.v, a.v_e1.v, a.v_e2.v, a.v_x1.v, a.v_x2.v]
     )
     res_target = np.array(
-        [0.07322712, 0.0, -0.14226285, 0.10567132, 0.04298667, 0.03905975,
-         -0.19967676]
+        [
+            0.07322712,
+            0.0,
+            -0.14226285,
+            0.10567132,
+            0.04298667,
+            0.03905975,
+            -0.19967676,
+        ]
     )
     np.testing.assert_almost_equal(res, res_target)
 
-    res = np.array(
-        [a.v_tt.v, a.v_e1e1.v, a.v_e2e2.v, a.v_x1x1.v, a.v_x2x2.v]
-    )
+    res = np.array([a.v_tt.v, a.v_e1e1.v, a.v_e2e2.v, a.v_x1x1.v, a.v_x2x2.v])
     res_target = np.array(
         [0.26834528, 0.48734336, 0.14561384, 0.12810377, 0.37523164]
     )
     np.testing.assert_almost_equal(res, res_target)
-
 
     a = gauss_model.get_model(x, y, kernel)
     res = np.array(
         [a.v.v, a.v_A.v, a.v_t.v, a.v_e1.v, a.v_e2.v, a.v_x1.v, a.v_x2.v]
     )
     res_target = np.array(
-        [0.022742572507201804, 0.01624469, -0.04270841, 0.01428684, -0.0076135,
-         -0.00044416, 0.00227058]
+        [
+            0.022742572507201804,
+            0.01624469,
+            -0.04270841,
+            0.01428684,
+            -0.0076135,
+            -0.00044416,
+            0.00227058,
+        ]
     )
     np.testing.assert_almost_equal(res, res_target)
 
-    res = np.array(
-        [a.v_tt.v, a.v_e1e1.v, a.v_e2e2.v, a.v_x1x1.v, a.v_x2x2.v]
-    )
+    res = np.array([a.v_tt.v, a.v_e1e1.v, a.v_e2e2.v, a.v_x1x1.v, a.v_x2x2.v])
     res_target = np.array(
         [0.07490922, 0.05550646, 0.03633384, -0.00144803, -0.00404018]
     )

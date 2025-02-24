@@ -7,7 +7,6 @@ def test_tmatrix6():
     for qn in tmatrix_zeros.data:
         assert qn.v == 0
 
-
     matrix = np.random.rand(36).reshape((6, 6)) + np.eye(6)
     tmatrix = anacal.math.tmatrix6(matrix)
     matrix_flatten = matrix.flatten()
@@ -91,7 +90,6 @@ def test_tmatrix8():
     tmatrix_zeros = anacal.math.tmatrix8()
     for qn in tmatrix_zeros.data:
         assert qn.v == 0
-
 
     matrix = np.random.rand(64).reshape((8, 8)) + np.eye(8)
     tmatrix = anacal.math.tmatrix8(matrix)
