@@ -11,6 +11,7 @@ from ._anacal import (
     noise,
     psf,
     table,
+    task,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "ngmix",
     "detector",
     "geometry",
+    "task",
 ]

@@ -9,5 +9,6 @@
 #include "anacal/ngmix.h"
 #include "anacal/table.h"
 #include "anacal/detector.h"
+#include "anacal/task.h"
 
 #endif // ANACAL_H

@@ -116,6 +116,7 @@ ext_modules.append(
             "src/table.cpp",
             "src/detector.cpp",
             "src/geometry.cpp",
+            "src/task.cpp",
         ],
         include_dirs=include_dirs,
         libraries=["fftw3"],

@@ -292,11 +292,11 @@ public:
         // Second-order derivatives
         res.v_AA = (
             math::pow(theory_val.v_A, 2.0) * mul
-            + tmp * theory_val.v_AA
+            /* + tmp * theory_val.v_AA */
         );
         res.v_tt = (
             math::pow(theory_val.v_t, 2.0) * mul
-            + tmp * theory_val.v_tt
+            /* + tmp * theory_val.v_tt */
         );
         res.v_e1e1 = (
             math::pow(theory_val.v_e1, 2.0) * mul
@@ -320,7 +320,8 @@ public:
     inline void
     update_model_params(
         const math::lossNumber& loss,
-        const modelPrior& prior
+        const modelPrior& prior,
+        int epoch
     ) {
         this->A = this->A - (
             (loss.v_A + prior.w_A * (this->A - prior.mu_A)) / (
@@ -330,7 +331,8 @@ public:
         /* std::cout << this->A.v << loss.v_AA.v << std::endl; */
         this->t = this->t - (
             (loss.v_t + prior.w_t * (this->t - prior.mu_t)) / (
-                loss.v_tt + prior.w_t
+               math::pow(loss.v, 0.5) * std::exp(-epoch)
+               + (loss.v_tt + prior.w_t)
             )
         );
         this->e1 = this->e1 - (

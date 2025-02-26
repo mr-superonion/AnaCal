@@ -108,49 +108,6 @@ find_peaks(
     return catalog;
 }
 
-/* inline std::vector<table::galNumber> */
-/* run( */
-/*     py::array_t<double>& img_array, */
-/*     py::array_t<double>& psf_array, */
-/*     double f_min, */
-/*     double omega_f, */
-/*     double v_min, */
-/*     double omega_v, */
-/*     double pthres, */
-/*     const std::optional<std::vector<geometry::block>>& block_list=std::nullopt, */
-/*     const std::optional<py::array_t<double>>& noise_array=std::nullopt */
-/* ) { */
-
-/*     int image_ny = img_array.shape(0); */
-/*     int image_nx = img_array.shape(1); */
-
-/*     std::vector<geometry::block> bb_list; */
-/*     if (block_list) { */
-/*         bb_list = *block_list; */
-/*     } else { */
-/*         bb_list = geometry::get_block_center_list( */
-/*             image_nx, image_ny, image_nx, image_ny, 0 */
-/*         ); */
-/*     } */
-
-/*     std::vector<table::galNumber> catalog; */
-/*     for (const geometry::block & bb: bb_list) { */
-/*         this->find_peaks( */
-/*             data, */
-/*             catalog, */
-/*             f_min, */
-/*             omega_f, */
-/*             v_min, */
-/*             omega_v, */
-/*             pthres, */
-/*             bb, */
-/*             image_nx, */
-/*             image_ny */
-/*         ); */
-/*     } */
-/*     return catalog; */
-/* } */
-
 void pyExportDetector(py::module_& m);
 
 } // detector

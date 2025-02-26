@@ -26,12 +26,6 @@ public:
         grids_1d(stamp_size, 0.0)
     {
         this->ss2 = stamp_size / 2;
-        if (stamp_size % 2 != 0 ) {
-            throw std::invalid_argument("nx or ny is not even number");
-        }
-        if (sigma_arcsec <= 0) {
-            throw std::invalid_argument("sigma_arcsec must be positive");
-        }
         for (int i = 0; i < this->stamp_size; ++i) {
             this->grids_1d[i] = (i - this->ss2) * this->scale;
             // range is [-ss2, ss2)
@@ -87,23 +81,44 @@ public:
     };
 
     inline std::vector<table::galNumber>
+    process_block_impl(
+        const std::vector<table::galNumber>& catalog,
+        const std::vector<math::tnumber> & data,
+        const modelPrior & prior,
+        int num_epochs,
+        double variance,
+        geometry::block block
+    ) {
+        std::vector<table::galNumber> result;
+        result.reserve(catalog.size());
+        for (table::galNumber src : catalog) {
+            for (int epoch = 0; epoch < num_epochs; ++epoch) {
+                src.loss = this->accumulate_loss(
+                    data, variance, src.model, block
+                );
+                src.model.update_model_params(src.loss, prior, epoch);
+            }
+            result.push_back(src);
+        }
+        return result;
+    };
+
+    inline std::vector<table::galNumber>
     process_block(
         const std::vector<table::galNumber>& catalog,
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
-        const modelPrior prior,
+        const modelPrior & prior,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
         int num_epochs = 5,
         double variance = 1.0,
         std::optional<geometry::block> block=std::nullopt
     ) {
-
         int image_ny = img_array.shape(0);
         int image_nx = img_array.shape(1);
         geometry::block bb = block ? *block : geometry::get_block_list(
             image_nx, image_ny, image_nx, image_ny, 0, this->scale
         )[0];
-
         std::vector<math::tnumber> data = prepare_data_block(
             img_array,
             psf_array,
@@ -111,20 +126,15 @@ public:
             bb,
             noise_array
         );
-        std::vector<table::galNumber> result;
-        result.reserve(catalog.size());
-        for (table::galNumber src : catalog) {
-            for (int epoch = 0; epoch < num_epochs; ++epoch) {
-                src.loss = this->accumulate_loss(
-                    data, variance, src.model, bb
-                );
-                src.model.update_model_params(src.loss, prior);
-            }
-            result.push_back(src);
-        }
-        return result;
+        return process_block_impl(
+            catalog,
+            data,
+            prior,
+            num_epochs,
+            variance,
+            bb
+        );
     };
-
 };
 
 } // end of ngmix

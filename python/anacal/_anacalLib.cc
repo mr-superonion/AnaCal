@@ -15,5 +15,6 @@ namespace anacal {
         table::pyExportTable(m);
         detector::pyExportDetector(m);
         geometry::pyExportGeometry(m);
+        task::pyExportTask(m);
     }
 }
