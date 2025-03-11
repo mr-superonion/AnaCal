@@ -24,7 +24,7 @@ find_peaks(
     const std::optional<py::array_t<double>>& noise_array=std::nullopt,
     int image_bound=0
 ) {
-    std::vector<math::tnumber> data = prepare_data_block(
+    std::vector<math::qnumber> data = prepare_data_block(
         img_array,
         psf_array,
         sigma_arcsec,
@@ -69,7 +69,7 @@ find_peaks(
                 continue;
             }
             // pixel value greater than threshold
-            math::tnumber wdet = math::tnumber(1.0);
+            math::qnumber wdet = math::qnumber(1.0);
             for (int dj = -1; dj <= 1; dj++) {
                 int dj2 = dj * dj;
                 for (int di = -1; di <= 1; di++) {
@@ -94,7 +94,7 @@ find_peaks(
                     (data[index].v > data[id3].v) &&
                     (data[index].v > data[id4].v)
                 );
-                math::tnumber fluxdet;
+                math::qnumber fluxdet;
                 for (int dj = -drmax_flux; dj <= drmax_flux; dj++) {
                     int dj2 = dj * dj;
                     for (int di = -drmax_flux; di <= drmax_flux; di++) {

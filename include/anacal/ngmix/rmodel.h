@@ -7,42 +7,42 @@ namespace anacal {
 namespace ngmix {
 
 struct modelPrior {
-    math::tnumber w_A, w_t, w_e, w_x;
-    math::tnumber mu_A, mu_t;
-    math::tnumber mu_e1, mu_e2;
-    math::tnumber mu_x1, mu_x2;
+    math::qnumber w_A, w_t, w_e, w_x;
+    math::qnumber mu_A, mu_t;
+    math::qnumber mu_e1, mu_e2;
+    math::qnumber mu_x1, mu_x2;
 
     modelPrior() = default;
 
-    inline void set_sigma_A(math::tnumber sigma_A){
+    inline void set_sigma_A(math::qnumber sigma_A){
         this->w_A = 2.0 / math::pow(sigma_A, 2.0);
     }; // loss is chi2
 
-    inline void set_sigma_t(math::tnumber sigma_t){
+    inline void set_sigma_t(math::qnumber sigma_t){
         this->w_t = 2.0 / math::pow(sigma_t, 2.0);
     }; // loss is chi2
 
-    inline void set_sigma_e(math::tnumber sigma_e){
+    inline void set_sigma_e(math::qnumber sigma_e){
         this->w_e = 2.0 / math::pow(sigma_e, 2.0);
     };
-    inline void set_sigma_x(math::tnumber sigma_x){
+    inline void set_sigma_x(math::qnumber sigma_x){
         this->w_x = 2.0 / math::pow(sigma_x, 2.0);
     };
 };
 
 struct modelKernel {
-    math::tnumber v_p0, v_p1, v_p2;
-    math::tnumber t_p0, t_p1, t_p2;
-    math::tnumber e1_p0, e1_p1, e1_p2;
-    math::tnumber e2_p0, e2_p1, e2_p2;
-    math::tnumber x1_p1, x1_p2, x2_p1, x2_p2;
-    math::tnumber tt_p0, tt_p1, tt_p2;
-    math::tnumber e1e1_p0, e1e1_p1, e1e1_p2;
-    math::tnumber e2e2_p0, e2e2_p1, e2e2_p2;
-    math::tnumber x1x1, x2x2;
+    math::qnumber v_p0, v_p1, v_p2;
+    math::qnumber t_p0, t_p1, t_p2;
+    math::qnumber e1_p0, e1_p1, e1_p2;
+    math::qnumber e2_p0, e2_p1, e2_p2;
+    math::qnumber x1_p1, x1_p2, x2_p1, x2_p2;
+    math::qnumber tt_p0, tt_p1, tt_p2;
+    math::qnumber e1e1_p0, e1e1_p1, e1e1_p2;
+    math::qnumber e2e2_p0, e2e2_p1, e2e2_p2;
+    math::qnumber x1x1, x2x2;
 
-    math::tnumber f, f_t, f_e1, f_e2;
-    math::tnumber f_tt, f_e1e1, f_e2e2;
+    math::qnumber f, f_t, f_e1, f_e2;
+    math::qnumber f_tt, f_e1e1, f_e2e2;
 
     double scale;
 
@@ -51,12 +51,12 @@ struct modelKernel {
 
 struct frDeriv {
     // f(r) and its derivatives
-    math::tnumber fr, dfr, ddfr;
+    math::qnumber fr, dfr, ddfr;
 
     frDeriv() = default;
 
     frDeriv(
-        math::tnumber fr, math::tnumber dfr, math::tnumber ddfr
+        math::qnumber fr, math::qnumber dfr, math::qnumber ddfr
     )
         : fr(fr), dfr(dfr), ddfr(ddfr) {}
 };
@@ -64,19 +64,19 @@ struct frDeriv {
 class NgmixGaussian {
 private:
     frDeriv get_fr(
-        math::tnumber r2
+        math::qnumber r2
     ) const {
-        math::tnumber fr = math::exp(r2 * (-0.5));
-        math::tnumber dfr = fr * (-0.5);
-        /* math::tnumber ddfr = dfr * (-0.5); */
-        math::tnumber ddfr;
+        math::qnumber fr = math::exp(r2 * (-0.5));
+        math::qnumber dfr = fr * (-0.5);
+        /* math::qnumber ddfr = dfr * (-0.5); */
+        math::qnumber ddfr;
         return frDeriv(fr, dfr, ddfr);
     };
 public:
     bool force_size, force_shape, force_center;
-    math::tnumber A = math::tnumber(1.0);
-    math::tnumber t = math::tnumber(-0.5);
-    math::tnumber e1, e2, x1, x2;   // parameters
+    math::qnumber A = math::qnumber(1.0);
+    math::qnumber t = math::qnumber(-0.5);
+    math::qnumber e1, e2, x1, x2;   // parameters
     NgmixGaussian(
         bool force_size=false,
         bool force_shape=false,
@@ -93,22 +93,22 @@ public:
         modelKernel kernel;
         kernel.scale = scale;
         double sigma2 = sigma_arcsec * sigma_arcsec;
-        math::tnumber rho = math::exp(this->t);
-        math::tnumber rho2 = math::pow(rho, 2.0);
-        math::tnumber rho4 = rho2 * rho2;
-        math::tnumber rho6 = rho2 * rho4;
-        math::tnumber rs2 = rho2 + sigma2;
-        math::tnumber e1e1 = math::pow(e1, 2);
-        math::tnumber e2e2 = math::pow(e2, 2);
-        math::tnumber e1e2 = e1 * e2;
-        math::tnumber ee = e1e1 + e2e2;
-        math::tnumber det = math::pow(rs2, 2) - ee * rho4;
-        math::tnumber det_inv = 1.0 / det;
-        math::tnumber det_inv0_5 = math::pow(det_inv, 0.5);
-        math::tnumber det_inv2 = math::pow(det_inv, 2.0);
-        math::tnumber det_inv3 = det_inv2 * det_inv;
+        math::qnumber rho = math::exp(this->t);
+        math::qnumber rho2 = math::pow(rho, 2.0);
+        math::qnumber rho4 = rho2 * rho2;
+        math::qnumber rho6 = rho2 * rho4;
+        math::qnumber rs2 = rho2 + sigma2;
+        math::qnumber e1e1 = math::pow(e1, 2);
+        math::qnumber e2e2 = math::pow(e2, 2);
+        math::qnumber e1e2 = e1 * e2;
+        math::qnumber ee = e1e1 + e2e2;
+        math::qnumber det = math::pow(rs2, 2) - ee * rho4;
+        math::qnumber det_inv = 1.0 / det;
+        math::qnumber det_inv0_5 = math::pow(det_inv, 0.5);
+        math::qnumber det_inv2 = math::pow(det_inv, 2.0);
+        math::qnumber det_inv3 = det_inv2 * det_inv;
 
-        math::tnumber tmp1 = rs2 - rho2 * ee;
+        math::qnumber tmp1 = rs2 - rho2 * ee;
 
         kernel.v_p0 = rs2 * det_inv;
         kernel.v_p1 = -e1 * rho2 * det_inv;
@@ -159,9 +159,9 @@ public:
         kernel.x1x1 = 2.0 * (rs2 - e1 * rho2) * det_inv;
         kernel.x2x2 = 2.0 * (rs2 + e1 * rho2) * det_inv;
 
-        math::tnumber r2ee = rho2 * (1.0 - ee);
-        math::tnumber tmp2 = 3.0 * r2ee + sigma2;
-        math::tnumber tmp3 = 8.0 * rho2 * pow(tmp1, 2) - det * tmp2;
+        math::qnumber r2ee = rho2 * (1.0 - ee);
+        math::qnumber tmp2 = 3.0 * r2ee + sigma2;
+        math::qnumber tmp3 = 8.0 * rho2 * pow(tmp1, 2) - det * tmp2;
 
         kernel.tt_p0 = -2.0 * (
             8.0 * rho2 * tmp1 * det_inv2
@@ -179,9 +179,9 @@ public:
             + det_inv
         ) * rho2 + kernel.t_p2;
 
-        math::tnumber det_inv1_5 = det_inv0_5 * det_inv;
-        math::tnumber det_inv2_5 = det_inv0_5 * det_inv2;
-        math::tnumber dtmp = one_over_pi * det_inv1_5;
+        math::qnumber det_inv1_5 = det_inv0_5 * det_inv;
+        math::qnumber det_inv2_5 = det_inv0_5 * det_inv2;
+        math::qnumber dtmp = one_over_pi * det_inv1_5;
 
         double scale2 = scale * scale;
         kernel.f = one_over_pi * 0.5 * det_inv0_5 * scale2;
@@ -212,13 +212,13 @@ public:
     ) const {
 
         // Center Shifting
-        math::tnumber xs = x - this->x1;
-        math::tnumber ys = y - this->x2;
+        math::qnumber xs = x - this->x1;
+        math::qnumber ys = y - this->x2;
 
         math::lossNumber result;
-        math::tnumber q0 = xs * xs + ys * ys;
-        math::tnumber q1 = xs * xs - ys * ys;
-        math::tnumber q2 = 2.0 * xs * ys;
+        math::qnumber q0 = xs * xs + ys * ys;
+        math::qnumber q1 = xs * xs - ys * ys;
+        math::qnumber q2 = 2.0 * xs * ys;
 
         result.v = c.v_p0 * q0 + c.v_p1 * q1 + c.v_p2 * q2;
         // First-order derivatives
@@ -265,7 +265,7 @@ public:
         fr.fr = fr.fr * this->A;
         fr.dfr = fr.dfr * this->A;
 
-        math::tnumber f1 = fr.dfr * c.f;
+        math::qnumber f1 = fr.dfr * c.f;
         // First-order derivatives
         if (!this->force_size) {
             res.v_t = f1 * r2.v_t + fr.fr * c.f_t;
@@ -304,30 +304,30 @@ public:
         return res;
     };
 
-    inline std::array<math::tnumber, 3> get_fpfs_moments(
-        math::tnumber img_val,
+    inline std::array<math::qnumber, 3> get_fpfs_moments(
+        math::qnumber img_val,
         double x, double y,
         const modelKernel& c
     ) const {
-        math::tnumber xs = x - this->x1;
-        math::tnumber ys = y - this->x2;
-        math::tnumber q0 = xs * xs + ys * ys;
-        math::tnumber q1 = xs * xs - ys * ys;
-        math::tnumber q2 = 2.0 * xs * ys;
-        math::tnumber r2 = c.v_p0 * q0 + c.v_p1 * q1 + c.v_p2 * q2;
-        math::tnumber model = this->A * math::exp(r2 * (-0.5)) * c.f * img_val;
+        math::qnumber xs = x - this->x1;
+        math::qnumber ys = y - this->x2;
+        math::qnumber q0 = xs * xs + ys * ys;
+        math::qnumber q1 = xs * xs - ys * ys;
+        math::qnumber q2 = 2.0 * xs * ys;
+        math::qnumber r2 = c.v_p0 * q0 + c.v_p1 * q1 + c.v_p2 * q2;
+        math::qnumber model = this->A * math::exp(r2 * (-0.5)) * c.f * img_val;
         return {model * q0, model * q1, model * q2};
     };
 
     inline math::lossNumber get_loss(
-        math::tnumber img_val,
+        math::qnumber img_val,
         double variance_val,
         double x, double y,
         const modelKernel & c
     ) const {
 
         math::lossNumber theory_val = this->get_model(x, y, c);
-        math::tnumber residual = img_val - theory_val.v;
+        math::qnumber residual = img_val - theory_val.v;
 
         math::lossNumber res;
 
@@ -335,7 +335,7 @@ public:
         double mul = 2.0 / variance_val;
 
         // First-order derivatives
-        math::tnumber tmp = -1.0 * residual * mul;
+        math::qnumber tmp = -1.0 * residual * mul;
         res.v_A =  tmp * theory_val.v_A ;
         if (!this->force_size) {
             res.v_t = tmp * theory_val.v_t;
@@ -391,7 +391,7 @@ public:
         int epoch,
         double variance_val=1.0
     ) {
-        math::tnumber damp = loss.v * 2.0 * std::exp(-epoch / 2.0);
+        math::qnumber damp = loss.v * 2.0 * std::exp(-epoch / 2.0);
         double ratio = 2.0 / variance_val;
         this->A = this->A - (
             (loss.v_A + prior.w_A * (this->A - prior.mu_A)) / (
@@ -431,7 +431,7 @@ public:
         }
     };
 
-    inline math::tnumber
+    inline math::qnumber
     get_flux_stamp(
         int nx,
         int ny,
@@ -447,7 +447,7 @@ public:
         modelKernel c = this->prepare_model(scale, sigma_arcsec);
         int nx2 = nx / 2;
         int ny2 = ny / 2;
-        math::tnumber flux;
+        math::qnumber flux;
         for (int j = 0; j < ny; ++j) {
             double y = (j - ny2 + y_stamp) * scale;
             for (int i = 0; i < nx; ++i) {
@@ -476,12 +476,12 @@ public:
         auto r = result.mutable_unchecked<3>();
         int nx2 = nx / 2;
         int ny2 = ny / 2;
-        math::tnumber flux;
+        math::qnumber flux;
         for (int j = 0; j < ny; ++j) {
             double y = (j - ny2 + y_stamp) * scale;
             for (int i = 0; i < nx; ++i) {
                 double x = (i - nx2 + x_stamp) * scale;
-                math::tnumber tn = this->get_model(x, y, c).v;
+                math::qnumber tn = this->get_model(x, y, c).v;
                 r(0, j, i) = tn.v;
                 r(1, j, i) = tn.g1;
                 r(2, j, i) = tn.g2;

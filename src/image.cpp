@@ -792,9 +792,9 @@ pyExportImage(py::module& m) {
             py::arg("klim"),
             py::arg("use_estimate")=true
         )
-        .def("prepare_tnumber_image",
-            &ImageT::prepare_tnumber_image,
-            "prepare the tnumber image",
+        .def("prepare_qnumber_image",
+            &ImageT::prepare_qnumber_image,
+            "prepare the qnumber image",
             py::arg("gal_array"),
             py::arg("psf_array"),
             py::arg("noise_array")=py::none(),

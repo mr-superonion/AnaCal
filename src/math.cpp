@@ -8,37 +8,37 @@ namespace math {
             "math",
             "submodule for Math"
         );
-        py::class_<tnumber>(math, "tnumber")
+        py::class_<qnumber>(math, "qnumber")
             .def(py::init<>())
             .def(
                 py::init<double>(),
-                "initialize tnumber with double number as value",
+                "initialize qnumber with double number as value",
                 py::arg("v")
             )
             .def(
                 py::init<double, double, double, double, double>(),
-                "initialize tnumber with double numbers",
+                "initialize qnumber with double numbers",
                 py::arg("v"), py::arg("g1"), py::arg("g2"),
                 py::arg("x1"), py::arg("x2")
             )
             .def(
                 py::init<std::array<double, 5>&>(),
-                "initialize tnumber with a list of double numbers",
+                "initialize qnumber with a list of double numbers",
                 py::arg("data")
             )
-            .def_readwrite("v", &tnumber::v)
-            .def_readwrite("g1", &tnumber::g1)
-            .def_readwrite("g2", &tnumber::g2)
-            .def_readwrite("x1", &tnumber::x1)
-            .def_readwrite("x2", &tnumber::x2)
+            .def_readwrite("v", &qnumber::v)
+            .def_readwrite("g1", &qnumber::g1)
+            .def_readwrite("g2", &qnumber::g2)
+            .def_readwrite("x1", &qnumber::x1)
+            .def_readwrite("x2", &qnumber::x2)
             .def(
                 "to_array",
-                &tnumber::to_array,
+                &qnumber::to_array,
                 "Return the numpy array in shape (5)"
             )
             .def("__repr__", [](
-                const tnumber &tn) {
-                return "<tnumber v=" + std::to_string(tn.v) +
+                const qnumber &tn) {
+                return "<qnumber v=" + std::to_string(tn.v) +
                        ", g1=" + std::to_string(tn.g1) +
                        ", g2=" + std::to_string(tn.g2) +
                        ", x1=" + std::to_string(tn.x1) +
@@ -58,103 +58,103 @@ namespace math {
             .def(double() * py::self)
             .def(py::self / double())
             .def(double() / py::self);
-        math.def("exp", &exp, "Compute the exponential of a tnumber");
-        math.def("pow", &pow, "Compute the exponential of a tnumber");
+        math.def("exp", &exp, "Compute the exponential of a qnumber");
+        math.def("pow", &pow, "Compute the exponential of a qnumber");
 
-        py::class_<tmatrix<6, 6>>(math, "tmatrix6")
+        py::class_<qmatrix<6, 6>>(math, "qmatrix6")
             .def(py::init<>())
             .def(
-                py::init<std::array<std::array<tnumber, 6>, 6>&>(),
-                "initialize tmatrix with a 2D list of tnumber",
+                py::init<std::array<std::array<qnumber, 6>, 6>&>(),
+                "initialize qmatrix with a 2D list of qnumber",
                 py::arg("data")
             )
             .def(
                 py::init<std::array<std::array<double, 6>, 6>&>(),
-                "initialize tmatrix with a 2D list of double",
+                "initialize qmatrix with a 2D list of double",
                 py::arg("data")
             )
             .def(
                 py::init<py::array_t<double>&>(),
-                "initialize tmatrix with a 2D numpy array",
+                "initialize qmatrix with a 2D numpy array",
                 py::arg("data")
             )
-            .def_readonly("data", &tmatrix<6, 6>::data)
+            .def_readonly("data", &qmatrix<6, 6>::data)
             .def(
                 "transpose",
-                &tmatrix<6, 6>::transpose,
+                &qmatrix<6, 6>::transpose,
                 "Return the transposed matrix"
             )
             .def(
                 "to_array",
-                &tmatrix<6, 6>::to_array,
+                &qmatrix<6, 6>::to_array,
                 "Return the numpy array in shape (6, 6, 5)"
             )
             .def(-py::self)
             .def(py::self + py::self)
             .def(py::self - py::self)
-            .def(py::self + tnumber())
-            .def(tnumber() + py::self)
-            .def(py::self - tnumber())
-            .def(tnumber() - py::self)
-            .def(py::self * tnumber())
-            .def(tnumber() * py::self)
+            .def(py::self + qnumber())
+            .def(qnumber() + py::self)
+            .def(py::self - qnumber())
+            .def(qnumber() - py::self)
+            .def(py::self * qnumber())
+            .def(qnumber() * py::self)
             .def(py::self * double())
             .def(double() * py::self)
             .def(py::self / double())
-            .def(py::self / tnumber())
+            .def(py::self / qnumber())
             .def(py::self * py::self);
 
-        py::class_<tmatrix<8, 8>>(math, "tmatrix8")
+        py::class_<qmatrix<8, 8>>(math, "qmatrix8")
             .def(py::init<>())
             .def(
-                py::init<std::array<std::array<tnumber, 8>, 8>&>(),
-                "initialize tmatrix with a 2D list of tnumber",
+                py::init<std::array<std::array<qnumber, 8>, 8>&>(),
+                "initialize qmatrix with a 2D list of qnumber",
                 py::arg("data")
             )
             .def(
                 py::init<std::array<std::array<double, 8>, 8>&>(),
-                "initialize tmatrix with a 2D list of double number",
+                "initialize qmatrix with a 2D list of double number",
                 py::arg("data")
             )
             .def(
                 py::init<py::array_t<double>&>(),
-                "initialize tmatrix with a 2D numpy array of double number",
+                "initialize qmatrix with a 2D numpy array of double number",
                 py::arg("data")
             )
-            .def_readonly("data", &tmatrix<8, 8>::data)
+            .def_readonly("data", &qmatrix<8, 8>::data)
             .def(
                 "transpose",
-                &tmatrix<8, 8>::transpose,
+                &qmatrix<8, 8>::transpose,
                 "Return the transposed matrix"
             )
             .def(
                 "to_array",
-                &tmatrix<8, 8>::to_array,
+                &qmatrix<8, 8>::to_array,
                 "Return the numpy array in shape (8, 8, 5)"
             )
             .def(-py::self)
             .def(py::self + py::self)
             .def(py::self - py::self)
-            .def(py::self + tnumber())
-            .def(tnumber() + py::self)
-            .def(py::self - tnumber())
-            .def(tnumber() - py::self)
-            .def(py::self * tnumber())
-            .def(tnumber() * py::self)
+            .def(py::self + qnumber())
+            .def(qnumber() + py::self)
+            .def(py::self - qnumber())
+            .def(qnumber() - py::self)
+            .def(py::self * qnumber())
+            .def(qnumber() * py::self)
             .def(py::self * double())
             .def(double() * py::self)
             .def(py::self / double())
-            .def(py::self / tnumber())
+            .def(py::self / qnumber())
             .def(py::self * py::self);
-        math.def("eye6", &eye<6>, "Generate a indentity tmatrix");
-        math.def("eye8", &eye<8>, "Generate a indentity tmatrix");
+        math.def("eye6", &eye<6>, "Generate a indentity qmatrix");
+        math.def("eye8", &eye<8>, "Generate a indentity qmatrix");
 
         py::class_<lossNumber>(math, "lossNumber")
             .def(py::init<
-                tnumber, tnumber, tnumber, tnumber,
-                tnumber, tnumber, tnumber, tnumber,
-                tnumber, tnumber, tnumber, tnumber,
-                tnumber>(),
+                qnumber, qnumber, qnumber, qnumber,
+                qnumber, qnumber, qnumber, qnumber,
+                qnumber, qnumber, qnumber, qnumber,
+                qnumber>(),
                 py::arg("v"),
                 py::arg("v_A"), py::arg("v_t"),
                 py::arg("v_e1"), py::arg("v_e2"),

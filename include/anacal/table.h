@@ -46,20 +46,20 @@ struct galRow{
 struct galNumber {
     // value with derivatives to Gaussian model parameters
     ngmix::NgmixGaussian model;
-    math::tnumber fluxdet;
-    math::tnumber wdet;
+    math::qnumber fluxdet;
+    math::qnumber wdet;
     int mask_value=0;
     bool is_peak=false;
     math::lossNumber loss;
-    math::tnumber fpfs_e1;
-    math::tnumber fpfs_e2;
+    math::qnumber fpfs_e1;
+    math::qnumber fpfs_e2;
 
     galNumber() = default;
 
     galNumber(
         ngmix::NgmixGaussian model,
-        math::tnumber fluxdet,
-        math::tnumber wdet,
+        math::qnumber fluxdet,
+        math::qnumber wdet,
         int mask_value,
         bool is_peak,
         math::lossNumber loss
@@ -94,7 +94,7 @@ struct galNumber {
 
     inline galRow
     to_row() const {
-        math::tnumber rho = math::exp(model.t);
+        math::qnumber rho = math::exp(model.t);
         galRow row = {
             model.A.v,
             model.A.g1,

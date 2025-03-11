@@ -166,8 +166,8 @@ public:
         return;
     };
 
-    std::vector<math::tnumber>
-    prepare_tnumber_vector(
+    std::vector<math::qnumber>
+    prepare_qnumber_vector(
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
@@ -214,7 +214,7 @@ public:
             }
         }
 
-        std::vector<math::tnumber> result(this->ny * this->nx);
+        std::vector<math::qnumber> result(this->ny * this->nx);
         // v
         {
             img_obj.set_f(imgcov_f);
@@ -304,7 +304,7 @@ public:
     };
 
     py::array_t<double>
-    prepare_tnumber_image(
+    prepare_qnumber_image(
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
@@ -314,7 +314,7 @@ public:
         auto result = py::array_t<double>({5, ny, nx});
         auto r = result.mutable_unchecked<3>();
 
-        std::vector<math::tnumber> tvec = prepare_tnumber_vector(
+        std::vector<math::qnumber> tvec = prepare_qnumber_vector(
             img_array,
             psf_array,
             noise_array,
@@ -340,7 +340,7 @@ public:
     ~ImageT() = default;
 };
 
-inline std::vector<math::tnumber>
+inline std::vector<math::qnumber>
 prepare_data_block(
     const py::array_t<double>& img_array,
     const py::array_t<double>& psf_array,
@@ -356,7 +356,7 @@ prepare_data_block(
         1000.0,         // very large klim
         true            // us estimate in FFTW
     );
-    return img_obj.prepare_tnumber_vector(
+    return img_obj.prepare_qnumber_vector(
         img_array,
         psf_array,
         noise_array,

@@ -21,7 +21,7 @@ pyExportTable(py::module_& m) {
     py::class_<galNumber>(table, "galNumber")
         .def(py::init<>())
         .def(py::init<
-            ngmix::NgmixGaussian, math::tnumber, math::tnumber,
+            ngmix::NgmixGaussian, math::qnumber, math::qnumber,
             int, bool, math::lossNumber
             >(),
             py::arg("model"), py::arg("fluxdet"),

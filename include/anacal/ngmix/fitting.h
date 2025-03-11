@@ -36,9 +36,9 @@ public:
         }
     };
 
-    inline std::array<math::tnumber, 3>
+    inline std::array<math::qnumber, 3>
     measure_fpfs_ellipticity(
-        const std::vector<math::tnumber> & data,
+        const std::vector<math::qnumber> & data,
         const NgmixGaussian & model,
         const geometry::block & block
     ) const {
@@ -63,7 +63,7 @@ public:
             this->sigma_arcsec
         );
 
-        std::array<math::tnumber, 3> result;
+        std::array<math::qnumber, 3> result;
         for (int j = 0; j < this->stamp_size; ++j) {
             int jb = j + j_block_shift;
             if (jb < 0 || jb >= block.ny) {
@@ -78,7 +78,7 @@ public:
                 }
                 int i2 = std::pow(i - this->ss2, 2.0);
                 if (i2 + j2 < this->ss2 * this->ss2) {
-                    std::array<math::tnumber, 3> mm = model.get_fpfs_moments(
+                    std::array<math::qnumber, 3> mm = model.get_fpfs_moments(
                         data[idjb + ib], xvs[i], yvs[j], kernel
                     );
                     result[0] = result[0] + mm[0];
@@ -92,7 +92,7 @@ public:
 
     inline math::lossNumber
     measure_loss(
-        const std::vector<math::tnumber> & data,
+        const std::vector<math::qnumber> & data,
         double variance,
         const NgmixGaussian & model,
         const geometry::block & block
@@ -145,7 +145,7 @@ public:
     inline std::vector<table::galNumber>
     process_block_impl(
         const std::vector<table::galNumber>& catalog,
-        const std::vector<math::tnumber> & data,
+        const std::vector<math::qnumber> & data,
         const modelPrior & prior,
         int num_epochs,
         double variance,
@@ -163,7 +163,7 @@ public:
                 );
                 src.model.update_model_params(src.loss, prior, epoch, variance);
             }
-            std::array<math::tnumber, 3> mm = this->measure_fpfs_ellipticity(
+            std::array<math::qnumber, 3> mm = this->measure_fpfs_ellipticity(
                 data, src.model, block
             );
             src.fpfs_e1 = mm[1] / mm[0];
@@ -189,7 +189,7 @@ public:
         geometry::block bb = block ? *block : geometry::get_block_list(
             image_nx, image_ny, image_nx, image_ny, 0, this->scale
         )[0];
-        std::vector<math::tnumber> data = prepare_data_block(
+        std::vector<math::qnumber> data = prepare_data_block(
             img_array,
             psf_array,
             this->sigma_arcsec,

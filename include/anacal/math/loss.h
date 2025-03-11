@@ -2,32 +2,32 @@
 #define ANACAL_MATH_LOSS_H
 
 #include "../stdafx.h"
-#include "tnumber.h"
+#include "qnumber.h"
 
 namespace anacal {
 namespace math {
 
 struct lossNumber {
     // value with derivatives to Gaussian model parameters
-    math::tnumber v, v_A, v_t, v_e1, v_e2, v_x1, v_x2;
-    math::tnumber v_AA, v_tt, v_e1e1, v_e2e2, v_x1x1, v_x2x2;
+    math::qnumber v, v_A, v_t, v_e1, v_e2, v_x1, v_x2;
+    math::qnumber v_AA, v_tt, v_e1e1, v_e2e2, v_x1x1, v_x2x2;
 
     lossNumber() = default;
 
     lossNumber(
-        math::tnumber v,
-        math::tnumber v_A,
-        math::tnumber v_t,
-        math::tnumber v_e1,
-        math::tnumber v_e2,
-        math::tnumber v_x1,
-        math::tnumber v_x2,
-        math::tnumber v_AA,
-        math::tnumber v_tt,
-        math::tnumber v_e1e1,
-        math::tnumber v_e2e2,
-        math::tnumber v_x1x1,
-        math::tnumber v_x2x2
+        math::qnumber v,
+        math::qnumber v_A,
+        math::qnumber v_t,
+        math::qnumber v_e1,
+        math::qnumber v_e2,
+        math::qnumber v_x1,
+        math::qnumber v_x2,
+        math::qnumber v_AA,
+        math::qnumber v_tt,
+        math::qnumber v_e1e1,
+        math::qnumber v_e2e2,
+        math::qnumber v_x1x1,
+        math::qnumber v_x2x2
     ) : v(v), v_A(v_A), v_t(v_t), v_e1(v_e1), v_e2(v_e2),
         v_x1(v_x1), v_x2(v_x2),
         v_AA(v_AA), v_tt(v_tt), v_e1e1(v_e1e1), v_e2e2(v_e2e2),

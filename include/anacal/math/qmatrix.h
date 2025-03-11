@@ -2,21 +2,21 @@
 #define ANACAL_MATH_QMATRIX_H
 
 #include "../stdafx.h"
-#include "tnumber.h"
+#include "qnumber.h"
 
 
 namespace anacal {
 namespace math {
 
-// tmatrix structure with fixed dimensions
+// qmatrix structure with fixed dimensions
 template <int Rows, int Cols>
-struct tmatrix {
+struct qmatrix {
     int nelements = Cols * Rows;
-    std::array<tnumber, Cols * Rows> data{};
+    std::array<qnumber, Cols * Rows> data{};
 
-    tmatrix() = default;
+    qmatrix() = default;
 
-    tmatrix(const std::array<std::array<tnumber, Cols>, Rows>& data) {
+    qmatrix(const std::array<std::array<qnumber, Cols>, Rows>& data) {
         // Copy elements into the flat data array
         for (size_t i = 0; i < Rows; ++i) {
             size_t offset = i * Cols;
@@ -26,7 +26,7 @@ struct tmatrix {
         }
     }
 
-    tmatrix(const std::array<std::array<double, Cols>, Rows>& data) {
+    qmatrix(const std::array<std::array<double, Cols>, Rows>& data) {
         // Copy elements into the flat data array
         for (size_t i = 0; i < Rows; ++i) {
             size_t offset = i * Cols;
@@ -36,7 +36,7 @@ struct tmatrix {
         }
     }
 
-    tmatrix(py::array_t<double>& data) {
+    qmatrix(py::array_t<double>& data) {
         // Copy elements into the flat data array
         auto data_r = data.unchecked<2>();
         for (size_t i = 0; i < Rows; ++i) {
@@ -48,17 +48,17 @@ struct tmatrix {
     }
 
     // Access operator for matrix elements
-    tnumber& operator()(size_t row, size_t col) {
+    qnumber& operator()(size_t row, size_t col) {
         return data[row * Cols + col];
     };
 
-    const tnumber& operator()(size_t row, size_t col) const {
+    const qnumber& operator()(size_t row, size_t col) const {
         return data[row * Cols + col];
     };
 
     // Transpose the matrix
-    tmatrix<Cols, Rows> transpose() const {
-        tmatrix<Cols, Rows> result;
+    qmatrix<Cols, Rows> transpose() const {
+        qmatrix<Cols, Rows> result;
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < Cols; ++j) {
                 result(j, i) = (*this)(i, j);
@@ -67,11 +67,11 @@ struct tmatrix {
         return result;
     };
 
-    // tmatrix multiplication
+    // qmatrix multiplication
     template <int OtherCols>
-    tmatrix<Rows, OtherCols> operator*(const tmatrix<Cols, OtherCols>& other) const {
-        tmatrix<Rows, OtherCols> result;
-        tmatrix <OtherCols, Cols> other2 = other.transpose();
+    qmatrix<Rows, OtherCols> operator*(const qmatrix<Cols, OtherCols>& other) const {
+        qmatrix<Rows, OtherCols> result;
+        qmatrix <OtherCols, Cols> other2 = other.transpose();
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < OtherCols; ++j) {
                 for (size_t k = 0; k < Cols; ++k) {
@@ -83,8 +83,8 @@ struct tmatrix {
     };
 
     // Addition of two matrices
-    tmatrix<Rows, Cols> operator+(const tmatrix<Rows, Cols>& other) const {
-        tmatrix<Rows, Cols> result;
+    qmatrix<Rows, Cols> operator+(const qmatrix<Rows, Cols>& other) const {
+        qmatrix<Rows, Cols> result;
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < Cols; ++j) {
                 result(i, j) = (*this)(i, j) + other(i, j);
@@ -94,8 +94,8 @@ struct tmatrix {
     };
 
     // Subtraction of two matrices
-    tmatrix<Rows, Cols> operator-(const tmatrix<Rows, Cols>& other) const {
-        tmatrix<Rows, Cols> result;
+    qmatrix<Rows, Cols> operator-(const qmatrix<Rows, Cols>& other) const {
+        qmatrix<Rows, Cols> result;
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < Cols; ++j) {
                 result(i, j) = (*this)(i, j) - other(i, j);
@@ -105,8 +105,8 @@ struct tmatrix {
     };
 
     // unary of this matrix
-    tmatrix<Rows, Cols> operator-() const {
-        tmatrix<Rows, Cols> result;
+    qmatrix<Rows, Cols> operator-() const {
+        qmatrix<Rows, Cols> result;
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < Cols; ++j) {
                 result(i, j) = -(*this)(i, j);
@@ -115,9 +115,9 @@ struct tmatrix {
         return result;
     };
 
-    // Scalar multiplication: tmatrix + tnumber
-    tmatrix<Rows, Cols> operator+(tnumber scalar) const {
-        tmatrix<Rows, Cols> result;
+    // Scalar multiplication: qmatrix + qnumber
+    qmatrix<Rows, Cols> operator+(qnumber scalar) const {
+        qmatrix<Rows, Cols> result;
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < Cols; ++j) {
                 result(i, j) = (*this)(i, j) + scalar;
@@ -126,17 +126,17 @@ struct tmatrix {
         return result;
     };
 
-    // Scalar multiplication: tnumber + tmatrix (friend function)
-    friend tmatrix<Rows, Cols> operator+(
-        tnumber scalar,
-        const tmatrix<Rows, Cols>& matrix
+    // Scalar multiplication: qnumber + qmatrix (friend function)
+    friend qmatrix<Rows, Cols> operator+(
+        qnumber scalar,
+        const qmatrix<Rows, Cols>& matrix
     ) {
         return matrix + scalar;
     };
 
-    // Scalar multiplication: tmatrix - tnumber
-    tmatrix<Rows, Cols> operator-(tnumber scalar) const {
-        tmatrix<Rows, Cols> result;
+    // Scalar multiplication: qmatrix - qnumber
+    qmatrix<Rows, Cols> operator-(qnumber scalar) const {
+        qmatrix<Rows, Cols> result;
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < Cols; ++j) {
                 result(i, j) = (*this)(i, j) - scalar;
@@ -145,12 +145,12 @@ struct tmatrix {
         return result;
     };
 
-    // Scalar multiplication: tnumber - tmatrix (friend function)
-    friend tmatrix<Rows, Cols> operator-(
-        tnumber scalar,
-        const tmatrix<Rows, Cols>& matrix
+    // Scalar multiplication: qnumber - qmatrix (friend function)
+    friend qmatrix<Rows, Cols> operator-(
+        qnumber scalar,
+        const qmatrix<Rows, Cols>& matrix
     ) {
-        tmatrix<Rows, Cols> result;
+        qmatrix<Rows, Cols> result;
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < Cols; ++j) {
                 result(i, j) = scalar - matrix(i, j);
@@ -159,9 +159,9 @@ struct tmatrix {
         return result;
     };
 
-    // Scalar multiplication: tmatrix * tnumber
-    tmatrix<Rows, Cols> operator*(tnumber scalar) const {
-        tmatrix<Rows, Cols> result;
+    // Scalar multiplication: qmatrix * qnumber
+    qmatrix<Rows, Cols> operator*(qnumber scalar) const {
+        qmatrix<Rows, Cols> result;
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < Cols; ++j) {
                 result(i, j) = (*this)(i, j) * scalar;
@@ -170,17 +170,17 @@ struct tmatrix {
         return result;
     };
 
-    // Scalar multiplication: tnumber * tmatrix (friend function)
-    friend tmatrix<Rows, Cols> operator*(
-        tnumber scalar,
-        const tmatrix<Rows, Cols>& matrix
+    // Scalar multiplication: qnumber * qmatrix (friend function)
+    friend qmatrix<Rows, Cols> operator*(
+        qnumber scalar,
+        const qmatrix<Rows, Cols>& matrix
     ) {
         return matrix * scalar;
     };
 
-    // Scalar multiplication: tmatrix * double
-    tmatrix<Rows, Cols> operator*(double scalar) const {
-        tmatrix<Rows, Cols> result;
+    // Scalar multiplication: qmatrix * double
+    qmatrix<Rows, Cols> operator*(double scalar) const {
+        qmatrix<Rows, Cols> result;
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < Cols; ++j) {
                 result(i, j) = (*this)(i, j) * scalar;
@@ -189,17 +189,17 @@ struct tmatrix {
         return result;
     };
 
-    // Scalar multiplication: tnumber * double (friend function)
-    friend tmatrix<Rows, Cols> operator*(
+    // Scalar multiplication: qnumber * double (friend function)
+    friend qmatrix<Rows, Cols> operator*(
         double scalar,
-        const tmatrix<Rows, Cols>& matrix
+        const qmatrix<Rows, Cols>& matrix
     ) {
         return matrix * scalar;
     };
 
-    // Scalar multiplication: tmatrix / tnumber
-    tmatrix<Rows, Cols> operator/(tnumber scalar) const {
-        tmatrix<Rows, Cols> result;
+    // Scalar multiplication: qmatrix / qnumber
+    qmatrix<Rows, Cols> operator/(qnumber scalar) const {
+        qmatrix<Rows, Cols> result;
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < Cols; ++j) {
                 result(i, j) = (*this)(i, j) / scalar;
@@ -208,9 +208,9 @@ struct tmatrix {
         return result;
     };
 
-    // Scalar multiplication: tmatrix / double
-    tmatrix<Rows, Cols> operator/(double scalar) const {
-        tmatrix<Rows, Cols> result;
+    // Scalar multiplication: qmatrix / double
+    qmatrix<Rows, Cols> operator/(double scalar) const {
+        qmatrix<Rows, Cols> result;
         for (size_t i = 0; i < Rows; ++i) {
             for (size_t j = 0; j < Cols; ++j) {
                 result(i, j) = (*this)(i, j) / scalar;
@@ -237,10 +237,10 @@ struct tmatrix {
 };
 
 template <int N>
-inline tmatrix<N, N> eye() {
-    tmatrix<N, N> result;
+inline qmatrix<N, N> eye() {
+    qmatrix<N, N> result;
     for (size_t i = 0; i < N; ++i) {
-        result(i, i) = tnumber(1.0, 0.0, 0.0, 0.0, 0.0);
+        result(i, i) = qnumber(1.0, 0.0, 0.0, 0.0, 0.0);
     }
     return result;
 }; // indentity matrix

@@ -9,26 +9,26 @@
 namespace anacal {
 namespace math {
 
-struct tnumber {
+struct qnumber {
     double v  = 0.0;
     double g1 = 0.0;
     double g2 = 0.0;
     double x1 = 0.0;
     double x2 = 0.0;
 
-    tnumber() = default;
+    qnumber() = default;
 
-    tnumber(
+    qnumber(
         double v
     )
         : v(v) {}
 
-    tnumber(
+    qnumber(
         double v, double g1, double g2, double x1, double x2
     )
         : v(v), g1(g1), g2(g2), x1(x1), x2(x2) {}
 
-    tnumber(const std::array<double, 5>& data) {
+    qnumber(const std::array<double, 5>& data) {
         this->v = data[0];
         this->g1 = data[1];
         this->g2 = data[2];
@@ -36,9 +36,9 @@ struct tnumber {
         this->x2 = data[4];
     };
 
-    // Define addition for tnumber + tnumber
-    tnumber operator+(const tnumber& other) const {
-        return tnumber(
+    // Define addition for qnumber + qnumber
+    qnumber operator+(const qnumber& other) const {
+        return qnumber(
             this->v + other.v,
             this->g1 + other.g1,
             this->g2 + other.g2,
@@ -47,9 +47,9 @@ struct tnumber {
         );
     };
 
-    // Define subtraction for tnumber - tnumber
-    tnumber operator-(const tnumber& other) const {
-        return tnumber(
+    // Define subtraction for qnumber - qnumber
+    qnumber operator-(const qnumber& other) const {
+        return qnumber(
             this->v - other.v,
             this->g1 - other.g1,
             this->g2 - other.g2,
@@ -58,9 +58,9 @@ struct tnumber {
         );
     };
 
-    // Define unary negation for -tnumber
-    tnumber operator-() const {
-        return tnumber(
+    // Define unary negation for -qnumber
+    qnumber operator-() const {
+        return qnumber(
             -this->v,
             -this->g1,
             -this->g2,
@@ -69,9 +69,9 @@ struct tnumber {
         );
     };
 
-    // Define multiplication for tnumber * tnumber
-    tnumber operator*(const tnumber& other) const {
-        return tnumber(
+    // Define multiplication for qnumber * qnumber
+    qnumber operator*(const qnumber& other) const {
+        return qnumber(
             this->v * other.v,
             this->g1 * other.v + this->v * other.g1,
             this->g2 * other.v + this->v * other.g2,
@@ -80,10 +80,10 @@ struct tnumber {
         );
     };
 
-    // Define division for tnumber / tnumber
-    tnumber operator/(const tnumber& other) const {
+    // Define division for qnumber / qnumber
+    qnumber operator/(const qnumber& other) const {
         double f = 1.0 / (other.v * other.v);
-        return tnumber(
+        return qnumber(
             this->v / other.v,
             (other.v * this->g1 - this->v * other.g1) * f,
             (other.v * this->g2 - this->v * other.g2) * f,
@@ -92,9 +92,9 @@ struct tnumber {
         );
     };
 
-    // Friend function for addition: tnumber + double
-    friend tnumber operator+(const tnumber& lhs, double rhs) {
-        return tnumber(
+    // Friend function for addition: qnumber + double
+    friend qnumber operator+(const qnumber& lhs, double rhs) {
+        return qnumber(
             lhs.v + rhs,
             lhs.g1,
             lhs.g2,
@@ -103,9 +103,9 @@ struct tnumber {
         );
     };
 
-    // Friend functions for addition: double + tnumber
-    friend tnumber operator+(double lhs, const tnumber& rhs) {
-        return tnumber(
+    // Friend functions for addition: double + qnumber
+    friend qnumber operator+(double lhs, const qnumber& rhs) {
+        return qnumber(
             lhs + rhs.v,
             rhs.g1,
             rhs.g2,
@@ -114,9 +114,9 @@ struct tnumber {
         );
     };
 
-    // Friend function for subtraction: tnumber - double
-    friend tnumber operator-(const tnumber& lhs, double rhs) {
-        return tnumber(
+    // Friend function for subtraction: qnumber - double
+    friend qnumber operator-(const qnumber& lhs, double rhs) {
+        return qnumber(
             lhs.v - rhs,
             lhs.g1,
             lhs.g2,
@@ -125,9 +125,9 @@ struct tnumber {
         );
     };
 
-    // Friend functions for subtraction: double - tnumber
-    friend tnumber operator-(double lhs, const tnumber& rhs) {
-        return tnumber(
+    // Friend functions for subtraction: double - qnumber
+    friend qnumber operator-(double lhs, const qnumber& rhs) {
+        return qnumber(
             lhs - rhs.v,
             -rhs.g1,
             -rhs.g2,
@@ -136,9 +136,9 @@ struct tnumber {
         );
     };
 
-    // Friend function for multiplication: tnumber * double
-    friend tnumber operator*(const tnumber& lhs, double rhs) {
-        return tnumber(
+    // Friend function for multiplication: qnumber * double
+    friend qnumber operator*(const qnumber& lhs, double rhs) {
+        return qnumber(
             lhs.v * rhs,
             lhs.g1 * rhs,
             lhs.g2 * rhs,
@@ -147,9 +147,9 @@ struct tnumber {
         );
     };
 
-    // Friend functions for multiplication: double * tnumber
-    friend tnumber operator*(double lhs, const tnumber& rhs) {
-        return tnumber(
+    // Friend functions for multiplication: double * qnumber
+    friend qnumber operator*(double lhs, const qnumber& rhs) {
+        return qnumber(
             lhs * rhs.v,
             lhs * rhs.g1,
             lhs * rhs.g2,
@@ -158,9 +158,9 @@ struct tnumber {
         );
     };
 
-    // Friend function for division: tnumber / double
-    friend tnumber operator/(const tnumber& lhs, double rhs) {
-        return tnumber(
+    // Friend function for division: qnumber / double
+    friend qnumber operator/(const qnumber& lhs, double rhs) {
+        return qnumber(
             lhs.v / rhs,
             lhs.g1 / rhs,
             lhs.g2 / rhs,
@@ -169,10 +169,10 @@ struct tnumber {
         );
     };
 
-    // Friend functions for division: double / tnumber
-    friend tnumber operator/(double lhs, const tnumber& rhs) {
+    // Friend functions for division: double / qnumber
+    friend qnumber operator/(double lhs, const qnumber& rhs) {
         double f = -1.0 / (rhs.v * rhs.v);
-        return tnumber(
+        return qnumber(
             lhs / rhs.v,
             lhs * rhs.g1 * f,
             lhs * rhs.g2 * f,
@@ -193,24 +193,24 @@ struct tnumber {
         return result;
     };
 
-    tnumber decentralize(double dx1, double dx2) const {
+    qnumber decentralize(double dx1, double dx2) const {
         // (dx1, dx2) is the position of the source wrt center of block
-        tnumber result = *this;
+        qnumber result = *this;
         result.g1 = this->g1 - dx1 * this->x1 + dx2 * this->x2;
         result.g2 = this->g2 - dx1 * this->x2 - dx2 * this->x1;
         return result;
     };
 
-    tnumber centralize(double dx1, double dx2) const {
+    qnumber centralize(double dx1, double dx2) const {
         // (dx1, dx2) is the position of the source wrt center of block
-        tnumber result = *this;
+        qnumber result = *this;
         result.g1 = this->g1 + dx1 * this->x1 - dx2 * this->x2;
         result.g2 = this->g2 + dx1 * this->x2 + dx2 * this->x1;
         return result;
     };
 
     // Stream insertion operator for printing
-    friend std::ostream& operator<<(std::ostream& os, const tnumber& q) {
+    friend std::ostream& operator<<(std::ostream& os, const qnumber& q) {
         os << "v: " << q.v << ", g1: " << q.g1 << ", g2: " << q.g2
            << ", x1: " << q.x1 << ", x2: " << q.x2;
         return os;
@@ -218,11 +218,11 @@ struct tnumber {
 };
 
 
-inline tnumber exp(
-    const tnumber& tn
+inline qnumber exp(
+    const qnumber& tn
 ) {
     double expv = std::exp(tn.v);
-    return tnumber(
+    return qnumber(
         expv,
         expv * tn.g1,
         expv * tn.g2,
@@ -231,12 +231,12 @@ inline tnumber exp(
     );
 }; // exponential function
 
-inline tnumber tanh(
-    const tnumber& tn
+inline qnumber tanh(
+    const qnumber& tn
 ) {
     double tan = std::tanh(tn.v);
     double dtan = 1.0 - pow(tan, 2.0);
-    return tnumber(
+    return qnumber(
         tan,
         dtan * tn.g1,
         dtan * tn.g2,
@@ -245,13 +245,13 @@ inline tnumber tanh(
     );
 }; // tanh function
 
-inline tnumber pow(
-    const tnumber& tn,
+inline qnumber pow(
+    const qnumber& tn,
     double n
 ) {
     double tmp0 = std::pow(tn.v, n - 1);
     double tmp = n * tmp0;
-    return tnumber(
+    return qnumber(
         tmp0 * tn.v,
         tmp * tn.g1,
         tmp * tn.g2,
