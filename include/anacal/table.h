@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "math.h"
+#include "geometry.h"
 
 namespace anacal {
 namespace table {
@@ -20,41 +21,80 @@ struct galRow{
     double e2;
     double de2_dg1;
     double de2_dg2;
-    double x;
-    double dx_dg1;
-    double dx_dg2;
-    double y;
-    double dy_dg1;
-    double dy_dg2;
+    double x1;
+    double dx1_dg1;
+    double dx1_dg2;
+    double x2;
+    double dx2_dg1;
+    double dx2_dg2;
+    double fluxdet;
+    double dfluxdet_dg1;
+    double dfluxdet_dg2;
     double wdet;
     double dwdet_dg1;
     double dwdet_dg2;
     int mask_value;
     bool is_peak;
+    double fpfs_e1;
+    double fpfs_de1_dg1;
+    double fpfs_de1_dg2;
+    double fpfs_e2;
+    double fpfs_de2_dg1;
+    double fpfs_de2_dg2;
 };
 
 struct galNumber {
     // value with derivatives to Gaussian model parameters
     ngmix::NgmixGaussian model;
+    math::tnumber fluxdet;
     math::tnumber wdet;
     int mask_value=0;
     bool is_peak=false;
     math::lossNumber loss;
+    math::tnumber fpfs_e1;
+    math::tnumber fpfs_e2;
 
     galNumber() = default;
 
     galNumber(
         ngmix::NgmixGaussian model,
+        math::tnumber fluxdet,
         math::tnumber wdet,
         int mask_value,
         bool is_peak,
         math::lossNumber loss
-    ) : model(model), wdet(wdet), mask_value(mask_value),
-        is_peak(is_peak), loss(loss) {}
+    ) : model(model), fluxdet(fluxdet), wdet(wdet),
+        mask_value(mask_value), is_peak(is_peak), loss(loss) {}
+
+    inline galNumber
+    decentralize(const geometry::block & block) const {
+        double dx1 = this->model.x1.v - block.xcen * block.scale;
+        double dx2 = this->model.x2.v - block.ycen * block.scale;
+        // (dx1, dx2) is the position of the source wrt center of block
+        galNumber result= *this;
+        result.wdet = this->wdet.decentralize(dx1, dx2);
+        result.fluxdet = this->fluxdet.decentralize(dx1, dx2);
+        result.model = this->model.decentralize(dx1, dx2);
+        result.fpfs_e1 = this->fpfs_e1.decentralize(dx1, dx2);
+        result.fpfs_e2 = this->fpfs_e2.decentralize(dx1, dx2);
+        return result;
+    };
+
+    inline galNumber
+    centralize(const geometry::block & block) const {
+        double dx1 = this->model.x1.v - block.xcen * block.scale;
+        double dx2 = this->model.x2.v - block.ycen * block.scale;
+        // (dx1, dx2) is the position of the source wrt center of block
+        galNumber result= *this;
+        result.wdet = this->wdet.centralize(dx1, dx2);
+        result.fluxdet = this->fluxdet.centralize(dx1, dx2);
+        result.model = this->model.centralize(dx1, dx2);
+        return result;
+    };
 
     inline galRow
     to_row() const {
-        math::tnumber rho = math::exp(model.A);
+        math::tnumber rho = math::exp(model.t);
         galRow row = {
             model.A.v,
             model.A.g1,
@@ -74,11 +114,20 @@ struct galNumber {
             model.x2.v,
             model.x2.g1,
             model.x2.g2,
+            fluxdet.v,
+            fluxdet.g1,
+            fluxdet.g2,
             wdet.v,
             wdet.g1,
             wdet.g2,
             mask_value,
-            is_peak
+            is_peak,
+            fpfs_e1.v,
+            fpfs_e1.g1,
+            fpfs_e1.g2,
+            fpfs_e2.v,
+            fpfs_e2.g1,
+            fpfs_e2.g2
         };
         return row;
     };

@@ -16,24 +16,12 @@ pyExportDetector(py::module_& m) {
         py::arg("omega_f"),
         py::arg("v_min"),
         py::arg("omega_v"),
-        py::arg("pthres"),
+        py::arg("p_min"),
+        py::arg("omega_p"),
         py::arg("block"),
         py::arg("noise_array")=py::none(),
         py::arg("image_bound")=0
     );
-
-    /* detector.def("run", &Detector::run, */
-    /*     "Run detection", */
-    /*     py::arg("img_array"), */
-    /*     py::arg("psf_array"), */
-    /*     py::arg("f_min"), */
-    /*     py::arg("omega_f"), */
-    /*     py::arg("v_min"), */
-    /*     py::arg("omega_v"), */
-    /*     py::arg("pthres"), */
-    /*     py::arg("block_list")=py::none(), */
-    /*     py::arg("noise_array")=py::none() */
-    /* ); */
 }
 
 } // end of detector

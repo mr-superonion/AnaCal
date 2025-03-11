@@ -228,6 +228,8 @@ struct tmatrix {
                 res_r(i, j, 0) = (*this)(i, j).v;
                 res_r(i, j, 1) = (*this)(i, j).g1;
                 res_r(i, j, 2) = (*this)(i, j).g2;
+                res_r(i, j, 3) = (*this)(i, j).x1;
+                res_r(i, j, 4) = (*this)(i, j).x2;
             }
         }
         return result;
@@ -238,7 +240,7 @@ template <int N>
 inline tmatrix<N, N> eye() {
     tmatrix<N, N> result;
     for (size_t i = 0; i < N; ++i) {
-        result(i, i) = tnumber(1.0, 0.0, 0.0);
+        result(i, i) = tnumber(1.0, 0.0, 0.0, 0.0, 0.0);
     }
     return result;
 }; // indentity matrix

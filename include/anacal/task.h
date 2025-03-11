@@ -13,11 +13,13 @@ public:
     double scale;
     double sigma_arcsec_det;
     double sigma_arcsec;
-    double snr_peak_min, omega_f, v_min, omega_v, pthres;
-    ngmix::modelPrior prior;
+    double snr_peak_min, omega_f, v_min, omega_v, p_min, omega_p;
+    const ngmix::modelPrior prior;
     int stamp_size, ss2;
     int image_bound;
     int num_epochs;
+    bool force_size, force_shape, force_center;
+    ngmix::GaussFit fitter;
 
     TaskAlpha(
         double scale,
@@ -27,16 +29,25 @@ public:
         double omega_f,
         double v_min,
         double omega_v,
-        double pthres,
-        const ngmix::modelPrior & prior,
+        double p_min,
+        double omega_p,
+        const std::optional<ngmix::modelPrior>& prior=std::nullopt,
         int stamp_size=64,
         int image_bound=0,
-        int num_epochs=10
+        int num_epochs=10,
+        bool force_size=false,
+        bool force_shape=false,
+        bool force_center=false
     ) : scale(scale), sigma_arcsec_det(sigma_arcsec_det),
         sigma_arcsec(sigma_arcsec), snr_peak_min(snr_peak_min),
-        omega_f(omega_f), v_min(v_min), omega_v(omega_v), pthres(pthres),
-        prior(prior), stamp_size(stamp_size), image_bound(image_bound),
-        num_epochs(num_epochs)
+        omega_f(omega_f), v_min(v_min), omega_v(omega_v),
+        p_min(p_min), omega_p(omega_p),
+        prior(prior ? *prior : ngmix::modelPrior()),
+        stamp_size(stamp_size), image_bound(image_bound),
+        num_epochs(num_epochs), fitter(
+            scale, sigma_arcsec, stamp_size,
+            force_size, force_shape, force_center
+        )
     {
         if (stamp_size % 2 != 0 ) {
             throw std::invalid_argument("nx or ny is not even number");
@@ -63,17 +74,13 @@ public:
             this->omega_f,
             this->v_min,
             this->omega_v,
-            this->pthres,
+            this->p_min,
+            this->omega_p,
             block,
             noise_array,
             this->image_bound
         );
-        ngmix::GaussFit fitter(
-            this->scale,
-            this->sigma_arcsec,
-            this->stamp_size
-        );
-        return fitter.process_block(
+        return this->fitter.process_block(
             catalog,
             img_array,
             psf_array,
@@ -85,6 +92,30 @@ public:
         );
     };
 
+    inline std::vector<table::galNumber>
+    process_image_impl(
+        py::array_t<double>& img_array,
+        py::array_t<double>& psf_array,
+        double variance,
+        const std::vector<geometry::block>& block_list,
+        const std::optional<py::array_t<double>>& noise_array=std::nullopt
+    ) {
+        std::vector<table::galNumber> catalog;
+        for (const geometry::block & block: block_list) {
+            std::vector<table::galNumber> v = process_block_impl(
+                img_array,
+                psf_array,
+                variance,
+                block,
+                noise_array
+            );
+            for (const auto& element : v) {
+                catalog.push_back(element.decentralize(block));
+            }
+        }
+        return catalog;
+    };
+
     inline py::array_t<table::galRow>
     process_image(
         py::array_t<double>& img_array,
@@ -93,6 +124,7 @@ public:
         const std::optional<std::vector<geometry::block>>& block_list=std::nullopt,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt
     ) {
+
         int image_ny = img_array.shape(0);
         int image_nx = img_array.shape(1);
 
@@ -100,17 +132,13 @@ public:
             : geometry::get_block_list(
                 image_nx, image_ny, image_nx, image_ny, 0, this->scale
             );
-        std::vector<table::galNumber> catalog;
-        for (const geometry::block & block: bb_list) {
-            std::vector<table::galNumber> v=process_block_impl(
-                img_array,
-                psf_array,
-                variance,
-                block,
-                noise_array
-            );
-            catalog.insert(catalog.end(), v.begin(), v.end());
-        }
+        std::vector<table::galNumber> catalog = this->process_image_impl(
+            img_array,
+            psf_array,
+            variance,
+            bb_list,
+            noise_array
+        );
         return table::objlist_to_array(catalog);
     };
 };

@@ -10,16 +10,47 @@ pyExportTask(py::module_& m) {
     );
     py::class_<TaskAlpha>(task, "TaskAlpha")
         .def(py::init<
-            double, double, double, double, double, double, double, double,
-            ngmix::modelPrior, int, int, int
+            double, double, double, double, double,
+            double, double, double, double,
+            const std::optional<ngmix::modelPrior>,
+            int, int, int,
+            bool, bool, bool
             >(),
-            py::arg("scale"), py::arg("sigma_arcsec_det"),
-            py::arg("sigma_arcsec"), py::arg("snr_peak_min"),
-            py::arg("omega_f"), py::arg("v_min"), py::arg("omega_v"),
-            py::arg("pthres"), py::arg("prior"), py::arg("stamp_size"),
-            py::arg("image_bound"), py::arg("num_epochs")
+            py::arg("scale"),
+            py::arg("sigma_arcsec_det"),
+            py::arg("sigma_arcsec"),
+            py::arg("snr_peak_min"),
+            py::arg("omega_f"),
+            py::arg("v_min"),
+            py::arg("omega_v"),
+            py::arg("p_min"),
+            py::arg("omega_p"),
+            py::arg("prior")=py::none(),
+            py::arg("stamp_size")=32,
+            py::arg("image_bound")=0,
+            py::arg("num_epochs")=15,
+            py::arg("force_size")=false,
+            py::arg("force_shape")=false,
+            py::arg("force_center")=false
         )
-        .def("process_image", &TaskAlpha::process_image);
+        .def("process_image_impl",
+            &TaskAlpha::process_image_impl,
+            "process image",
+            py::arg("img_array"),
+            py::arg("psf_array"),
+            py::arg("variance"),
+            py::arg("block_list"),
+            py::arg("noise_array")=py::none()
+        )
+        .def("process_image",
+            &TaskAlpha::process_image,
+            "process image",
+            py::arg("img_array"),
+            py::arg("psf_array"),
+            py::arg("variance"),
+            py::arg("block_list")=py::none(),
+            py::arg("noise_array")=py::none()
+        );
 }
 
 } // end of task

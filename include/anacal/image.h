@@ -277,6 +277,7 @@ public:
                     double x = (i - this->nx2) * this->scale;
                     result[idx].g1 = result[idx].g1 + x * tmp_r(j, i);
                     result[idx].g2 = result[idx].g2 + y * tmp_r(j, i);
+                    result[idx].x1 = tmp_r(j, i);
                 }
             }
         }
@@ -294,6 +295,7 @@ public:
                     double x = (i - this->nx2) * this->scale;
                     result[idx].g1 = result[idx].g1 - y * tmp_r(j, i);
                     result[idx].g2 = result[idx].g2 + x * tmp_r(j, i);
+                    result[idx].x2 = tmp_r(j, i);
                 }
             }
         }
@@ -309,7 +311,7 @@ public:
         int xcen=-1,
         int ycen=-1
     ) {
-        auto result = py::array_t<double>({3, ny, nx});
+        auto result = py::array_t<double>({5, ny, nx});
         auto r = result.mutable_unchecked<3>();
 
         std::vector<math::tnumber> tvec = prepare_tnumber_vector(
@@ -324,6 +326,8 @@ public:
                 r(0, j, i) = tvec[idx].v;
                 r(1, j, i) = tvec[idx].g1;
                 r(2, j, i) = tvec[idx].g2;
+                r(3, j, i) = tvec[idx].x1;
+                r(4, j, i) = tvec[idx].x2;
             }
         }
         return result;

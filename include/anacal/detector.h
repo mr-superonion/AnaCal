@@ -18,7 +18,8 @@ find_peaks(
     double omega_f,
     double v_min,
     double omega_v,
-    double pthres,
+    double p_min,
+    double omega_p,
     const geometry::block & block,
     const std::optional<py::array_t<double>>& noise_array=std::nullopt,
     int image_bound=0
@@ -34,7 +35,7 @@ find_peaks(
     // Secondary peak cut
     double f_cut = f_min - omega_f;
     double v_cut = v_min - omega_v;
-    double wdet_cut = pthres - fpfs_det_sigma2;
+    double wdet_cut = p_min - fpfs_det_sigma2;
 
     int image_ny = img_array.shape(0);
     int image_nx = img_array.shape(1);
@@ -44,7 +45,9 @@ find_peaks(
     int xstart = std::max(image_bound, block.xmin_in);
     int xend = std::min(image_nx - image_bound, block.xmax_in);
 
-    int drmax2 = 1;
+    int drmax2 = 16;
+    int drmax_flux = static_cast<int>(2.0 / block.scale) + 1;
+    int drmax2_flux = drmax_flux * drmax_flux;
     std::vector<table::galNumber> catalog;
     for (int y = ystart; y < yend; ++y) {
         int j = y - block.ymin;
@@ -66,14 +69,14 @@ find_peaks(
                 continue;
             }
             // pixel value greater than threshold
-            math::tnumber wdet(1.0, 0.0, 0.0);
+            math::tnumber wdet = math::tnumber(1.0);
             for (int dj = -1; dj <= 1; dj++) {
                 int dj2 = dj * dj;
                 for (int di = -1; di <= 1; di++) {
                     int dr2 = di * di + dj2;
                     if ((dr2 <= drmax2) && (dr2 != 0)) {
                         int index2 = (j + dj) * block.nx + (i + di);
-                        wdet = wdet * math::ssfunc2(
+                        wdet = wdet * math::ssfunc1(
                             data[index] - data[index2],
                             v_min,
                             omega_v
@@ -85,22 +88,36 @@ find_peaks(
                 table::galNumber src;
                 src.model.x1.v = x * block.scale;
                 src.model.x2.v = y * block.scale;
-                src.model.A = data[index];
                 src.is_peak = (
                     (data[index].v > data[id1].v) &&
                     (data[index].v > data[id2].v) &&
                     (data[index].v > data[id3].v) &&
                     (data[index].v > data[id4].v)
                 );
-                src.wdet = math::ssfunc2(
+                math::tnumber fluxdet;
+                for (int dj = -drmax_flux; dj <= drmax_flux; dj++) {
+                    int dj2 = dj * dj;
+                    for (int di = -drmax_flux; di <= drmax_flux; di++) {
+                        int dr2 = di * di + dj2;
+                        if (dr2 < drmax2_flux) {
+                            fluxdet = (
+                                fluxdet
+                                + data[(j + dj) * block.nx + (i + di)]
+                            );
+                        }
+                    }
+                }
+                src.fluxdet = fluxdet;
+                src.wdet = math::ssfunc1(
                     wdet,
-                    pthres,
-                    fpfs_det_sigma2
-                ) * math::ssfunc2(
+                    p_min,
+                    omega_p
+                ) * math::ssfunc1(
                     data[index],
                     f_min,
                     omega_f
                 );
+                src.model.A = fluxdet;
                 catalog.push_back(src);
             }
         }

@@ -13,21 +13,27 @@ struct tnumber {
     double v  = 0.0;
     double g1 = 0.0;
     double g2 = 0.0;
+    double x1 = 0.0;
+    double x2 = 0.0;
 
     tnumber() = default;
 
     tnumber(
         double v
-    ) : v(v), g1(0), g2(0) {}
+    )
+        : v(v) {}
 
     tnumber(
-        double v, double g1, double g2
-    ) : v(v), g1(g1), g2(g2) {}
+        double v, double g1, double g2, double x1, double x2
+    )
+        : v(v), g1(g1), g2(g2), x1(x1), x2(x2) {}
 
-    tnumber(const std::array<double, 3>& data) {
+    tnumber(const std::array<double, 5>& data) {
         this->v = data[0];
         this->g1 = data[1];
         this->g2 = data[2];
+        this->x1 = data[3];
+        this->x2 = data[4];
     };
 
     // Define addition for tnumber + tnumber
@@ -35,7 +41,9 @@ struct tnumber {
         return tnumber(
             this->v + other.v,
             this->g1 + other.g1,
-            this->g2 + other.g2
+            this->g2 + other.g2,
+            this->x1 + other.x1,
+            this->x2 + other.x2
         );
     };
 
@@ -44,7 +52,9 @@ struct tnumber {
         return tnumber(
             this->v - other.v,
             this->g1 - other.g1,
-            this->g2 - other.g2
+            this->g2 - other.g2,
+            this->x1 - other.x1,
+            this->x2 - other.x2
         );
     };
 
@@ -53,7 +63,9 @@ struct tnumber {
         return tnumber(
             -this->v,
             -this->g1,
-            -this->g2
+            -this->g2,
+            -this->x1,
+            -this->x2
         );
     };
 
@@ -62,7 +74,9 @@ struct tnumber {
         return tnumber(
             this->v * other.v,
             this->g1 * other.v + this->v * other.g1,
-            this->g2 * other.v + this->v * other.g2
+            this->g2 * other.v + this->v * other.g2,
+            this->x1 * other.v + this->v * other.x1,
+            this->x2 * other.v + this->v * other.x2
         );
     };
 
@@ -72,7 +86,9 @@ struct tnumber {
         return tnumber(
             this->v / other.v,
             (other.v * this->g1 - this->v * other.g1) * f,
-            (other.v * this->g2 - this->v * other.g2) * f
+            (other.v * this->g2 - this->v * other.g2) * f,
+            (other.v * this->x1 - this->v * other.x1) * f,
+            (other.v * this->x2 - this->v * other.x2) * f
         );
     };
 
@@ -81,7 +97,9 @@ struct tnumber {
         return tnumber(
             lhs.v + rhs,
             lhs.g1,
-            lhs.g2
+            lhs.g2,
+            lhs.x1,
+            lhs.x2
         );
     };
 
@@ -90,7 +108,9 @@ struct tnumber {
         return tnumber(
             lhs + rhs.v,
             rhs.g1,
-            rhs.g2
+            rhs.g2,
+            rhs.x1,
+            rhs.x2
         );
     };
 
@@ -99,7 +119,9 @@ struct tnumber {
         return tnumber(
             lhs.v - rhs,
             lhs.g1,
-            lhs.g2
+            lhs.g2,
+            lhs.x1,
+            lhs.x2
         );
     };
 
@@ -108,7 +130,9 @@ struct tnumber {
         return tnumber(
             lhs - rhs.v,
             -rhs.g1,
-            -rhs.g2
+            -rhs.g2,
+            -rhs.x1,
+            -rhs.x2
         );
     };
 
@@ -117,7 +141,9 @@ struct tnumber {
         return tnumber(
             lhs.v * rhs,
             lhs.g1 * rhs,
-            lhs.g2 * rhs
+            lhs.g2 * rhs,
+            lhs.x1 * rhs,
+            lhs.x2 * rhs
         );
     };
 
@@ -126,7 +152,9 @@ struct tnumber {
         return tnumber(
             lhs * rhs.v,
             lhs * rhs.g1,
-            lhs * rhs.g2
+            lhs * rhs.g2,
+            lhs * rhs.x1,
+            lhs * rhs.x2
         );
     };
 
@@ -135,7 +163,9 @@ struct tnumber {
         return tnumber(
             lhs.v / rhs,
             lhs.g1 / rhs,
-            lhs.g2 / rhs
+            lhs.g2 / rhs,
+            lhs.x1 / rhs,
+            lhs.x2 / rhs
         );
     };
 
@@ -145,26 +175,48 @@ struct tnumber {
         return tnumber(
             lhs / rhs.v,
             lhs * rhs.g1 * f,
-            lhs * rhs.g2 * f
+            lhs * rhs.g2 * f,
+            lhs * rhs.x1 * f,
+            lhs * rhs.x2 * f
         );
     };
 
     // to array
     py::array_t<double> to_array() const {
-        auto result = py::array_t<double>(3);
+        auto result = py::array_t<double>(5);
         auto res_r = result.mutable_unchecked<1>();
         res_r(0) = this->v;
         res_r(1) = this->g1;
         res_r(2) = this->g2;
+        res_r(3) = this->x1;
+        res_r(4) = this->x2;
+        return result;
+    };
+
+    tnumber decentralize(double dx1, double dx2) const {
+        // (dx1, dx2) is the position of the source wrt center of block
+        tnumber result = *this;
+        result.g1 = this->g1 - dx1 * this->x1 + dx2 * this->x2;
+        result.g2 = this->g2 - dx1 * this->x2 - dx2 * this->x1;
+        return result;
+    };
+
+    tnumber centralize(double dx1, double dx2) const {
+        // (dx1, dx2) is the position of the source wrt center of block
+        tnumber result = *this;
+        result.g1 = this->g1 + dx1 * this->x1 - dx2 * this->x2;
+        result.g2 = this->g2 + dx1 * this->x2 + dx2 * this->x1;
         return result;
     };
 
     // Stream insertion operator for printing
     friend std::ostream& operator<<(std::ostream& os, const tnumber& q) {
-        os << "v: " << q.v << ", g1: " << q.g1 << ", g2: " << q.g2;
+        os << "v: " << q.v << ", g1: " << q.g1 << ", g2: " << q.g2
+           << ", x1: " << q.x1 << ", x2: " << q.x2;
         return os;
     };
 };
+
 
 inline tnumber exp(
     const tnumber& tn
@@ -173,9 +225,25 @@ inline tnumber exp(
     return tnumber(
         expv,
         expv * tn.g1,
-        expv * tn.g2
+        expv * tn.g2,
+        expv * tn.x1,
+        expv * tn.x2
     );
 }; // exponential function
+
+inline tnumber tanh(
+    const tnumber& tn
+) {
+    double tan = std::tanh(tn.v);
+    double dtan = 1.0 - pow(tan, 2.0);
+    return tnumber(
+        tan,
+        dtan * tn.g1,
+        dtan * tn.g2,
+        dtan * tn.x1,
+        dtan * tn.x2
+    );
+}; // tanh function
 
 inline tnumber pow(
     const tnumber& tn,
@@ -186,7 +254,9 @@ inline tnumber pow(
     return tnumber(
         tmp0 * tn.v,
         tmp * tn.g1,
-        tmp * tn.g2
+        tmp * tn.g2,
+        tmp * tn.x1,
+        tmp * tn.x2
     );
 }; // power function
 

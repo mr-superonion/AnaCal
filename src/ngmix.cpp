@@ -43,53 +43,55 @@ pyExportNgmix(py::module_& m) {
         .def_readonly("f_e1e1", &modelKernel::f_e1e1)
         .def_readonly("f_e2e2", &modelKernel::f_e2e2);
 
-    py::class_<NgmixModel>(ngmix, "NgmixModel")
-        .def(py::init<>())
-        .def("prepare_model", &NgmixModel::prepare_model,
-            "Prepare the gradient function",
-            py::arg("scale"), py::arg("sigma_arcsec")
-        )
-        .def("get_r2", &NgmixModel::get_r2,
-            "Returns the r squared value at x, y",
-            py::arg("x"), py::arg("y"), py::arg("c")
-        )
-        .def("get_model", &NgmixModel::get_model,
-            "Returns the distorted model value at x, y",
-            py::arg("x"), py::arg("y"), py::arg("c")
-        )
-        .def("get_loss", &NgmixModel::get_loss,
-            "Returns the loss function value and the derivatives wrt params",
-            py::arg("image_val"), py::arg("variance_val"),
-            py::arg("x"), py::arg("y"), py::arg("c")
-        )
-        .def("get_flux_stamp", &NgmixModel::get_flux_stamp,
-            "Returns the flux on a stamp",
-            py::arg("nx"), py::arg("ny"), py::arg("scale"), py::arg("sigma_arcsec")
-        )
-        .def("get_image_stamp", &NgmixModel::get_image_stamp,
-            "Returns the flux on a stamp",
-            py::arg("nx"), py::arg("ny"), py::arg("scale"), py::arg("sigma_arcsec")
-        );
-
-    py::class_<NgmixGaussian, NgmixModel>(ngmix, "NgmixGaussian")
-        .def(py::init<>(),
-            "NgmixGaussian basis function"
+    py::class_<NgmixGaussian>(ngmix, "NgmixGaussian")
+        .def(py::init<bool, bool, bool>(),
+            py::arg("force_size")=false,
+            py::arg("force_shape")=false,
+            py::arg("force_center")=false
         )
         .def_readwrite("A", &NgmixGaussian::A)
         .def_readwrite("t", &NgmixGaussian::t)
         .def_readwrite("e1", &NgmixGaussian::e1)
         .def_readwrite("e2", &NgmixGaussian::e2)
         .def_readwrite("x1", &NgmixGaussian::x1)
-        .def_readwrite("x2", &NgmixGaussian::x2);
+        .def_readwrite("x2", &NgmixGaussian::x2)
+        .def("prepare_model", &NgmixGaussian::prepare_model,
+            "Prepare the gradient function",
+            py::arg("scale"), py::arg("sigma_arcsec")
+        )
+        .def("get_r2", &NgmixGaussian::get_r2,
+            "Returns the r squared value at x, y",
+            py::arg("x"), py::arg("y"), py::arg("c")
+        )
+        .def("get_model", &NgmixGaussian::get_model,
+            "Returns the distorted model value at x, y",
+            py::arg("x"), py::arg("y"), py::arg("c")
+        )
+        .def("get_loss", &NgmixGaussian::get_loss,
+            "Returns the loss function value and the derivatives wrt params",
+            py::arg("image_val"), py::arg("variance_val"),
+            py::arg("x"), py::arg("y"), py::arg("c")
+        )
+        .def("get_flux_stamp", &NgmixGaussian::get_flux_stamp,
+            "Returns the flux on a stamp",
+            py::arg("nx"), py::arg("ny"), py::arg("scale"), py::arg("sigma_arcsec")
+        )
+        .def("get_image_stamp", &NgmixGaussian::get_image_stamp,
+            "Returns the flux on a stamp",
+            py::arg("nx"), py::arg("ny"), py::arg("scale"), py::arg("sigma_arcsec")
+        );
 
     py::class_<GaussFit>(ngmix, "GaussFit")
         .def(
             py::init<
-                double, double, int
+                double, double, int, bool, bool, bool
             >(),
             py::arg("scale"),
             py::arg("sigma_arcsec"),
-            py::arg("stamp_size")=64
+            py::arg("stamp_size")=64,
+            py::arg("force_size")=false,
+            py::arg("force_shape")=false,
+            py::arg("force_center")=false
         )
         .def("process_block", &GaussFit::process_block,
             "Run iteration for fitting",

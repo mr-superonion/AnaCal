@@ -126,6 +126,8 @@ FpfsImage::find_peaks(
 
     double fcut = fthres * std_m00;
     double wdet_cut = pthres - fpfs_det_sigma2 - 0.02;
+    /* std::cout<<"fcut:"<<fcut<<", pthres:"<<pthres<<", vmin:"<<v_min<<","<<std::endl; */
+    /* std::cout<<"omegav:"<<omega_v<<std::endl; */
 
     if (std::fabs(wdet_cut) < 1e-10) {
         wdet_cut = 0.0;

@@ -16,18 +16,21 @@ namespace math {
                 py::arg("v")
             )
             .def(
-                py::init<double, double, double>(),
+                py::init<double, double, double, double, double>(),
                 "initialize tnumber with double numbers",
-                py::arg("v"), py::arg("g1"), py::arg("g2")
+                py::arg("v"), py::arg("g1"), py::arg("g2"),
+                py::arg("x1"), py::arg("x2")
             )
             .def(
-                py::init<std::array<double, 3>&>(),
+                py::init<std::array<double, 5>&>(),
                 "initialize tnumber with a list of double numbers",
                 py::arg("data")
             )
             .def_readwrite("v", &tnumber::v)
             .def_readwrite("g1", &tnumber::g1)
             .def_readwrite("g2", &tnumber::g2)
+            .def_readwrite("x1", &tnumber::x1)
+            .def_readwrite("x2", &tnumber::x2)
             .def(
                 "to_array",
                 &tnumber::to_array,
@@ -37,7 +40,9 @@ namespace math {
                 const tnumber &tn) {
                 return "<tnumber v=" + std::to_string(tn.v) +
                        ", g1=" + std::to_string(tn.g1) +
-                       ", g2=" + std::to_string(tn.g2) + ">";
+                       ", g2=" + std::to_string(tn.g2) +
+                       ", x1=" + std::to_string(tn.x1) +
+                       ", x2=" + std::to_string(tn.x2) + ">";
                 }
             )
             .def(-py::self)
@@ -146,15 +151,17 @@ namespace math {
 
         py::class_<lossNumber>(math, "lossNumber")
             .def(py::init<
-                math::tnumber, math::tnumber, math::tnumber, math::tnumber,
-                math::tnumber, math::tnumber, math::tnumber, math::tnumber,
-                math::tnumber, math::tnumber, math::tnumber, math::tnumber,
-                math::tnumber>(),
+                tnumber, tnumber, tnumber, tnumber,
+                tnumber, tnumber, tnumber, tnumber,
+                tnumber, tnumber, tnumber, tnumber,
+                tnumber>(),
                 py::arg("v"),
-                py::arg("v_A"), py::arg("v_t"), py::arg("v_e1"), py::arg("v_e2"),
+                py::arg("v_A"), py::arg("v_t"),
+                py::arg("v_e1"), py::arg("v_e2"),
                 py::arg("v_x1"), py::arg("v_x2"),
-                py::arg("v_AA"), py::arg("v_tt"), py::arg("v_e1e1"),
-                py::arg("v_e2e2"), py::arg("v_x1x1"), py::arg("v_x2x2")
+                py::arg("v_AA"), py::arg("v_tt"),
+                py::arg("v_e1e1"), py::arg("v_e2e2"),
+                py::arg("v_x1x1"), py::arg("v_x2x2")
             )
             .def_readwrite("v", &lossNumber::v)
             .def_readwrite("v_A", &lossNumber::v_A)
@@ -169,6 +176,7 @@ namespace math {
             .def_readwrite("v_e2e2", &lossNumber::v_e2e2)
             .def_readwrite("v_x1x1", &lossNumber::v_x1x1)
             .def_readwrite("v_x2x2", &lossNumber::v_x2x2);
+
     }
 } // math
 } // anacal

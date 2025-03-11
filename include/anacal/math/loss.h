@@ -91,6 +91,7 @@ struct lossNumber {
     }
 };
 
+
 } // end of math
 } // end of anacal
 

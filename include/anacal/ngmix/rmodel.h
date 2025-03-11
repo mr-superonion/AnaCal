@@ -61,19 +61,31 @@ struct frDeriv {
         : fr(fr), dfr(dfr), ddfr(ddfr) {}
 };
 
-class NgmixModel {
+class NgmixGaussian {
 private:
-    virtual frDeriv get_fr(
+    frDeriv get_fr(
         math::tnumber r2
     ) const {
-        return frDeriv(r2, r2, r2);
+        math::tnumber fr = math::exp(r2 * (-0.5));
+        math::tnumber dfr = fr * (-0.5);
+        /* math::tnumber ddfr = dfr * (-0.5); */
+        math::tnumber ddfr;
+        return frDeriv(fr, dfr, ddfr);
     };
-
 public:
-    math::tnumber A = {1.0, 0.0, 0.0};
-    math::tnumber t = {-0.5, 0.0, 0.0};
+    bool force_size, force_shape, force_center;
+    math::tnumber A = math::tnumber(1.0);
+    math::tnumber t = math::tnumber(-0.5);
     math::tnumber e1, e2, x1, x2;   // parameters
-    NgmixModel() {};
+    NgmixGaussian(
+        bool force_size=false,
+        bool force_shape=false,
+        bool force_center=false
+    ) {
+        this->force_size = force_size;
+        this->force_shape = force_shape;
+        this->force_center = force_center;
+    };
 
     inline modelKernel
     prepare_model(double scale, double sigma_arcsec) const {
@@ -86,8 +98,8 @@ public:
         math::tnumber rho4 = rho2 * rho2;
         math::tnumber rho6 = rho2 * rho4;
         math::tnumber rs2 = rho2 + sigma2;
-        math::tnumber e1e1 = math::pow(this->e1, 2);
-        math::tnumber e2e2 = math::pow(this->e2, 2);
+        math::tnumber e1e1 = math::pow(e1, 2);
+        math::tnumber e2e2 = math::pow(e2, 2);
         math::tnumber e1e2 = e1 * e2;
         math::tnumber ee = e1e1 + e2e2;
         math::tnumber det = math::pow(rs2, 2) - ee * rho4;
@@ -176,13 +188,14 @@ public:
         kernel.f_t = -dtmp * (
             sigma2 + r2ee
         ) * rho2 * scale2;
-        kernel.f_e1 = 0.5 * dtmp * rho4 * this->e1 * scale2;
-        kernel.f_e2 = 0.5 * dtmp * rho4 * this->e2 * scale2;
+        kernel.f_e1 = 0.5 * dtmp * rho4 * e1 * scale2;
+        kernel.f_e2 = 0.5 * dtmp * rho4 * e2 * scale2;
 
         kernel.f_tt = 0.25 * one_over_pi * (
             1.5 * det_inv2_5 * math::pow((4.0 * rho * (sigma2 + r2ee)), 2.0)
             - det_inv1_5 * (4.0 * sigma2 + 12.0 * r2ee)
         ) * rho2 * scale2 + kernel.f_t * scale2;
+
         kernel.f_e1e1 = 0.5 * one_over_pi * rho4 * det_inv1_5 * (
             3.0 * e1e1 * rho4 * det_inv + 1.0
         ) * scale2;
@@ -209,18 +222,31 @@ public:
 
         result.v = c.v_p0 * q0 + c.v_p1 * q1 + c.v_p2 * q2;
         // First-order derivatives
-        result.v_t = c.t_p0 * q0 + c.t_p1 * q1 + c.t_p2 * q2;
-        result.v_e1 = c.e1_p0 * q0 + c.e1_p1 * q1 + c.e1_p2 * q2;
-        result.v_e2 = c.e2_p0 * q0 + c.e2_p1 * q1 + c.e2_p2 * q2;
-        result.v_x1 = c.x1_p1 * xs + c.x1_p2 * ys;
-        result.v_x2 = c.x2_p1 * xs + c.x2_p2 * ys;
+        if (!this->force_size) {
+            result.v_t = c.t_p0 * q0 + c.t_p1 * q1 + c.t_p2 * q2;
+        }
+        if (!this->force_shape) {
+            result.v_e1 = c.e1_p0 * q0 + c.e1_p1 * q1 + c.e1_p2 * q2;
+            result.v_e2 = c.e2_p0 * q0 + c.e2_p1 * q1 + c.e2_p2 * q2;
+        }
+        if (!this->force_center) {
+            result.v_x1 = c.x1_p1 * xs + c.x1_p2 * ys;
+            result.v_x2 = c.x2_p1 * xs + c.x2_p2 * ys;
+        }
 
         // Second-order derivatives
-        result.v_tt = c.tt_p0 * q0 + c.tt_p1 * q1 + c.tt_p2 * q2;
-        result.v_e1e1 = c.e1e1_p0 * q0 + c.e1e1_p1 * q1 + c.e1e1_p2 * q2;
-        result.v_e2e2 = c.e2e2_p0 * q0 + c.e2e2_p1 * q1 + c.e2e2_p2 * q2;
-        result.v_x1x1 = c.x1x1;
-        result.v_x2x2 = c.x2x2;
+
+        if (!this->force_size) {
+            result.v_tt = c.tt_p0 * q0 + c.tt_p1 * q1 + c.tt_p2 * q2;
+        }
+        if (!this->force_shape) {
+            result.v_e1e1 = c.e1e1_p0 * q0 + c.e1e1_p1 * q1 + c.e1e1_p2 * q2;
+            result.v_e2e2 = c.e2e2_p0 * q0 + c.e2e2_p1 * q1 + c.e2e2_p2 * q2;
+        }
+        if (!this->force_center) {
+            result.v_x1x1 = c.x1x1;
+            result.v_x2x2 = c.x2x2;
+        }
         return result;
     };
 
@@ -241,28 +267,56 @@ public:
 
         math::tnumber f1 = fr.dfr * c.f;
         // First-order derivatives
-        res.v_t = f1 * r2.v_t + fr.fr * c.f_t;
-        res.v_e1 = f1 * r2.v_e1 + fr.fr * c.f_e1;
-        res.v_e2 = f1 * r2.v_e2 + fr.fr * c.f_e2;
-        res.v_x1 = f1 * r2.v_x1;
-        res.v_x2 = f1 * r2.v_x2;
+        if (!this->force_size) {
+            res.v_t = f1 * r2.v_t + fr.fr * c.f_t;
+        }
+        if (!this->force_shape) {
+            res.v_e1 = f1 * r2.v_e1 + fr.fr * c.f_e1;
+            res.v_e2 = f1 * r2.v_e2 + fr.fr * c.f_e2;
+        }
+        if (!this->force_center) {
+            res.v_x1 = f1 * r2.v_x1;
+            res.v_x2 = f1 * r2.v_x2;
+        }
 
-        // Second-order derivatives
-        res.v_tt = (
-            f1 * (r2.v_tt - 0.5 * math::pow(r2.v_t, 2.0))
-            + fr.fr * (c.f_tt - r2.v_t * c.f_t)
-        );
-        res.v_e1e1 = (
-            f1 * (r2.v_e1e1 - 0.5 * math::pow(r2.v_e1, 2.0))
-            + fr.fr * (c.f_e1e1 - r2.v_e1 * c.f_e1)
-        );
-        res.v_e2e2 = (
-            f1 * (r2.v_e2e2 - 0.5 * math::pow(r2.v_e2, 2.0))
-            + fr.fr * (c.f_e2e2 - r2.v_e2 * c.f_e2)
-        );
-        res.v_x1x1 = f1 * (r2.v_x1x1 - 0.5 * math::pow(r2.v_x1, 2.0));
-        res.v_x2x2 = f1 * (r2.v_x2x2 - 0.5 * math::pow(r2.v_x2, 2.0));
+        if (!this->force_size) {
+            // Second-order derivatives
+            res.v_tt = (
+                f1 * (r2.v_tt - 0.5 * math::pow(r2.v_t, 2.0))
+                + fr.fr * (c.f_tt - r2.v_t * c.f_t)
+            );
+        }
+
+        if (!this->force_shape) {
+            res.v_e1e1 = (
+                f1 * (r2.v_e1e1 - 0.5 * math::pow(r2.v_e1, 2.0))
+                + fr.fr * (c.f_e1e1 - r2.v_e1 * c.f_e1)
+            );
+            res.v_e2e2 = (
+                f1 * (r2.v_e2e2 - 0.5 * math::pow(r2.v_e2, 2.0))
+                + fr.fr * (c.f_e2e2 - r2.v_e2 * c.f_e2)
+            );
+        }
+        if (!this->force_center) {
+            res.v_x1x1 = f1 * (r2.v_x1x1 - 0.5 * math::pow(r2.v_x1, 2.0));
+            res.v_x2x2 = f1 * (r2.v_x2x2 - 0.5 * math::pow(r2.v_x2, 2.0));
+        }
         return res;
+    };
+
+    inline std::array<math::tnumber, 3> get_fpfs_moments(
+        math::tnumber img_val,
+        double x, double y,
+        const modelKernel& c
+    ) const {
+        math::tnumber xs = x - this->x1;
+        math::tnumber ys = y - this->x2;
+        math::tnumber q0 = xs * xs + ys * ys;
+        math::tnumber q1 = xs * xs - ys * ys;
+        math::tnumber q2 = 2.0 * xs * ys;
+        math::tnumber r2 = c.v_p0 * q0 + c.v_p1 * q1 + c.v_p2 * q2;
+        math::tnumber model = this->A * math::exp(r2 * (-0.5)) * c.f * img_val;
+        return {model * q0, model * q1, model * q2};
     };
 
     inline math::lossNumber get_loss(
@@ -283,37 +337,50 @@ public:
         // First-order derivatives
         math::tnumber tmp = -1.0 * residual * mul;
         res.v_A =  tmp * theory_val.v_A ;
-        res.v_t = tmp * theory_val.v_t;
-        res.v_e1 = tmp * theory_val.v_e1;
-        res.v_e2 = tmp * theory_val.v_e2;
-        res.v_x1 = tmp * theory_val.v_x1;
-        res.v_x2 = tmp * theory_val.v_x2;
+        if (!this->force_size) {
+            res.v_t = tmp * theory_val.v_t;
+        }
+        if (!this->force_shape) {
+            res.v_e1 = tmp * theory_val.v_e1;
+            res.v_e2 = tmp * theory_val.v_e2;
+        }
+
+        if (!this->force_center) {
+            res.v_x1 = tmp * theory_val.v_x1;
+            res.v_x2 = tmp * theory_val.v_x2;
+        }
 
         // Second-order derivatives
         res.v_AA = (
             math::pow(theory_val.v_A, 2.0) * mul
             /* + tmp * theory_val.v_AA */
         );
-        res.v_tt = (
-            math::pow(theory_val.v_t, 2.0) * mul
-            /* + tmp * theory_val.v_tt */
-        );
-        res.v_e1e1 = (
-            math::pow(theory_val.v_e1, 2.0) * mul
-            + tmp * theory_val.v_e1e1
-        );
-        res.v_e2e2 = (
-            math::pow(theory_val.v_e2, 2.0) * mul
-            + tmp * theory_val.v_e2e2
-        );
-        res.v_x1x1 = (
-            math::pow(theory_val.v_x1, 2.0) * mul
-            + tmp * theory_val.v_x1x1
-        );
-        res.v_x2x2 = (
-            math::pow(theory_val.v_x2, 2.0) * mul
-            + tmp * theory_val.v_x2x2
-        );
+        if (!this->force_size) {
+            res.v_tt = (
+                math::pow(theory_val.v_t, 2.0) * mul
+                /* + tmp * theory_val.v_tt */
+            );
+        }
+        if (!this->force_shape) {
+            res.v_e1e1 = (
+                math::pow(theory_val.v_e1, 2.0) * mul
+                /* + tmp * theory_val.v_e1e1 */
+            );
+            res.v_e2e2 = (
+                math::pow(theory_val.v_e2, 2.0) * mul
+                /* + tmp * theory_val.v_e2e2 */
+            );
+        }
+        if (!this->force_center) {
+            res.v_x1x1 = (
+                math::pow(theory_val.v_x1, 2.0) * mul
+                /* + tmp * theory_val.v_x1x1 */
+            );
+            res.v_x2x2 = (
+                math::pow(theory_val.v_x2, 2.0) * mul
+                /* + tmp * theory_val.v_x2x2 */
+            );
+        }
         return res;
     };
 
@@ -321,40 +388,47 @@ public:
     update_model_params(
         const math::lossNumber& loss,
         const modelPrior& prior,
-        int epoch
+        int epoch,
+        double variance_val=1.0
     ) {
+        math::tnumber damp = loss.v * 2.0 * std::exp(-epoch / 2.0);
+        double ratio = 2.0 / variance_val;
         this->A = this->A - (
             (loss.v_A + prior.w_A * (this->A - prior.mu_A)) / (
-                loss.v_AA + prior.w_A
+                0.01 * ratio + loss.v_AA + prior.w_A
             )
         );
-        /* std::cout << this->A.v << loss.v_AA.v << std::endl; */
-        this->t = this->t - (
-            (loss.v_t + prior.w_t * (this->t - prior.mu_t)) / (
-               math::pow(loss.v, 0.5) * std::exp(-epoch)
-               + (loss.v_tt + prior.w_t)
-            )
-        );
-        this->e1 = this->e1 - (
-            (loss.v_e1 + prior.w_e * (this->e1 - prior.mu_e1)) / (
-                loss.v_e1e1 + prior.w_e
-            )
-        );
-        this->e2 = this->e2 - (
-            (loss.v_e2 + prior.w_e * (this->e2 - prior.mu_e2)) / (
-                loss.v_e2e2 + prior.w_e
-            )
-        );
-        this->x1 = this->x1 - (
-            (loss.v_x1 + prior.w_x * (this->x1 - prior.mu_x1)) / (
-                loss.v_x1x1 + prior.w_x
-            )
-        );
-        this->x2 = this->x2 - (
-            (loss.v_x2 + prior.w_x * (this->x2 - prior.mu_x2)) / (
-                loss.v_x2x2 + prior.w_x
-            )
-        );
+        if (!this->force_size) {
+            this->t = this->t - (
+                (loss.v_t + prior.w_t * (this->t - prior.mu_t)) / (
+                    damp + (loss.v_tt + prior.w_t)
+                )
+            );
+        }
+        if (!this->force_shape) {
+            this->e1 = this->e1 - (
+                (loss.v_e1 + prior.w_e * (this->e1 - prior.mu_e1)) / (
+                    damp + (loss.v_e1e1 + prior.w_e)
+                )
+            );
+            this->e2 = this->e2 - (
+                (loss.v_e2 + prior.w_e * (this->e2 - prior.mu_e2)) / (
+                    damp + (loss.v_e2e2 + prior.w_e)
+                )
+            );
+        }
+        if (!this->force_center) {
+            this->x1 = this->x1 - (
+                loss.v_x1 / (
+                    damp + (loss.v_x1x1 + prior.w_x)
+                )
+            );
+            this->x2 = this->x2 - (
+                loss.v_x2 / (
+                    damp + (loss.v_x2x2 + prior.w_x)
+                )
+            );
+        }
     };
 
     inline math::tnumber
@@ -416,26 +490,35 @@ public:
         return result;
     }
 
-    virtual ~NgmixModel() = default;
-};
-
-
-/// NgmixGaussian Function
-class NgmixGaussian : public NgmixModel {
-private:
-    frDeriv get_fr(
-        math::tnumber r2
-    ) const {
-        math::tnumber fr = math::exp(r2 * (-0.5));
-        math::tnumber dfr = fr * (-0.5);
-        /* math::tnumber ddfr = dfr * (-0.5); */
-        math::tnumber ddfr;
-        return frDeriv(fr, dfr, ddfr);
+    inline NgmixGaussian
+    decentralize(double dx1, double dx2) const {
+        // (dx1, dx2) is the position of the source wrt center of block
+        NgmixGaussian result= *this;
+        result.A = this->A.decentralize(dx1, dx2);
+        result.t = this->t.decentralize(dx1, dx2);
+        result.e1 = this->e1.decentralize(dx1, dx2);
+        result.e2 = this->e2.decentralize(dx1, dx2);
+        result.x1 = this->x1.decentralize(dx1, dx2);
+        result.x2 = this->x2.decentralize(dx1, dx2);
+        return result;
     };
-public:
-    // NgmixGaussian Profile
-    NgmixGaussian() {};
+
+    inline NgmixGaussian
+    centralize(double dx1, double dx2) const {
+        // (dx1, dx2) is the position of the source wrt center of block
+        NgmixGaussian result= *this;
+        result.A = this->A.centralize(dx1, dx2);
+        result.t = this->t.centralize(dx1, dx2);
+        result.e1 = this->e1.centralize(dx1, dx2);
+        result.e2 = this->e2.centralize(dx1, dx2);
+        result.x1 = this->x1.centralize(dx1, dx2);
+        result.x2 = this->x2.centralize(dx1, dx2);
+        return result;
+    };
+
+    virtual ~NgmixGaussian() = default;
 };
+
 
 } // ngmix
 } // anacal

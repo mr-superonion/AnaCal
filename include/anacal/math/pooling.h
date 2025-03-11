@@ -6,6 +6,16 @@
 namespace anacal {
 namespace math {
 
+    template <typename T>
+    inline tnumber ssfunc1(tnumber x, T mu, T sigma) {
+        tnumber t = (x - mu) / (sigma * 2.0) + 0.5;
+        if (t.v < 0) return {0.0, 0.0, 0.0, 0.0, 0.0};
+        else if (t.v <= 1) return (
+            - 2.0 * pow(t, 3.0) + 3.0 * pow(t, 2)
+        );
+        else return {1.0, 0.0, 0.0, 0.0, 0.0};
+    }
+
     inline double ssfunc1(double x, double mu, double sigma) {
         // Returns the C1 smooth step weight funciton
         auto _func = [](double t) -> double {
@@ -30,14 +40,14 @@ namespace math {
         else return 0.0;
     }
 
-
-    inline tnumber ssfunc2(tnumber x, double mu, double sigma) {
+    template <typename T>
+    inline tnumber ssfunc2(tnumber x, T mu, T sigma) {
         tnumber t = (x - mu) / (sigma * 2.0) + 0.5;
-        if (t.v < 0) return {0.0, 0.0, 0.0};
+        if (t.v < 0) return {0.0, 0.0, 0.0, 0.0, 0.0};
         else if (t.v <= 1) return (
             6 * pow(t, 5) - 15 * pow(t, 4) + 10 * pow(t, 3)
         );
-        else return {1.0, 0.0, 0.0};
+        else return {1.0, 0.0, 0.0, 0.0, 0.0};
     }
 
     inline double ssfunc2(double x, double mu, double sigma) {
