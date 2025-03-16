@@ -75,17 +75,15 @@ private:
 public:
     bool force_size, force_shape, force_center;
     math::qnumber A = math::qnumber(1.0);
-    math::qnumber t = math::qnumber(-0.5);
+    math::qnumber t = math::qnumber(-1.0);
     math::qnumber e1, e2, x1, x2;   // parameters
     NgmixGaussian(
         bool force_size=false,
         bool force_shape=false,
         bool force_center=false
-    ) {
-        this->force_size = force_size;
-        this->force_shape = force_shape;
-        this->force_center = force_center;
-    };
+    ) :
+        force_size(force_size), force_shape(force_shape),
+        force_center(force_center){};
 
     inline modelKernel
     prepare_model(double scale, double sigma_arcsec) const {
@@ -304,19 +302,19 @@ public:
         return res;
     };
 
-    inline std::array<math::qnumber, 3> get_fpfs_moments(
+    inline std::array<math::qnumber, 4> get_fpfs_moments(
         math::qnumber img_val,
         double x, double y,
-        const modelKernel& c
+        double sigma_arcsec
     ) const {
         math::qnumber xs = x - this->x1;
         math::qnumber ys = y - this->x2;
         math::qnumber q0 = xs * xs + ys * ys;
         math::qnumber q1 = xs * xs - ys * ys;
         math::qnumber q2 = 2.0 * xs * ys;
-        math::qnumber r2 = c.v_p0 * q0 + c.v_p1 * q1 + c.v_p2 * q2;
-        math::qnumber model = this->A * math::exp(r2 * (-0.5)) * c.f * img_val;
-        return {model * q0, model * q1, model * q2};
+        math::qnumber r2 = q0 / sigma_arcsec / sigma_arcsec;
+        math::qnumber model = math::exp(r2 * (-0.5)) * img_val;
+        return {model * q0, model * q1, model * q2, model};
     };
 
     inline math::lossNumber get_loss(

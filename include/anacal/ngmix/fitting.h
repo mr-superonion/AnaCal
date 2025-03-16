@@ -36,8 +36,8 @@ public:
         }
     };
 
-    inline std::array<math::qnumber, 3>
-    measure_fpfs_ellipticity(
+    inline std::array<math::qnumber, 4>
+    measure_fpfs_2nd(
         const std::vector<math::qnumber> & data,
         const NgmixGaussian & model,
         const geometry::block & block
@@ -63,7 +63,7 @@ public:
             this->sigma_arcsec
         );
 
-        std::array<math::qnumber, 3> result;
+        std::array<math::qnumber, 4> result;
         for (int j = 0; j < this->stamp_size; ++j) {
             int jb = j + j_block_shift;
             if (jb < 0 || jb >= block.ny) {
@@ -78,12 +78,13 @@ public:
                 }
                 int i2 = std::pow(i - this->ss2, 2.0);
                 if (i2 + j2 < this->ss2 * this->ss2) {
-                    std::array<math::qnumber, 3> mm = model.get_fpfs_moments(
-                        data[idjb + ib], xvs[i], yvs[j], kernel
+                    std::array<math::qnumber, 4> mm = model.get_fpfs_moments(
+                        data[idjb + ib], xvs[i], yvs[j], sigma_arcsec
                     );
                     result[0] = result[0] + mm[0];
                     result[1] = result[1] + mm[1];
                     result[2] = result[2] + mm[2];
+                    result[3] = result[3] + mm[3];
                 }
             }
         }
@@ -113,6 +114,7 @@ public:
         }
         int j_block_shift = j_stamp - this->ss2 - block.ymin;
         int i_block_shift = i_stamp - this->ss2 - block.xmin;
+        /* std::cout<<model.force_shape<<std::endl; */
 
         modelKernel kernel = model.prepare_model(
             this->scale,
@@ -157,17 +159,19 @@ public:
             src.model.force_size=this->force_size;
             src.model.force_shape=this->force_shape;
             src.model.force_center=this->force_center;
+            // FPFS Shapes
+            std::array<math::qnumber, 4> mm = this->measure_fpfs_2nd(
+                data, src.model, block
+            );
+            src.fpfs_e1 = mm[1] / mm[0];
+            src.fpfs_e2 = mm[2] / mm[0];
+            src.fpfs_trace = mm[0] / mm[3];
             for (int epoch = 0; epoch < num_epochs; ++epoch) {
                 src.loss = this->measure_loss(
                     data, variance, src.model, block
                 );
                 src.model.update_model_params(src.loss, prior, epoch, variance);
             }
-            std::array<math::qnumber, 3> mm = this->measure_fpfs_ellipticity(
-                data, src.model, block
-            );
-            src.fpfs_e1 = mm[1] / mm[0];
-            src.fpfs_e2 = mm[2] / mm[0];
             result.push_back(src);
         }
         return result;

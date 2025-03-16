@@ -64,6 +64,8 @@ class FpfsTask(FpfsKernel):
             psf_array=self.psf_array,
             use_estimate=True,
         )
+        # print(self.kmax / self.pixel_scale)
+        # print(self.kmax)
 
         if self.do_detection:
             self.dtask = FpfsImage(

@@ -41,6 +41,9 @@ struct galRow{
     double fpfs_e2;
     double fpfs_de2_dg1;
     double fpfs_de2_dg2;
+    double fpfs_trace;
+    double fpfs_dtrace_dg1;
+    double fpfs_dtrace_dg2;
 };
 
 struct galNumber {
@@ -53,6 +56,7 @@ struct galNumber {
     math::lossNumber loss;
     math::qnumber fpfs_e1;
     math::qnumber fpfs_e2;
+    math::qnumber fpfs_trace;
 
     galNumber() = default;
 
@@ -77,6 +81,7 @@ struct galNumber {
         result.model = this->model.decentralize(dx1, dx2);
         result.fpfs_e1 = this->fpfs_e1.decentralize(dx1, dx2);
         result.fpfs_e2 = this->fpfs_e2.decentralize(dx1, dx2);
+        result.fpfs_trace = this->fpfs_trace.decentralize(dx1, dx2);
         return result;
     };
 
@@ -89,6 +94,9 @@ struct galNumber {
         result.wdet = this->wdet.centralize(dx1, dx2);
         result.fluxdet = this->fluxdet.centralize(dx1, dx2);
         result.model = this->model.centralize(dx1, dx2);
+        result.fpfs_e1 = this->fpfs_e1.centralize(dx1, dx2);
+        result.fpfs_e2 = this->fpfs_e2.centralize(dx1, dx2);
+        result.fpfs_trace = this->fpfs_trace.centralize(dx1, dx2);
         return result;
     };
 
@@ -127,7 +135,10 @@ struct galNumber {
             fpfs_e1.g2,
             fpfs_e2.v,
             fpfs_e2.g1,
-            fpfs_e2.g2
+            fpfs_e2.g2,
+            fpfs_trace.v,
+            fpfs_trace.g1,
+            fpfs_trace.g2
         };
         return row;
     };

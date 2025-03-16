@@ -116,7 +116,7 @@ deconvolve_filter(
 );
 
 
-class ImageT {
+class ImageQ {
 private:
     // Preventing copy (implement these if you need copy semantics)
     double klim;
@@ -134,10 +134,10 @@ private:
 
     int nx2, ny2;
     int kx_length, ky_length;
-    ImageT(const ImageT&) = delete;
-    ImageT& operator=(const ImageT&) = delete;
+    ImageQ(const ImageQ&) = delete;
+    ImageQ& operator=(const ImageQ&) = delete;
 public:
-    ImageT(
+    ImageQ(
         int nx,
         int ny,
         double scale,
@@ -155,7 +155,7 @@ public:
     {
         if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
             throw std::runtime_error(
-                "ImageT Error: invalid input sigma_arcsec"
+                "ImageQ Error: invalid input sigma_arcsec"
             );
         }
         this->nx2 = nx / 2;
@@ -334,10 +334,10 @@ public:
     };
 
 
-    ImageT(ImageT&& other) noexcept = default;
-    ImageT& operator=(ImageT&& other) noexcept = default;
+    ImageQ(ImageQ&& other) noexcept = default;
+    ImageQ& operator=(ImageQ&& other) noexcept = default;
 
-    ~ImageT() = default;
+    ~ImageQ() = default;
 };
 
 inline std::vector<math::qnumber>
@@ -348,7 +348,7 @@ prepare_data_block(
     const geometry::block & block,
     const std::optional<py::array_t<double>>& noise_array=std::nullopt
 ){
-    ImageT img_obj(
+    ImageQ img_obj(
         block.nx,
         block.ny,
         block.scale,

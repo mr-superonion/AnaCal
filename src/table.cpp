@@ -12,7 +12,8 @@ pyExportTable(py::module_& m) {
         fluxdet, dfluxdet_dg1, dfluxdet_dg2, wdet, dwdet_dg1, dwdet_dg2,
         mask_value, is_peak,
         fpfs_e1, fpfs_de1_dg1, fpfs_de1_dg2,
-        fpfs_e2, fpfs_de2_dg1, fpfs_de2_dg2
+        fpfs_e2, fpfs_de2_dg1, fpfs_de2_dg2,
+        fpfs_trace, fpfs_dtrace_dg1, fpfs_dtrace_dg2
     );
     py::module_ table = m.def_submodule(
         "table", "submodule for table"
@@ -29,13 +30,14 @@ pyExportTable(py::module_& m) {
             py::arg("loss")
         )
         .def_readwrite("model", &galNumber::model)
-        .def_readwrite("fluxdet", &galNumber::fluxdet)
-        .def_readwrite("wdet", &galNumber::wdet)
-        .def_readwrite("mask_value", &galNumber::mask_value)
-        .def_readwrite("is_peak", &galNumber::is_peak)
-        .def_readwrite("loss", &galNumber::loss)
-        .def_readwrite("fpfs_e1", &galNumber::fpfs_e1)
-        .def_readwrite("fpfs_e2", &galNumber::fpfs_e2)
+        .def_readonly("fluxdet", &galNumber::fluxdet)
+        .def_readonly("wdet", &galNumber::wdet)
+        .def_readonly("mask_value", &galNumber::mask_value)
+        .def_readonly("is_peak", &galNumber::is_peak)
+        .def_readonly("loss", &galNumber::loss)
+        .def_readonly("fpfs_e1", &galNumber::fpfs_e1)
+        .def_readonly("fpfs_e2", &galNumber::fpfs_e2)
+        .def_readonly("fpfs_trace", &galNumber::fpfs_trace)
         .def("to_row", &galNumber::to_row);
 
     table.def(

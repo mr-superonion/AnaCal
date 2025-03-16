@@ -6,6 +6,17 @@
 namespace anacal {
 namespace math {
 
+    inline qnumber ssfunc0(qnumber x, double mu, double sigma) {
+        double xv = x.v - mu;
+        if (xv < 0 && xv > -sigma) {
+            return (1.0 / (2.0 * sigma * sigma)) * (x + sigma) * (x + sigma);
+        } else if (xv >= 0) {
+            return 1.0 / (1.0 + exp(-4.0 * x / sigma));
+        } else {
+            return 0.0;  // Outside defined region
+        }
+    }
+
     template <typename T>
     inline qnumber ssfunc1(qnumber x, T mu, T sigma) {
         qnumber t = (x - mu) / (sigma * 2.0) + 0.5;
@@ -75,8 +86,6 @@ namespace math {
         else if (t <= 1) return _func(t) / (sigma * 2.0);
         else return 0.0;
     }
-
-
 
 }
 }
