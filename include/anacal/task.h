@@ -92,30 +92,6 @@ public:
         );
     };
 
-    inline std::vector<table::galNumber>
-    process_image_impl(
-        py::array_t<double>& img_array,
-        py::array_t<double>& psf_array,
-        double variance,
-        const std::vector<geometry::block>& block_list,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt
-    ) {
-        std::vector<table::galNumber> catalog;
-        for (const geometry::block & block: block_list) {
-            std::vector<table::galNumber> v = process_block_impl(
-                img_array,
-                psf_array,
-                variance,
-                block,
-                noise_array
-            );
-            for (const auto& element : v) {
-                catalog.push_back(element.decentralize(block));
-            }
-        }
-        return catalog;
-    };
-
     inline py::array_t<table::galRow>
     process_image(
         py::array_t<double>& img_array,
@@ -132,13 +108,20 @@ public:
             : geometry::get_block_list(
                 image_nx, image_ny, image_nx, image_ny, 0, this->scale
             );
-        std::vector<table::galNumber> catalog = this->process_image_impl(
-            img_array,
-            psf_array,
-            variance,
-            bb_list,
-            noise_array
-        );
+
+        std::vector<table::galNumber> catalog;
+        for (const geometry::block & block: bb_list) {
+            std::vector<table::galNumber> v = process_block_impl(
+                img_array,
+                psf_array,
+                variance,
+                block,
+                noise_array
+            );
+            for (const auto& element : v) {
+                catalog.push_back(element.decentralize(block));
+            }
+        }
         return table::objlist_to_array(catalog);
     };
 };

@@ -227,7 +227,7 @@ public:
             }
         }
 
-        // shear response are derived from image - 2.0 * noise
+        // shear response are derived from image - noise
         if (imgcov_f_n) {
             auto r = imgcov_f.mutable_unchecked<2>();
             auto r_n = imgcov_f_n.value().unchecked<2>();

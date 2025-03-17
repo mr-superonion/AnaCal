@@ -33,15 +33,6 @@ pyExportTask(py::module_& m) {
             py::arg("force_shape")=false,
             py::arg("force_center")=false
         )
-        .def("process_image_impl",
-            &TaskAlpha::process_image_impl,
-            "process image",
-            py::arg("img_array"),
-            py::arg("psf_array"),
-            py::arg("variance"),
-            py::arg("block_list"),
-            py::arg("noise_array")=py::none()
-        )
         .def("process_image",
             &TaskAlpha::process_image,
             "process image",
