@@ -219,44 +219,72 @@ struct qnumber {
 
 
 inline qnumber exp(
-    const qnumber& tn
+    const qnumber& qn
 ) {
-    double expv = std::exp(tn.v);
+    double expv = std::exp(qn.v);
     return qnumber(
         expv,
-        expv * tn.g1,
-        expv * tn.g2,
-        expv * tn.x1,
-        expv * tn.x2
+        expv * qn.g1,
+        expv * qn.g2,
+        expv * qn.x1,
+        expv * qn.x2
     );
 }; // exponential function
 
 inline qnumber tanh(
-    const qnumber& tn
+    const qnumber& qn
 ) {
-    double tan = std::tanh(tn.v);
+    double tan = std::tanh(qn.v);
     double dtan = 1.0 - pow(tan, 2.0);
     return qnumber(
         tan,
-        dtan * tn.g1,
-        dtan * tn.g2,
-        dtan * tn.x1,
-        dtan * tn.x2
+        dtan * qn.g1,
+        dtan * qn.g2,
+        dtan * qn.x1,
+        dtan * qn.x2
     );
 }; // tanh function
 
+inline qnumber sin(
+    const qnumber& qn
+) {
+    double sin = std::sin(qn.v);
+    double dsin = std::cos(qn.v);
+    return qnumber(
+        sin,
+        dsin * qn.g1,
+        dsin * qn.g2,
+        dsin * qn.x1,
+        dsin * qn.x2
+    );
+}; // sine function
+
+inline qnumber cos(
+    const qnumber& qn
+) {
+    double cos = std::cos(qn.v);
+    double dcos = -std::sin(qn.v);
+    return qnumber(
+        cos,
+        dcos * qn.g1,
+        dcos * qn.g2,
+        dcos * qn.x1,
+        dcos * qn.x2
+    );
+}; // cosine function
+
 inline qnumber pow(
-    const qnumber& tn,
+    const qnumber& qn,
     double n
 ) {
-    double tmp0 = std::pow(tn.v, n - 1);
+    double tmp0 = std::pow(qn.v, n - 1);
     double tmp = n * tmp0;
     return qnumber(
-        tmp0 * tn.v,
-        tmp * tn.g1,
-        tmp * tn.g2,
-        tmp * tn.x1,
-        tmp * tn.x2
+        tmp0 * qn.v,
+        tmp * qn.g1,
+        tmp * qn.g2,
+        tmp * qn.x1,
+        tmp * qn.x2
     );
 }; // power function
 

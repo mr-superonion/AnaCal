@@ -10,15 +10,15 @@ pyExportNgmix(py::module_& m) {
 
     py::class_<modelPrior>(ngmix, "modelPrior")
         .def(py::init<>())
-        .def_readwrite("mu_A", &modelPrior::mu_A)
+        .def_readwrite("mu_F", &modelPrior::mu_F)
         .def_readwrite("mu_t", &modelPrior::mu_t)
-        .def_readwrite("w_A", &modelPrior::w_A)
+        .def_readwrite("w_F", &modelPrior::w_F)
         .def_readwrite("w_e", &modelPrior::w_e)
         .def_readwrite("w_t", &modelPrior::w_t)
         .def_readwrite("w_x", &modelPrior::w_x)
-        .def("set_sigma_A", &modelPrior::set_sigma_A,
-            "set the Gaussian prior on A",
-            py::arg("sigma_A")
+        .def("set_sigma_F", &modelPrior::set_sigma_F,
+            "set the Gaussian prior on Flux",
+            py::arg("sigma_F")
         )
         .def("set_sigma_t", &modelPrior::set_sigma_t,
             "set the Gaussian prior on log radius",
@@ -49,7 +49,7 @@ pyExportNgmix(py::module_& m) {
             py::arg("force_shape")=false,
             py::arg("force_center")=false
         )
-        .def_readwrite("A", &NgmixGaussian::A)
+        .def_readwrite("F", &NgmixGaussian::F)
         .def_readwrite("t", &NgmixGaussian::t)
         .def_readwrite("e1", &NgmixGaussian::e1)
         .def_readwrite("e2", &NgmixGaussian::e2)

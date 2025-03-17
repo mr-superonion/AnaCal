@@ -104,9 +104,9 @@ struct galNumber {
     to_row() const {
         math::qnumber rho = math::exp(model.t);
         galRow row = {
-            model.A.v,
-            model.A.g1,
-            model.A.g2,
+            model.F.v,
+            model.F.g1,
+            model.F.g2,
             rho.v,
             rho.g1,
             rho.g2,

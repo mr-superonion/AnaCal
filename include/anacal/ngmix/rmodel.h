@@ -7,15 +7,15 @@ namespace anacal {
 namespace ngmix {
 
 struct modelPrior {
-    math::qnumber w_A, w_t, w_e, w_x;
-    math::qnumber mu_A, mu_t;
+    math::qnumber w_F, w_t, w_e, w_x;
+    math::qnumber mu_F, mu_t;
     math::qnumber mu_e1, mu_e2;
     math::qnumber mu_x1, mu_x2;
 
     modelPrior() = default;
 
-    inline void set_sigma_A(math::qnumber sigma_A){
-        this->w_A = 2.0 / math::pow(sigma_A, 2.0);
+    inline void set_sigma_F(math::qnumber sigma_F){
+        this->w_F = 2.0 / math::pow(sigma_F, 2.0);
     }; // loss is chi2
 
     inline void set_sigma_t(math::qnumber sigma_t){
@@ -74,7 +74,7 @@ private:
     };
 public:
     bool force_size, force_shape, force_center;
-    math::qnumber A = math::qnumber(1.0);
+    math::qnumber F = math::qnumber(1.0);
     math::qnumber t = math::qnumber(-1.0);
     math::qnumber e1, e2, x1, x2;   // parameters
     NgmixGaussian(
@@ -257,11 +257,11 @@ public:
         frDeriv fr =  this->get_fr(r2.v);
 
         math::lossNumber res;
-        res.v = this->A * fr.fr * c.f;
-        res.v_A = fr.fr * c.f; // A is special
+        res.v = this->F * fr.fr * c.f;
+        res.v_F = fr.fr * c.f; // F is special
 
-        fr.fr = fr.fr * this->A;
-        fr.dfr = fr.dfr * this->A;
+        fr.fr = fr.fr * this->F;
+        fr.dfr = fr.dfr * this->F;
 
         math::qnumber f1 = fr.dfr * c.f;
         // First-order derivatives
@@ -334,7 +334,7 @@ public:
 
         // First-order derivatives
         math::qnumber tmp = -1.0 * residual * mul;
-        res.v_A =  tmp * theory_val.v_A ;
+        res.v_F =  tmp * theory_val.v_F ;
         if (!this->force_size) {
             res.v_t = tmp * theory_val.v_t;
         }
@@ -349,9 +349,9 @@ public:
         }
 
         // Second-order derivatives
-        res.v_AA = (
-            math::pow(theory_val.v_A, 2.0) * mul
-            /* + tmp * theory_val.v_AA */
+        res.v_FF = (
+            math::pow(theory_val.v_F, 2.0) * mul
+            /* + tmp * theory_val.v_FF */
         );
         if (!this->force_size) {
             res.v_tt = (
@@ -391,9 +391,9 @@ public:
     ) {
         math::qnumber damp = loss.v * 2.0 * std::exp(-epoch / 2.0);
         double ratio = 2.0 / variance_val;
-        this->A = this->A - (
-            (loss.v_A + prior.w_A * (this->A - prior.mu_A)) / (
-                0.01 * ratio + loss.v_AA + prior.w_A
+        this->F = this->F - (
+            (loss.v_F + prior.w_F * (this->F - prior.mu_F)) / (
+                0.01 * ratio + loss.v_FF + prior.w_F
             )
         );
         if (!this->force_size) {
@@ -492,7 +492,7 @@ public:
     decentralize(double dx1, double dx2) const {
         // (dx1, dx2) is the position of the source wrt center of block
         NgmixGaussian result= *this;
-        result.A = this->A.decentralize(dx1, dx2);
+        result.F = this->F.decentralize(dx1, dx2);
         result.t = this->t.decentralize(dx1, dx2);
         result.e1 = this->e1.decentralize(dx1, dx2);
         result.e2 = this->e2.decentralize(dx1, dx2);
@@ -505,7 +505,7 @@ public:
     centralize(double dx1, double dx2) const {
         // (dx1, dx2) is the position of the source wrt center of block
         NgmixGaussian result= *this;
-        result.A = this->A.centralize(dx1, dx2);
+        result.F = this->F.centralize(dx1, dx2);
         result.t = this->t.centralize(dx1, dx2);
         result.e1 = this->e1.centralize(dx1, dx2);
         result.e2 = this->e2.centralize(dx1, dx2);

@@ -58,10 +58,6 @@ public:
         }
         int j_block_shift = j_stamp - this->ss2 - block.ymin;
         int i_block_shift = i_stamp - this->ss2 - block.xmin;
-        modelKernel kernel = model.prepare_model(
-            this->scale,
-            this->sigma_arcsec
-        );
 
         std::array<math::qnumber, 4> result;
         for (int j = 0; j < this->stamp_size; ++j) {
@@ -160,18 +156,18 @@ public:
             src.model.force_shape=this->force_shape;
             src.model.force_center=this->force_center;
             // FPFS Shapes
-            std::array<math::qnumber, 4> mm = this->measure_fpfs_2nd(
-                data, src.model, block
-            );
-            src.fpfs_e1 = mm[1] / mm[0];
-            src.fpfs_e2 = mm[2] / mm[0];
-            src.fpfs_trace = mm[0] / mm[3];
             for (int epoch = 0; epoch < num_epochs; ++epoch) {
                 src.loss = this->measure_loss(
                     data, variance, src.model, block
                 );
                 src.model.update_model_params(src.loss, prior, epoch, variance);
             }
+            std::array<math::qnumber, 4> mm = this->measure_fpfs_2nd(
+                data, src.model, block
+            );
+            src.fpfs_e1 = mm[1] / mm[0];
+            src.fpfs_e2 = mm[2] / mm[0];
+            src.fpfs_trace = mm[0] / mm[3];
             result.push_back(src);
         }
         return result;
