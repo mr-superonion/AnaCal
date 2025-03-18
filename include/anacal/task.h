@@ -3,6 +3,7 @@
 
 #include "detector.h"
 #include "stdafx.h"
+#include "mask2.h"
 
 namespace anacal {
 namespace task {
@@ -119,7 +120,7 @@ public:
     ) {
 
         double variance_use;
-        if (noise_array) {
+        if (noise_array.has_value()) {
             variance_use = variance * 2.0;
         } else {
             variance_use = variance;
@@ -163,7 +164,8 @@ public:
         const py::array_t<double>& psf_array,
         double variance,
         const std::optional<std::vector<geometry::block>>& block_list=std::nullopt,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt
+        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+        const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
     ) {
 
         int image_ny = img_array.shape(0);
@@ -186,6 +188,15 @@ public:
             for (const auto& element : v) {
                 catalog.push_back(element.decentralize(block));
             }
+        }
+
+        if (mask_array.has_value()) {
+            mask2::add_pixel_mask_column_catalog(
+                catalog,
+                *mask_array,
+                sigma_arcsec,
+                scale
+            );
         }
         return table::objlist_to_array(catalog);
     };

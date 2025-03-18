@@ -40,7 +40,8 @@ pyExportTask(py::module_& m) {
             py::arg("psf_array"),
             py::arg("variance"),
             py::arg("block_list")=py::none(),
-            py::arg("noise_array")=py::none()
+            py::arg("noise_array")=py::none(),
+            py::arg("mask_array")=py::none()
         );
     task.def(
         "get_smoothed_variance", &get_smoothed_variance,
