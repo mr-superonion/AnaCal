@@ -314,7 +314,7 @@ public:
         auto result = py::array_t<double>({5, ny, nx});
         auto r = result.mutable_unchecked<3>();
 
-        std::vector<math::qnumber> tvec = prepare_qnumber_vector(
+        std::vector<math::qnumber> qvec = prepare_qnumber_vector(
             img_array,
             psf_array,
             noise_array,
@@ -323,11 +323,11 @@ public:
         );
         for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
             for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
-                r(0, j, i) = tvec[idx].v;
-                r(1, j, i) = tvec[idx].g1;
-                r(2, j, i) = tvec[idx].g2;
-                r(3, j, i) = tvec[idx].x1;
-                r(4, j, i) = tvec[idx].x2;
+                r(0, j, i) = qvec[idx].v;
+                r(1, j, i) = qvec[idx].g1;
+                r(2, j, i) = qvec[idx].g2;
+                r(3, j, i) = qvec[idx].x1;
+                r(4, j, i) = qvec[idx].x2;
             }
         }
         return result;
