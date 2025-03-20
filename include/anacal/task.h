@@ -40,7 +40,7 @@ inline double get_smoothed_variance(
             img_obj.set_f(pf);
         }
         // Deconvolve the PSF
-        img_obj.deconvolve(parr, 1000.0);
+        img_obj.deconvolve(parr, 3.0 / scale);
     }
     {
         // Convolve Gaussian
@@ -125,18 +125,23 @@ public:
         } else {
             variance_use = variance;
         }
-        double variance_sm = get_smoothed_variance(
+        double variance_det = get_smoothed_variance(
             block.scale,
             sigma_arcsec_det,
             psf_array,
             variance_use
         );
-        double noise_std = std::pow(variance_sm, 0.5);
+        double variance_meas = get_smoothed_variance(
+            block.scale,
+            sigma_arcsec,
+            psf_array,
+            variance_use
+        );
         std::vector<table::galNumber> catalog = detector::find_peaks(
             img_array,
             psf_array,
             this->sigma_arcsec_det,
-            this->snr_peak_min * noise_std,
+            this->snr_peak_min * std::pow(variance_det, 0.5),
             this->omega_f,
             this->v_min,
             this->omega_v,
@@ -153,9 +158,23 @@ public:
             this->prior,
             noise_array,
             this->num_epochs,
-            variance_sm,
+            variance_meas,
             block
         );
+    };
+
+    inline
+    void select_push_back(
+        table::galNumber& src,
+        std::vector<table::galNumber> & catalog
+    ) {
+        src.wdet = src.wdet * math::ssfunc1(
+            src.fpfs_trace,
+            0.18 + this->sigma_arcsec * 0.05,
+            this->sigma_arcsec * 0.1
+        );
+        if (src.wdet.v > 1e-8) catalog.push_back(src);
+        return;
     };
 
     inline py::array_t<table::galRow>
@@ -178,15 +197,16 @@ public:
 
         std::vector<table::galNumber> catalog;
         for (const geometry::block & block: bb_list) {
-            std::vector<table::galNumber> v = process_block_impl(
+            std::vector<table::galNumber> catb = process_block_impl(
                 img_array,
                 psf_array,
                 variance,
                 block,
                 noise_array
             );
-            for (const auto& element : v) {
-                catalog.push_back(element.decentralize(block));
+            for (const table::galNumber& src : catb) {
+                table::galNumber src_new = src.decentralize(block);
+                this->select_push_back(src_new, catalog);
             }
         }
 

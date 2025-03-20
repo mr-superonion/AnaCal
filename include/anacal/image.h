@@ -189,8 +189,9 @@ public:
         py::array_t<std::complex<double>> imgcov_f = img_obj.draw_f();
 
         // image is derived from image + noise
-        std::optional<py::array_t<std::complex<double>>> imgcov_f_n;
-        if (noise_array.has_value()){
+        py::array_t<std::complex<double>> imgcov_f_n;
+        bool has_noise = noise_array.has_value();
+        if (has_noise) {
             img_obj.set_r(psf_array, -1, -1, true);
             img_obj.fft();
             img_obj.rotate90_f();
@@ -199,16 +200,14 @@ public:
             // signal
             img_obj.set_r(*noise_array, xcen, ycen, false);
             img_obj.fft();
-            // Deconvolve the PSF
-            img_obj.deconvolve(parr_n, klim);
-            // Convolve Gaussian
-            img_obj.filter(gauss_model);
+            img_obj.deconvolve(parr_n, klim);  // Deconvolve the PSF
+            img_obj.filter(gauss_model);       // Convolve Gaussian
             imgcov_f_n = img_obj.draw_f();
 
             auto r = imgcov_f.mutable_unchecked<2>();
-            auto r_n = imgcov_f_n.value().unchecked<2>();
-            for (int j = 0; j < ky_length ; ++j) {
-                for (int i = 0; i < kx_length ; ++i) {
+            auto r_n = imgcov_f_n.unchecked<2>();
+            for (int j = 0; j < this->ky_length ; ++j) {
+                for (int i = 0; i < this->kx_length ; ++i) {
                     r(j, i) = r(j, i) + r_n(j, i);
                 }
             }
@@ -227,12 +226,12 @@ public:
             }
         }
 
-        // shear response are derived from image - noise
-        if (imgcov_f_n) {
+        // shear response from image - noise
+        if (has_noise) {
             auto r = imgcov_f.mutable_unchecked<2>();
-            auto r_n = imgcov_f_n.value().unchecked<2>();
-            for (int j = 0; j < ky_length ; ++j) {
-                for (int i = 0; i < kx_length ; ++i) {
+            auto r_n = imgcov_f_n.unchecked<2>();
+            for (int j = 0; j < this->ky_length ; ++j) {
+                for (int i = 0; i < this->kx_length ; ++i) {
                     r(j, i) = r(j, i) - 2.0 * r_n(j, i);
                 }
             }
@@ -353,8 +352,8 @@ prepare_data_block(
         block.ny,
         block.scale,
         sigma_arcsec,
-        1000.0,         // very large klim
-        true            // us estimate in FFTW
+        3.0 / block.scale,      // klim = 3.0 / scale
+        true                    // us estimate in FFTW
     );
     return img_obj.prepare_qnumber_vector(
         img_array,

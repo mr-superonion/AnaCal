@@ -75,7 +75,7 @@ public:
                 int i2 = std::pow(i - this->ss2, 2.0);
                 if (i2 + j2 < this->ss2 * this->ss2) {
                     std::array<math::qnumber, 4> mm = model.get_fpfs_moments(
-                        data[idjb + ib], xvs[i], yvs[j], sigma_arcsec
+                        data[idjb + ib], xvs[i], yvs[j], this->sigma_arcsec
                     );
                     result[0] = result[0] + mm[0];
                     result[1] = result[1] + mm[1];
