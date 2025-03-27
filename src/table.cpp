@@ -13,7 +13,8 @@ pyExportTable(py::module_& m) {
         mask_value, is_peak,
         fpfs_e1, fpfs_de1_dg1, fpfs_de1_dg2,
         fpfs_e2, fpfs_de2_dg1, fpfs_de2_dg2,
-        fpfs_trace, fpfs_dtrace_dg1, fpfs_dtrace_dg2
+        fpfs_m0, fpfs_m0_dg1, fpfs_m0_dg2,
+        fpfs_m2, fpfs_m2_dg1, fpfs_m2_dg2
     );
     py::module_ table = m.def_submodule(
         "table", "submodule for table"
@@ -37,7 +38,8 @@ pyExportTable(py::module_& m) {
         .def_readonly("loss", &galNumber::loss)
         .def_readonly("fpfs_e1", &galNumber::fpfs_e1)
         .def_readonly("fpfs_e2", &galNumber::fpfs_e2)
-        .def_readonly("fpfs_trace", &galNumber::fpfs_trace)
+        .def_readonly("fpfs_m0", &galNumber::fpfs_m0)
+        .def_readonly("fpfs_m2", &galNumber::fpfs_m2)
         .def("to_row", &galNumber::to_row);
 
     table.def(

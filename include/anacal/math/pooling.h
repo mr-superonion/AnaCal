@@ -17,12 +17,11 @@ namespace math {
         }
     }
 
-    template <typename T>
-    inline qnumber ssfunc1(qnumber x, T mu, T sigma) {
+    inline qnumber ssfunc1(qnumber x, double mu, double sigma) {
         qnumber t = (x - mu) / (sigma * 2.0) + 0.5;
         if (t.v < 0) return {0.0, 0.0, 0.0, 0.0, 0.0};
         else if (t.v <= 1) return (
-            - 2.0 * pow(t, 3.0) + 3.0 * pow(t, 2)
+            -2.0 * pow(t, 3.0) + 3.0 * pow(t, 2)
         );
         else return {1.0, 0.0, 0.0, 0.0, 0.0};
     }

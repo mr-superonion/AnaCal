@@ -97,6 +97,56 @@ public:
     Image& operator=(Image&& other) noexcept = default;
 
     ~Image();
+
+    inline void truncate(double xlim, bool ishift) {
+        int off_x = ishift ? this->nx2 : 0;
+        int off_y = ishift ? this->ny2 : 0;
+        double xlim2 = xlim * xlim;
+
+        for (int j = 0; j < this->ny; ++j) {
+            int jj = ((j + off_y) % this->ny - this->ny2);
+            double y = jj * this->scale;
+
+            for (int i = 0; i < this->nx; ++i) {
+                int ii = ((i + off_x) % this->nx - this->nx2);
+                double x = ii * this->scale;
+
+                double r2 = x * x + y * y;
+                int index = j * this->nx + i;
+
+                if (r2 > xlim2) {
+                    this->data_r[index] = 0.0;
+                }
+            }
+        }
+        return;
+    };
+
+    inline py::array_t<std::complex<double>>
+    get_lens_kernel(
+        const py::array_t<double>& psf_array,
+        const Gaussian & gauss_model,
+        double klim,
+        double xlim
+    ) {
+        // Prepare PSF
+        this->set_r(psf_array, -1, -1, true);
+        this->fft();
+        const py::array_t<std::complex<double>> parr = this->draw_f();
+        // Delta
+        this->set_delta_f();
+        // Convolve Gaussian
+        this->filter(gauss_model);
+        // Deconvolve the PSF
+        this->deconvolve(parr, klim);
+        /* this->ifft(); */
+        /* // We truncate the deconvolved Gaussian kernel */
+        /* this->truncate(xlim, true); */
+        /* this->fft(); */
+        return this->draw_f();
+    };
+
+
 };
 
 py::array_t<std::complex<double>>
@@ -174,34 +224,30 @@ public:
         int xcen=-1,
         int ycen=-1
     ) {
-        // Prepare PSF
-        img_obj.set_r(psf_array, -1, -1, true);
-        img_obj.fft();
-        const py::array_t<std::complex<double>> parr = img_obj.draw_f();
-
+        const py::array_t<std::complex<double>> karr = img_obj.get_lens_kernel(
+            psf_array,
+            gauss_model,
+            klim,
+            this->sigma_arcsec * 12.0
+        );
         // signal
         img_obj.set_r(img_array, xcen, ycen, false);
         img_obj.fft();
-        // Deconvolve the PSF
-        img_obj.deconvolve(parr, klim);
-        // Convolve Gaussian
-        img_obj.filter(gauss_model);
+        img_obj.filter(karr);
         py::array_t<std::complex<double>> imgcov_f = img_obj.draw_f();
 
         // image is derived from image + noise
         py::array_t<std::complex<double>> imgcov_f_n;
         bool has_noise = noise_array.has_value();
         if (has_noise) {
-            img_obj.set_r(psf_array, -1, -1, true);
-            img_obj.fft();
+            img_obj.set_f(karr);
             img_obj.rotate90_f();
-            const py::array_t<std::complex<double>> parr_n = img_obj.draw_f();
+            const py::array_t<std::complex<double>> karr_n = img_obj.draw_f();
 
             // signal
             img_obj.set_r(*noise_array, xcen, ycen, false);
             img_obj.fft();
-            img_obj.deconvolve(parr_n, klim);  // Deconvolve the PSF
-            img_obj.filter(gauss_model);       // Convolve Gaussian
+            img_obj.filter(karr_n);         // Filtering
             imgcov_f_n = img_obj.draw_f();
 
             auto r = imgcov_f.mutable_unchecked<2>();
@@ -298,7 +344,6 @@ public:
                 }
             }
         }
-
         return result;
     };
 

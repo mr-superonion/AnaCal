@@ -9,7 +9,8 @@
 namespace anacal {
 namespace detector {
 
-inline int drmax2 = 16;
+inline constexpr int drmax = 4;
+inline constexpr int drmax2 = drmax * drmax;
 
 inline
 void measure_pixel(
@@ -28,16 +29,12 @@ void measure_pixel(
     int j = y - block.ymin;
     int i = x - block.xmin;
     int index = j * block.nx + i;
-    int id1 = j * block.nx + (i + 1);
-    int id2 = j * block.nx + (i - 1);
-    int id3 = (j + 1) * block.nx + i;
-    int id4 = (j - 1) * block.nx + i;
     double wdet_cut = p_min - omega_p;
     // pixel value greater than threshold
     math::qnumber wdet = math::qnumber(1.0);
-    for (int dj = -1; dj <= 1; dj++) {
+    for (int dj = -drmax; dj <= drmax; dj++) {
         int dj2 = dj * dj;
-        for (int di = -1; di <= 1; di++) {
+        for (int di = -drmax; di <= drmax; di++) {
             int dr2 = di * di + dj2;
             if ((dr2 <= drmax2) && (dr2 != 0)) {
                 int index2 = (j + dj) * block.nx + (i + di);
@@ -50,6 +47,10 @@ void measure_pixel(
         }
     }
     if (wdet.v > wdet_cut) {
+        int id1 = j * block.nx + (i + 1);
+        int id2 = j * block.nx + (i - 1);
+        int id3 = (j + 1) * block.nx + i;
+        int id4 = (j - 1) * block.nx + i;
         table::galNumber src;
         src.model.x1.v = x * block.scale;
         src.model.x2.v = y * block.scale;

@@ -307,14 +307,15 @@ public:
         double x, double y,
         double sigma_arcsec
     ) const {
+        double fac = 1.0 / sigma_arcsec / sigma_arcsec;
         math::qnumber xs = x - this->x1;
         math::qnumber ys = y - this->x2;
         math::qnumber q0 = xs * xs + ys * ys;
         math::qnumber q1 = xs * xs - ys * ys;
         math::qnumber q2 = 2.0 * xs * ys;
-        math::qnumber r2 = q0 / sigma_arcsec / sigma_arcsec;
-        math::qnumber model = math::exp(r2 * (-0.5)) * img_val;
-        return {model * q0, model * q1, model * q2, model};
+        math::qnumber r2 = q0 * fac;
+        math::qnumber model = fac * 0.15915494 * math::exp(r2 * (-0.5)) * img_val;
+        return {model, model * q0, model * q1, model * q2};
     };
 
     inline math::lossNumber get_loss(

@@ -18,6 +18,7 @@ public:
     int stamp_size, ss2;
     std::vector<double> grids_1d;
     bool force_size, force_shape, force_center;
+    double fpfs_c0;
 
     GaussFit(
         double scale,
@@ -25,10 +26,12 @@ public:
         int stamp_size=64,
         bool force_size=false,
         bool force_shape=false,
-        bool force_center=false
+        bool force_center=false,
+        double fpfs_c0=1.0
     ) : scale(scale), sigma_arcsec(sigma_arcsec), stamp_size(stamp_size),
         ss2(stamp_size / 2), grids_1d(stamp_size, 0.0), force_size(force_size),
-        force_shape(force_shape), force_center(force_center)
+        force_shape(force_shape), force_center(force_center),
+        fpfs_c0(fpfs_c0)
     {
         for (int i = 0; i < this->stamp_size; ++i) {
             this->grids_1d[i] = (i - this->ss2) * this->scale;
@@ -165,9 +168,10 @@ public:
             std::array<math::qnumber, 4> mm = this->measure_fpfs_2nd(
                 data, src.model, block
             );
-            src.fpfs_e1 = mm[1] / mm[0];
-            src.fpfs_e2 = mm[2] / mm[0];
-            src.fpfs_trace = mm[0] / mm[3];
+            src.fpfs_m0 = mm[0];
+            src.fpfs_m2 = mm[1];
+            src.fpfs_e1 = mm[2] / (mm[0] + this->fpfs_c0);
+            src.fpfs_e2 = mm[3] / (mm[0] + this->fpfs_c0);
             result.push_back(src);
         }
         return result;
