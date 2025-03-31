@@ -21,6 +21,12 @@ struct galRow{
     double a2;
     double da2_dg1;
     double da2_dg2;
+    double e1;
+    double de1_dg1;
+    double de1_dg2;
+    double e2;
+    double de2_dg1;
+    double de2_dg2;
     double x1;
     double dx1_dg1;
     double dx1_dg2;
@@ -108,6 +114,7 @@ struct galNumber {
 
     inline galRow
     to_row() const {
+        std::array<math::qnumber, 2> shape = model.get_shape();
         galRow row = {
             model.F.v,
             model.F.g1,
@@ -121,6 +128,12 @@ struct galNumber {
             model.a2.v,
             model.a2.g1,
             model.a2.g2,
+            shape[0].v,
+            shape[0].g1,
+            shape[0].g2,
+            shape[1].v,
+            shape[1].g1,
+            shape[1].g2,
             model.x1.v,
             model.x1.g1,
             model.x1.g2,
