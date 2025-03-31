@@ -94,6 +94,10 @@ public:
         math::qnumber m1 = (base1 - base2) * cos * det_inv;
         math::qnumber m2 = (base1 - base2) * sin * det_inv;
 
+        kernel.v_p0 = 0.5 * m0;
+        kernel.v_p1 = -0.5 * m1;
+        kernel.v_p2 = -0.5 * m2;
+
         kernel.x1_p1 = m1 - m0;
         kernel.x1_p2 = m2;
 
@@ -103,32 +107,25 @@ public:
         kernel.t_p1 = m2;
         kernel.t_p2 = -1.0 * m1;
 
-        kernel.v_p0 = 0.5 * m0;
-        kernel.v_p1 = -0.5 * m1;
-        kernel.v_p2 = -0.5 * m2;
 
         {
-            math::qnumber det_inv2 = math::pow(det_inv, 2.0);
-            kernel.a1_p0 = -1.0 * det_inv2 * this->a1 * base2 * base2;
+            math::qnumber det_inv2 = math::pow(det_inv, 2);
+            kernel.a1_p0 = -1.0 * det_inv2 * math::pow(base2, 2) * this->a1;
             kernel.a1_p1 = kernel.a1_p0 * cos;
             kernel.a1_p2 = kernel.a1_p0 * sin;
 
-            kernel.a2_p0 = -1.0 * det_inv2 * this->a2 * base1 * base1;
+            kernel.a2_p0 = -1.0 * det_inv2 * math::pow(base1, 2) * this->a2;
             kernel.a2_p1 = -1.0 * kernel.a2_p0 * cos;
             kernel.a2_p2 = -1.0 * kernel.a2_p0 * sin;
         }
 
-        {
-            math::qnumber det_inv0_5 = math::pow(det_inv, 0.5);
-            math::qnumber det_inv1_5 = det_inv0_5 * det_inv;
-            kernel.f =  det_inv0_5 * scale2;
-            kernel.f_a1 = det_inv1_5 * scale2 * -1.0 * this->a1 * base2;
-            kernel.f_a2 = det_inv1_5 * scale2 * -1.0 * this->a2 * base1;
-            // math::qnumber tmp = (2.0 * math::pow(this->a1, 2) - sigma2);
-            // kernel.f_a1a1 = kernel.f * tmp / math::pow(base1, 2);
-            // tmp = (2.0 * math::pow(this->a2, 2) - sigma2);
-            // kernel.f_a2a2 = kernel.f * tmp / math::pow(base2, 2);
-        }
+        kernel.f =  math::pow(det_inv, 0.5) * scale2;
+        kernel.f_a1 = kernel.f * det_inv * -1.0 * base2 * this->a1;
+        kernel.f_a2 = kernel.f * det_inv * -1.0 * base1 * this->a2;
+        // math::qnumber tmp = (2.0 * math::pow(this->a1, 2) - sigma2);
+        // kernel.f_a1a1 = kernel.f * tmp / math::pow(base1, 2);
+        // tmp = (2.0 * math::pow(this->a2, 2) - sigma2);
+        // kernel.f_a2a2 = kernel.f * tmp / math::pow(base2, 2);
         return kernel;
     };
 
@@ -312,12 +309,12 @@ public:
 
     inline std::array<math::qnumber, 2>
     get_shape() const {
-        math::qnumber base1 = math::pow(this->a1, 2);
-        math::qnumber base2 = math::pow(this->a2, 2);
-        math::qnumber base = (base1 - base2) / (base1 + base2) * 2.0;
+        math::qnumber r1 = math::pow(this->a1, 2);
+        math::qnumber r2 = math::pow(this->a2, 2);
+        math::qnumber rr = (r1 - r2) / (r1 + r2);
         math::qnumber tx2 = 2.0 * this->t;
-        math::qnumber e1 = base * math::cos(tx2);
-        math::qnumber e2 = base * math::sin(tx2);
+        math::qnumber e1 = rr * math::cos(tx2);
+        math::qnumber e2 = rr * math::sin(tx2);
         return {e1, e2};
     }
 
