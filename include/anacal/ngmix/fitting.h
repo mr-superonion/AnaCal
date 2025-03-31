@@ -17,7 +17,7 @@ public:
     double sigma_arcsec;
     int stamp_size, ss2;
     std::vector<double> grids_1d;
-    bool force_size, force_shape, force_center;
+    bool force_size, force_center;
     double fpfs_c0;
 
     GaussFit(
@@ -25,12 +25,11 @@ public:
         double sigma_arcsec,
         int stamp_size=64,
         bool force_size=false,
-        bool force_shape=false,
         bool force_center=false,
         double fpfs_c0=1.0
     ) : scale(scale), sigma_arcsec(sigma_arcsec), stamp_size(stamp_size),
         ss2(stamp_size / 2), grids_1d(stamp_size, 0.0), force_size(force_size),
-        force_shape(force_shape), force_center(force_center),
+        force_center(force_center),
         fpfs_c0(fpfs_c0)
     {
         for (int i = 0; i < this->stamp_size; ++i) {
@@ -113,7 +112,6 @@ public:
         }
         int j_block_shift = j_stamp - this->ss2 - block.ymin;
         int i_block_shift = i_stamp - this->ss2 - block.xmin;
-        /* std::cout<<model.force_shape<<std::endl; */
 
         modelKernel kernel = model.prepare_model(
             this->scale,
@@ -156,7 +154,6 @@ public:
         result.reserve(catalog.size());
         for (table::galNumber src : catalog) {
             src.model.force_size=this->force_size;
-            src.model.force_shape=this->force_shape;
             src.model.force_center=this->force_center;
             // FPFS Shapes
             for (int epoch = 0; epoch < num_epochs; ++epoch) {

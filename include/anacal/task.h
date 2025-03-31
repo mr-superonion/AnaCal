@@ -73,7 +73,7 @@ public:
     int stamp_size, ss2;
     int image_bound;
     int num_epochs;
-    bool force_size, force_shape, force_center;
+    bool force_size, force_center;
     ngmix::GaussFit fitter;
 
     TaskAlpha(
@@ -91,7 +91,6 @@ public:
         int image_bound=0,
         int num_epochs=10,
         bool force_size=false,
-        bool force_shape=false,
         bool force_center=false,
         double fpfs_c0=1.0
     ) : scale(scale), sigma_arcsec_det(sigma_arcsec_det),
@@ -102,7 +101,7 @@ public:
         stamp_size(stamp_size), image_bound(image_bound),
         num_epochs(num_epochs), fitter(
             scale, sigma_arcsec, stamp_size,
-            force_size, force_shape, force_center,
+            force_size, force_center,
             fpfs_c0
         )
     {

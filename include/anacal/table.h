@@ -12,15 +12,15 @@ struct galRow{
     double flux;
     double dflux_dg1;
     double dflux_dg2;
-    double rho;
-    double drho_dg1;
-    double drho_dg2;
-    double e1;
-    double de1_dg1;
-    double de1_dg2;
-    double e2;
-    double de2_dg1;
-    double de2_dg2;
+    double t;
+    double dt_dg1;
+    double dt_dg2;
+    double a1;
+    double da1_dg1;
+    double da1_dg2;
+    double a2;
+    double da2_dg1;
+    double da2_dg2;
     double x1;
     double dx1_dg1;
     double dx1_dg2;
@@ -108,20 +108,19 @@ struct galNumber {
 
     inline galRow
     to_row() const {
-        math::qnumber rho = math::exp(model.t);
         galRow row = {
             model.F.v,
             model.F.g1,
             model.F.g2,
-            rho.v,
-            rho.g1,
-            rho.g2,
-            model.e1.v,
-            model.e1.g1,
-            model.e1.g2,
-            model.e2.v,
-            model.e2.g1,
-            model.e2.g2,
+            model.t.v,
+            model.t.g1,
+            model.t.g2,
+            model.a1.v,
+            model.a1.g1,
+            model.a1.g2,
+            model.a2.v,
+            model.a2.g1,
+            model.a2.g2,
             model.x1.v,
             model.x1.g1,
             model.x1.g2,

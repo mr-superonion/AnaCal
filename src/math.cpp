@@ -157,23 +157,23 @@ namespace math {
                 qnumber>(),
                 py::arg("v"),
                 py::arg("v_F"), py::arg("v_t"),
-                py::arg("v_e1"), py::arg("v_e2"),
+                py::arg("v_a1"), py::arg("v_a2"),
                 py::arg("v_x1"), py::arg("v_x2"),
                 py::arg("v_FF"), py::arg("v_tt"),
-                py::arg("v_e1e1"), py::arg("v_e2e2"),
+                py::arg("v_a1a1"), py::arg("v_a2a2"),
                 py::arg("v_x1x1"), py::arg("v_x2x2")
             )
             .def_readwrite("v", &lossNumber::v)
             .def_readwrite("v_F", &lossNumber::v_F)
             .def_readwrite("v_t", &lossNumber::v_t)
-            .def_readwrite("v_e1", &lossNumber::v_e1)
-            .def_readwrite("v_e2", &lossNumber::v_e2)
+            .def_readwrite("v_a1", &lossNumber::v_a1)
+            .def_readwrite("v_a2", &lossNumber::v_a2)
             .def_readwrite("v_x1", &lossNumber::v_x1)
             .def_readwrite("v_x2", &lossNumber::v_x2)
             .def_readwrite("v_FF", &lossNumber::v_FF)
             .def_readwrite("v_tt", &lossNumber::v_tt)
-            .def_readwrite("v_e1e1", &lossNumber::v_e1e1)
-            .def_readwrite("v_e2e2", &lossNumber::v_e2e2)
+            .def_readwrite("v_a1a1", &lossNumber::v_a1a1)
+            .def_readwrite("v_a2a2", &lossNumber::v_a2a2)
             .def_readwrite("v_x1x1", &lossNumber::v_x1x1)
             .def_readwrite("v_x2x2", &lossNumber::v_x2x2);
 

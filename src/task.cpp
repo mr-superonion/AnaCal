@@ -14,7 +14,7 @@ pyExportTask(py::module_& m) {
             double, double, double, double,
             const std::optional<ngmix::modelPrior>,
             int, int, int,
-            bool, bool, bool, double
+            bool, bool, double
             >(),
             py::arg("scale"),
             py::arg("sigma_arcsec_det"),
@@ -30,7 +30,6 @@ pyExportTask(py::module_& m) {
             py::arg("image_bound")=0,
             py::arg("num_epochs")=15,
             py::arg("force_size")=false,
-            py::arg("force_shape")=false,
             py::arg("force_center")=false,
             py::arg("fpfs_c0")=1.0
         )

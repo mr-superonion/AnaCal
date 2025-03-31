@@ -6,8 +6,10 @@ namespace table {
 void
 pyExportTable(py::module_& m) {
     PYBIND11_NUMPY_DTYPE(galRow,
-        flux, dflux_dg1, dflux_dg2, rho, drho_dg1, drho_dg2,
-        e1, de1_dg1,de1_dg2, e2, de2_dg1, de2_dg2,
+        flux, dflux_dg1, dflux_dg2,
+        t, dt_dg1, dt_dg2,
+        a1, da1_dg1,da1_dg2,
+        a2, da2_dg1, da2_dg2,
         x1, dx1_dg1, dx1_dg2, x2, dx2_dg1, dx2_dg2,
         fluxdet, dfluxdet_dg1, dfluxdet_dg2, wdet, dwdet_dg1, dwdet_dg2,
         mask_value, is_peak,
