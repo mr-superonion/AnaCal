@@ -87,6 +87,15 @@ public:
         math::qnumber base1 = math::pow(this->a1, 2) + sigma2;
         math::qnumber base2 = math::pow(this->a2, 2) + sigma2;
         math::qnumber det_inv = 1.0 / base1 / base2;
+
+        kernel.f =  math::pow(det_inv, 0.5) * scale2;
+        kernel.f_a1 = kernel.f * det_inv * -1.0 * base2 * this->a1;
+        kernel.f_a2 = kernel.f * det_inv * -1.0 * base1 * this->a2;
+        // math::qnumber tmp = (2.0 * math::pow(this->a1, 2) - sigma2);
+        // kernel.f_a1a1 = kernel.f * tmp / math::pow(base1, 2);
+        // tmp = (2.0 * math::pow(this->a2, 2) - sigma2);
+        // kernel.f_a2a2 = kernel.f * tmp / math::pow(base2, 2);
+
         math::qnumber tx2 = 2.0 * this->t;
         math::qnumber cos = math::cos(tx2);
         math::qnumber sin = math::sin(tx2);
@@ -98,34 +107,29 @@ public:
         kernel.v_p1 = -0.5 * m1;
         kernel.v_p2 = -0.5 * m2;
 
-        kernel.x1_p1 = m1 - m0;
-        kernel.x1_p2 = m2;
+        if (!this->force_center) {
+            kernel.x1_p1 = m1 - m0;
+            kernel.x1_p2 = m2;
 
-        kernel.x2_p1 = m2;
-        kernel.x2_p2 = -1.0 * (m1 + m0);
-
-        kernel.t_p1 = m2;
-        kernel.t_p2 = -1.0 * m1;
-
-
-        {
-            math::qnumber det_inv2 = math::pow(det_inv, 2);
-            kernel.a1_p0 = -1.0 * det_inv2 * math::pow(base2, 2) * this->a1;
-            kernel.a1_p1 = kernel.a1_p0 * cos;
-            kernel.a1_p2 = kernel.a1_p0 * sin;
-
-            kernel.a2_p0 = -1.0 * det_inv2 * math::pow(base1, 2) * this->a2;
-            kernel.a2_p1 = -1.0 * kernel.a2_p0 * cos;
-            kernel.a2_p2 = -1.0 * kernel.a2_p0 * sin;
+            kernel.x2_p1 = m2;
+            kernel.x2_p2 = -1.0 * (m1 + m0);
         }
 
-        kernel.f =  math::pow(det_inv, 0.5) * scale2;
-        kernel.f_a1 = kernel.f * det_inv * -1.0 * base2 * this->a1;
-        kernel.f_a2 = kernel.f * det_inv * -1.0 * base1 * this->a2;
-        // math::qnumber tmp = (2.0 * math::pow(this->a1, 2) - sigma2);
-        // kernel.f_a1a1 = kernel.f * tmp / math::pow(base1, 2);
-        // tmp = (2.0 * math::pow(this->a2, 2) - sigma2);
-        // kernel.f_a2a2 = kernel.f * tmp / math::pow(base2, 2);
+        if (!this->force_size) {
+            kernel.t_p1 = m2;
+            kernel.t_p2 = -1.0 * m1;
+            {
+                math::qnumber det_inv2 = math::pow(det_inv, 2);
+                kernel.a1_p0 = -1.0 * det_inv2 * math::pow(base2, 2) * this->a1;
+                kernel.a1_p1 = kernel.a1_p0 * cos;
+                kernel.a1_p2 = kernel.a1_p0 * sin;
+
+                kernel.a2_p0 = -1.0 * det_inv2 * math::pow(base1, 2) * this->a2;
+                kernel.a2_p1 = -1.0 * kernel.a2_p0 * cos;
+                kernel.a2_p2 = -1.0 * kernel.a2_p0 * sin;
+            }
+        }
+
         return kernel;
     };
 
@@ -164,7 +168,7 @@ public:
     ) const {
 
         math::lossNumber r2 = this->get_r2(x, y, c);
-        frDeriv fr =  this->get_fr(r2.v);
+        frDeriv fr = this->get_fr(r2.v);
 
         math::lossNumber res;
         res.v = this->F * fr.fr * c.f;
@@ -190,17 +194,15 @@ public:
     inline std::array<math::qnumber, 4> get_fpfs_moments(
         math::qnumber img_val,
         double x, double y,
-        double sigma_arcsec
+        double rfac
     ) const {
-        double fac = 1.0 / sigma_arcsec / sigma_arcsec;
         math::qnumber xs = x - this->x1;
         math::qnumber ys = y - this->x2;
-        math::qnumber q0 = xs * xs + ys * ys;
-        math::qnumber q1 = xs * xs - ys * ys;
-        math::qnumber q2 = 2.0 * xs * ys;
-        math::qnumber r2 = q0 * fac;
-        math::qnumber model = fac * 0.15915494 * math::exp(r2 * (-0.5)) * img_val;
-        return {model, model * q0, model * q1, model * q2};
+        math::qnumber xx = xs * xs;
+        math::qnumber yy = ys * ys;
+        math::qnumber xy = xs * ys;
+        math::qnumber model = math::exp((xx + yy) * rfac) * img_val;
+        return {model, model * xx, model * yy, model * xy};
     };
 
     inline math::lossNumber get_loss(
@@ -269,39 +271,37 @@ public:
         int epoch,
         double variance_val=1.0
     ) {
-        math::qnumber damp = loss.v * 2.0 * std::exp(-epoch / 2.0);
-        double ratio = 2.0 / variance_val;
         this->F = this->F - (
             (loss.v_F + prior.w_F * this->F) / (
-                0.01 * ratio + loss.v_FF + prior.w_F
+                0.02 / variance_val + loss.v_FF + prior.w_F
             )
         );
         if (!this->force_size) {
             this->t = this->t - (
                 (loss.v_t + prior.w_t * this->t) / (
-                    damp + (loss.v_tt + prior.w_t)
+                    loss.v + (loss.v_tt + prior.w_t)
                 )
-            );
+            ) * 0.1;
             this->a1 = this->a1 - (
                 (loss.v_a1 + prior.w_a * this->a1) / (
-                    damp + (loss.v_a1a1 + prior.w_a)
+                    loss.v + (loss.v_a1a1 + prior.w_a)
                 )
             );
             this->a2 = this->a2 - (
                 (loss.v_a2 + prior.w_a * this->a2) / (
-                    damp + (loss.v_a2a2 + prior.w_a)
+                    loss.v + (loss.v_a2a2 + prior.w_a)
                 )
             );
         }
         if (!this->force_center) {
             this->x1 = this->x1 - (
                 loss.v_x1 / (
-                    damp + (loss.v_x1x1 + prior.w_x)
+                    loss.v + (loss.v_x1x1 + prior.w_x)
                 )
             );
             this->x2 = this->x2 - (
                 loss.v_x2 / (
-                    damp + (loss.v_x2x2 + prior.w_x)
+                    loss.v + (loss.v_x2x2 + prior.w_x)
                 )
             );
         }

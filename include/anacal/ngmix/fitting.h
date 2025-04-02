@@ -19,6 +19,7 @@ public:
     std::vector<double> grids_1d;
     bool force_size, force_center;
     double fpfs_c0;
+    double sigma2, sigma_m2, rfac, ffac;
 
     GaussFit(
         double scale,
@@ -36,19 +37,23 @@ public:
             this->grids_1d[i] = (i - this->ss2) * this->scale;
             // range is [-ss2, ss2)
         }
+        this->sigma2 = sigma_arcsec * sigma_arcsec;
+        this->sigma_m2 = 1.0 / this->sigma2;
+        this->rfac = -0.5 * this->sigma_m2;
+        this->ffac = rfac * (-0.318309886);
     };
 
-    inline std::array<math::qnumber, 4>
-    measure_fpfs_2nd(
+    inline void
+    measure_fpfs(
         const std::vector<math::qnumber> & data,
-        const NgmixGaussian & model,
+        table::galNumber & src,
         const geometry::block & block
     ) const {
         int i_stamp = static_cast<int>(
-            std::round(model.x1.v / this->scale)
+            std::round(src.model.x1.v / this->scale)
         );
         int j_stamp = static_cast<int>(
-            std::round(model.x2.v / this->scale)
+            std::round(src.model.x2.v / this->scale)
         );
         double x_stamp_shift = i_stamp * this->scale;
         double y_stamp_shift = j_stamp * this->scale;
@@ -61,32 +66,43 @@ public:
         int j_block_shift = j_stamp - this->ss2 - block.ymin;
         int i_block_shift = i_stamp - this->ss2 - block.xmin;
 
-        std::array<math::qnumber, 4> result;
+        math::qnumber m0, mxx, myy, mxy;
         for (int j = 0; j < this->stamp_size; ++j) {
             int jb = j + j_block_shift;
             if (jb < 0 || jb >= block.ny) {
                 continue;
             }
             int idjb = jb * block.nx;
-            int j2 = std::pow(j - this->ss2, 2.0);
+            int j2 = std::pow(j - this->ss2, 2);
             for (int i = 0; i < this->stamp_size; ++i) {
                 int ib = i + i_block_shift;
                 if (ib < 0 || ib >= block.nx) {
                     continue;
                 }
-                int i2 = std::pow(i - this->ss2, 2.0);
+                int i2 = std::pow(i - this->ss2, 2);
                 if (i2 + j2 < this->ss2 * this->ss2) {
-                    std::array<math::qnumber, 4> mm = model.get_fpfs_moments(
-                        data[idjb + ib], xvs[i], yvs[j], this->sigma_arcsec
+                    std::array<math::qnumber, 4> mm = src.model.get_fpfs_moments(
+                        data[idjb + ib], xvs[i], yvs[j], this->rfac
                     );
-                    result[0] = result[0] + mm[0];
-                    result[1] = result[1] + mm[1];
-                    result[2] = result[2] + mm[2];
-                    result[3] = result[3] + mm[3];
+                    m0 = m0 + mm[0];
+                    mxx = mxx + mm[1];
+                    myy = myy + mm[2];
+                    mxy = mxy + mm[3];
                 }
             }
         }
-        return result;
+
+        math::qnumber m22c = (mxx - myy) * this->ffac;
+        math::qnumber m22s = 2.0 * mxy * this->ffac;
+        // Orientation angle (in radians)
+        src.model.t = 0.5 * math::atan2(m22s, m22c);
+
+        src.fpfs_m0 = m0 * this->ffac;
+        src.fpfs_m2 = (mxx + myy) * this->ffac;
+        src.fpfs_e1 = m22c / (src.fpfs_m0 + this->fpfs_c0);
+        src.fpfs_e2 = m22s / (src.fpfs_m0 + this->fpfs_c0);
+
+        return;
     };
 
     inline math::lossNumber
@@ -153,22 +169,35 @@ public:
         std::vector<table::galNumber> result;
         result.reserve(catalog.size());
         for (table::galNumber src : catalog) {
-            src.model.force_size=this->force_size;
-            src.model.force_center=this->force_center;
-            // FPFS Shapes
-            for (int epoch = 0; epoch < num_epochs; ++epoch) {
-                src.loss = this->measure_loss(
-                    data, variance, src.model, block
-                );
-                src.model.update_model_params(src.loss, prior, epoch, variance);
+            if (!this->force_center) {
+                // Do center refinement first
+                src.model.force_size=true;
+                src.model.force_center=false;
+                for (int epoch = 0; epoch < num_epochs; ++epoch) {
+                    src.loss = this->measure_loss(
+                        data, variance, src.model, block
+                    );
+                    src.model.update_model_params(
+                        src.loss, prior, epoch, variance
+                    );
+                }
             }
-            std::array<math::qnumber, 4> mm = this->measure_fpfs_2nd(
-                data, src.model, block
+            // FPFS measurement
+            this->measure_fpfs(
+                data, src, block
             );
-            src.fpfs_m0 = mm[0];
-            src.fpfs_m2 = mm[1];
-            src.fpfs_e1 = mm[2] / (mm[0] + this->fpfs_c0);
-            src.fpfs_e2 = mm[3] / (mm[0] + this->fpfs_c0);
+            if (!this->force_size) {
+                src.model.force_size=false;
+                src.model.force_center=true;
+                for (int epoch = 0; epoch < num_epochs; ++epoch) {
+                    src.loss = this->measure_loss(
+                        data, variance, src.model, block
+                    );
+                    src.model.update_model_params(
+                        src.loss, prior, epoch, variance
+                    );
+                }
+            }
             result.push_back(src);
         }
         return result;

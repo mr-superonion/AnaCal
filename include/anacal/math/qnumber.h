@@ -273,6 +273,23 @@ inline qnumber cos(
     );
 }; // cosine function
 
+inline qnumber atan2(
+    const qnumber& qn1,
+    const qnumber& qn2
+) {
+    double v0 = std::atan2(qn1.v, qn2.v);
+    double denom = qn1.v * qn1.v + qn2.v * qn2.v;
+    double d1 = qn2.v / denom;
+    double d2 = -qn1.v / denom;
+    return qnumber(
+        v0,
+        d1 * qn1.g1 + d2 * qn2.g1,
+        d1 * qn1.g2 + d2 * qn2.g2,
+        d1 * qn1.x1 + d2 * qn2.x1,
+        d1 * qn1.x2 + d2 * qn2.x2
+    );
+}; // arctan2 function
+
 inline qnumber pow(
     const qnumber& qn,
     double n
