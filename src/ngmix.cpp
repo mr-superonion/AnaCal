@@ -60,11 +60,6 @@ pyExportNgmix(py::module_& m) {
             "Returns the distorted model value at x, y",
             py::arg("x"), py::arg("y"), py::arg("c")
         )
-        .def("get_loss", &NgmixGaussian::get_loss,
-            "Returns the loss function value and the derivatives wrt params",
-            py::arg("image_val"), py::arg("variance_val"),
-            py::arg("x"), py::arg("y"), py::arg("c")
-        )
         .def("get_shape", &NgmixGaussian::get_shape,
             "Returns shape (e1, e2)"
         )

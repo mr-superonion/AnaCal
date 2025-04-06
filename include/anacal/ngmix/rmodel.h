@@ -58,7 +58,7 @@ private:
     frDeriv get_fr(
         math::qnumber r2
     ) const {
-        math::qnumber fr = math::exp(r2 * (-0.5));
+        math::qnumber fr = math::exp6(r2 * (-0.5));
         math::qnumber dfr = fr * (-0.5);
         /* math::qnumber ddfr = dfr * (-0.5); */
         math::qnumber ddfr;
@@ -162,17 +162,14 @@ public:
         return result;
     };
 
-    inline math::lossNumber get_model(
-        double x, double y,
+    inline math::lossNumber get_model_from_r2(
+        const math::lossNumber& r2,
         const modelKernel& c
     ) const {
-
-        math::lossNumber r2 = this->get_r2(x, y, c);
         frDeriv fr = this->get_fr(r2.v);
-
         math::lossNumber res;
-        res.v = this->F * fr.fr * c.f;
-        res.v_F = fr.fr * c.f; // F is special
+        res.v_F = fr.fr * c.f;
+        res.v = this->F * res.v_F;
 
         fr.fr = fr.fr * this->F;
         fr.dfr = fr.dfr * this->F;
@@ -191,6 +188,15 @@ public:
         return res;
     };
 
+    inline math::lossNumber get_model(
+        double x, double y,
+        const modelKernel& c
+    ) const {
+
+        math::lossNumber r2 = this->get_r2(x, y, c);
+        return get_model_from_r2(r2, c);
+    };
+
     inline std::array<math::qnumber, 4> get_fpfs_moments(
         math::qnumber img_val,
         double x, double y,
@@ -201,21 +207,20 @@ public:
         math::qnumber xx = xs * xs;
         math::qnumber yy = ys * ys;
         math::qnumber xy = xs * ys;
-        math::qnumber model = math::exp((xx + yy) * rfac) * img_val;
+        math::qnumber model = math::exp6((xx + yy) * rfac) * img_val;
         return {model, model * xx, model * yy, model * xy};
     };
 
     inline math::lossNumber get_loss(
         math::qnumber img_val,
         double variance_val,
-        double x, double y,
+        const math::lossNumber& r2,
         const modelKernel & c
     ) const {
 
-        math::lossNumber theory_val = this->get_model(x, y, c);
-        math::qnumber residual = img_val - theory_val.v;
-
         math::lossNumber res;
+        math::lossNumber theory_val = this->get_model_from_r2(r2, c);
+        math::qnumber residual = img_val - theory_val.v;
 
         res.v = math::pow(residual, 2.0) / variance_val;
         double mul = 2.0 / variance_val;
@@ -339,7 +344,10 @@ public:
             double y = (j - ny2 + y_stamp) * scale;
             for (int i = 0; i < nx; ++i) {
                 double x = (i - nx2 + x_stamp) * scale;
-                flux = flux + this->get_model(x, y, c).v;
+                math::lossNumber r2 = this->get_r2(x, y, c);
+                if (r2.v.v < 30) {
+                    flux = flux + this->get_model_from_r2(r2, c).v;
+                }
             }
         }
         return flux;
@@ -368,10 +376,17 @@ public:
             double y = (j - ny2 + y_stamp) * scale;
             for (int i = 0; i < nx; ++i) {
                 double x = (i - nx2 + x_stamp) * scale;
-                math::qnumber tn = this->get_model(x, y, c).v;
-                r(0, j, i) = tn.v;
-                r(1, j, i) = tn.g1;
-                r(2, j, i) = tn.g2;
+                math::lossNumber r2 = this->get_r2(x, y, c);
+                if (r2.v.v < 30) {
+                    math::qnumber tn = this->get_model_from_r2(r2, c).v;
+                    r(0, j, i) = tn.v;
+                    r(1, j, i) = tn.g1;
+                    r(2, j, i) = tn.g2;
+                } else {
+                    r(0, j, i) = 0.0;
+                    r(1, j, i) = 0.0;
+                    r(2, j, i) = 0.0;
+                }
             }
         }
         return result;

@@ -19,7 +19,8 @@ public:
     std::vector<double> grids_1d;
     bool force_size, force_center;
     double fpfs_c0;
-    double sigma2, sigma_m2, rfac, ffac;
+    double sigma2, sigma_m2, rfac, ffac, ffac2, ffac3;
+    double sigma2_lim;
 
     GaussFit(
         double scale,
@@ -41,6 +42,9 @@ public:
         this->sigma_m2 = 1.0 / this->sigma2;
         this->rfac = -0.5 * this->sigma_m2;
         this->ffac = rfac * (-0.318309886);
+        this->ffac2 = this->ffac * 1.41421356 * this->sigma_m2;
+        this->ffac3 = this->ffac * 2.0 * this->sigma_m2;
+        this->sigma2_lim = sigma2 * 25 / scale / scale;
     };
 
     inline void
@@ -80,7 +84,7 @@ public:
                     continue;
                 }
                 int i2 = std::pow(i - this->ss2, 2);
-                if (i2 + j2 < this->ss2 * this->ss2) {
+                if (i2 + j2 < this->sigma2_lim) {
                     std::array<math::qnumber, 4> mm = src.model.get_fpfs_moments(
                         data[idjb + ib], xvs[i], yvs[j], this->rfac
                     );
@@ -92,16 +96,15 @@ public:
             }
         }
 
-        math::qnumber m22c = (mxx - myy) * this->ffac;
-        math::qnumber m22s = 2.0 * mxy * this->ffac;
-        // Orientation angle (in radians)
-        src.model.t = 0.5 * math::atan2(m22s, m22c);
-
         src.fpfs_m0 = m0 * this->ffac;
-        src.fpfs_m2 = (mxx + myy) * this->ffac;
-        src.fpfs_e1 = m22c / (src.fpfs_m0 + this->fpfs_c0);
-        src.fpfs_e2 = m22s / (src.fpfs_m0 + this->fpfs_c0);
-
+        src.fpfs_m2 = (mxx + myy - m0 * this->sigma2) * this->ffac3;
+        {
+            math::qnumber denom = (src.fpfs_m0 + this->fpfs_c0);
+            src.fpfs_e1 = (mxx - myy) * this->ffac2 / denom;
+            src.fpfs_e2 = 2.0 * mxy * this->ffac2 / denom;
+        }
+        // Orientation angle (in radians)
+        src.model.t = 0.5 * math::atan2(src.fpfs_e2, src.fpfs_e1);
         return;
     };
 
@@ -140,16 +143,15 @@ public:
                 continue;
             }
             int idjb = jb * block.nx;
-            int j2 = std::pow(j - this->ss2, 2.0);
             for (int i = 0; i < this->stamp_size; ++i) {
                 int ib = i + i_block_shift;
                 if (ib < 0 || ib >= block.nx) {
                     continue;
                 }
-                int i2 = std::pow(i - this->ss2, 2.0);
-                if (i2 + j2 < this->ss2 * this->ss2) {
+                math::lossNumber r2 = model.get_r2(xvs[i], yvs[j], kernel);
+                if (r2.v.v < 30) {
                     loss = loss + model.get_loss(
-                        data[idjb + ib], variance, xvs[i], yvs[j], kernel
+                        data[idjb + ib], variance, r2, kernel
                     );
                 }
             }
