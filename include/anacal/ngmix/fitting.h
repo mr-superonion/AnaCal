@@ -44,7 +44,7 @@ public:
         this->ffac = rfac * (-0.318309886);
         this->ffac2 = this->ffac * 1.41421356 * this->sigma_m2;
         this->ffac3 = this->ffac * 2.0 * this->sigma_m2;
-        this->sigma2_lim = sigma2 * 25 / scale / scale;
+        this->sigma2_lim = sigma2 * 28 / scale / scale;
     };
 
     inline void
@@ -149,7 +149,7 @@ public:
                     continue;
                 }
                 math::lossNumber r2 = model.get_r2(xvs[i], yvs[j], kernel);
-                if (r2.v.v < 30) {
+                if (r2.v.v < 28) {
                     loss = loss + model.get_loss(
                         data[idjb + ib], variance, r2, kernel
                     );
