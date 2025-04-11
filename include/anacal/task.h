@@ -162,7 +162,8 @@ public:
             src.fpfs_m0,
             6.0 * std_fpfs,
             std_fpfs
-        ) * math::ssfunc1(
+        );
+        src.wdet = src.wdet * math::ssfunc1(
             src.fpfs_m2 - 0.09 * src.fpfs_m0,
             std_fpfs,
             std_fpfs

@@ -9,6 +9,8 @@ namespace anacal {
 namespace table {
 
 struct galRow{
+    double ra;
+    double dec;
     double flux;
     double dflux_dg1;
     double dflux_dg2;
@@ -41,6 +43,7 @@ struct galRow{
     double dwdet_dg2;
     int mask_value;
     bool is_peak;
+    bool is_primary;
     double fpfs_e1;
     double fpfs_de1_dg1;
     double fpfs_de1_dg2;
@@ -116,6 +119,8 @@ struct galNumber {
     to_row() const {
         std::array<math::qnumber, 2> shape = model.get_shape();
         galRow row = {
+            0.0,
+            0.0,
             model.F.v,
             model.F.g1,
             model.F.g2,
@@ -148,6 +153,7 @@ struct galNumber {
             wdet.g2,
             mask_value,
             is_peak,
+            true,
             fpfs_e1.v,
             fpfs_e1.g1,
             fpfs_e1.g2,
