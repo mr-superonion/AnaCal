@@ -233,9 +233,13 @@ namespace mask2 {
         int ny = conv_r.shape(0);
         int nx = conv_r.shape(1);
 
-        for (table::galNumber src : catalog) {
-            int y = static_cast<int>(std::round(src.model.x2.v));
-            int x = static_cast<int>(std::round(src.model.x1.v));
+        for (table::galNumber & src : catalog) {
+            int y = static_cast<int>(
+                std::round(src.model.x2.v / scale)
+            );
+            int x = static_cast<int>(
+                std::round(src.model.x1.v / scale)
+            );
             if (y>=0 && y< ny && x>=0 && x<nx) {
                 src.mask_value = static_cast<int>(conv_r(y, x) * 1000);
             }

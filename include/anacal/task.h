@@ -237,7 +237,7 @@ public:
             mask2::add_pixel_mask_column_catalog(
                 catalog,
                 *mask_array,
-                sigma_arcsec,
+                sigma_arcsec_det,
                 scale
             );
         }
