@@ -3,5 +3,6 @@ black
 pytest>=3.4
 pytest-xdist>=1.19
 pytest-timeout>=1.2
+flake8-pyproject
 memory_profiler
 matplotlib

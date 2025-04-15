@@ -9,7 +9,7 @@
 namespace anacal {
 namespace detector {
 
-inline constexpr int drmax = 4;
+inline constexpr int drmax = 5;
 inline constexpr int drmax2 = drmax * drmax;
 
 inline
@@ -24,7 +24,12 @@ void measure_pixel(
     double v_min,
     double omega_v,
     double p_min,
-    double omega_p
+    double omega_p,
+    int drmax_flux,
+    int drmax2_flux,
+    int drmax_bg,
+    int drmax2_bg,
+    double nbg
 ) {
     int j = y - block.ymin;
     int i = x - block.xmin;
@@ -61,18 +66,18 @@ void measure_pixel(
             (data[index].v > data[id4].v)
         );
 
-        int drmax_flux = static_cast<int>(2.0 / block.scale) + 1;
-        int drmax2_flux = drmax_flux * drmax_flux;
         math::qnumber fluxdet;
+        math::qnumber fluxbg;
         for (int dj = -drmax_flux; dj <= drmax_flux; dj++) {
             int dj2 = dj * dj;
             for (int di = -drmax_flux; di <= drmax_flux; di++) {
                 int dr2 = di * di + dj2;
                 if (dr2 < drmax2_flux) {
-                    fluxdet = (
-                        fluxdet
-                        + data[(j + dj) * block.nx + (i + di)]
-                    );
+                    int _i = (j + dj) * block.nx + (i + di);
+                    fluxdet = fluxdet + data[_i];
+                    if (dr2 >= drmax2_bg) {
+                        fluxbg = fluxbg + data[_i];
+                    }
                 }
             }
         }
@@ -83,6 +88,10 @@ void measure_pixel(
             omega_p
         ) * math::ssfunc1(
             data[index],
+            f_min,
+            omega_f
+        )* math::ssfunc1(
+            data[index] - fluxbg / nbg,
             f_min,
             omega_f
         );
@@ -126,6 +135,24 @@ find_peaks(
     int xstart = std::max(image_bound, block.xmin_in);
     int xend = std::min(image_nx - image_bound, block.xmax_in);
 
+    // fluxdet is for 0 to 2 arcsec
+    int drmax_flux = static_cast<int>(2.0 / block.scale) + 1;
+    int drmax2_flux = drmax_flux * drmax_flux;
+    // fluxdet is for 1 arcsec to 2 arcsec
+    int drmax_bg = static_cast<int>(1.0 / block.scale) + 1;
+    int drmax2_bg = drmax_bg * drmax_bg;
+
+    double nbg;
+    for (int dj = -drmax_flux; dj <= drmax_flux; ++dj) {
+        int dj2 = dj * dj;
+        for (int di = -drmax_flux; di <= drmax_flux; ++di) {
+            int dr2 = di * di + dj2;
+            if (dr2 >= drmax2_bg && dr2 < drmax2_flux) {
+                ++nbg;
+            }
+        }
+    }
+
     std::vector<table::galNumber> catalog;
     for (int y = ystart; y < yend; ++y) {
         int j = y - block.ymin;
@@ -151,7 +178,12 @@ find_peaks(
                     v_min,
                     omega_v,
                     p_min,
-                    omega_p
+                    omega_p,
+                    drmax_flux,
+                    drmax2_flux,
+                    drmax_bg,
+                    drmax2_bg,
+                    nbg
                 );
             }
 
