@@ -20,7 +20,8 @@ pyExportTable(py::module_& m) {
         fpfs_e1, fpfs_de1_dg1, fpfs_de1_dg2,
         fpfs_e2, fpfs_de2_dg1, fpfs_de2_dg2,
         fpfs_m0, fpfs_m0_dg1, fpfs_m0_dg2,
-        fpfs_m2, fpfs_m2_dg1, fpfs_m2_dg2
+        fpfs_m2, fpfs_m2_dg1, fpfs_m2_dg2,
+        peakv, dpeakv_dg1, dpeakv_dg2, bkg, dbkg_dg1, dbkg_dg2
     );
     py::module_ table = m.def_submodule(
         "table", "submodule for table"

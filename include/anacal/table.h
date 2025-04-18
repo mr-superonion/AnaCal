@@ -56,6 +56,12 @@ struct galRow{
     double fpfs_m2;
     double fpfs_m2_dg1;
     double fpfs_m2_dg2;
+    double peakv;
+    double dpeakv_dg1;
+    double dpeakv_dg2;
+    double bkg;
+    double dbkg_dg1;
+    double dbkg_dg2;
 };
 
 struct galNumber {
@@ -70,6 +76,8 @@ struct galNumber {
     math::qnumber fpfs_e2;
     math::qnumber fpfs_m0;
     math::qnumber fpfs_m2;
+    math::qnumber peakv;
+    math::qnumber bkg;
 
     galNumber() = default;
 
@@ -165,7 +173,13 @@ struct galNumber {
             fpfs_m0.g2,
             fpfs_m2.v,
             fpfs_m2.g1,
-            fpfs_m2.g2
+            fpfs_m2.g2,
+            peakv.v,
+            peakv.g1,
+            peakv.g2,
+            bkg.v,
+            bkg.g1,
+            bkg.g2
         };
         return row;
     };

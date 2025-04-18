@@ -4,6 +4,7 @@
 #include "detector.h"
 #include "stdafx.h"
 #include "mask2.h"
+#include "psf.h"
 
 namespace anacal {
 namespace task {
@@ -117,20 +118,27 @@ public:
     };
 
     inline std::vector<table::galNumber>
-    process_block_impl(
+    process_block(
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
-        double variance_det,
-        double variance_meas,
+        double variance,
         const geometry::block & block,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt
     ) {
+
+        double variance_det = get_smoothed_variance(
+            block.scale,
+            sigma_arcsec_det,
+            psf_array,
+            variance
+        );
 
         std::vector<table::galNumber> catalog = detector::find_peaks(
             img_array,
             psf_array,
             this->sigma_arcsec_det,
-            this->snr_peak_min * std::pow(variance_det, 0.5),
+            this->snr_peak_min,
+            std::pow(variance_det, 0.5),
             this->omega_f,
             this->v_min,
             this->omega_v,
@@ -139,6 +147,13 @@ public:
             block,
             noise_array,
             this->image_bound
+        );
+
+        double variance_meas = get_smoothed_variance(
+            block.scale,
+            sigma_arcsec,
+            psf_array,
+            variance
         );
         return this->fitter.process_block(
             catalog,
@@ -198,17 +213,12 @@ public:
             } else {
                 variance_use = variance;
             }
-            double variance_det = get_smoothed_variance(
-                block.scale,
-                sigma_arcsec_det,
+            std::vector<table::galNumber> catb = process_block(
+                img_array,
                 psf_array,
-                variance_use
-            );
-            double variance_meas = get_smoothed_variance(
-                block.scale,
-                sigma_arcsec,
-                psf_array,
-                variance_use
+                variance_use,
+                block,
+                noise_array
             );
             double std_fpfs = std::pow(
                 get_smoothed_variance(
@@ -219,13 +229,67 @@ public:
                 ),
                 0.5
             );
-            std::vector<table::galNumber> catb = process_block_impl(
+            for (const table::galNumber& src : catb) {
+                table::galNumber src_new = src.decentralize(block);
+                this->select_push_back(src_new, catalog, std_fpfs);
+            }
+        }
+
+        if (mask_array.has_value()) {
+            mask2::add_pixel_mask_column_catalog(
+                catalog,
+                *mask_array,
+                sigma_arcsec_det,
+                scale
+            );
+        }
+        return table::objlist_to_array(catalog);
+    };
+
+    inline py::array_t<table::galRow>
+    process_image(
+        const py::array_t<double>& img_array,
+        const psf::BasePsf& psf_obj,
+        double variance,
+        const std::optional<std::vector<geometry::block>>& block_list=std::nullopt,
+        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+        const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
+    ) {
+
+        int image_ny = img_array.shape(0);
+        int image_nx = img_array.shape(1);
+
+        std::vector<geometry::block> bb_list = block_list ? *block_list
+            : geometry::get_block_list(
+                image_nx, image_ny, image_nx, image_ny, 0, this->scale
+            );
+
+        std::vector<table::galNumber> catalog;
+        for (const geometry::block & block: bb_list) {
+            double variance_use;
+            if (noise_array.has_value()) {
+                variance_use = variance * 2.0;
+            } else {
+                variance_use = variance;
+            }
+            py::array_t<double> psf_array = psf_obj.draw(
+                block.xcen, block.ycen
+            );
+            std::vector<table::galNumber> catb = process_block(
                 img_array,
                 psf_array,
-                variance_det,
-                variance_meas,
+                variance_use,
                 block,
                 noise_array
+            );
+            double std_fpfs = std::pow(
+                get_smoothed_variance(
+                    block.scale,
+                    sigma_arcsec * 1.414,
+                    psf_array,
+                    variance_use
+                ),
+                0.5
             );
             for (const table::galNumber& src : catb) {
                 table::galNumber src_new = src.decentralize(block);

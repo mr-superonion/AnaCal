@@ -273,7 +273,6 @@ public:
     update_model_params(
         const math::lossNumber& loss,
         const modelPrior& prior,
-        int epoch,
         double variance_val=1.0
     ) {
         this->F = this->F - (

@@ -34,10 +34,34 @@ pyExportTask(py::module_& m) {
             py::arg("fpfs_c0")=1.0
         )
         .def("process_image",
-            &TaskAlpha::process_image,
-            "process image",
+            py::overload_cast<
+                const py::array_t<double>&,
+                const py::array_t<double>&,
+                double,
+                const std::optional<std::vector<geometry::block>>&,
+                const std::optional<py::array_t<double>>&,
+                const std::optional<py::array_t<int16_t>>&
+            >(&TaskAlpha::process_image),
+            "process image with PSF array",
             py::arg("img_array"),
             py::arg("psf_array"),
+            py::arg("variance"),
+            py::arg("block_list")=py::none(),
+            py::arg("noise_array")=py::none(),
+            py::arg("mask_array")=py::none()
+        )
+        .def("process_image",
+            py::overload_cast<
+                const py::array_t<double>&,
+                const psf::BasePsf&,
+                double,
+                const std::optional<std::vector<geometry::block>>&,
+                const std::optional<py::array_t<double>>&,
+                const std::optional<py::array_t<int16_t>>&
+            >(&TaskAlpha::process_image),
+            "process image with PSF object",
+            py::arg("img_array"),
+            py::arg("psf_obj"),
             py::arg("variance"),
             py::arg("block_list")=py::none(),
             py::arg("noise_array")=py::none(),

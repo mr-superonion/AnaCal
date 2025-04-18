@@ -85,13 +85,19 @@ namespace psf {
                 "draw the PSF model image",
                 py::arg("x"), py::arg("y")
             )
-            .def_readonly("crun", &GridPsf::crun);
+            .def_readonly("crun", &GridPsf::crun)
+            .def_readonly("x0", &GridPsf::x0)
+            .def_readonly("dx", &GridPsf::dx)
+            .def_readonly("y0", &GridPsf::y0)
+            .def_readonly("dy", &GridPsf::dy)
+            .def_readonly("model_array", &GridPsf::model_array);
 
         py::class_<PyPsf, BasePsf>(psf, "PyPsf")
             .def(py::init<>())
-            .def("draw", &PyPsf::draw)
-            .def_readonly("crun", &PyPsf::crun);
+            .def_readonly("crun", &PyPsf::crun)
+            .def("draw", &PyPsf::draw);
     }
+
 
 } // end of psf
 } // end of anacal

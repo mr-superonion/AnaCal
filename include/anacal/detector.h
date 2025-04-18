@@ -29,7 +29,8 @@ void measure_pixel(
     int drmax2_flux,
     int drmax_bg,
     int drmax2_bg,
-    double nbg
+    double nbg,
+    double std_noise
 ) {
     int j = y - block.ymin;
     int i = x - block.xmin;
@@ -82,6 +83,8 @@ void measure_pixel(
             }
         }
         src.fluxdet = fluxdet;
+        src.peakv = data[index];
+        src.bkg = fluxbg / nbg;
         src.wdet = math::ssfunc1(
             wdet,
             p_min,
@@ -91,8 +94,8 @@ void measure_pixel(
             f_min,
             omega_f
         )* math::ssfunc1(
-            data[index] - fluxbg / nbg,
-            f_min,
+            data[index] - src.bkg * 0.9,
+            5.0 * std_noise,
             omega_f
         );
         src.model.F = fluxdet;
@@ -105,7 +108,8 @@ find_peaks(
     const py::array_t<double>& img_array,
     const py::array_t<double>& psf_array,
     double sigma_arcsec,
-    double f_min,
+    double snr_min,
+    double std_noise,
     double omega_f,
     double v_min,
     double omega_v,
@@ -124,6 +128,7 @@ find_peaks(
     );
 
     // Secondary peak cut
+    double f_min = std_noise * snr_min;
     double f_cut = f_min - omega_f;
     double v_cut = v_min - omega_v;
 
@@ -142,13 +147,13 @@ find_peaks(
     int drmax_bg = static_cast<int>(1.0 / block.scale) + 1;
     int drmax2_bg = drmax_bg * drmax_bg;
 
-    double nbg;
+    double nbg=0.0;
     for (int dj = -drmax_flux; dj <= drmax_flux; ++dj) {
         int dj2 = dj * dj;
         for (int di = -drmax_flux; di <= drmax_flux; ++di) {
             int dr2 = di * di + dj2;
             if (dr2 >= drmax2_bg && dr2 < drmax2_flux) {
-                ++nbg;
+                nbg=nbg+1;
             }
         }
     }
@@ -183,7 +188,8 @@ find_peaks(
                     drmax2_flux,
                     drmax_bg,
                     drmax2_bg,
-                    nbg
+                    nbg,
+                    std_noise
                 );
             }
 

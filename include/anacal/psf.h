@@ -20,13 +20,13 @@ namespace psf {
     /// Gaussian Function
     class GridPsf : public BasePsf {
     private:
-        double x0, y0;
-        double dx, dy;
         int nx, ny;
         int ngrid;
-        py::array_t<double> model_array;
         py::slice slice;
     public:
+        double x0, y0;
+        double dx, dy;
+        py::array_t<double> model_array;
         GridPsf(
             double x0,
             double y0,

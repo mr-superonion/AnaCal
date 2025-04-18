@@ -180,7 +180,7 @@ public:
                         data, variance, src.model, block
                     );
                     src.model.update_model_params(
-                        src.loss, prior, epoch, variance
+                        src.loss, prior, variance
                     );
                 }
             }
@@ -196,7 +196,7 @@ public:
                         data, variance, src.model, block
                     );
                     src.model.update_model_params(
-                        src.loss, prior, epoch, variance
+                        src.loss, prior, variance
                     );
                 }
             }
