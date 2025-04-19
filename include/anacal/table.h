@@ -183,6 +183,67 @@ struct galNumber {
         };
         return row;
     };
+
+    inline
+    from_row() const {
+        std::array<math::qnumber, 2> shape = model.get_shape();
+        galRow row = {
+            0.0,
+            0.0,
+            model.F.v,
+            model.F.g1,
+            model.F.g2,
+            model.t.v,
+            model.t.g1,
+            model.t.g2,
+            model.a1.v,
+            model.a1.g1,
+            model.a1.g2,
+            model.a2.v,
+            model.a2.g1,
+            model.a2.g2,
+            shape[0].v,
+            shape[0].g1,
+            shape[0].g2,
+            shape[1].v,
+            shape[1].g1,
+            shape[1].g2,
+            model.x1.v,
+            model.x1.g1,
+            model.x1.g2,
+            model.x2.v,
+            model.x2.g1,
+            model.x2.g2,
+            fluxdet.v,
+            fluxdet.g1,
+            fluxdet.g2,
+            wdet.v,
+            wdet.g1,
+            wdet.g2,
+            mask_value,
+            is_peak,
+            true,
+            fpfs_e1.v,
+            fpfs_e1.g1,
+            fpfs_e1.g2,
+            fpfs_e2.v,
+            fpfs_e2.g1,
+            fpfs_e2.g2,
+            fpfs_m0.v,
+            fpfs_m0.g1,
+            fpfs_m0.g2,
+            fpfs_m2.v,
+            fpfs_m2.g1,
+            fpfs_m2.g2,
+            peakv.v,
+            peakv.g1,
+            peakv.g2,
+            bkg.v,
+            bkg.g1,
+            bkg.g2
+        };
+        return row;
+    };
 };
 
 inline py::array_t<galRow>
