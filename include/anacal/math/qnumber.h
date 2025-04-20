@@ -24,6 +24,11 @@ struct qnumber {
         : v(v) {}
 
     qnumber(
+        double v, double g1, double g2
+    )
+        : v(v), g1(g1), g2(g2) {}
+
+    qnumber(
         double v, double g1, double g2, double x1, double x2
     )
         : v(v), g1(g1), g2(g2), x1(x1), x2(x2) {}

@@ -35,9 +35,9 @@ struct galRow{
     double x2;
     double dx2_dg1;
     double dx2_dg2;
-    double fluxdet;
-    double dfluxdet_dg1;
-    double dfluxdet_dg2;
+    double fluxap2;
+    double dfluxap2_dg1;
+    double dfluxap2_dg2;
     double wdet;
     double dwdet_dg1;
     double dwdet_dg2;
@@ -51,11 +51,11 @@ struct galRow{
     double fpfs_de2_dg1;
     double fpfs_de2_dg2;
     double fpfs_m0;
-    double fpfs_m0_dg1;
-    double fpfs_m0_dg2;
+    double fpfs_dm0_dg1;
+    double fpfs_dm0_dg2;
     double fpfs_m2;
-    double fpfs_m2_dg1;
-    double fpfs_m2_dg2;
+    double fpfs_dm2_dg1;
+    double fpfs_dm2_dg2;
     double peakv;
     double dpeakv_dg1;
     double dpeakv_dg2;
@@ -67,10 +67,11 @@ struct galRow{
 struct galNumber {
     // value with derivatives to Gaussian model parameters
     ngmix::NgmixGaussian model;
-    math::qnumber fluxdet;
+    math::qnumber fluxap2;
     math::qnumber wdet;
     int mask_value=0;
     bool is_peak=false;
+    bool is_primary=true;
     math::lossNumber loss;
     math::qnumber fpfs_e1;
     math::qnumber fpfs_e2;
@@ -78,17 +79,19 @@ struct galNumber {
     math::qnumber fpfs_m2;
     math::qnumber peakv;
     math::qnumber bkg;
+    double ra = 0.0;
+    double dec = 0.0;
 
     galNumber() = default;
 
     galNumber(
         ngmix::NgmixGaussian model,
-        math::qnumber fluxdet,
+        math::qnumber fluxap2,
         math::qnumber wdet,
         int mask_value,
         bool is_peak,
         math::lossNumber loss
-    ) : model(model), fluxdet(fluxdet), wdet(wdet),
+    ) : model(model), fluxap2(fluxap2), wdet(wdet),
         mask_value(mask_value), is_peak(is_peak), loss(loss) {}
 
     inline galNumber
@@ -98,7 +101,7 @@ struct galNumber {
         // (dx1, dx2) is the position of the source wrt center of block
         galNumber result= *this;
         result.wdet = this->wdet.decentralize(dx1, dx2);
-        result.fluxdet = this->fluxdet.decentralize(dx1, dx2);
+        result.fluxap2 = this->fluxap2.decentralize(dx1, dx2);
         result.model = this->model.decentralize(dx1, dx2);
         result.fpfs_e1 = this->fpfs_e1.decentralize(dx1, dx2);
         result.fpfs_e2 = this->fpfs_e2.decentralize(dx1, dx2);
@@ -114,7 +117,7 @@ struct galNumber {
         // (dx1, dx2) is the position of the source wrt center of block
         galNumber result= *this;
         result.wdet = this->wdet.centralize(dx1, dx2);
-        result.fluxdet = this->fluxdet.centralize(dx1, dx2);
+        result.fluxap2 = this->fluxap2.centralize(dx1, dx2);
         result.model = this->model.centralize(dx1, dx2);
         result.fpfs_e1 = this->fpfs_e1.centralize(dx1, dx2);
         result.fpfs_e2 = this->fpfs_e2.centralize(dx1, dx2);
@@ -127,8 +130,8 @@ struct galNumber {
     to_row() const {
         std::array<math::qnumber, 2> shape = model.get_shape();
         galRow row = {
-            0.0,
-            0.0,
+            ra,
+            dec,
             model.F.v,
             model.F.g1,
             model.F.g2,
@@ -153,15 +156,15 @@ struct galNumber {
             model.x2.v,
             model.x2.g1,
             model.x2.g2,
-            fluxdet.v,
-            fluxdet.g1,
-            fluxdet.g2,
+            fluxap2.v,
+            fluxap2.g1,
+            fluxap2.g2,
             wdet.v,
             wdet.g1,
             wdet.g2,
             mask_value,
             is_peak,
-            true,
+            is_primary,
             fpfs_e1.v,
             fpfs_e1.g1,
             fpfs_e1.g2,
@@ -182,6 +185,39 @@ struct galNumber {
             bkg.g2
         };
         return row;
+    };
+
+    inline void
+    from_row(galRow & row) {
+        ra = row.ra;
+        dec = row.dec;
+        model.F = math::qnumber(row.flux, row.dflux_dg1, row.dflux_dg2);
+        model.t = math::qnumber(row.t, row.dt_dg1, row.dt_dg2);
+        model.a1 = math::qnumber(row.a1, row.da1_dg1, row.da1_dg2);
+        model.a2 = math::qnumber(row.a2, row.da2_dg1, row.da2_dg2);
+        model.x1 = math::qnumber(row.x1, row.dx1_dg1, row.dx1_dg2);
+        model.x2= math::qnumber(row.x2, row.dx2_dg1, row.dx2_dg2);
+        fluxap2 = math::qnumber(
+            row.fluxap2, row.dfluxap2_dg1, row.dfluxap2_dg2
+        );
+        wdet = math::qnumber(row.wdet, row.dwdet_dg1, row.dwdet_dg2);
+        mask_value = row.mask_value;
+        is_peak = row.is_peak;
+        is_primary = row.is_primary;
+        fpfs_e1 = math::qnumber(
+            row.fpfs_e1, row.fpfs_de1_dg1, row.fpfs_de1_dg2
+        );
+        fpfs_e2 = math::qnumber(
+            row.fpfs_e2, row.fpfs_de2_dg1, row.fpfs_de2_dg2
+        );
+        fpfs_m0 = math::qnumber(
+            row.fpfs_m0, row.fpfs_dm0_dg1, row.fpfs_dm0_dg2
+        );
+        fpfs_m2 = math::qnumber(
+            row.fpfs_m2, row.fpfs_dm2_dg1, row.fpfs_dm2_dg2
+        );
+        peakv = math::qnumber(row.peakv, row.dpeakv_dg1, row.dpeakv_dg2);
+        bkg = math::qnumber(row.bkg, row.dbkg_dg1, row.dbkg_dg2);
     };
 };
 

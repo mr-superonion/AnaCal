@@ -21,6 +21,7 @@ public:
     double fpfs_c0;
     double sigma2, sigma_m2, rfac, ffac, ffac2, ffac3;
     double sigma2_lim;
+    double ap2_r, ap2_r2;
 
     GaussFit(
         double scale,
@@ -45,6 +46,36 @@ public:
         this->ffac2 = this->ffac * 1.41421356 * this->sigma_m2;
         this->ffac3 = this->ffac * 2.0 * this->sigma_m2;
         this->sigma2_lim = sigma2 * 28 / scale / scale;
+        this->ap2_r = 2.0 / scale;
+        this->ap2_r2 = std::pow(ap2_r, 2.0);
+    };
+
+    inline void
+    measure_aperture_flux(
+        const std::vector<math::qnumber> & data,
+        table::galNumber & src,
+        const geometry::block & block
+    ) const {
+        // stamp center index
+        int i = static_cast<int>(
+            std::round(src.model.x1.v / this->scale)
+        ) - block.xmin;
+        int j = static_cast<int>(
+            std::round(src.model.x2.v / this->scale)
+        ) - block.ymin;
+
+        math::qnumber fluxap2;
+        for (int dj = -ap2_r; dj <= ap2_r; dj++) {
+            int dj2 = dj * dj;
+            for (int di = -ap2_r; di <= ap2_r; di++) {
+                int dr2 = di * di + dj2;
+                if (dr2 < this->ap2_r2) {
+                    int _i = (j + dj) * block.nx + (i + di);
+                    src.fluxap2 = src.fluxap2 + data[_i];
+                }
+            }
+        }
+        return;
     };
 
     inline void
@@ -67,8 +98,8 @@ public:
             xvs[i] = this->grids_1d[i] + x_stamp_shift;
             yvs[i] = this->grids_1d[i] + y_stamp_shift;
         }
-        int j_block_shift = j_stamp - this->ss2 - block.ymin;
         int i_block_shift = i_stamp - this->ss2 - block.xmin;
+        int j_block_shift = j_stamp - this->ss2 - block.ymin;
 
         math::qnumber m0, mxx, myy, mxy;
         for (int j = 0; j < this->stamp_size; ++j) {
@@ -171,6 +202,10 @@ public:
         std::vector<table::galNumber> result;
         result.reserve(catalog.size());
         for (table::galNumber src : catalog) {
+            this->measure_aperture_flux(
+                data, src, block
+            );
+            src.model.F = src.fluxap2;
             if (!this->force_center) {
                 // Do center refinement first
                 src.model.force_size=true;

@@ -67,22 +67,17 @@ void measure_pixel(
             (data[index].v > data[id4].v)
         );
 
-        math::qnumber fluxdet;
         math::qnumber fluxbg;
         for (int dj = -drmax_flux; dj <= drmax_flux; dj++) {
             int dj2 = dj * dj;
             for (int di = -drmax_flux; di <= drmax_flux; di++) {
                 int dr2 = di * di + dj2;
-                if (dr2 < drmax2_flux) {
+                if ((dr2 < drmax2_flux) && (dr2 >= drmax2_bg)) {
                     int _i = (j + dj) * block.nx + (i + di);
-                    fluxdet = fluxdet + data[_i];
-                    if (dr2 >= drmax2_bg) {
-                        fluxbg = fluxbg + data[_i];
-                    }
+                    fluxbg = fluxbg + data[_i];
                 }
             }
         }
-        src.fluxdet = fluxdet;
         src.peakv = data[index];
         src.bkg = fluxbg / nbg;
         src.wdet = math::ssfunc1(
@@ -98,7 +93,6 @@ void measure_pixel(
             5.0 * std_noise,
             omega_f
         );
-        src.model.F = fluxdet;
         catalog.push_back(src);
     }
 };
@@ -135,15 +129,10 @@ find_peaks(
     int image_ny = img_array.shape(0);
     int image_nx = img_array.shape(1);
 
-    int ystart = std::max(image_bound, block.ymin_in);
-    int yend = std::min(image_ny - image_bound, block.ymax_in);
-    int xstart = std::max(image_bound, block.xmin_in);
-    int xend = std::min(image_nx - image_bound, block.xmax_in);
-
     // fluxdet is for 0 to 2 arcsec
     int drmax_flux = static_cast<int>(2.0 / block.scale) + 1;
     int drmax2_flux = drmax_flux * drmax_flux;
-    // fluxdet is for 1 arcsec to 2 arcsec
+    // background is for 1 arcsec to 2 arcsec
     int drmax_bg = static_cast<int>(1.0 / block.scale) + 1;
     int drmax2_bg = drmax_bg * drmax_bg;
 
@@ -157,6 +146,11 @@ find_peaks(
             }
         }
     }
+
+    int ystart = std::max(image_bound, block.ymin_in);
+    int yend = std::min(image_ny - image_bound, block.ymax_in);
+    int xstart = std::max(image_bound, block.xmin_in);
+    int xend = std::min(image_nx - image_bound, block.xmax_in);
 
     std::vector<table::galNumber> catalog;
     for (int y = ystart; y < yend; ++y) {

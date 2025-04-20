@@ -10,7 +10,6 @@ namespace anacal {
 namespace task {
 
 
-
 inline double get_smoothed_variance(
     double scale,
     double sigma_arcsec_det,
