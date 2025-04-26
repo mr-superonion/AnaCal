@@ -310,6 +310,20 @@ inline qnumber pow(
     );
 }; // power function
 
+inline qnumber sqrt(
+    const qnumber& qn
+) {
+    double tmp0 = std::sqrt(qn.v);
+    double tmp = 0.5 / tmp0;
+    return qnumber(
+        tmp0,
+        tmp * qn.g1,
+        tmp * qn.g2,
+        tmp * qn.x1,
+        tmp * qn.x2
+    );
+}; // sqrt function
+
 inline constexpr int N_LOOK  = 33;
 /**
 * Compile-time exponent lookup table for i in [MIN_VAL, MAX_VAL].

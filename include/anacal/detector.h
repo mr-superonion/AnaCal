@@ -93,7 +93,7 @@ void measure_pixel(
             5.0 * std_noise,
             omega_f
         );
-        catalog.push_back(src);
+        if (src.wdet.v > 1e-8) catalog.push_back(src);
     }
 };
 
@@ -103,7 +103,7 @@ find_peaks(
     const py::array_t<double>& psf_array,
     double sigma_arcsec,
     double snr_min,
-    double std_noise,
+    double variance,
     double omega_f,
     double v_min,
     double omega_v,
@@ -113,14 +113,23 @@ find_peaks(
     const std::optional<py::array_t<double>>& noise_array=std::nullopt,
     int image_bound=0
 ) {
+    double sigma_arcsec_det = sigma_arcsec * 1.414;
     std::vector<math::qnumber> data = prepare_data_block(
         img_array,
         psf_array,
-        sigma_arcsec,
+        sigma_arcsec_det,
         block,
         noise_array
     );
 
+    double std_noise = std::pow(
+        get_smoothed_variance(
+            block.scale,
+            sigma_arcsec_det,
+            psf_array,
+            variance
+        ), 0.5
+    );
     // Secondary peak cut
     double f_min = std_noise * snr_min;
     double f_cut = f_min - omega_f;

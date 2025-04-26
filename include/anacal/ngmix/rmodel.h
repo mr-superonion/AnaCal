@@ -8,6 +8,7 @@ namespace ngmix {
 
 inline constexpr double one_over_two_pi = 0.5 / M_PI;
 
+
 struct modelPrior {
     math::qnumber w_F, w_a, w_t, w_x;
 
@@ -29,7 +30,16 @@ struct modelPrior {
     };
 };
 
-struct modelKernel {
+struct modelKernelB {
+    math::qnumber v_p0, v_p1, v_p2;
+    math::qnumber f;
+    double scale;
+
+    modelKernelB() = default;
+
+};
+
+struct modelKernelD {
     math::qnumber v_p0, v_p1, v_p2;
     math::qnumber a1_p0, a1_p1, a1_p2;
     math::qnumber a2_p0, a2_p1, a2_p2;
@@ -38,7 +48,18 @@ struct modelKernel {
     math::qnumber f, f_a1, f_a2;
     double scale;
 
-    modelKernel() = default;
+    modelKernelD() = default;
+
+    inline modelKernelB
+    to_kernelB() {
+        modelKernelB res;
+        res.v_p0 = this->v_p0;
+        res.v_p1 = this->v_p1;
+        res.v_p2 = this->v_p2;
+        res.f = this->f;
+        res.scale = this->scale;
+        return res;
+    };
 };
 
 struct frDeriv {
@@ -71,6 +92,7 @@ public:
     math::qnumber a1 = math::qnumber(0.15);
     math::qnumber a2 = math::qnumber(0.15);
     math::qnumber x1, x2;   // parameters
+    bool is_simple=false;
     NgmixGaussian(
         bool force_size=false,
         bool force_center=false
@@ -78,10 +100,34 @@ public:
         force_size(force_size),
         force_center(force_center){};
 
-    inline modelKernel
-    prepare_model(double scale, double sigma_arcsec) const {
+    inline modelKernelB
+    prepare_modelB(double scale, double sigma_arcsec) const {
         double scale2 = one_over_two_pi * scale * scale;
-        modelKernel kernel;
+        modelKernelB kernel;
+        kernel.scale = scale;
+        double sigma2 = sigma_arcsec * sigma_arcsec;
+        math::qnumber base1 = math::pow(this->a1, 2) + sigma2;
+        math::qnumber base2 = math::pow(this->a2, 2) + sigma2;
+        math::qnumber det_inv = 1.0 / base1 / base2;
+
+        kernel.f =  math::pow(det_inv, 0.5) * scale2;
+
+        math::qnumber tx2 = 2.0 * this->t;
+        math::qnumber cos = math::cos(tx2);
+        math::qnumber sin = math::sin(tx2);
+        math::qnumber m0 = (base1 + base2) * det_inv;
+        math::qnumber m1 = (base1 - base2) * cos * det_inv;
+        math::qnumber m2 = (base1 - base2) * sin * det_inv;
+        kernel.v_p0 = 0.5 * m0;
+        kernel.v_p1 = -0.5 * m1;
+        kernel.v_p2 = -0.5 * m2;
+        return kernel;
+    };
+
+    inline modelKernelD
+    prepare_modelD(double scale, double sigma_arcsec) const {
+        double scale2 = one_over_two_pi * scale * scale;
+        modelKernelD kernel;
         kernel.scale = scale;
         double sigma2 = sigma_arcsec * sigma_arcsec;
         math::qnumber base1 = math::pow(this->a1, 2) + sigma2;
@@ -133,12 +179,27 @@ public:
         return kernel;
     };
 
+    inline math::qnumber get_r2(
+        double x,
+        double y,
+        const modelKernelB & c
+    ) const {
+        // Center Shifting
+        math::qnumber xs = x - this->x1;
+        math::qnumber ys = y - this->x2;
+
+        math::lossNumber result;
+        math::qnumber q0 = xs * xs + ys * ys;
+        math::qnumber q1 = xs * xs - ys * ys;
+        math::qnumber q2 = 2.0 * xs * ys;
+        return c.v_p0 * q0 + c.v_p1 * q1 + c.v_p2 * q2;
+    };
+
     inline math::lossNumber get_r2(
         double x,
         double y,
-        const modelKernel & c
+        const modelKernelD & c
     ) const {
-
         // Center Shifting
         math::qnumber xs = x - this->x1;
         math::qnumber ys = y - this->x2;
@@ -162,9 +223,25 @@ public:
         return result;
     };
 
+    inline math::qnumber get_func_from_r2(
+        const math::qnumber& r2,
+        const modelKernelB& c
+    ) const {
+        frDeriv fr = this->get_fr(r2.v);
+        return fr.fr * c.f;
+    };
+
+    inline math::qnumber get_model_from_r2(
+        const math::qnumber& r2,
+        const modelKernelB& c
+    ) const {
+        frDeriv fr = this->get_fr(r2.v);
+        return this->F * fr.fr * c.f;
+    };
+
     inline math::lossNumber get_model_from_r2(
         const math::lossNumber& r2,
-        const modelKernel& c
+        const modelKernelD& c
     ) const {
         frDeriv fr = this->get_fr(r2.v);
         math::lossNumber res;
@@ -190,7 +267,7 @@ public:
 
     inline math::lossNumber get_model(
         double x, double y,
-        const modelKernel& c
+        const modelKernelD& c
     ) const {
 
         math::lossNumber r2 = this->get_r2(x, y, c);
@@ -215,7 +292,7 @@ public:
         math::qnumber img_val,
         double variance_val,
         const math::lossNumber& r2,
-        const modelKernel & c
+        const modelKernelD & c
     ) const {
 
         math::lossNumber res;
@@ -245,25 +322,20 @@ public:
         if (!this->force_size) {
             res.v_tt = (
                 math::pow(theory_val.v_t, 2.0) * mul
-                /* + tmp * theory_val.v_tt */
             );
             res.v_a1a1 = (
                 math::pow(theory_val.v_a1, 2.0) * mul
-                /* + tmp * theory_val.v_a1a1 */
             );
             res.v_a2a2 = (
                 math::pow(theory_val.v_a2, 2.0) * mul
-                /* + tmp * theory_val.v_a2a2 */
             );
         }
         if (!this->force_center) {
             res.v_x1x1 = (
                 math::pow(theory_val.v_x1, 2.0) * mul
-                /* + tmp * theory_val.v_x1x1 */
             );
             res.v_x2x2 = (
                 math::pow(theory_val.v_x2, 2.0) * mul
-                /* + tmp * theory_val.v_x2x2 */
             );
         }
         return res;
@@ -285,7 +357,7 @@ public:
                 (loss.v_t + prior.w_t * this->t) / (
                     loss.v + (loss.v_tt + prior.w_t)
                 )
-            ) * 0.1;
+            ) * 0.2;
             this->a1 = this->a1 - (
                 (loss.v_a1 + prior.w_a * this->a1) / (
                     loss.v + (loss.v_a1a1 + prior.w_a)
@@ -311,6 +383,67 @@ public:
         }
     };
 
+    /* inline void update_model_admom( */
+    /*     double sigma_arcsec, */
+    /*     const math::qnumber& Ixx, */
+    /*     const math::qnumber& Iyy, */
+    /*     const math::qnumber& Ixy */
+    /* ) { */
+    /*     double sigma2 = sigma_arcsec * sigma_arcsec; */
+    /*     // Compute determinant of measured (weighted) covariance matrix */
+    /*     math::qnumber detm = Iyy * Ixx - math::pow(Ixy, 2); */
+    /*     // Retrieve weight covariance components from the model */
+    /*     math::qnumber Wxx = this->ixx + sigma2; // convolved with PSF */
+    /*     math::qnumber Wyy = this->iyy + sigma2; */
+    /*     math::qnumber Wxy = this->ixy; */
+    /*     math::qnumber detw = Wyy * Wxx - math::pow(Wxy, 2); */
+
+    /*     // Compute inverses of the determinants */
+    /*     math::qnumber idetm = math::pow(detm, -1); // measurement */
+    /*     math::qnumber idetw = math::pow(detw, -1); // model */
+
+    /*     // Compute the difference of inverse covariance matrices (precision matrices) */
+    /*     math::qnumber Nxx = Iyy * idetm - Wyy * idetw; */
+    /*     math::qnumber Nyy = Ixx * idetm - Wxx * idetw; */
+    /*     math::qnumber Nxy = -Ixy * idetm + Wxy * idetw; */
+
+    /*     // Compute determinant of the difference matrix */
+    /*     math::qnumber detn = Nyy * Nxx - math::pow(Nxy, 2); */
+    /*     math::qnumber idetn = math::pow(detn, -1.0); */
+
+    /*     // Compute PSF-conved covariance matrix by inverting the difference matrix */
+    /*     this->ixx = Nyy * idetn - sigma2; */
+    /*     this->iyy = Nxx * idetn - sigma2; */
+    /*     this->ixy = -Nxy * idetn; */
+    /* }; */
+
+    /* inline void update_model_admom_inv(double sigma_arcsec) { */
+    /*     double sigma2 = sigma_arcsec * sigma_arcsec; */
+    /*     double sigma4 = sigma2 * sigma2; */
+    /*     // Retrieve weight covariance components from the model */
+    /*     math::qnumber Wxx = this->ixx + sigma2; // convolved with PSF */
+    /*     math::qnumber Wyy = this->iyy + sigma2; */
+    /*     math::qnumber Wxy = this->ixy; */
+    /*     math::qnumber detw = Wyy * Wxx - math::pow(Wxy, 2); */
+    /*     math::qnumber sel = math::ssfunc1( */
+    /*         detw, */
+    /*         sigma4 * 1.1, */
+    /*         sigma4 * 0.1 */
+    /*     ); */
+    /*     this->ixx = this->ixx * sel; */
+    /*     this->iyy = this->iyy * sel; */
+    /*     this->ixy = this->ixy * sel; */
+    /*     Wxx = this->ixx + sigma2; */
+    /*     Wyy = this->iyy + sigma2; */
+    /*     Wxy = this->ixy; */
+    /*     detw = Wyy * Wxx - math::pow(Wxy, 2); */
+    /*     this->idet = 1.0 / detw; */
+    /*     this->dxx = Wyy * this->idet; */
+    /*     this->dyy = Wxx * this->idet; */
+    /*     this->dxy = -Wxy * this->idet; */
+    /*     return; */
+    /* } */
+
     inline std::array<math::qnumber, 2>
     get_shape() const {
         math::qnumber r1 = math::pow(this->a1, 2);
@@ -335,7 +468,7 @@ public:
         int y_stamp = static_cast<int>(
             std::round(this->x2.v / scale)
         );
-        modelKernel c = this->prepare_model(scale, sigma_arcsec);
+        modelKernelD c = this->prepare_modelD(scale, sigma_arcsec);
         int nx2 = nx / 2;
         int ny2 = ny / 2;
         math::qnumber flux;
@@ -365,7 +498,7 @@ public:
         int y_stamp = static_cast<int>(
             std::round(this->x2.v / scale)
         );
-        modelKernel c = this->prepare_model(scale, sigma_arcsec);
+        modelKernelD c = this->prepare_modelD(scale, sigma_arcsec);
         auto result = py::array_t<double>({3, ny, nx});
         auto r = result.mutable_unchecked<3>();
         int nx2 = nx / 2;

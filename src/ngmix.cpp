@@ -31,11 +31,15 @@ pyExportNgmix(py::module_& m) {
             py::arg("sigma_x")
         );
 
-    py::class_<modelKernel>(ngmix, "modelKernel")
+    py::class_<modelKernelB>(ngmix, "modelKernelB")
         .def(py::init<>())
-        .def_readonly("f", &modelKernel::f)
-        .def_readonly("f_a1", &modelKernel::f_a1)
-        .def_readonly("f_a2", &modelKernel::f_a2);
+        .def_readonly("f", &modelKernelB::f);
+
+    py::class_<modelKernelD>(ngmix, "modelKernelD")
+        .def(py::init<>())
+        .def_readonly("f", &modelKernelD::f)
+        .def_readonly("f_a1", &modelKernelD::f_a1)
+        .def_readonly("f_a2", &modelKernelD::f_a2);
 
     py::class_<NgmixGaussian>(ngmix, "NgmixGaussian")
         .def(py::init<bool, bool>(),
@@ -48,13 +52,23 @@ pyExportNgmix(py::module_& m) {
         .def_readwrite("a2", &NgmixGaussian::a2)
         .def_readwrite("x1", &NgmixGaussian::x1)
         .def_readwrite("x2", &NgmixGaussian::x2)
-        .def("prepare_model", &NgmixGaussian::prepare_model,
+        .def("prepare_modelD", &NgmixGaussian::prepare_modelD,
             "Prepare the gradient function",
             py::arg("scale"), py::arg("sigma_arcsec")
         )
-        .def("get_r2", &NgmixGaussian::get_r2,
-            "Returns the r squared value at x, y",
-            py::arg("x"), py::arg("y"), py::arg("c")
+        .def("get_r2",
+             py::overload_cast<
+                 double, double, const modelKernelB&
+             >(&NgmixGaussian::get_r2, py::const_),
+             "Returns the r squared value at x, y using modelKernelB (as a math.qnumber).",
+             py::arg("x"), py::arg("y"), py::arg("c")
+        )
+        .def("get_r2",
+             py::overload_cast<
+                 double, double, const modelKernelD&
+             >(&NgmixGaussian::get_r2, py::const_),
+             "Returns the r squared value and its first-order derivatives at x, y using modelKernelD (as a math.lossNumber).",
+             py::arg("x"), py::arg("y"), py::arg("c")
         )
         .def("get_model", &NgmixGaussian::get_model,
             "Returns the distorted model value at x, y",

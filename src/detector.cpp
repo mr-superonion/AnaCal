@@ -13,7 +13,7 @@ pyExportDetector(py::module_& m) {
         py::arg("psf_array"),
         py::arg("sigma_arcsec"),
         py::arg("snr_min"),
-        py::arg("std_noise"),
+        py::arg("variance"),
         py::arg("omega_f"),
         py::arg("v_min"),
         py::arg("omega_v"),

@@ -410,6 +410,57 @@ prepare_data_block(
 };
 
 
+inline double get_smoothed_variance(
+    double scale,
+    double sigma_arcsec,
+    const py::array_t<double>& psf_array,
+    double variance
+) {
+    double variance_sm = 0.0;
+    // number of pixels in x and y used to estimated noise variance
+    // result is independent on this
+    int npix = 64;
+    Image img_obj(npix, npix, scale, true);
+    {
+        // Prepare PSF
+        img_obj.set_r(psf_array, -1, -1, true);
+        img_obj.fft();
+        const py::array_t<std::complex<double>> parr = img_obj.draw_f();
+        {
+            // white noise
+            auto pf = py::array_t<std::complex<double>>({npix, npix / 2 + 1});
+            auto pf_r = pf.mutable_unchecked<2>();
+            std::complex<double> vv(std::sqrt(variance) / npix, 0.0);
+            std::complex<double> sqrt2vv = std::sqrt(2.0) * vv;
+            for (ssize_t j = 0; j < npix; ++j) {
+                for (ssize_t i = 1; i < npix / 2; ++i) {
+                    pf_r(j, i) = sqrt2vv;
+                }
+                pf_r(j, 0) = vv;
+                pf_r(j, npix / 2) = vv;
+            }
+            img_obj.set_f(pf);
+        }
+        // Deconvolve the PSF
+        img_obj.deconvolve(parr, 3.0 / scale);
+    }
+    {
+        // Convolve Gaussian
+        const Gaussian gauss_model(1.0 / sigma_arcsec);
+        img_obj.filter(gauss_model);
+    }
+    {
+        const py::array_t<std::complex<double>> pf_dec = img_obj.draw_f();
+        auto pfd_r = pf_dec.unchecked<2>();
+        for (ssize_t j = 0; j < npix; ++j) {
+            for (ssize_t i = 0; i < npix / 2 + 1; ++i) {
+                variance_sm += std::norm(pfd_r(j, i));
+            }
+        }
+    }
+    return variance_sm;
+};
+
 
 void pyExportImage(py::module& m);
 }

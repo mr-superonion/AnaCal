@@ -10,14 +10,13 @@ pyExportTask(py::module_& m) {
     );
     py::class_<TaskAlpha>(task, "TaskAlpha")
         .def(py::init<
-            double, double, double, double, double,
+            double, double, double, double,
             double, double, double, double,
             const std::optional<ngmix::modelPrior>,
             int, int, int,
             bool, bool, double
             >(),
             py::arg("scale"),
-            py::arg("sigma_arcsec_det"),
             py::arg("sigma_arcsec"),
             py::arg("snr_peak_min"),
             py::arg("omega_f"),
@@ -38,7 +37,8 @@ pyExportTask(py::module_& m) {
                 const py::array_t<double>&,
                 const py::array_t<double>&,
                 double,
-                const std::optional<std::vector<geometry::block>>&,
+                const std::vector<geometry::block>&,
+                const std::optional<py::array_t<table::galRow>>&,
                 const std::optional<py::array_t<double>>&,
                 const std::optional<py::array_t<int16_t>>&
             >(&TaskAlpha::process_image),
@@ -46,7 +46,8 @@ pyExportTask(py::module_& m) {
             py::arg("img_array"),
             py::arg("psf_array"),
             py::arg("variance"),
-            py::arg("block_list")=py::none(),
+            py::arg("block_list"),
+            py::arg("detection")=py::none(),
             py::arg("noise_array")=py::none(),
             py::arg("mask_array")=py::none()
         )
@@ -55,7 +56,8 @@ pyExportTask(py::module_& m) {
                 const py::array_t<double>&,
                 const psf::BasePsf&,
                 double,
-                const std::optional<std::vector<geometry::block>>&,
+                const std::vector<geometry::block>&,
+                const std::optional<py::array_t<table::galRow>>&,
                 const std::optional<py::array_t<double>>&,
                 const std::optional<py::array_t<int16_t>>&
             >(&TaskAlpha::process_image),
@@ -63,7 +65,8 @@ pyExportTask(py::module_& m) {
             py::arg("img_array"),
             py::arg("psf_obj"),
             py::arg("variance"),
-            py::arg("block_list")=py::none(),
+            py::arg("block_list"),
+            py::arg("detection")=py::none(),
             py::arg("noise_array")=py::none(),
             py::arg("mask_array")=py::none()
         );
@@ -71,7 +74,7 @@ pyExportTask(py::module_& m) {
         "get_smoothed_variance", &get_smoothed_variance,
         "get noise variance for smoothed image",
         py::arg("scale"),
-        py::arg("sigma_arcsec_det"),
+        py::arg("sigma_arcsec"),
         py::arg("psf_array"),
         py::arg("variance")
     );
