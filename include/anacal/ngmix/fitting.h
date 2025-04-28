@@ -349,8 +349,20 @@ public:
         int num_epochs,
         double variance,
         geometry::block block,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt
+        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+        const std::optional<std::vector<std::size_t>>& indices=std::nullopt
     ) {
+
+        std::vector<std::size_t> inds;
+        if (indices.has_value()) {
+            inds = *indices;
+        } else {
+            std::size_t ns = catalog.size();
+            inds.reserve(ns);
+            for (std::size_t i = 0; i < ns; ++i) {
+                inds.push_back(i);
+            }
+        }
 
         std::vector<math::qnumber> data = prepare_data_block(
             img_array,
@@ -359,17 +371,12 @@ public:
             block,
             noise_array
         );
-        double variance_meas = get_smoothed_variance(
-            block.scale,
-            this->sigma_arcsec,
-            psf_array,
-            variance
-        );
 
+        std::size_t ng = inds.size();
         std::vector<modelKernelD> kernels;
-        size_t ns = catalog.size();
-        kernels.reserve(ns);
-        for (table::galNumber & src : catalog) {
+        kernels.reserve(ng);
+        for (std::size_t ind : inds) {
+            table::galNumber & src = catalog[ind];
             src.model.force_size=this->force_size;
             src.model.force_center=this->force_center;
             if (!this->force_size) {
@@ -383,35 +390,47 @@ public:
             );
         }
 
+        double variance_meas = get_smoothed_variance(
+            block.scale,
+            this->sigma_arcsec,
+            psf_array,
+            variance
+        );
+
+        // deblend modeling
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
-            for (size_t ind = 0; ind < ns; ++ind) {
-                table::galNumber & src = catalog[ind];
-                modelKernelD & kernel = kernels[ind];
-                src.loss = this->measure_loss(
-                    data, variance_meas, src.model, block, kernel
-                );
-                src.model.update_model_params(
-                    src.loss, prior, variance_meas
-                );
-                kernel = src.model.prepare_modelD(
-                    this->scale,
-                    this->sigma_arcsec
-                );
+            for (std::size_t i=0; i<ng; ++i) {
+                table::galNumber & src = catalog[inds[i]];
+                modelKernelD & kernel = kernels[i];
+                if (src.block_id == block.index) {
+                    // update the sources in the inner region
+                    src.loss = this->measure_loss(
+                        data, variance_meas, src.model, block, kernel
+                    );
+                    src.model.update_model_params(
+                        src.loss, prior, variance_meas
+                    );
+                    kernel = src.model.prepare_modelD(
+                        this->scale,
+                        this->sigma_arcsec
+                    );
+                }
             }
         }
 
-        for (table::galNumber & src : catalog) {
+        // finally get FPFS measurement
+        double std_fpfs = std::sqrt(
+            get_smoothed_variance(
+                block.scale,
+                this->sigma_arcsec * 1.414,
+                psf_array,
+                variance
+            )
+        );
+        for (std::size_t i=0; i<ng; ++i) {
+            table::galNumber & src = catalog[inds[i]];
             this->measure_fpfs(
                 data, src, block
-            );
-            double std_fpfs = std::pow(
-                get_smoothed_variance(
-                    block.scale,
-                    this->sigma_arcsec * 1.414,
-                    psf_array,
-                    variance
-                ),
-                0.5
             );
             src.wsel = src.wdet * math::ssfunc1(
                 src.fpfs_m0,

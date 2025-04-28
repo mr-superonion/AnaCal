@@ -61,36 +61,63 @@ public:
     };
 
     inline std::vector<table::galNumber>
-    process_block(
+    detect_block(
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         double variance,
         const geometry::block & block,
-        const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt
     ) {
-        std::vector<table::galNumber> catalog;
-        if (detection.has_value()) {
-            catalog = table::array_to_objlist(
-                *detection,
-                block
-            );
-        } else {
-            catalog = detector::find_peaks(
-                img_array,
-                psf_array,
-                this->sigma_arcsec,
-                this->snr_peak_min,
-                variance,
-                this->omega_f,
-                this->v_min,
-                this->omega_v,
-                this->p_min,
-                this->omega_p,
-                block,
-                noise_array,
-                this->image_bound
-            );
+        std::vector<table::galNumber> catalog = detector::find_peaks(
+            img_array,
+            psf_array,
+            this->sigma_arcsec,
+            this->snr_peak_min,
+            variance,
+            this->omega_f,
+            this->v_min,
+            this->omega_v,
+            this->p_min,
+            this->omega_p,
+            block,
+            noise_array,
+            this->image_bound
+        );
+        for (table::galNumber& src : catalog) {
+            src = src.decentralize(block);
+        }
+        return catalog;
+    };
+
+    inline void
+    measure_block(
+        std::vector<table::galNumber>& catalog,
+        const py::array_t<double>& img_array,
+        const py::array_t<double>& psf_array,
+        double variance,
+        const geometry::block & block,
+        const std::optional<py::array_t<double>>& noise_array=std::nullopt
+    ) {
+        double x_min = block.xmin * block.scale;
+        double y_min = block.ymin * block.scale;
+        double x_max = block.xmax * block.scale;
+        double y_max = block.ymax * block.scale;
+        std::size_t nrow = catalog.size();
+        std::vector<std::size_t> indices;
+        indices.reserve(nrow / 4);
+        for (std::size_t i = 0; i < nrow; ++i) {
+            const ngmix::NgmixGaussian & m = catalog[i].model;
+            if (m.x1.v >= x_min &&
+                m.x1.v < x_max &&
+                m.x2.v >= y_min &&
+                m.x2.v < y_max
+            ) {
+                indices.push_back(i);
+            }
+        }
+        if (indices.empty()) return;
+        for (std::size_t idx : indices) {
+            catalog[idx] = catalog[idx].centralize(block);
         }
         this->fitter.process_block_impl(
             catalog,
@@ -100,9 +127,13 @@ public:
             this->num_epochs,
             variance,
             block,
-            noise_array
+            noise_array,
+            indices
         );
-        return catalog;
+        for (std::size_t idx : indices) {
+            catalog[idx] = catalog[idx].decentralize(block);
+        }
+        return;
     };
 
     inline py::array_t<table::galRow>
@@ -116,25 +147,42 @@ public:
         const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
     ) {
 
+        double variance_use;
+        if (noise_array.has_value()) {
+            variance_use = variance * 2.0;
+        } else {
+            variance_use = variance;
+        }
+
         std::vector<table::galNumber> catalog;
-        for (const geometry::block & block: block_list) {
-            double variance_use;
-            if (noise_array.has_value()) {
-                variance_use = variance * 2.0;
-            } else {
-                variance_use = variance;
+        if (detection.has_value()) {
+            catalog = table::array_to_objlist(
+                *detection
+            );
+        } else {
+            for (const geometry::block & block: block_list) {
+                std::vector<table::galNumber> catb = detect_block(
+                    img_array,
+                    psf_array,
+                    variance_use,
+                    block,
+                    noise_array
+                );
+                for (const table::galNumber& src : catb) {
+                    catalog.push_back(src);
+                }
             }
-            std::vector<table::galNumber> catb = process_block(
+        }
+
+        for (const geometry::block & block: block_list) {
+            measure_block(
+                catalog,
                 img_array,
                 psf_array,
                 variance_use,
                 block,
-                detection,
                 noise_array
             );
-            for (const table::galNumber& src : catb) {
-                catalog.push_back(src.decentralize(block));
-            }
         }
 
         if (mask_array.has_value()) {
@@ -159,28 +207,48 @@ public:
         const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
     ) {
 
+        double variance_use;
+        if (noise_array.has_value()) {
+            variance_use = variance * 2.0;
+        } else {
+            variance_use = variance;
+        }
+
         std::vector<table::galNumber> catalog;
-        for (const geometry::block & block: block_list) {
-            double variance_use;
-            if (noise_array.has_value()) {
-                variance_use = variance * 2.0;
-            } else {
-                variance_use = variance;
+        if (detection.has_value()) {
+            catalog = table::array_to_objlist(
+                *detection
+            );
+        } else {
+            for (const geometry::block & block: block_list) {
+                py::array_t<double> psf_array = psf_obj.draw(
+                    block.xcen, block.ycen
+                );
+                std::vector<table::galNumber> catb = detect_block(
+                    img_array,
+                    psf_array,
+                    variance_use,
+                    block,
+                    noise_array
+                );
+                for (const table::galNumber& src : catb) {
+                    catalog.push_back(src);
+                }
             }
+        }
+
+        for (const geometry::block & block: block_list) {
             py::array_t<double> psf_array = psf_obj.draw(
                 block.xcen, block.ycen
             );
-            std::vector<table::galNumber> catb = process_block(
+            measure_block(
+                catalog,
                 img_array,
                 psf_array,
                 variance_use,
                 block,
-                detection,
                 noise_array
             );
-            for (const table::galNumber& src : catb) {
-                catalog.push_back(src.decentralize(block));
-            }
         }
 
         if (mask_array.has_value()) {

@@ -99,6 +99,7 @@ struct galRow{
     double dbkg_dg2;
     double dbkg_dj1;
     double dbkg_dj2;
+    int block_id;
 };
 
 struct galNumber {
@@ -119,6 +120,7 @@ struct galNumber {
     double ra = 0.0;
     double dec = 0.0;
     math::qnumber wsel = math::qnumber(1.0);
+    int block_id;
 
     galNumber() = default;
 
@@ -259,7 +261,8 @@ struct galNumber {
             bkg.g1,
             bkg.g2,
             bkg.x1,
-            bkg.x2
+            bkg.x2,
+            block_id
         };
         return row;
     };
@@ -346,6 +349,7 @@ struct galNumber {
             row.dbkg_dg1, row.dbkg_dg2,
             row.dbkg_dj1, row.dbkg_dj2
         );
+        block_id = row.block_id;
     };
 };
 
@@ -374,10 +378,10 @@ array_to_objlist(
 
     std::vector<galNumber> result;
     result.reserve(static_cast<std::size_t>(n));     // upper bound
-    double x_min = block.xmin_in * block.scale;
-    double y_min = block.ymin_in * block.scale;
-    double x_max = block.xmax_in * block.scale;
-    double y_max = block.ymax_in * block.scale;
+    double x_min = block.xmin * block.scale;
+    double y_min = block.ymin * block.scale;
+    double x_max = block.xmax * block.scale;
+    double y_max = block.ymax * block.scale;
 
     for (ssize_t i = 0; i < n; ++i) {
         const galRow &row = r(i);                     // read‑only reference
@@ -390,6 +394,27 @@ array_to_objlist(
             gn.from_row(row);
             result.push_back(gn.centralize(block));
         }
+    }
+    return result;
+}
+
+
+inline std::vector<galNumber>
+array_to_objlist(
+    const py::array_t<galRow> &records
+) {
+    /* Fast zero‑copy view of the NumPy buffer */
+    auto r = records.unchecked<1>();          // one‑dimensional view
+    const ssize_t n = r.shape(0);
+
+    std::vector<galNumber> result;
+    result.reserve(static_cast<std::size_t>(n));     // upper bound
+
+    for (ssize_t i = 0; i < n; ++i) {
+        const galRow &row = r(i);                     // read‑only reference
+        galNumber gn;
+        gn.from_row(row);
+        result.push_back(gn);
     }
     return result;
 }

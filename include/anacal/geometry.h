@@ -20,14 +20,16 @@ struct block {
     int nx = 0;
     int ny = 0;
     double scale = 0.2;
+    int index = 0;
 
     block() = default;
     block(
         int xc, int yc, int xmi, int ymi, int xma, int yma,
-        int xmi_in, int ymi_in, int xma_in, int yma_in, double scale
+        int xmi_in, int ymi_in, int xma_in, int yma_in, double scale,
+        int index
     ) : xcen(xc), ycen(yc), xmin(xmi), ymin(ymi), xmax(xma), ymax(yma),
         xmin_in(xmi_in), ymin_in(ymi_in), xmax_in(xma_in), ymax_in(yma_in),
-        scale(scale) {
+        scale(scale), index(index) {
         this->nx = xmax - xmin;
         this->ny = ymax - ymin;
     }
@@ -95,7 +97,8 @@ inline std::vector<block> get_block_list(
                 ymin_in,
                 xmax_in,
                 ymax_in,
-                scale
+                scale,
+                index
             );
         }
     }

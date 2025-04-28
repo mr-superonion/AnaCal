@@ -78,7 +78,7 @@ def test_ngmix_gaussian_fit_additive(test_g1=True):
         variance=0.1,
     )[0]
     ell1 = cat_1.model.get_shape()[0]
-    assert ell1.v / ell1.g1 < 1e-4
+    assert np.abs(ell1.v / ell1.g1)< 1e-4
     return
 
 
@@ -241,7 +241,7 @@ def test_ngmix_gaussian_fit2():
         variance=0.1,
     )[0]
     ell2 = cat_2.model.get_shape()[0]
-    assert (ell2.v + ell1.v) / (ell2.g1 + ell1.g1) < 1e-5
+    assert np.abs((ell2.v + ell1.v) / (ell2.g1 + ell1.g1)) < 2e-5
 
     fitter = anacal.ngmix.GaussFit(
         scale=scale,
@@ -318,22 +318,23 @@ def test_ngmix_gaussian_fit4():
         .array
     )
 
-    obj = galsim.Exponential(half_light_radius=0.25).shear(g1=0.03)
+    obj = galsim.Gaussian(half_light_radius=0.25).shear(g1=0.03)
     obj = galsim.Convolve(psf_obj, obj)
 
     # Create an empty image
     full_image = galsim.ImageF(ncol=nx, nrow=ny, scale=scale)
 
     # Define centers for 4 substamps
-    centers = [(31, 31), (96, 32), (160, 32), (224, 32)]
+    centers = [(31.2, 31.2), (95.9, 32.05), (160, 32.1), (224, 31.8)]
+    fluxes = [12, 23, 8.5, 18.4]
 
     # Draw galaxies at specified positions
-    for center in centers:
+    for i, center in enumerate(centers):
         shift = galsim.PositionD(
             (center[0] - (nx - 1) / 2) * scale,
             (center[1] - (ny - 1) / 2) * scale
         )
-        final_galaxy = obj.shift(shift)
+        final_galaxy = obj.shift(shift).withFlux(fluxes[i])
         final_galaxy.drawImage(image=full_image, add_to_image=True)
     img_array = full_image.array
 
@@ -356,10 +357,10 @@ def test_ngmix_gaussian_fit4():
         img_array=img_array,
         psf_array=psf_array,
         prior=prior,
-        num_epochs=20,
+        num_epochs=25,
         variance=1.0,
     )
-    for rr in result:
+    for i, rr in enumerate(result):
         [e1, e2] = rr.model.get_shape()
         np.testing.assert_allclose(
             rr.model.x1.g1 - (rr.model.x1.v - nx / 2 * scale),
@@ -378,7 +379,12 @@ def test_ngmix_gaussian_fit4():
             0.0, atol=1e-5, rtol=0,
         )
         assert abs(e1.v / e1.g1 / 0.03 - 1.0) < 0.003
-        assert abs(e2.v / e2.g2) < 1e-4
+        assert abs(e2.v / e2.g2) < 2e-5
+        np.testing.assert_allclose(
+            rr.model.F.v,
+            fluxes[i],
+            atol=1e-1, rtol=1e-2,
+        )
     return
 
 # # Loss function

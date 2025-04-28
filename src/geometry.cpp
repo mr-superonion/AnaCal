@@ -14,12 +14,12 @@ pyExportGeometry(py::module_& m) {
         .def(py::init<
             int, int, int, int, int,
             int, int, int, int, int,
-            double
+            double, int
             >(),
             py::arg("xcen"), py::arg("ycen"), py::arg("xmin"), py::arg("ymin"),
             py::arg("xmax"), py::arg("ymax"), py::arg("xmin_in"),
             py::arg("ymin_in"), py::arg("xmax_in"), py::arg("ymax_in"),
-            py::arg("scale")
+            py::arg("scale"), py::arg("index")
         )
         .def_readwrite("scale", &block::scale)
         .def_readwrite("xcen", &block::xcen)
@@ -31,7 +31,9 @@ pyExportGeometry(py::module_& m) {
         .def_readwrite("xmin_in", &block::xmin_in)
         .def_readwrite("ymin_in", &block::ymin_in)
         .def_readwrite("xmax_in", &block::xmax_in)
-        .def_readwrite("ymax_in", &block::ymax_in);
+        .def_readwrite("ymax_in", &block::ymax_in)
+        .def_readwrite("scale", &block::scale)
+        .def_readwrite("index", &block::index);
 
     geometry.def(
         "get_block_list", &get_block_list,

@@ -93,6 +93,7 @@ void measure_pixel(
             5.0 * std_noise,
             omega_f
         );
+        src.block_id = block.index;
         if (src.wdet.v > 1e-8) catalog.push_back(src);
     }
 };
