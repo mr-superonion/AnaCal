@@ -117,7 +117,7 @@ public:
                     continue;
                 }
                 int i2 = std::pow(i - this->ss2, 2);
-                if (i2 + j2 < this->sigma2_lim) {
+                if ((i2 + j2) < this->sigma2_lim) {
                     std::array<math::qnumber, 4> mm = src.model.get_fpfs_moments(
                         data[idjb + ib], xvs[i], yvs[j], this->rfac
                     );
@@ -250,6 +250,7 @@ public:
         int j_block_shift = j_stamp - this->ss2 - block.ymin;
         int i_block_shift = i_stamp - this->ss2 - block.xmin;
 
+        double a_ini = 0.2;
         math::qnumber m0, mxx, myy, mxy, norm;
         for (int j = 0; j < this->stamp_size; ++j) {
             int jb = j + j_block_shift;
@@ -267,7 +268,7 @@ public:
                 math::qnumber x2 = math::pow(xs, 2);
                 math::qnumber y2 = math::pow(ys, 2);
                 math::qnumber xy = xs * ys;
-                double dd = 0.5 / this->sigma2;
+                double dd = 1.0 / (this->sigma2 + a_ini * a_ini);
                 math::qnumber r2 = (x2 + y2) * dd;
                 if (r2.v < 20) {
                     math::qnumber w = math::exp6(-0.5 * r2);
@@ -284,8 +285,8 @@ public:
         }
         model.t = 0.5 * math::atan2(2.0 * mxy, mxx - myy);
         model.F = m0 * (4.0 * M_PI * this->sigma2) / norm / block.scale / block.scale;
-        model.a1 = sigma_arcsec;
-        model.a2 = sigma_arcsec;
+        model.a1 = a_ini;
+        model.a2 = a_ini;
         return;
     };
 
@@ -330,7 +331,7 @@ public:
 
                 double xs = xvs[i] - model.x1.v;
                 double ys = yvs[j] - model.x2.v;
-                if (r2.v.v < 20 & xs * xs + ys * ys < this->r2_lim_stamp) {
+                if (r2.v.v < 20 & (xs * xs + ys * ys) < this->r2_lim_stamp) {
                     loss = loss + model.get_loss(
                         data[idjb + ib], variance, r2, kernel
                     );
