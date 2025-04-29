@@ -16,7 +16,6 @@ public:
     double scale;
     double sigma_arcsec;
     int stamp_size, ss2;
-    std::vector<double> grids_1d;
     bool force_size, force_center;
     double fpfs_c0;
     double sigma2, sigma_m2, rfac, ffac, ffac2, ffac3;
@@ -32,21 +31,17 @@ public:
         bool force_center=false,
         double fpfs_c0=1.0
     ) : scale(scale), sigma_arcsec(sigma_arcsec), stamp_size(stamp_size),
-        ss2(stamp_size / 2), grids_1d(stamp_size, 0.0), force_size(force_size),
+        ss2(stamp_size / 2), force_size(force_size),
         force_center(force_center),
         fpfs_c0(fpfs_c0)
     {
-        for (int i = 0; i < this->stamp_size; ++i) {
-            this->grids_1d[i] = (i - this->ss2) * this->scale;
-            // range is [-ss2, ss2)
-        }
         this->sigma2 = sigma_arcsec * sigma_arcsec;
         this->sigma_m2 = 1.0 / this->sigma2;
         this->rfac = -0.5 * this->sigma_m2;
         this->ffac = rfac * (-0.318309886);
         this->ffac2 = this->ffac * 1.41421356 * this->sigma_m2;
         this->ffac3 = this->ffac * 2.0 * this->sigma_m2;
-        this->sigma2_lim = sigma2 * 20 / scale / scale;
+        this->sigma2_lim = sigma2 * 20;
         this->ap2_r = 2.0 / scale;
         this->ap2_r2 = std::pow(ap2_r, 2.0);
         this->r2_lim_stamp = std::pow((this->ss2-1) * scale, 2.0);
@@ -89,42 +84,33 @@ public:
         const modelKernelD & kernel
     ) const {
         ngmix::NgmixGaussian & model = src.model;
-        int i_stamp = static_cast<int>(
-            std::round(model.x1.v / this->scale)
+        int i_min = std::max(
+            static_cast<int>(
+                std::round(model.x1.v / this->scale)
+            ) - block.xmin - this->ss2,
+            0
         );
-        int j_stamp = static_cast<int>(
-            std::round(model.x2.v / this->scale)
+        int i_max = std::min(i_min + this->stamp_size, block.nx);
+        int j_min = std::max(
+            static_cast<int>(
+                std::round(model.x2.v / this->scale)
+            ) - block.ymin - this->ss2,
+            0
         );
-        double x_stamp_shift = i_stamp * this->scale;
-        double y_stamp_shift = j_stamp * this->scale;
-        std::vector<double> xvs(stamp_size, 0.0);
-        std::vector<double> yvs(stamp_size, 0.0);
-        for (int i = 0; i < this->stamp_size; ++i){
-            xvs[i] = this->grids_1d[i] + x_stamp_shift;
-            yvs[i] = this->grids_1d[i] + y_stamp_shift;
-        }
-        int j_block_shift = j_stamp - this->ss2 - block.ymin;
-        int i_block_shift = i_stamp - this->ss2 - block.xmin;
+        int j_max = std::min(j_min + this->stamp_size, block.ny);
 
         math::lossNumber loss;
-        for (int j = 0; j < this->stamp_size; ++j) {
-            int jb = j + j_block_shift;
-            if (jb < 0 || jb >= block.ny) {
-                continue;
-            }
-            int idjb = jb * block.nx;
-            for (int i = 0; i < this->stamp_size; ++i) {
-                int ib = i + i_block_shift;
-                if (ib < 0 || ib >= block.nx) {
-                    continue;
-                }
-                math::lossNumber r2 = model.get_r2(xvs[i], yvs[j], kernel);
-
-                double xs = xvs[i] - model.x1.v;
-                double ys = yvs[j] - model.x2.v;
-                if (r2.v.v < 20 & (xs * xs + ys * ys) < this->r2_lim_stamp) {
+        for (int j = j_min; j < j_max; ++j) {
+            int jj = j * block.nx;
+            double ys = block.yvs[j] - model.x2.v;
+            for (int i = i_min; i < i_max; ++i) {
+                double xs = block.xvs[i] - model.x1.v;
+                math::lossNumber r2 = model.get_r2(
+                    block.xvs[i], block.yvs[j], kernel
+                );
+                if (r2.v.v < 20 && (xs * xs + ys * ys) < this->r2_lim_stamp) {
                     loss = loss + model.get_loss(
-                        data[idjb + ib], variance, r2, kernel
+                        data[jj + i], variance, r2, kernel
                     );
                 }
             }
@@ -139,40 +125,37 @@ public:
         table::galNumber & src,
         const geometry::block & block
     ) const {
-        int i_stamp = static_cast<int>(
-            std::round(src.model.x1.v / this->scale)
+
+        ngmix::NgmixGaussian & model = src.model;
+        int i_min = std::max(
+            static_cast<int>(
+                std::round(model.x1.v / this->scale)
+            ) - block.xmin - this->ss2,
+            0
         );
-        int j_stamp = static_cast<int>(
-            std::round(src.model.x2.v / this->scale)
+        int i_max = std::min(i_min + this->stamp_size, block.nx);
+        int j_min = std::max(
+            static_cast<int>(
+                std::round(model.x2.v / this->scale)
+            ) - block.ymin - this->ss2,
+            0
         );
-        double x_stamp_shift = i_stamp * this->scale;
-        double y_stamp_shift = j_stamp * this->scale;
-        std::vector<double> xvs(stamp_size, 0.0);
-        std::vector<double> yvs(stamp_size, 0.0);
-        for (int i = 0; i < this->stamp_size; ++i){
-            xvs[i] = this->grids_1d[i] + x_stamp_shift;
-            yvs[i] = this->grids_1d[i] + y_stamp_shift;
-        }
-        int i_block_shift = i_stamp - this->ss2 - block.xmin;
-        int j_block_shift = j_stamp - this->ss2 - block.ymin;
+        int j_max = std::min(j_min + this->stamp_size, block.ny);
 
         math::qnumber m0, mxx, myy, mxy;
-        for (int j = 0; j < this->stamp_size; ++j) {
-            int jb = j + j_block_shift;
-            if (jb < 0 || jb >= block.ny) {
-                continue;
-            }
-            int idjb = jb * block.nx;
-            int j2 = std::pow(j - this->ss2, 2);
-            for (int i = 0; i < this->stamp_size; ++i) {
-                int ib = i + i_block_shift;
-                if (ib < 0 || ib >= block.nx) {
-                    continue;
-                }
-                int i2 = std::pow(i - this->ss2, 2);
-                if ((i2 + j2) < this->sigma2_lim) {
+        for (int j = j_min; j < j_max; ++j) {
+            int jj = j * block.nx;
+            double ys = block.yvs[j] - model.x2.v;
+            double y2 = ys * ys;
+            for (int i = i_min; i < i_max; ++i) {
+                double xs = block.xvs[i] - model.x1.v;
+                double x2 = xs * xs;
+                if ((x2 + y2) < this->sigma2_lim) {
                     std::array<math::qnumber, 4> mm = src.model.get_fpfs_moments(
-                        data[idjb + ib], xvs[i], yvs[j], this->rfac
+                        data[jj + i],
+                        block.xvs[i],
+                        block.yvs[j],
+                        this->rfac
                     );
                     m0 = m0 + mm[0];
                     mxx = mxx + mm[1];
@@ -181,7 +164,6 @@ public:
                 }
             }
         }
-
         src.fpfs_m0 = m0 * this->ffac;
         src.fpfs_m2 = (mxx + myy - m0 * this->sigma2) * this->ffac3;
         {
@@ -198,48 +180,37 @@ public:
         NgmixGaussian & model,
         const geometry::block & block
     ) const {
-        int i_stamp = static_cast<int>(
-            std::round(model.x1.v / this->scale)
+        int i_min = std::max(
+            static_cast<int>(
+                std::round(model.x1.v / this->scale)
+            ) - block.xmin - this->ss2,
+            0
         );
-
-        int j_stamp = static_cast<int>(
-            std::round(model.x2.v / this->scale)
+        int i_max = std::min(i_min + this->stamp_size, block.nx);
+        int j_min = std::max(
+            static_cast<int>(
+                std::round(model.x2.v / this->scale)
+            ) - block.ymin - this->ss2,
+            0
         );
-        double x_stamp_shift = i_stamp * this->scale;
-        double y_stamp_shift = j_stamp * this->scale;
-        std::vector<double> xvs(stamp_size, 0.0);
-        std::vector<double> yvs(stamp_size, 0.0);
-        for (int i = 0; i < this->stamp_size; ++i){
-            xvs[i] = this->grids_1d[i] + x_stamp_shift;
-            yvs[i] = this->grids_1d[i] + y_stamp_shift;
-        }
-        int j_block_shift = j_stamp - this->ss2 - block.ymin;
-        int i_block_shift = i_stamp - this->ss2 - block.xmin;
+        int j_max = std::min(j_min + this->stamp_size, block.ny);
 
-        double a_ini = 0.2;
         math::qnumber m0, mxx, myy, mxy, norm;
-        for (int j = 0; j < this->stamp_size; ++j) {
-            int jb = j + j_block_shift;
-            if (jb < 0 || jb >= block.ny) {
-                continue;
-            }
-            int idjb = jb * block.nx;
-            for (int i = 0; i < this->stamp_size; ++i) {
-                int ib = i + i_block_shift;
-                if (ib < 0 || ib >= block.nx) {
-                    continue;
-                }
-                math::qnumber xs = xvs[i] - model.x1;
-                math::qnumber ys = yvs[j] - model.x2;
+        double a_ini = 0.2;
+        double dd = 1.0 / (this->sigma2 + a_ini * a_ini);
+        for (int j = j_min; j < j_max; ++j) {
+            int jj = j * block.nx;
+            math::qnumber ys = block.yvs[j] - model.x2.v;
+            math::qnumber y2 = math::pow(ys, 2);
+            for (int i = i_min; i < i_max; ++i) {
+                math::qnumber xs = block.xvs[i] - model.x1.v;
                 math::qnumber x2 = math::pow(xs, 2);
-                math::qnumber y2 = math::pow(ys, 2);
                 math::qnumber xy = xs * ys;
-                double dd = 1.0 / (this->sigma2 + a_ini * a_ini);
                 math::qnumber r2 = (x2 + y2) * dd;
                 if (r2.v < 20) {
                     math::qnumber w = math::exp6(-0.5 * r2);
                     math::qnumber f = (
-                        w * data[idjb + ib]
+                        w * data[jj + i]
                     );
                     norm = norm + w * w;
                     m0 = m0 + f;
@@ -295,10 +266,6 @@ public:
             table::galNumber & src = catalog[ind];
             src.model.force_size=this->force_size;
             src.model.force_center=this->force_center;
-            if ((!this->force_size) & (!src.initialized)) {
-                initialize_fitting(data, src.model, block);
-                src.initialized = true;
-            }
             kernels.emplace_back(
                 src.model.prepare_modelD(
                     this->scale,
@@ -313,13 +280,17 @@ public:
             variance
         );
 
-        // deblend modeling
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
             for (std::size_t i=0; i<ng; ++i) {
                 table::galNumber & src = catalog[inds[i]];
                 modelKernelD & kernel = kernels[i];
                 if (src.block_id == block.index) {
                     // update the sources in the inner region
+                    if ((!this->force_size) & (!src.initialized)) {
+                        initialize_fitting(data, src.model, block);
+                        src.initialized = true;
+                    }
+                    // input is data, data_m
                     this->measure_loss(
                         data, variance_meas, src, block, kernel
                     );
@@ -331,6 +302,7 @@ public:
                         this->sigma_arcsec
                     );
                 }
+                // collect data_m
             }
         }
 

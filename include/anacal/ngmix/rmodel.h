@@ -87,7 +87,7 @@ private:
     };
 public:
     bool force_size, force_center;
-    math::qnumber F = math::qnumber(1.0);
+    math::qnumber F = math::qnumber(0.0);
     math::qnumber t = math::qnumber(0.0);
     math::qnumber a1 = math::qnumber(0.15);
     math::qnumber a2 = math::qnumber(0.15);

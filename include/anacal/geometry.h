@@ -22,6 +22,10 @@ struct block {
     double scale = 0.2;
     int index = 0;
 
+    std::vector<double> xvs;
+    std::vector<double> yvs;
+
+
     block() = default;
     block(
         int xc, int yc, int xmi, int ymi, int xma, int yma,
@@ -32,6 +36,14 @@ struct block {
         scale(scale), index(index) {
         this->nx = xmax - xmin;
         this->ny = ymax - ymin;
+        this->xvs.resize(this->nx);
+        this->yvs.resize(this->ny);
+        for (int i = 0; i < this->nx; ++i) {
+            this->xvs[i] = (i + this->xmin) * this->scale;
+        }
+        for (int i = 0; i < this->ny; ++i) {
+            this->yvs[i] = (i + this->ymin) * this->scale;
+        }
     }
 };
 
