@@ -89,6 +89,23 @@ struct lossNumber {
             -this->v_x2x2
         );
     }
+
+    inline void reset() {
+        this->v = math::qnumber(0.0);
+        this->v_F = math::qnumber(0.0);
+        this->v_t = math::qnumber(0.0);
+        this->v_a1 = math::qnumber(0.0);
+        this->v_a2 = math::qnumber(0.0);
+        this->v_x1 = math::qnumber(0.0);
+        this->v_x2 = math::qnumber(0.0);
+
+        this->v_FF = math::qnumber(0.0);
+        this->v_tt = math::qnumber(0.0);
+        this->v_a1a1 = math::qnumber(0.0);
+        this->v_a2a2 = math::qnumber(0.0);
+        this->v_x1x1 = math::qnumber(0.0);
+        this->v_x2x2 = math::qnumber(0.0);
+    };
 };
 
 

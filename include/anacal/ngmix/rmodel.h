@@ -227,6 +227,14 @@ public:
         const math::qnumber& r2,
         const modelKernelB& c
     ) const {
+        frDeriv fr = this->get_fr(r2);
+        return fr.fr * c.f;
+    };
+
+    inline math::qnumber get_func_from_r2(
+        const math::lossNumber& r2,
+        const modelKernelD& c
+    ) const {
         frDeriv fr = this->get_fr(r2.v);
         return fr.fr * c.f;
     };
@@ -235,7 +243,7 @@ public:
         const math::qnumber& r2,
         const modelKernelB& c
     ) const {
-        frDeriv fr = this->get_fr(r2.v);
+        frDeriv fr = this->get_fr(r2);
         return this->F * fr.fr * c.f;
     };
 
@@ -345,104 +353,45 @@ public:
     update_model_params(
         const math::lossNumber& loss,
         const modelPrior& prior,
+        int epoch,
         double variance_val=1.0
     ) {
-        this->F = this->F - (
-            (loss.v_F + prior.w_F * this->F) / (
-                0.02 / variance_val + loss.v_FF + prior.w_F
-            )
-        );
+        /* this->F = this->F - ( */
+        /*     (loss.v_F + prior.w_F * this->F) / ( */
+        /*         0.02 / variance_val + loss.v_FF + prior.w_F */
+        /*     ) */
+        /* ); */
+        double frac = std::pow(0.62, epoch / 5.0);
         if (!this->force_size) {
             this->t = this->t - (
                 (loss.v_t + prior.w_t * this->t) / (
-                    loss.v + (loss.v_tt + prior.w_t)
+                    loss.v * frac + (loss.v_tt + prior.w_t)
                 )
-            ) * 0.2;
+            ) * 0.5;
             this->a1 = this->a1 - (
                 (loss.v_a1 + prior.w_a * this->a1) / (
-                    loss.v + (loss.v_a1a1 + prior.w_a)
+                    loss.v * frac + (loss.v_a1a1 + prior.w_a)
                 )
             );
             this->a2 = this->a2 - (
                 (loss.v_a2 + prior.w_a * this->a2) / (
-                    loss.v + (loss.v_a2a2 + prior.w_a)
+                    loss.v * frac + (loss.v_a2a2 + prior.w_a)
                 )
             );
         }
         if (!this->force_center) {
             this->x1 = this->x1 - (
                 loss.v_x1 / (
-                    loss.v + (loss.v_x1x1 + prior.w_x)
+                    loss.v * frac + (loss.v_x1x1 + prior.w_x)
                 )
             );
             this->x2 = this->x2 - (
                 loss.v_x2 / (
-                    loss.v + (loss.v_x2x2 + prior.w_x)
+                    loss.v * frac + (loss.v_x2x2 + prior.w_x)
                 )
             );
         }
     };
-
-    /* inline void update_model_admom( */
-    /*     double sigma_arcsec, */
-    /*     const math::qnumber& Ixx, */
-    /*     const math::qnumber& Iyy, */
-    /*     const math::qnumber& Ixy */
-    /* ) { */
-    /*     double sigma2 = sigma_arcsec * sigma_arcsec; */
-    /*     // Compute determinant of measured (weighted) covariance matrix */
-    /*     math::qnumber detm = Iyy * Ixx - math::pow(Ixy, 2); */
-    /*     // Retrieve weight covariance components from the model */
-    /*     math::qnumber Wxx = this->ixx + sigma2; // convolved with PSF */
-    /*     math::qnumber Wyy = this->iyy + sigma2; */
-    /*     math::qnumber Wxy = this->ixy; */
-    /*     math::qnumber detw = Wyy * Wxx - math::pow(Wxy, 2); */
-
-    /*     // Compute inverses of the determinants */
-    /*     math::qnumber idetm = math::pow(detm, -1); // measurement */
-    /*     math::qnumber idetw = math::pow(detw, -1); // model */
-
-    /*     // Compute the difference of inverse covariance matrices (precision matrices) */
-    /*     math::qnumber Nxx = Iyy * idetm - Wyy * idetw; */
-    /*     math::qnumber Nyy = Ixx * idetm - Wxx * idetw; */
-    /*     math::qnumber Nxy = -Ixy * idetm + Wxy * idetw; */
-
-    /*     // Compute determinant of the difference matrix */
-    /*     math::qnumber detn = Nyy * Nxx - math::pow(Nxy, 2); */
-    /*     math::qnumber idetn = math::pow(detn, -1.0); */
-
-    /*     // Compute PSF-conved covariance matrix by inverting the difference matrix */
-    /*     this->ixx = Nyy * idetn - sigma2; */
-    /*     this->iyy = Nxx * idetn - sigma2; */
-    /*     this->ixy = -Nxy * idetn; */
-    /* }; */
-
-    /* inline void update_model_admom_inv(double sigma_arcsec) { */
-    /*     double sigma2 = sigma_arcsec * sigma_arcsec; */
-    /*     double sigma4 = sigma2 * sigma2; */
-    /*     // Retrieve weight covariance components from the model */
-    /*     math::qnumber Wxx = this->ixx + sigma2; // convolved with PSF */
-    /*     math::qnumber Wyy = this->iyy + sigma2; */
-    /*     math::qnumber Wxy = this->ixy; */
-    /*     math::qnumber detw = Wyy * Wxx - math::pow(Wxy, 2); */
-    /*     math::qnumber sel = math::ssfunc1( */
-    /*         detw, */
-    /*         sigma4 * 1.1, */
-    /*         sigma4 * 0.1 */
-    /*     ); */
-    /*     this->ixx = this->ixx * sel; */
-    /*     this->iyy = this->iyy * sel; */
-    /*     this->ixy = this->ixy * sel; */
-    /*     Wxx = this->ixx + sigma2; */
-    /*     Wyy = this->iyy + sigma2; */
-    /*     Wxy = this->ixy; */
-    /*     detw = Wyy * Wxx - math::pow(Wxy, 2); */
-    /*     this->idet = 1.0 / detw; */
-    /*     this->dxx = Wyy * this->idet; */
-    /*     this->dyy = Wxx * this->idet; */
-    /*     this->dxy = -Wxy * this->idet; */
-    /*     return; */
-    /* } */
 
     inline std::array<math::qnumber, 2>
     get_shape() const {

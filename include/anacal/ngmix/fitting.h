@@ -76,6 +76,50 @@ public:
     };
 
     inline void
+    measure_flux(
+        const std::vector<math::qnumber> & data,
+        table::galNumber & src,
+        const geometry::block & block,
+        const modelKernelD & kernel
+    ) const {
+        ngmix::NgmixGaussian & model = src.model;
+        int i_min = std::max(
+            static_cast<int>(
+                std::round(model.x1.v / this->scale)
+            ) - block.xmin - this->ss2,
+            0
+        );
+        int i_max = std::min(i_min + this->stamp_size, block.nx);
+        int j_min = std::max(
+            static_cast<int>(
+                std::round(model.x2.v / this->scale)
+            ) - block.ymin - this->ss2,
+            0
+        );
+        int j_max = std::min(j_min + this->stamp_size, block.ny);
+        math::qnumber m0, norm;
+        for (int j = j_min; j < j_max; ++j) {
+            int jj = j * block.nx;
+            double ys = block.yvs[j] - model.x2.v;
+            for (int i = i_min; i < i_max; ++i) {
+                double xs = block.xvs[i] - model.x1.v;
+                math::lossNumber r2 = model.get_r2(
+                    block.xvs[i], block.yvs[j], kernel
+                );
+                if ((xs * xs + ys * ys) < this->r2_lim_stamp && r2.v.v < 20) {
+                    math::qnumber w = src.model.get_func_from_r2(
+                        r2,
+                        kernel
+                    );
+                    norm = norm + w * w;
+                    m0 = m0 + w * data[jj + i];
+                }
+            }
+        }
+        src.model.F = m0 / norm;
+        return;
+    };
+    inline void
     measure_loss(
         const std::vector<math::qnumber> & data,
         double variance,
@@ -99,7 +143,7 @@ public:
         );
         int j_max = std::min(j_min + this->stamp_size, block.ny);
 
-        math::lossNumber loss;
+        src.loss.reset();
         for (int j = j_min; j < j_max; ++j) {
             int jj = j * block.nx;
             double ys = block.yvs[j] - model.x2.v;
@@ -108,14 +152,13 @@ public:
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                if (r2.v.v < 20 && (xs * xs + ys * ys) < this->r2_lim_stamp) {
-                    loss = loss + model.get_loss(
+                if ((xs * xs + ys * ys) < this->r2_lim_stamp && r2.v.v < 20) {
+                    src.loss = src.loss + model.get_loss(
                         data[jj + i], variance, r2, kernel
                     );
                 }
             }
         }
-        src.loss = loss;
         return;
     };
 
@@ -220,10 +263,9 @@ public:
                 }
             }
         }
-        model.t = 0.5 * math::atan2(2.0 * mxy, mxx - myy);
-        model.F = m0 * (4.0 * M_PI * this->sigma2) / norm / block.scale / block.scale;
         model.a1 = a_ini;
         model.a2 = a_ini;
+        model.t = 0.5 * math::atan2(2.0 * mxy, mxx - myy);
         return;
     };
 
@@ -291,11 +333,14 @@ public:
                         src.initialized = true;
                     }
                     // input is data, data_m
+                    this->measure_flux(
+                        data, src, block, kernel
+                    );
                     this->measure_loss(
                         data, variance_meas, src, block, kernel
                     );
                     src.model.update_model_params(
-                        src.loss, prior, variance_meas
+                        src.loss, prior, epoch, variance_meas
                     );
                     kernel = src.model.prepare_modelD(
                         this->scale,
