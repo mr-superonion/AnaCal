@@ -81,6 +81,59 @@ public:
     };
 
     inline void
+    measure_loss(
+        const std::vector<math::qnumber> & data,
+        double variance,
+        table::galNumber & src,
+        const geometry::block & block,
+        const modelKernelD & kernel
+    ) const {
+        ngmix::NgmixGaussian & model = src.model;
+        int i_stamp = static_cast<int>(
+            std::round(model.x1.v / this->scale)
+        );
+        int j_stamp = static_cast<int>(
+            std::round(model.x2.v / this->scale)
+        );
+        double x_stamp_shift = i_stamp * this->scale;
+        double y_stamp_shift = j_stamp * this->scale;
+        std::vector<double> xvs(stamp_size, 0.0);
+        std::vector<double> yvs(stamp_size, 0.0);
+        for (int i = 0; i < this->stamp_size; ++i){
+            xvs[i] = this->grids_1d[i] + x_stamp_shift;
+            yvs[i] = this->grids_1d[i] + y_stamp_shift;
+        }
+        int j_block_shift = j_stamp - this->ss2 - block.ymin;
+        int i_block_shift = i_stamp - this->ss2 - block.xmin;
+
+        math::lossNumber loss;
+        for (int j = 0; j < this->stamp_size; ++j) {
+            int jb = j + j_block_shift;
+            if (jb < 0 || jb >= block.ny) {
+                continue;
+            }
+            int idjb = jb * block.nx;
+            for (int i = 0; i < this->stamp_size; ++i) {
+                int ib = i + i_block_shift;
+                if (ib < 0 || ib >= block.nx) {
+                    continue;
+                }
+                math::lossNumber r2 = model.get_r2(xvs[i], yvs[j], kernel);
+
+                double xs = xvs[i] - model.x1.v;
+                double ys = yvs[j] - model.x2.v;
+                if (r2.v.v < 20 & (xs * xs + ys * ys) < this->r2_lim_stamp) {
+                    loss = loss + model.get_loss(
+                        data[idjb + ib], variance, r2, kernel
+                    );
+                }
+            }
+        }
+        src.loss = loss;
+        return;
+    };
+
+    inline void
     measure_fpfs(
         const std::vector<math::qnumber> & data,
         table::galNumber & src,
@@ -138,93 +191,6 @@ public:
         }
         return;
     };
-
-    /* inline void */
-    /* measure_admom( */
-    /*     const std::vector<math::qnumber> & data, */
-    /*     NgmixGaussian & model, */
-    /*     const geometry::block & block */
-    /* ) const { */
-    /*     int i_stamp = static_cast<int>( */
-    /*         std::round(model.x1.v / this->scale) */
-    /*     ); */
-
-    /*     int j_stamp = static_cast<int>( */
-    /*         std::round(model.x2.v / this->scale) */
-    /*     ); */
-    /*     double x_stamp_shift = i_stamp * this->scale; */
-    /*     double y_stamp_shift = j_stamp * this->scale; */
-    /*     std::vector<double> xvs(stamp_size, 0.0); */
-    /*     std::vector<double> yvs(stamp_size, 0.0); */
-    /*     for (int i = 0; i < this->stamp_size; ++i){ */
-    /*         xvs[i] = this->grids_1d[i] + x_stamp_shift; */
-    /*         yvs[i] = this->grids_1d[i] + y_stamp_shift; */
-    /*     } */
-    /*     int j_block_shift = j_stamp - this->ss2 - block.ymin; */
-    /*     int i_block_shift = i_stamp - this->ss2 - block.xmin; */
-
-    /*     int n_iter_admom = 2; */
-    /*     for (int it=0; it<n_iter_admom; ++it){ */
-    /*         model.update_model_admom_inv(this->sigma_arcsec); */
-    /*         math::qnumber m0, mx, my, mxx, myy, mxy, norm; */
-    /*         for (int j = 0; j < this->stamp_size; ++j) { */
-    /*             int jb = j + j_block_shift; */
-    /*             if (jb < 0 || jb >= block.ny) { */
-    /*                 continue; */
-    /*             } */
-    /*             int idjb = jb * block.nx; */
-    /*             for (int i = 0; i < this->stamp_size; ++i) { */
-    /*                 int ib = i + i_block_shift; */
-    /*                 if (ib < 0 || ib >= block.nx) { */
-    /*                     continue; */
-    /*                 } */
-    /*                 math::qnumber xs = xvs[i] - model.x1; */
-    /*                 math::qnumber ys = yvs[j] - model.x2; */
-    /*                 math::qnumber x2 = math::pow(xs, 2); */
-    /*                 math::qnumber y2 = math::pow(ys, 2); */
-    /*                 math::qnumber xy = xs * ys; */
-    /*                 math::qnumber r2 = ( */
-    /*                     x2 * model.dxx + 2.0 * xy * model.dxy + y2 * model.dyy */
-    /*                 ); */
-    /*                 if ((r2.v < 20) & ((x2.v + y2.v) < this->r2_lim_stamp )) { */
-    /*                     math::qnumber w = math::exp6(-0.5 * r2); */
-    /*                     math::qnumber f = ( */
-    /*                         w * data[idjb + ib] */
-    /*                     ); */
-    /*                     norm = norm + w * w; */
-    /*                     m0 = m0 + f; */
-    /*                     mxx = mxx + f * x2; */
-    /*                     myy = myy + f * y2; */
-    /*                     mxy = mxy + f * xy; */
-    /*                     mx = mx + f * xs; */
-    /*                     my = mx + f * ys; */
-    /*                 } */
-    /*             } */
-    /*         } */
-    /*         math::qnumber rr = 1.0 / m0; */
-    /*         model.x1 = model.x1 + mx * rr / n_iter_admom; */
-    /*         model.x2 = model.x2 + my * rr / n_iter_admom; */
-    /*         model.update_model_admom( */
-    /*             this->sigma_arcsec, */
-    /*             mxx * rr, myy * rr, mxy * rr */
-    /*         ); */
-    /*         model.F = m0 * (2.0 * M_PI / math::sqrt(model.idet)) / norm / block.scale / block.scale; */
-    /*         model.t = 0.5 * math::atan2(2.0 * mxy, mxx - myy); */
-    /*         math::qnumber delta = math::sqrt( */
-    /*             math::pow(mxx - myy, 2) */
-    /*             + 4.0 * math::pow(mxy, 2) */
-    /*         ); */
-    /*         if (mxx.v + myy.v - delta.v > 1e-10) { */
-    /*             model.a1 = math::sqrt(0.5 * (mxx + myy + delta)); */
-    /*             model.a2 = math::sqrt(0.5 * (mxx + myy - delta)); */
-    /*         } else { */
-    /*             model.a1 = math::qnumber(0.0); */
-    /*             model.a2 = math::qnumber(0.0); */
-    /*         } */
-    /*     } */
-
-    /*     return; */
-    /* }; */
 
     inline void
     initialize_fitting(
@@ -290,57 +256,6 @@ public:
         return;
     };
 
-    inline math::lossNumber
-    measure_loss(
-        const std::vector<math::qnumber> & data,
-        double variance,
-        const NgmixGaussian & model,
-        const geometry::block & block,
-        const modelKernelD & kernel
-    ) const {
-        int i_stamp = static_cast<int>(
-            std::round(model.x1.v / this->scale)
-        );
-        int j_stamp = static_cast<int>(
-            std::round(model.x2.v / this->scale)
-        );
-        double x_stamp_shift = i_stamp * this->scale;
-        double y_stamp_shift = j_stamp * this->scale;
-        std::vector<double> xvs(stamp_size, 0.0);
-        std::vector<double> yvs(stamp_size, 0.0);
-        for (int i = 0; i < this->stamp_size; ++i){
-            xvs[i] = this->grids_1d[i] + x_stamp_shift;
-            yvs[i] = this->grids_1d[i] + y_stamp_shift;
-        }
-        int j_block_shift = j_stamp - this->ss2 - block.ymin;
-        int i_block_shift = i_stamp - this->ss2 - block.xmin;
-
-        math::lossNumber loss;
-        for (int j = 0; j < this->stamp_size; ++j) {
-            int jb = j + j_block_shift;
-            if (jb < 0 || jb >= block.ny) {
-                continue;
-            }
-            int idjb = jb * block.nx;
-            for (int i = 0; i < this->stamp_size; ++i) {
-                int ib = i + i_block_shift;
-                if (ib < 0 || ib >= block.nx) {
-                    continue;
-                }
-                math::lossNumber r2 = model.get_r2(xvs[i], yvs[j], kernel);
-
-                double xs = xvs[i] - model.x1.v;
-                double ys = yvs[j] - model.x2.v;
-                if (r2.v.v < 20 & (xs * xs + ys * ys) < this->r2_lim_stamp) {
-                    loss = loss + model.get_loss(
-                        data[idjb + ib], variance, r2, kernel
-                    );
-                }
-            }
-        }
-        return loss;
-    };
-
     inline void
     process_block_impl(
         std::vector<table::galNumber>& catalog,
@@ -380,8 +295,9 @@ public:
             table::galNumber & src = catalog[ind];
             src.model.force_size=this->force_size;
             src.model.force_center=this->force_center;
-            if (!this->force_size) {
+            if ((!this->force_size) & (!src.initialized)) {
                 initialize_fitting(data, src.model, block);
+                src.initialized = true;
             }
             kernels.emplace_back(
                 src.model.prepare_modelD(
@@ -390,7 +306,6 @@ public:
                 )
             );
         }
-
         double variance_meas = get_smoothed_variance(
             block.scale,
             this->sigma_arcsec,
@@ -405,8 +320,8 @@ public:
                 modelKernelD & kernel = kernels[i];
                 if (src.block_id == block.index) {
                     // update the sources in the inner region
-                    src.loss = this->measure_loss(
-                        data, variance_meas, src.model, block, kernel
+                    this->measure_loss(
+                        data, variance_meas, src, block, kernel
                     );
                     src.model.update_model_params(
                         src.loss, prior, variance_meas
@@ -428,21 +343,24 @@ public:
                 variance
             )
         );
+
         for (std::size_t i=0; i<ng; ++i) {
             table::galNumber & src = catalog[inds[i]];
-            this->measure_fpfs(
-                data, src, block
-            );
-            src.wsel = src.wdet * math::ssfunc1(
-                src.fpfs_m0,
-                5.0 * std_fpfs,
-                std_fpfs
-            );
-            src.wsel = src.wsel * math::ssfunc1(
-                src.fpfs_m2 - 0.1 * src.fpfs_m0,
-                std_fpfs,
-                std_fpfs
-            );
+            if (src.block_id == block.index) {
+                this->measure_fpfs(
+                    data, src, block
+                );
+                src.wsel = src.wdet * math::ssfunc1(
+                    src.fpfs_m0,
+                    5.0 * std_fpfs,
+                    std_fpfs
+                );
+                src.wsel = src.wsel * math::ssfunc1(
+                    src.fpfs_m2 - 0.1 * src.fpfs_m0,
+                    std_fpfs,
+                    std_fpfs
+                );
+            }
         }
         return;
     };

@@ -110,6 +110,7 @@ struct galNumber {
     int mask_value=0;
     bool is_peak=false;
     bool is_primary=true;
+    bool initialized=false;
     math::lossNumber loss;
     math::qnumber fpfs_e1;
     math::qnumber fpfs_e2;
@@ -350,6 +351,7 @@ struct galNumber {
             row.dbkg_dj1, row.dbkg_dj2
         );
         block_id = row.block_id;
+        initialized = true;
     };
 };
 

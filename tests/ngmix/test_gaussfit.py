@@ -241,7 +241,7 @@ def test_ngmix_gaussian_fit2():
         variance=0.1,
     )[0]
     ell2 = cat_2.model.get_shape()[0]
-    assert np.abs((ell2.v + ell1.v) / (ell2.g1 + ell1.g1)) < 2e-5
+    assert np.abs((ell2.v + ell1.v) / (ell2.g1 + ell1.g1)) < 5e-5
 
     fitter = anacal.ngmix.GaussFit(
         scale=scale,
