@@ -297,12 +297,11 @@ public:
     };
 
     inline math::lossNumber get_loss(
-        math::qnumber img_val,
+        const math::qnumber img_val,
         double variance_val,
         const math::lossNumber& r2,
         const modelKernelD & c
     ) const {
-
         math::lossNumber res;
         math::lossNumber theory_val = this->get_model_from_r2(r2, c);
         math::qnumber residual = img_val - theory_val.v;
@@ -310,24 +309,15 @@ public:
         res.v = math::pow(residual, 2.0) / variance_val;
         double mul = 2.0 / variance_val;
 
-        // First-order derivatives
         math::qnumber tmp = -1.0 * residual * mul;
         res.v_F =  tmp * theory_val.v_F ;
-        if (!this->force_size) {
-            res.v_t = tmp * theory_val.v_t;
-            res.v_a1 = tmp * theory_val.v_a1;
-            res.v_a2 = tmp * theory_val.v_a2;
-        }
-        if (!this->force_center) {
-            res.v_x1 = tmp * theory_val.v_x1;
-            res.v_x2 = tmp * theory_val.v_x2;
-        }
-
-        // Second-order derivatives
         res.v_FF = (
             math::pow(theory_val.v_F, 2.0) * mul
         );
         if (!this->force_size) {
+            res.v_t = tmp * theory_val.v_t;
+            res.v_a1 = tmp * theory_val.v_a1;
+            res.v_a2 = tmp * theory_val.v_a2;
             res.v_tt = (
                 math::pow(theory_val.v_t, 2.0) * mul
             );
@@ -339,6 +329,59 @@ public:
             );
         }
         if (!this->force_center) {
+            res.v_x1 = tmp * theory_val.v_x1;
+            res.v_x2 = tmp * theory_val.v_x2;
+            res.v_x1x1 = (
+                math::pow(theory_val.v_x1, 2.0) * mul
+            );
+            res.v_x2x2 = (
+                math::pow(theory_val.v_x2, 2.0) * mul
+            );
+        }
+        return res;
+    };
+
+    inline math::lossNumber get_loss_with_mask(
+        const math::qnumber img_val,
+        double variance_val,
+        const math::lossNumber& r2,
+        const modelKernelD & c,
+        const math::qnumber p
+    ) const {
+        math::lossNumber res;
+        math::lossNumber theory_val = this->get_model_from_r2(r2, c);
+        math::qnumber residual = img_val - p;
+        math::qnumber w = theory_val.v / (p + 1e-10);
+        theory_val.v_F = theory_val.v_F * w;
+        theory_val.v_t = theory_val.v_t * w;
+        theory_val.v_a1 = theory_val.v_a1 * w;
+        theory_val.v_a2 = theory_val.v_a2 * w;
+
+        res.v = math::pow(residual, 2.0) / variance_val;
+        double mul = 2.0 / variance_val;
+
+        math::qnumber tmp = -1.0 * residual * mul;
+        res.v_F =  tmp * theory_val.v_F ;
+        res.v_FF = (
+            math::pow(theory_val.v_F, 2.0) * mul
+        );
+        if (!this->force_size) {
+            res.v_t = tmp * theory_val.v_t;
+            res.v_a1 = tmp * theory_val.v_a1;
+            res.v_a2 = tmp * theory_val.v_a2;
+            res.v_tt = (
+                math::pow(theory_val.v_t, 2.0) * mul
+            );
+            res.v_a1a1 = (
+                math::pow(theory_val.v_a1, 2.0) * mul
+            );
+            res.v_a2a2 = (
+                math::pow(theory_val.v_a2, 2.0) * mul
+            );
+        }
+        if (!this->force_center) {
+            res.v_x1 = tmp * theory_val.v_x1;
+            res.v_x2 = tmp * theory_val.v_x2;
             res.v_x1x1 = (
                 math::pow(theory_val.v_x1, 2.0) * mul
             );

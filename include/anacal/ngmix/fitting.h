@@ -162,6 +162,7 @@ public:
     inline void
     measure_loss(
         const std::vector<math::qnumber> & data,
+        const std::vector<math::qnumber> & data_m,
         double variance,
         table::galNumber & src,
         const geometry::block & block,
@@ -193,8 +194,8 @@ public:
                     block.xvs[i], block.yvs[j], kernel
                 );
                 if (((xs * xs + ys * ys) < r2_lim_stamp) && (r2.v.v < 20)) {
-                    src.loss = src.loss + model.get_loss(
-                        data[jj + i], variance, r2, kernel
+                    src.loss = src.loss + model.get_loss_with_mask(
+                        data[jj + i], variance, r2, kernel, data_m[jj+i]
                     );
                 }
             }
@@ -384,7 +385,7 @@ public:
                 table::galNumber & src = catalog[inds[i]];
                 if (src.block_id == block.index) {
                     this->measure_loss(
-                        data, variance_meas, src, block, kernels[i]
+                        data, data_model, variance_meas, src, block, kernels[i]
                     );
                     src.model.update_model_params(
                         src.loss, prior, epoch, variance_meas
