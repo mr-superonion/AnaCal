@@ -356,38 +356,37 @@ public:
         int epoch,
         double variance_val=1.0
     ) {
-        /* this->F = this->F - ( */
-        /*     (loss.v_F + prior.w_F * this->F) / ( */
-        /*         0.02 / variance_val + loss.v_FF + prior.w_F */
-        /*     ) */
-        /* ); */
-        double frac = std::pow(0.62, epoch / 5.0);
+        this->F = this->F - (
+            (loss.v_F + prior.w_F * this->F) / (
+                0.02 / variance_val + loss.v_FF + prior.w_F
+            )
+        );
         if (!this->force_size) {
             this->t = this->t - (
                 (loss.v_t + prior.w_t * this->t) / (
-                    loss.v * frac + (loss.v_tt + prior.w_t)
+                    loss.v + (loss.v_tt + prior.w_t)
                 )
             ) * 0.5;
             this->a1 = this->a1 - (
                 (loss.v_a1 + prior.w_a * this->a1) / (
-                    loss.v * frac + (loss.v_a1a1 + prior.w_a)
+                    loss.v + (loss.v_a1a1 + prior.w_a)
                 )
             );
             this->a2 = this->a2 - (
                 (loss.v_a2 + prior.w_a * this->a2) / (
-                    loss.v * frac + (loss.v_a2a2 + prior.w_a)
+                    loss.v + (loss.v_a2a2 + prior.w_a)
                 )
             );
         }
         if (!this->force_center) {
             this->x1 = this->x1 - (
                 loss.v_x1 / (
-                    loss.v * frac + (loss.v_x1x1 + prior.w_x)
+                    loss.v + (loss.v_x1x1 + prior.w_x)
                 )
             );
             this->x2 = this->x2 - (
                 loss.v_x2 / (
-                    loss.v * frac + (loss.v_x2x2 + prior.w_x)
+                    loss.v + (loss.v_x2x2 + prior.w_x)
                 )
             );
         }

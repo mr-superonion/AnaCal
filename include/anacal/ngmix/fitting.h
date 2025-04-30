@@ -119,6 +119,7 @@ public:
         src.model.F = m0 / norm;
         return;
     };
+
     inline void
     measure_loss(
         const std::vector<math::qnumber> & data,
@@ -152,7 +153,7 @@ public:
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                if ((xs * xs + ys * ys) < this->r2_lim_stamp && r2.v.v < 20) {
+                if (((xs * xs + ys * ys) < r2_lim_stamp) && (r2.v.v < 20)) {
                     src.loss = src.loss + model.get_loss(
                         data[jj + i], variance, r2, kernel
                     );
@@ -266,6 +267,7 @@ public:
         model.a1 = a_ini;
         model.a2 = a_ini;
         model.t = 0.5 * math::atan2(2.0 * mxy, mxx - myy);
+        model.F = m0 * (4.0 * M_PI * this->sigma2) / norm / block.scale / block.scale;
         return;
     };
 
@@ -308,6 +310,10 @@ public:
             table::galNumber & src = catalog[ind];
             src.model.force_size=this->force_size;
             src.model.force_center=this->force_center;
+            if ((!this->force_size) & (!src.initialized)) {
+                initialize_fitting(data, src.model, block);
+                src.initialized = true;
+            }
             kernels.emplace_back(
                 src.model.prepare_modelD(
                     this->scale,
@@ -328,10 +334,6 @@ public:
                 modelKernelD & kernel = kernels[i];
                 if (src.block_id == block.index) {
                     // update the sources in the inner region
-                    if ((!this->force_size) & (!src.initialized)) {
-                        initialize_fitting(data, src.model, block);
-                        src.initialized = true;
-                    }
                     // input is data, data_m
                     this->measure_flux(
                         data, src, block, kernel

@@ -107,10 +107,10 @@ public:
         indices.reserve(nrow / 4);
         for (std::size_t i = 0; i < nrow; ++i) {
             const ngmix::NgmixGaussian & m = catalog[i].model;
-            if (m.x1.v >= x_min &&
-                m.x1.v < x_max &&
-                m.x2.v >= y_min &&
-                m.x2.v < y_max
+            if ((m.x1.v >= x_min) &&
+                (m.x1.v < x_max) &&
+                (m.x2.v >= y_min) &&
+                (m.x2.v < y_max)
             ) {
                 indices.push_back(i);
             }
