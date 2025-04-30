@@ -67,19 +67,24 @@ void measure_pixel(
             (data[index].v > data[id4].v)
         );
 
-        math::qnumber fluxbg;
+        math::qnumber fluxbg, fluxap2;
         for (int dj = -drmax_flux; dj <= drmax_flux; dj++) {
             int dj2 = dj * dj;
             for (int di = -drmax_flux; di <= drmax_flux; di++) {
                 int dr2 = di * di + dj2;
-                if ((dr2 < drmax2_flux) && (dr2 >= drmax2_bg)) {
+                if ((dr2 < drmax2_flux)) {
                     int _i = (j + dj) * block.nx + (i + di);
-                    fluxbg = fluxbg + data[_i];
+                    fluxap2 = fluxap2 + data[_i];
+                    if ((dr2 >= drmax2_bg)) {
+                        fluxbg = fluxbg + data[_i];
+                    }
                 }
             }
         }
         src.peakv = data[index];
         src.bkg = fluxbg / nbg;
+        src.fluxap2 = fluxap2;
+        src.model.F = fluxap2;
         src.wdet = math::ssfunc1(
             wdet,
             p_min,

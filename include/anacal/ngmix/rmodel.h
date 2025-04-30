@@ -51,7 +51,7 @@ struct modelKernelD {
     modelKernelD() = default;
 
     inline modelKernelB
-    to_kernelB() {
+    to_kernelB() const {
         modelKernelB res;
         res.v_p0 = this->v_p0;
         res.v_p1 = this->v_p1;

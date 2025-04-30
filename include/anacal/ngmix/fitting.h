@@ -76,6 +76,45 @@ public:
     };
 
     inline void
+    add_model_to_block(
+        std::vector<math::qnumber> & data_model,
+        const table::galNumber & src,
+        const geometry::block & block,
+        const modelKernelD & kernel
+    ) const {
+        const ngmix::NgmixGaussian & model = src.model;
+        int i_min = std::max(
+            static_cast<int>(
+                std::round(model.x1.v / this->scale)
+            ) - block.xmin - this->ss2,
+            0
+        );
+        int i_max = std::min(i_min + this->stamp_size, block.nx);
+        int j_min = std::max(
+            static_cast<int>(
+                std::round(model.x2.v / this->scale)
+            ) - block.ymin - this->ss2,
+            0
+        );
+        int j_max = std::min(j_min + this->stamp_size, block.ny);
+        const modelKernelB kernelB = kernel.to_kernelB();
+        for (int j = j_min; j < j_max; ++j) {
+            int jj = j * block.nx;
+            double ys = block.yvs[j] - model.x2.v;
+            for (int i = i_min; i < i_max; ++i) {
+                double xs = block.xvs[i] - model.x1.v;
+                math::qnumber r2 = model.get_r2(
+                    block.xvs[i], block.yvs[j], kernelB
+                );
+                if (((xs * xs + ys * ys) < this->r2_lim_stamp) && (r2.v < 20)) {
+                    data_model[jj + i] = data_model[jj + i] + src.model.get_model_from_r2(r2, kernelB) * src.wdet;
+                }
+            }
+        }
+        return;
+    };
+
+    inline void
     measure_flux(
         const std::vector<math::qnumber> & data,
         table::galNumber & src,
@@ -106,7 +145,7 @@ public:
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                if ((xs * xs + ys * ys) < this->r2_lim_stamp && r2.v.v < 20) {
+                if (((xs * xs + ys * ys) < this->r2_lim_stamp) && (r2.v.v < 20)) {
                     math::qnumber w = src.model.get_func_from_r2(
                         r2,
                         kernel
@@ -240,7 +279,7 @@ public:
         int j_max = std::min(j_min + this->stamp_size, block.ny);
 
         math::qnumber m0, mxx, myy, mxy, norm;
-        double a_ini = 0.2;
+        double a_ini = 0.15;
         double dd = 1.0 / (this->sigma2 + a_ini * a_ini);
         for (int j = j_min; j < j_max; ++j) {
             int jj = j * block.nx;
@@ -303,23 +342,20 @@ public:
             noise_array
         );
 
-        std::size_t ng = inds.size();
-        std::vector<modelKernelD> kernels;
-        kernels.reserve(ng);
-        for (std::size_t ind : inds) {
+        std::size_t n_pix = data.size();
+        // initialize the sources
+        for (const std::size_t ind : inds) {
             table::galNumber & src = catalog[ind];
             src.model.force_size=this->force_size;
             src.model.force_center=this->force_center;
-            if ((!this->force_size) & (!src.initialized)) {
+            if (
+                (!this->force_size) &&
+                (!src.initialized) &&
+                (src.block_id == block.index)
+            ) {
                 initialize_fitting(data, src.model, block);
                 src.initialized = true;
             }
-            kernels.emplace_back(
-                src.model.prepare_modelD(
-                    this->scale,
-                    this->sigma_arcsec
-                )
-            );
         }
         double variance_meas = get_smoothed_variance(
             block.scale,
@@ -328,28 +364,32 @@ public:
             variance
         );
 
+        std::size_t ng = inds.size();
+        std::vector<modelKernelD> kernels(ng);
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
             for (std::size_t i=0; i<ng; ++i) {
+                const table::galNumber & src = catalog[inds[i]];
+                kernels[i] = src.model.prepare_modelD(
+                    this->scale,
+                    this->sigma_arcsec
+                );
+            }
+
+            std::vector<math::qnumber> data_model(n_pix);
+            for (std::size_t i=0; i<ng; ++i) {
+                const table::galNumber & src = catalog[inds[i]];
+                add_model_to_block(data_model, src, block, kernels[i]);
+            }
+            for (std::size_t i=0; i<ng; ++i) {
                 table::galNumber & src = catalog[inds[i]];
-                modelKernelD & kernel = kernels[i];
                 if (src.block_id == block.index) {
-                    // update the sources in the inner region
-                    // input is data, data_m
-                    this->measure_flux(
-                        data, src, block, kernel
-                    );
                     this->measure_loss(
-                        data, variance_meas, src, block, kernel
+                        data, variance_meas, src, block, kernels[i]
                     );
                     src.model.update_model_params(
                         src.loss, prior, epoch, variance_meas
                     );
-                    kernel = src.model.prepare_modelD(
-                        this->scale,
-                        this->sigma_arcsec
-                    );
                 }
-                // collect data_m
             }
         }
 
@@ -371,7 +411,7 @@ public:
                 );
                 src.wsel = src.wdet * math::ssfunc1(
                     src.fpfs_m0,
-                    5.0 * std_fpfs,
+                    8.0 * std_fpfs,
                     std_fpfs
                 );
                 src.wsel = src.wsel * math::ssfunc1(
