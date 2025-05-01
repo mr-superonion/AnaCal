@@ -346,19 +346,21 @@ public:
         double variance_val,
         const math::lossNumber& r2,
         const modelKernelD & c,
-        const math::qnumber p
+        const math::qnumber p,
+        const math::qnumber wdet
     ) const {
         math::lossNumber res;
         math::lossNumber theory_val = this->get_model_from_r2(r2, c);
-        math::qnumber residual = img_val - p;
-        math::qnumber w = theory_val.v / (p + 1e-10);
-        theory_val.v_F = theory_val.v_F * w;
-        theory_val.v_t = theory_val.v_t * w;
-        theory_val.v_a1 = theory_val.v_a1 * w;
-        theory_val.v_a2 = theory_val.v_a2 * w;
+        /* math::qnumber residual = img_val - p; */
+        math::qnumber residual = img_val - theory_val.v;
+        math::qnumber w = theory_val.v * w / (p + 1e-8);
+        /* theory_val.v_F = theory_val.v_F * w; */
+        /* theory_val.v_t = theory_val.v_t * w; */
+        /* theory_val.v_a1 = theory_val.v_a1 * w; */
+        /* theory_val.v_a2 = theory_val.v_a2 * w; */
 
-        res.v = math::pow(residual, 2.0) / variance_val;
-        double mul = 2.0 / variance_val;
+        res.v = math::pow(residual, 2.0) / variance_val * w;
+        math::qnumber mul = 2.0 / variance_val * w;
 
         math::qnumber tmp = -1.0 * residual * mul;
         res.v_F =  tmp * theory_val.v_F ;

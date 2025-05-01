@@ -96,7 +96,8 @@ public:
         const py::array_t<double>& psf_array,
         double variance,
         const geometry::block & block,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt
+        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+        int run_id=0
     ) {
         double x_min = block.xmin * block.scale;
         double y_min = block.ymin * block.scale;
@@ -128,7 +129,8 @@ public:
             variance,
             block,
             noise_array,
-            indices
+            indices,
+            run_id
         );
         for (std::size_t idx : indices) {
             catalog[idx] = catalog[idx].decentralize(block);
@@ -174,15 +176,19 @@ public:
             }
         }
 
-        for (const geometry::block & block: block_list) {
-            measure_block(
-                catalog,
-                img_array,
-                psf_array,
-                variance_use,
-                block,
-                noise_array
-            );
+
+        for (int run_id = 0; run_id < 2; ++run_id) {
+            for (const geometry::block & block: block_list) {
+                measure_block(
+                    catalog,
+                    img_array,
+                    psf_array,
+                    variance_use,
+                    block,
+                    noise_array,
+                    run_id
+                );
+            }
         }
 
         if (mask_array.has_value()) {

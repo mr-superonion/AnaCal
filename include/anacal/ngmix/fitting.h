@@ -162,6 +162,49 @@ public:
     inline void
     measure_loss(
         const std::vector<math::qnumber> & data,
+        double variance,
+        table::galNumber & src,
+        const geometry::block & block,
+        const modelKernelD & kernel
+    ) const {
+        ngmix::NgmixGaussian & model = src.model;
+        int i_min = std::max(
+            static_cast<int>(
+                std::round(model.x1.v / this->scale)
+            ) - block.xmin - this->ss2,
+            0
+        );
+        int i_max = std::min(i_min + this->stamp_size, block.nx);
+        int j_min = std::max(
+            static_cast<int>(
+                std::round(model.x2.v / this->scale)
+            ) - block.ymin - this->ss2,
+            0
+        );
+        int j_max = std::min(j_min + this->stamp_size, block.ny);
+
+        src.loss.reset();
+        for (int j = j_min; j < j_max; ++j) {
+            int jj = j * block.nx;
+            double ys = block.yvs[j] - model.x2.v;
+            for (int i = i_min; i < i_max; ++i) {
+                double xs = block.xvs[i] - model.x1.v;
+                math::lossNumber r2 = model.get_r2(
+                    block.xvs[i], block.yvs[j], kernel
+                );
+                if (((xs * xs + ys * ys) < r2_lim_stamp) && (r2.v.v < 20)) {
+                    src.loss = src.loss + model.get_loss(
+                        data[jj + i], variance, r2, kernel
+                    );
+                }
+            }
+        }
+        return;
+    };
+
+    inline void
+    measure_loss2(
+        const std::vector<math::qnumber> & data,
         const std::vector<math::qnumber> & data_m,
         double variance,
         table::galNumber & src,
@@ -195,7 +238,7 @@ public:
                 );
                 if (((xs * xs + ys * ys) < r2_lim_stamp) && (r2.v.v < 20)) {
                     src.loss = src.loss + model.get_loss_with_mask(
-                        data[jj + i], variance, r2, kernel, data_m[jj+i]
+                        data[jj + i], variance, r2, kernel, data_m[jj+i], src.wdet
                     );
                 }
             }
@@ -321,8 +364,15 @@ public:
         double variance,
         geometry::block block,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
-        const std::optional<std::vector<std::size_t>>& indices=std::nullopt
+        const std::optional<std::vector<std::size_t>>& indices=std::nullopt,
+        std::optional<int> run_id=std::nullopt
     ) {
+        int irun;
+        if (run_id.has_value()) {
+            irun = *run_id;
+        } else {
+            irun = 0;
+        }
 
         std::vector<std::size_t> inds;
         if (indices.has_value()) {
@@ -376,20 +426,34 @@ public:
                 );
             }
 
-            std::vector<math::qnumber> data_model(n_pix);
-            for (std::size_t i=0; i<ng; ++i) {
-                const table::galNumber & src = catalog[inds[i]];
-                add_model_to_block(data_model, src, block, kernels[i]);
-            }
-            for (std::size_t i=0; i<ng; ++i) {
-                table::galNumber & src = catalog[inds[i]];
-                if (src.block_id == block.index) {
-                    this->measure_loss(
-                        data, data_model, variance_meas, src, block, kernels[i]
-                    );
-                    src.model.update_model_params(
-                        src.loss, prior, epoch, variance_meas
-                    );
+            if (irun == 0){
+                for (std::size_t i=0; i<ng; ++i) {
+                    table::galNumber & src = catalog[inds[i]];
+                    if (src.block_id == block.index) {
+                        this->measure_loss(
+                            data, variance_meas, src, block, kernels[i]
+                        );
+                        src.model.update_model_params(
+                            src.loss, prior, epoch, variance_meas
+                        );
+                    }
+                }
+            } else {
+                std::vector<math::qnumber> data_model(n_pix);
+                for (std::size_t i=0; i<ng; ++i) {
+                    const table::galNumber & src = catalog[inds[i]];
+                    add_model_to_block(data_model, src, block, kernels[i]);
+                }
+                for (std::size_t i=0; i<ng; ++i) {
+                    table::galNumber & src = catalog[inds[i]];
+                    if (src.block_id == block.index) {
+                        this->measure_loss2(
+                            data, data_model, variance_meas, src, block, kernels[i]
+                        );
+                        src.model.update_model_params(
+                            src.loss, prior, epoch, variance_meas
+                        );
+                    }
                 }
             }
         }
@@ -412,7 +476,7 @@ public:
                 );
                 src.wsel = src.wdet * math::ssfunc1(
                     src.fpfs_m0,
-                    8.0 * std_fpfs,
+                    5.0 * std_fpfs,
                     std_fpfs
                 );
                 src.wsel = src.wsel * math::ssfunc1(

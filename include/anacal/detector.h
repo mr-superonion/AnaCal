@@ -85,6 +85,16 @@ void measure_pixel(
         src.bkg = fluxbg / nbg;
         src.fluxap2 = fluxap2;
         src.model.F = fluxap2;
+        src.wsel = math::ssfunc1(
+            data[index],
+            f_min,
+            omega_f
+        )* math::ssfunc1(
+            data[index] - src.bkg * 0.9,
+            5.0 * std_noise,
+            omega_f
+        );
+        src.block_id = block.index;
         src.wdet = math::ssfunc1(
             wdet,
             p_min,
@@ -98,13 +108,12 @@ void measure_pixel(
             5.0 * std_noise,
             omega_f
         );
-        src.block_id = block.index;
         if (src.wdet.v > 1e-8) catalog.push_back(src);
     }
 };
 
 inline std::vector<table::galNumber>
-find_peaks(
+find_peaks_impl(
     const py::array_t<double>& img_array,
     const py::array_t<double>& psf_array,
     double sigma_arcsec,
@@ -205,7 +214,81 @@ find_peaks(
         }
     }
     return catalog;
-}
+};
+
+inline std::vector<table::galNumber>
+find_peaks(
+    const py::array_t<double>& img_array,
+    const py::array_t<double>& psf_array,
+    double sigma_arcsec,
+    double snr_min,
+    double variance,
+    double omega_f,
+    double v_min,
+    double omega_v,
+    double p_min,
+    double omega_p,
+    const geometry::block & block,
+    const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+    int image_bound=0
+) {
+    std::vector<table::galNumber> cat = find_peaks_impl(
+        img_array,
+        psf_array,
+        sigma_arcsec,
+        snr_min,
+        variance,
+        omega_f,
+        v_min,
+        omega_v,
+        p_min,
+        omega_p,
+        block,
+        noise_array,
+        image_bound
+    );
+    std::vector<math::qnumber> data(block.nx * block.ny);
+    for (const table::galNumber & src: cat){
+        const ngmix::NgmixGaussian & model = src.model;
+        int i = static_cast<int>(
+            std::round(model.x1.v / block.scale)
+        ) - block.xmin;
+        int j = static_cast<int>(
+            std::round(model.x2.v / block.scale)
+        ) - block.ymin;
+        data[j * block.nx + i] = src.wdet;
+    }
+    std::vector<table::galNumber> catalog;
+    catalog.reserve(cat.size() / 2);
+    for (table::galNumber & src: cat){
+        const ngmix::NgmixGaussian & model = src.model;
+        int i = static_cast<int>(
+            std::round(model.x1.v / block.scale)
+        ) - block.xmin;
+        int j = static_cast<int>(
+            std::round(model.x2.v / block.scale)
+        ) - block.ymin;
+        math::qnumber ss;
+        for (int jj = j - 3; jj <= j + 3; ++jj) {
+            int dy = jj - j;
+            for (int ii = i - 3; ii <= i + 3; ++ii) {
+                int dx = ii -i;
+                // radius
+                int r2 = dx * dx + dy * dy;
+                if ((r2 < 8) && (r2!=0)) {
+                    ss = ss + data[jj * block.nx + ii];
+                }
+            }
+        }
+        src.wdet = math::ssfunc1(
+            src.wdet - ss,
+            0.3,
+            0.25
+        );
+        if (src.wdet.v > 1e-8) catalog.push_back(src);
+    }
+    return catalog;
+};
 
 void pyExportDetector(py::module_& m);
 
