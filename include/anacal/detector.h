@@ -283,7 +283,7 @@ find_peaks(
         src.wdet = math::ssfunc1(
             src.wdet - ss,
             0.3,
-            0.25
+            0.299
         );
         if (src.wdet.v > 1e-8) catalog.push_back(src);
     }
