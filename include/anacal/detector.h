@@ -84,7 +84,6 @@ void measure_pixel(
         src.peakv = data[index];
         src.bkg = fluxbg / nbg;
         src.fluxap2 = fluxap2;
-        src.model.F = fluxap2;
         src.wsel = math::ssfunc1(
             data[index],
             f_min,
@@ -282,9 +281,10 @@ find_peaks(
         }
         src.wdet = math::ssfunc1(
             src.wdet - ss,
-            0.3,
-            0.299
+            0.4,
+            0.399
         );
+        src.model.F = src.fluxap2;
         if (src.wdet.v > 1e-8) catalog.push_back(src);
     }
     return catalog;

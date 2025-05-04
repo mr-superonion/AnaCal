@@ -351,16 +351,16 @@ public:
     ) const {
         math::lossNumber res;
         math::lossNumber theory_val = this->get_model_from_r2(r2, c);
-        /* math::qnumber residual = img_val - p; */
-        math::qnumber residual = img_val - theory_val.v;
-        math::qnumber w = theory_val.v * w / (p + 1e-8);
+        math::qnumber residual = img_val - p - (1.0 - wdet) * theory_val.v;
+        /* math::qnumber residual = img_val - theory_val.v; */
+        /* math::qnumber w = theory_val.v * w / (p + 1e-8); */
         /* theory_val.v_F = theory_val.v_F * w; */
         /* theory_val.v_t = theory_val.v_t * w; */
         /* theory_val.v_a1 = theory_val.v_a1 * w; */
         /* theory_val.v_a2 = theory_val.v_a2 * w; */
 
-        res.v = math::pow(residual, 2.0) / variance_val * w;
-        math::qnumber mul = 2.0 / variance_val * w;
+        res.v = math::pow(residual, 2.0) / variance_val;
+        math::qnumber mul = 2.0 / variance_val;
 
         math::qnumber tmp = -1.0 * residual * mul;
         res.v_F =  tmp * theory_val.v_F ;
@@ -397,8 +397,8 @@ public:
     inline void
     update_model_params(
         const math::lossNumber& loss,
+        const math::qnumber& wdet,
         const modelPrior& prior,
-        int epoch,
         double variance_val=1.0
     ) {
         this->F = this->F - (
@@ -417,11 +417,17 @@ public:
                     loss.v + (loss.v_a1a1 + prior.w_a)
                 )
             );
+            if (this->a1.v > 1.0) {
+                this->a1 = 0.75 + 0.5 / (1 + math::exp(-8.0 * (this->a1 - 1)));
+            }
             this->a2 = this->a2 - (
                 (loss.v_a2 + prior.w_a * this->a2) / (
                     loss.v + (loss.v_a2a2 + prior.w_a)
                 )
             );
+            if (this->a2.v > 1.0) {
+                this->a2 = 0.75 + 0.5 / (1 + math::exp(-8.0 * (this->a2 - 1)));
+            }
         }
         if (!this->force_center) {
             this->x1 = this->x1 - (

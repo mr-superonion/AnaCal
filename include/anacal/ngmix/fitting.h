@@ -10,6 +10,8 @@
 namespace anacal {
 namespace ngmix {
 
+inline constexpr double r2_max = 20.0;
+
 class GaussFit {
 public:
     // stamp dimension
@@ -106,8 +108,11 @@ public:
                 math::qnumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernelB
                 );
-                if (((xs * xs + ys * ys) < this->r2_lim_stamp) && (r2.v < 20)) {
-                    data_model[jj + i] = data_model[jj + i] + src.model.get_model_from_r2(r2, kernelB) * src.wdet;
+                if (((xs * xs + ys * ys) < this->r2_lim_stamp) && (r2.v < r2_max)) {
+                    data_model[jj + i] = (
+                        data_model[jj + i]
+                        + src.model.get_model_from_r2(r2, kernelB) * src.wdet
+                    );
                 }
             }
         }
@@ -145,7 +150,7 @@ public:
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                if (((xs * xs + ys * ys) < this->r2_lim_stamp) && (r2.v.v < 20)) {
+                if (((xs * xs + ys * ys) < this->r2_lim_stamp) && (r2.v.v < r2_max)) {
                     math::qnumber w = src.model.get_func_from_r2(
                         r2,
                         kernel
@@ -192,7 +197,7 @@ public:
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                if (((xs * xs + ys * ys) < r2_lim_stamp) && (r2.v.v < 20)) {
+                if (((xs * xs + ys * ys) < r2_lim_stamp) && (r2.v.v < r2_max)) {
                     src.loss = src.loss + model.get_loss(
                         data[jj + i], variance, r2, kernel
                     );
@@ -236,7 +241,7 @@ public:
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                if (((xs * xs + ys * ys) < r2_lim_stamp) && (r2.v.v < 20)) {
+                if (((xs * xs + ys * ys) < r2_lim_stamp) && (r2.v.v < r2_max)) {
                     src.loss = src.loss + model.get_loss_with_mask(
                         data[jj + i], variance, r2, kernel, data_m[jj+i], src.wdet
                     );
@@ -334,7 +339,7 @@ public:
                 math::qnumber x2 = math::pow(xs, 2);
                 math::qnumber xy = xs * ys;
                 math::qnumber r2 = (x2 + y2) * dd;
-                if (r2.v < 20) {
+                if (r2.v < r2_max) {
                     math::qnumber w = math::exp6(-0.5 * r2);
                     math::qnumber f = (
                         w * data[jj + i]
@@ -350,7 +355,7 @@ public:
         model.a1 = a_ini;
         model.a2 = a_ini;
         model.t = 0.5 * math::atan2(2.0 * mxy, mxx - myy);
-        model.F = m0 * (4.0 * M_PI * this->sigma2) / norm / block.scale / block.scale;
+        /* model.F = m0 * (4.0 * M_PI * this->sigma2) / norm / block.scale / block.scale; */
         return;
     };
 
@@ -434,7 +439,7 @@ public:
                             data, variance_meas, src, block, kernels[i]
                         );
                         src.model.update_model_params(
-                            src.loss, prior, epoch, variance_meas
+                            src.loss, src.wdet, prior, variance_meas
                         );
                     }
                 }
@@ -451,7 +456,7 @@ public:
                             data, data_model, variance_meas, src, block, kernels[i]
                         );
                         src.model.update_model_params(
-                            src.loss, prior, epoch, variance_meas
+                            src.loss, src.wdet, prior, variance_meas
                         );
                     }
                 }
