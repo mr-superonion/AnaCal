@@ -341,7 +341,7 @@ public:
         return res;
     };
 
-    inline math::lossNumber get_loss_with_mask(
+    inline math::lossNumber get_loss_with_p(
         const math::qnumber img_val,
         double variance_val,
         const math::lossNumber& r2,
@@ -351,7 +351,7 @@ public:
     ) const {
         math::lossNumber res;
         math::lossNumber theory_val = this->get_model_from_r2(r2, c);
-        math::qnumber residual = img_val - p - (1.0 - wdet) * theory_val.v;
+        math::qnumber residual = img_val - p - theory_val.v;
         /* math::qnumber residual = img_val - theory_val.v; */
         /* math::qnumber w = theory_val.v * w / (p + 1e-8); */
         /* theory_val.v_F = theory_val.v_F * w; */
@@ -417,17 +417,17 @@ public:
                     loss.v + (loss.v_a1a1 + prior.w_a)
                 )
             );
-            if (this->a1.v > 1.0) {
-                this->a1 = 0.75 + 0.5 / (1 + math::exp(-8.0 * (this->a1 - 1)));
-            }
             this->a2 = this->a2 - (
                 (loss.v_a2 + prior.w_a * this->a2) / (
                     loss.v + (loss.v_a2a2 + prior.w_a)
                 )
             );
-            if (this->a2.v > 1.0) {
-                this->a2 = 0.75 + 0.5 / (1 + math::exp(-8.0 * (this->a2 - 1)));
-            }
+            /* if (this->a1.v > 1.0) { */
+            /*     this->a1 = 0.75 + 0.5 / (1 + math::exp(-8.0 * (this->a1 - 1))); */
+            /* } */
+            /* if (this->a2.v > 1.0) { */
+            /*     this->a2 = 0.75 + 0.5 / (1 + math::exp(-8.0 * (this->a2 - 1))); */
+            /* } */
         }
         if (!this->force_center) {
             this->x1 = this->x1 - (

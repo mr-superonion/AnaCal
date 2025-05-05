@@ -82,7 +82,7 @@ public:
         std::vector<math::qnumber> & data_model,
         const table::galNumber & src,
         const geometry::block & block,
-        const modelKernelD & kernel
+        const modelKernelB & kernel
     ) const {
         const ngmix::NgmixGaussian & model = src.model;
         int i_min = std::max(
@@ -99,19 +99,18 @@ public:
             0
         );
         int j_max = std::min(j_min + this->stamp_size, block.ny);
-        const modelKernelB kernelB = kernel.to_kernelB();
         for (int j = j_min; j < j_max; ++j) {
             int jj = j * block.nx;
             double ys = block.yvs[j] - model.x2.v;
             for (int i = i_min; i < i_max; ++i) {
                 double xs = block.xvs[i] - model.x1.v;
                 math::qnumber r2 = model.get_r2(
-                    block.xvs[i], block.yvs[j], kernelB
+                    block.xvs[i], block.yvs[j], kernel
                 );
                 if (((xs * xs + ys * ys) < this->r2_lim_stamp) && (r2.v < r2_max)) {
                     data_model[jj + i] = (
                         data_model[jj + i]
-                        + src.model.get_model_from_r2(r2, kernelB) * src.wdet
+                        + src.model.get_model_from_r2(r2, kernel) * src.wdet
                     );
                 }
             }
@@ -213,10 +212,12 @@ public:
         const std::vector<math::qnumber> & data_m,
         double variance,
         table::galNumber & src,
-        const geometry::block & block,
-        const modelKernelD & kernel
+        const modelKernelD & kernel,
+        const NgmixGaussian & mmod,
+        const modelKernelB & mkernel,
+        const geometry::block & block
     ) const {
-        ngmix::NgmixGaussian & model = src.model;
+        NgmixGaussian & model = src.model;
         int i_min = std::max(
             static_cast<int>(
                 std::round(model.x1.v / this->scale)
@@ -236,14 +237,23 @@ public:
         for (int j = j_min; j < j_max; ++j) {
             int jj = j * block.nx;
             double ys = block.yvs[j] - model.x2.v;
+            double mys = block.yvs[j] - mmod.x2.v;
             for (int i = i_min; i < i_max; ++i) {
                 double xs = block.xvs[i] - model.x1.v;
-                math::lossNumber r2 = model.get_r2(
+                double mxs = block.xvs[i] - mmod.x1.v;
+                const math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
                 if (((xs * xs + ys * ys) < r2_lim_stamp) && (r2.v.v < r2_max)) {
-                    src.loss = src.loss + model.get_loss_with_mask(
-                        data[jj + i], variance, r2, kernel, data_m[jj+i], src.wdet
+                    math::qnumber p = data_m[jj+i];
+                    const math::qnumber mr2 = mmod.get_r2(
+                        block.xvs[i], block.yvs[j], mkernel
+                    );
+                    if (((mxs * mxs + mys * mys) < r2_lim_stamp) && (mr2.v < r2_max)) {
+                        p = p - mmod.get_model_from_r2(mr2, mkernel) * src.wdet;
+                    }
+                    src.loss = src.loss + model.get_loss_with_p(
+                        data[jj + i], variance, r2, kernel, p, src.wdet
                     );
                 }
             }
@@ -397,64 +407,71 @@ public:
             block,
             noise_array
         );
-
-        std::size_t n_pix = data.size();
-        // initialize the sources
-        for (const std::size_t ind : inds) {
-            table::galNumber & src = catalog[ind];
-            src.model.force_size=this->force_size;
-            src.model.force_center=this->force_center;
-            if (
-                (!this->force_size) &&
-                (!src.initialized) &&
-                (src.block_id == block.index)
-            ) {
-                initialize_fitting(data, src.model, block);
-                src.initialized = true;
-            }
-        }
-        double variance_meas = get_smoothed_variance(
-            block.scale,
-            this->sigma_arcsec,
-            psf_array,
-            variance
-        );
-
         std::size_t ng = inds.size();
-        std::vector<modelKernelD> kernels(ng);
-        for (int epoch = 0; epoch < num_epochs; ++epoch) {
+
+        {
+            // initialize the sources
+            for (const std::size_t ind : inds) {
+                table::galNumber & src = catalog[ind];
+                src.model.force_size=this->force_size;
+                src.model.force_center=this->force_center;
+                if (
+                    (!this->force_size) &&
+                    (!src.initialized) &&
+                    (src.block_id == block.index)
+                ) {
+                    initialize_fitting(data, src.model, block);
+                    src.initialized = true;
+                }
+            }
+
+            std::vector<NgmixGaussian> catalog_model;
+            catalog_model.reserve(ng);
+            std::vector<modelKernelB> kernels_model;
+            kernels_model.reserve(ng);
+            std::size_t n_pix = data.size();
+            std::vector<math::qnumber> data_model(n_pix);
             for (std::size_t i=0; i<ng; ++i) {
-                const table::galNumber & src = catalog[inds[i]];
-                kernels[i] = src.model.prepare_modelD(
+                const table::galNumber mrc = catalog[inds[i]];
+                catalog_model.push_back(mrc.model);
+                const modelKernelB kernel = mrc.model.prepare_modelB(
                     this->scale,
                     this->sigma_arcsec
                 );
+                kernels_model.push_back(kernel);
+                add_model_to_block(data_model, mrc, block, kernel);
             }
 
-            if (irun == 0){
+            double variance_meas = get_smoothed_variance(
+                block.scale,
+                this->sigma_arcsec,
+                psf_array,
+                variance
+            );
+
+            for (int epoch = 0; epoch < num_epochs; ++epoch) {
                 for (std::size_t i=0; i<ng; ++i) {
                     table::galNumber & src = catalog[inds[i]];
                     if (src.block_id == block.index) {
-                        this->measure_loss(
-                            data, variance_meas, src, block, kernels[i]
+                        const modelKernelD kernel = src.model.prepare_modelD(
+                            this->scale,
+                            this->sigma_arcsec
                         );
-                        src.model.update_model_params(
-                            src.loss, src.wdet, prior, variance_meas
-                        );
-                    }
-                }
-            } else {
-                std::vector<math::qnumber> data_model(n_pix);
-                for (std::size_t i=0; i<ng; ++i) {
-                    const table::galNumber & src = catalog[inds[i]];
-                    add_model_to_block(data_model, src, block, kernels[i]);
-                }
-                for (std::size_t i=0; i<ng; ++i) {
-                    table::galNumber & src = catalog[inds[i]];
-                    if (src.block_id == block.index) {
-                        this->measure_loss2(
-                            data, data_model, variance_meas, src, block, kernels[i]
-                        );
+                        if (irun == 0) {
+                            this->measure_loss(
+                                data, variance_meas, src, block, kernel
+                            );
+                        } else {
+                            const NgmixGaussian & mmod = catalog_model[i];
+                            const modelKernelB & mkernel = kernels_model[i];
+                            this->measure_loss2(
+                                data, data_model,
+                                variance_meas,
+                                src, kernel,
+                                mmod, mkernel,
+                                block
+                            );
+                        }
                         src.model.update_model_params(
                             src.loss, src.wdet, prior, variance_meas
                         );
@@ -463,32 +480,34 @@ public:
             }
         }
 
-        // finally get FPFS measurement
-        double std_fpfs = std::sqrt(
-            get_smoothed_variance(
-                block.scale,
-                this->sigma_arcsec * 1.414,
-                psf_array,
-                variance
-            )
-        );
+        {
+            // finally get FPFS measurement
+            double std_fpfs = std::sqrt(
+                get_smoothed_variance(
+                    block.scale,
+                    this->sigma_arcsec * 1.414,
+                    psf_array,
+                    variance
+                )
+            );
 
-        for (std::size_t i=0; i<ng; ++i) {
-            table::galNumber & src = catalog[inds[i]];
-            if (src.block_id == block.index) {
-                this->measure_fpfs(
-                    data, src, block
-                );
-                src.wsel = src.wdet * math::ssfunc1(
-                    src.fpfs_m0,
-                    5.0 * std_fpfs,
-                    std_fpfs
-                );
-                src.wsel = src.wsel * math::ssfunc1(
-                    src.fpfs_m2 - 0.1 * src.fpfs_m0,
-                    std_fpfs,
-                    std_fpfs
-                );
+            for (std::size_t i=0; i<ng; ++i) {
+                table::galNumber & src = catalog[inds[i]];
+                if (src.block_id == block.index) {
+                    this->measure_fpfs(
+                        data, src, block
+                    );
+                    src.wsel = src.wdet * math::ssfunc1(
+                        src.fpfs_m0,
+                        5.0 * std_fpfs,
+                        std_fpfs
+                    );
+                    src.wsel = src.wsel * math::ssfunc1(
+                        src.fpfs_m2 - 0.1 * src.fpfs_m0,
+                        std_fpfs,
+                        std_fpfs
+                    );
+                }
             }
         }
         return;
@@ -521,7 +540,7 @@ public:
             bb,
             noise_array
         );
-        return result;
+        return std::move(result);
     };
 };
 

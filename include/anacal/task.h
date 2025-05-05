@@ -163,21 +163,22 @@ public:
             );
         } else {
             for (const geometry::block & block: block_list) {
-                std::vector<table::galNumber> catb = detect_block(
+                std::vector<table::galNumber> det = detect_block(
                     img_array,
                     psf_array,
                     variance_use,
                     block,
                     noise_array
                 );
-                for (const table::galNumber& src : catb) {
+                catalog.reserve(catalog.size() + det.size());
+                for (const table::galNumber& src : det) {
                     catalog.push_back(src);
                 }
             }
         }
 
 
-        for (int run_id = 0; run_id < 2; ++run_id) {
+        for (int run_id = 0; run_id < 3; ++run_id) {
             for (const geometry::block & block: block_list) {
                 measure_block(
                     catalog,

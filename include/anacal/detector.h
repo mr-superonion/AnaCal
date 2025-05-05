@@ -176,6 +176,7 @@ find_peaks_impl(
     int xend = std::min(image_nx - image_bound, block.xmax_in);
 
     std::vector<table::galNumber> catalog;
+    catalog.reserve((yend - ystart) * (xend - xstart) / 2500);
     for (int y = ystart; y < yend; ++y) {
         int j = y - block.ymin;
         for (int x = xstart; x < xend; ++x) {
