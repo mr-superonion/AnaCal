@@ -449,7 +449,10 @@ public:
                 variance
             );
 
+            /* std::cout<<"irun: "<<irun<<std::endl; */
+            /* std::cout<<"block: "<<block.index<<std::endl; */
             for (int epoch = 0; epoch < num_epochs; ++epoch) {
+                /* std::cout<<"epoch: "<<epoch<<std::endl; */
                 for (std::size_t i=0; i<ng; ++i) {
                     table::galNumber & src = catalog[inds[i]];
                     if (src.block_id == block.index) {

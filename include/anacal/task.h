@@ -244,18 +244,21 @@ public:
             }
         }
 
-        for (const geometry::block & block: block_list) {
-            py::array_t<double> psf_array = psf_obj.draw(
-                block.xcen, block.ycen
-            );
-            measure_block(
-                catalog,
-                img_array,
-                psf_array,
-                variance_use,
-                block,
-                noise_array
-            );
+        for (int run_id = 0; run_id < 3; ++run_id) {
+            for (const geometry::block & block: block_list) {
+                py::array_t<double> psf_array = psf_obj.draw(
+                    block.xcen, block.ycen
+                );
+                measure_block(
+                    catalog,
+                    img_array,
+                    psf_array,
+                    variance_use,
+                    block,
+                    noise_array,
+                    run_id
+                );
+            }
         }
 
         if (mask_array.has_value()) {
