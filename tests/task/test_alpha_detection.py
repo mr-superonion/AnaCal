@@ -80,15 +80,15 @@ def test_task_detection():
     blocks = anacal.geometry.get_block_list(
         img_array.shape[0],
         img_array.shape[1],
-        256,
-        256,
+        500,
+        500,
         64,
         scale,
     )
 
-    time.sleep(2)
     initial_memory_usage = mem_used()
     print_mem(initial_memory_usage)
+
     def func():
         taskA.process_image(
             img_array,
@@ -98,7 +98,6 @@ def test_task_detection():
         )
         gc.collect()
         return
-    time.sleep(2)
 
     peak_memory_usage = max(memory_usage(proc=(func,)))
     print("Peak Mem:", peak_memory_usage, "M")

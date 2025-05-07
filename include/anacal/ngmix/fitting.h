@@ -513,6 +513,7 @@ public:
                 }
             }
         }
+        std::vector<math::qnumber>().swap(data);
         return;
     };
 
@@ -543,7 +544,7 @@ public:
             bb,
             noise_array
         );
-        return std::move(result);
+        return result;
     };
 };
 

@@ -105,7 +105,7 @@ public:
         double y_max = block.ymax * block.scale;
         std::size_t nrow = catalog.size();
         std::vector<std::size_t> indices;
-        indices.reserve(nrow / 4);
+        indices.reserve(static_cast<std::size_t>(nrow / 4));
         for (std::size_t i = 0; i < nrow; ++i) {
             const ngmix::NgmixGaussian & m = catalog[i].model;
             if ((m.x1.v >= x_min) &&
@@ -190,6 +190,21 @@ public:
                     run_id
                 );
             }
+        }
+
+        int image_ny = img_array.shape(0);
+        int image_nx = img_array.shape(1);
+        int bound = stamp_size * 2 + 10;
+        for (table::galNumber& src : catalog) {
+            double jj = src.model.x2.v / this->scale;
+            double ii = src.model.x1.v / this->scale;
+            bool cond = (
+                (jj >= bound) ||
+                (jj < image_ny - bound) ||
+                (ii >= bound) ||
+                (ii < image_nx - bound)
+            );
+            if (! cond) src.wsel = math::qnumber(0.0);
         }
 
         if (mask_array.has_value()) {

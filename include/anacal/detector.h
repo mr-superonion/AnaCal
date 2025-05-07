@@ -176,7 +176,6 @@ find_peaks_impl(
     int xend = std::min(image_nx - image_bound, block.xmax_in);
 
     std::vector<table::galNumber> catalog;
-    catalog.reserve((yend - ystart) * (xend - xstart) / 2500);
     for (int y = ystart; y < yend; ++y) {
         int j = y - block.ymin;
         for (int x = xstart; x < xend; ++x) {
@@ -259,7 +258,7 @@ find_peaks(
         data[j * block.nx + i] = src.wdet;
     }
     std::vector<table::galNumber> catalog;
-    catalog.reserve(cat.size() / 2);
+    catalog.reserve(static_cast<std::size_t>(cat.size() / 10));
     for (table::galNumber & src: cat){
         const ngmix::NgmixGaussian & model = src.model;
         int i = static_cast<int>(
