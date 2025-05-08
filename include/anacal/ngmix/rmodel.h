@@ -352,12 +352,6 @@ public:
         math::lossNumber res;
         math::lossNumber theory_val = this->get_model_from_r2(r2, c);
         math::qnumber residual = img_val - p - theory_val.v;
-        /* math::qnumber residual = img_val - theory_val.v; */
-        /* math::qnumber w = theory_val.v * w / (p + 1e-8); */
-        /* theory_val.v_F = theory_val.v_F * w; */
-        /* theory_val.v_t = theory_val.v_t * w; */
-        /* theory_val.v_a1 = theory_val.v_a1 * w; */
-        /* theory_val.v_a2 = theory_val.v_a2 * w; */
 
         res.v = math::pow(residual, 2.0) / variance_val;
         math::qnumber mul = 2.0 / variance_val;

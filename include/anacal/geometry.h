@@ -24,6 +24,8 @@ struct block {
 
     std::vector<double> xvs;
     std::vector<double> yvs;
+    std::vector<bool> xmsk;
+    std::vector<bool> ymsk;
 
 
     block() = default;
@@ -44,6 +46,8 @@ struct block {
         for (int i = 0; i < this->ny; ++i) {
             this->yvs[i] = (i + this->ymin) * this->scale;
         }
+        this->xmsk.resize(this->nx);
+        this->ymsk.resize(this->ny);
     }
 };
 
@@ -112,6 +116,24 @@ inline std::vector<block> get_block_list(
                 scale,
                 index
             );
+            block & bb = result[index];
+            for (int i = 0; i < bb.nx; ++i) {
+                int ii = bb.xvs[i] / bb.scale;
+                if ((ii >= 0) && (ii < img_nx)){
+                    bb.xmsk[i] = true;
+                } else {
+                    bb.xmsk[i] = false;
+                }
+            }
+            for (int i = 0; i < bb.ny; ++i) {
+                int ii = bb.yvs[i] / bb.scale;
+                if ((ii >= 0) && (ii < img_ny)){
+                    bb.ymsk[i] = true;
+                } else {
+                    bb.ymsk[i] = false;
+                }
+            }
+
         }
     }
     return result;
