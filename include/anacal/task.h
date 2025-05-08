@@ -276,6 +276,21 @@ public:
             }
         }
 
+        int image_ny = img_array.shape(0);
+        int image_nx = img_array.shape(1);
+        int bound = stamp_size * 2 + 10;
+        for (table::galNumber& src : catalog) {
+            double jj = src.model.x2.v / this->scale;
+            double ii = src.model.x1.v / this->scale;
+            bool cond = (
+                (jj >= bound) ||
+                (jj < image_ny - bound) ||
+                (ii >= bound) ||
+                (ii < image_nx - bound)
+            );
+            if (! cond) src.wsel = math::qnumber(0.0);
+        }
+
         if (mask_array.has_value()) {
             mask2::add_pixel_mask_column_catalog(
                 catalog,
