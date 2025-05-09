@@ -78,12 +78,16 @@ struct frDeriv {
 struct StampBounds {
     int i_min, i_max;
     int j_min, j_max;
+    int i_cen, j_cen;
+    int r;
 
     inline bool
     has_point(
         int i, int j
     ) const {
-        return (i>=i_min) && (i<i_max) && (j>=j_min) && (j<j_max);
+        int di = (i - i_cen);
+        int dj = (j - j_cen);
+        return  (di * di + dj * dj) < r * r;
     };
 };
 
@@ -114,28 +118,32 @@ public:
         force_center(force_center){};
 
     inline StampBounds get_stamp_bounds(
-        const geometry::block& block
+        const geometry::block& block,
+        int r
     ) const {
-        int i_center = static_cast<int>(std::round(this->x1.v / block.scale));
-        int j_center = static_cast<int>(std::round(this->x2.v / block.scale));
-        /* int r = static_cast<int>( */
-        /*     std::min( */
-        /*         std::max( */
-        /*             std::abs(this->a1.v), */
-        /*             std::abs(this->a2.v) */
-        /*         ) / block.scale * 5 + 12, */
-        /*         64.0 */
+        int i_cen = static_cast<int>(std::round(this->x1.v / block.scale)) - block.xmin ;
+        int j_cen = static_cast<int>(std::round(this->x2.v / block.scale)) - block.ymin;
+        /* int rr = static_cast<int>( */
+        /*     std::max( */
+        /*         std::min( */
+        /*             std::max( */
+        /*                 std::abs(this->a1.v), */
+        /*                 std::abs(this->a2.v) */
+        /*             ) / block.scale * 5 + 12, */
+        /*             50.0 */
+        /*         ), */
+        /*         24.0 */
         /*     ) */
         /* ); */
-        int r = 32;
+        int rr = r;
 
-        int i_min = std::max(i_center - block.xmin - r, 0);
-        int i_max = std::min(i_min + 2 * r + 1, block.nx);
+        int i_min = std::max(i_cen - rr, 0);
+        int i_max = std::min(i_min + 2 * rr + 1, block.nx);
 
-        int j_min = std::max(j_center - block.ymin - r, 0);
-        int j_max = std::min(j_min + 2 * r + 1, block.ny);
+        int j_min = std::max(j_cen - rr, 0);
+        int j_max = std::min(j_min + 2 * rr + 1, block.ny);
 
-        return {i_min, i_max, j_min, j_max};
+        return {i_min, i_max, j_min, j_max, i_cen, j_cen, rr};
     };
 
     inline modelKernelB

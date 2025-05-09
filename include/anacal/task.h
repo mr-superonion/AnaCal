@@ -199,9 +199,9 @@ public:
             double jj = src.model.x2.v / this->scale;
             double ii = src.model.x1.v / this->scale;
             bool cond = (
-                (jj >= bound) ||
-                (jj < image_ny - bound) ||
-                (ii >= bound) ||
+                (jj >= bound) &&
+                (jj < image_ny - bound) &&
+                (ii >= bound) &&
                 (ii < image_nx - bound)
             );
             if (! cond) src.wsel = math::qnumber(0.0);
@@ -283,9 +283,9 @@ public:
             double jj = src.model.x2.v / this->scale;
             double ii = src.model.x1.v / this->scale;
             bool cond = (
-                (jj >= bound) ||
-                (jj < image_ny - bound) ||
-                (ii >= bound) ||
+                (jj >= bound) &&
+                (jj < image_ny - bound) &&
+                (ii >= bound) &&
                 (ii < image_nx - bound)
             );
             if (! cond) src.wsel = math::qnumber(0.0);
