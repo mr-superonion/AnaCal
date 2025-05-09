@@ -10,6 +10,8 @@
 namespace anacal {
 namespace ngmix {
 
+inline constexpr double r2_max = 20.0;
+
 class GaussFit {
 public:
     // stamp dimension
@@ -92,10 +94,12 @@ public:
                 math::qnumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                data_model[jj + i] = (
-                    data_model[jj + i]
-                    + src.model.get_model_from_r2(r2, kernel) * src.wdet
-                );
+                if (r2.v < r2_max) {
+                    data_model[jj + i] = (
+                        data_model[jj + i]
+                        + src.model.get_model_from_r2(r2, kernel) * src.wdet
+                    );
+                }
             }
         }
         return;
@@ -119,12 +123,14 @@ public:
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                math::qnumber w = src.model.get_func_from_r2(
-                    r2,
-                    kernel
-                );
-                norm = norm + w * w;
-                m0 = m0 + w * data[jj + i];
+                if (r2.v.v < r2_max) {
+                    math::qnumber w = src.model.get_func_from_r2(
+                        r2,
+                        kernel
+                    );
+                    norm = norm + w * w;
+                    m0 = m0 + w * data[jj + i];
+                }
             }
         }
         src.model.F = m0 / norm;
@@ -151,9 +157,11 @@ public:
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                src.loss = src.loss + model.get_loss(
-                    data[jj + i], variance, r2, kernel
-                );
+                if (r2.v.v < r2_max) {
+                    src.loss = src.loss + model.get_loss(
+                        data[jj + i], variance, r2, kernel
+                    );
+                }
             }
         }
         return;
@@ -183,16 +191,18 @@ public:
                 const math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                math::qnumber p = data_m[jj+i];
-                const math::qnumber mr2 = mmod.get_r2(
-                    block.xvs[i], block.yvs[j], mkernel
-                );
-                if (mbb.has_point(i, j)) {
-                    p = p - mmod.get_model_from_r2(mr2, mkernel) * src.wdet;
+                if (r2.v.v < r2_max) {
+                    math::qnumber p = data_m[jj+i];
+                    const math::qnumber mr2 = mmod.get_r2(
+                        block.xvs[i], block.yvs[j], mkernel
+                    );
+                    if (mbb.has_point(i, j) && (mr2.v < r2_max)) {
+                        p = p - mmod.get_model_from_r2(mr2, mkernel) * src.wdet;
+                    }
+                    src.loss = src.loss + model.get_loss_with_p(
+                        data[jj + i], variance, r2, kernel, p
+                    );
                 }
-                src.loss = src.loss + model.get_loss_with_p(
-                    data[jj + i], variance, r2, kernel, p
-                );
             }
         }
         return;
@@ -279,15 +289,17 @@ public:
                 math::qnumber x2 = math::pow(xs, 2);
                 math::qnumber xy = xs * ys;
                 math::qnumber r2 = (x2 + y2) * dd;
-                math::qnumber w = math::exp(-0.5 * r2);
-                math::qnumber f = (
-                    w * data[jj + i]
-                );
-                norm = norm + w * w;
-                m0 = m0 + f;
-                mxx = mxx + f * x2;
-                myy = myy + f * y2;
-                mxy = mxy + f * xy;
+                if (r2.v < r2_max) {
+                    math::qnumber w = math::exp(-0.5 * r2);
+                    math::qnumber f = (
+                        w * data[jj + i]
+                    );
+                    norm = norm + w * w;
+                    m0 = m0 + f;
+                    mxx = mxx + f * x2;
+                    myy = myy + f * y2;
+                    mxy = mxy + f * xy;
+                }
             }
         }
         model.t = 0.5 * math::atan2(2.0 * mxy, mxx - myy);

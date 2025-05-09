@@ -118,15 +118,16 @@ public:
     ) const {
         int i_center = static_cast<int>(std::round(this->x1.v / block.scale));
         int j_center = static_cast<int>(std::round(this->x2.v / block.scale));
-        int r = static_cast<int>(
-            std::min(
-                std::max(
-                    std::abs(this->a1.v),
-                    std::abs(this->a2.v)
-                ) / block.scale * 5 + 12,
-                64.0
-            )
-        );
+        /* int r = static_cast<int>( */
+        /*     std::min( */
+        /*         std::max( */
+        /*             std::abs(this->a1.v), */
+        /*             std::abs(this->a2.v) */
+        /*         ) / block.scale * 5 + 12, */
+        /*         64.0 */
+        /*     ) */
+        /* ); */
+        int r = 32;
 
         int i_min = std::max(i_center - block.xmin - r, 0);
         int i_max = std::min(i_min + 2 * r + 1, block.nx);
