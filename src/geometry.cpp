@@ -32,6 +32,12 @@ pyExportGeometry(py::module_& m) {
         .def_readwrite("ymin_in", &block::ymin_in)
         .def_readwrite("xmax_in", &block::xmax_in)
         .def_readwrite("ymax_in", &block::ymax_in)
+        .def_readwrite("nx", &block::nx)
+        .def_readwrite("ny", &block::ny)
+        .def_readwrite("xvs", &block::xvs)
+        .def_readwrite("yvs", &block::yvs)
+        .def_readwrite("xmsk", &block::xmsk)
+        .def_readwrite("ymsk", &block::ymsk)
         .def_readwrite("scale", &block::scale)
         .def_readwrite("index", &block::index);
 

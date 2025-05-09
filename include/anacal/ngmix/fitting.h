@@ -10,38 +10,6 @@
 namespace anacal {
 namespace ngmix {
 
-inline constexpr double r2_max = 20.0;
-
-struct StampBounds {
-    int i_min, i_max;
-    int j_min, j_max;
-};
-
-inline StampBounds get_stamp_bounds(
-    const ngmix::NgmixGaussian& model,
-    const geometry::block& block
-) {
-    int i_center = static_cast<int>(std::round(model.x1.v / block.scale));
-    int j_center = static_cast<int>(std::round(model.x2.v / block.scale));
-    int r = static_cast<int>(
-        std::min(
-            std::max(
-                std::abs(model.a1.v),
-                std::abs(model.a2.v)
-            ) / block.scale * 5 + 12,
-            64.0
-        )
-    );
-
-    int i_min = std::max(i_center - block.xmin - r, 0);
-    int i_max = std::min(i_min + 2 * r + 1, block.nx);
-
-    int j_min = std::max(j_center - block.ymin - r, 0);
-    int j_max = std::min(j_min + 2 * r + 1, block.ny);
-
-    return {i_min, i_max, j_min, j_max};
-}
-
 class GaussFit {
 public:
     // stamp dimension
@@ -115,19 +83,19 @@ public:
         const modelKernelB & kernel
     ) const {
         const ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = get_stamp_bounds(model, block);
-        for (int j = bb.j_min; (j < bb.j_max) && block.ymsk[j]; ++j) {
+        const StampBounds bb = model.get_stamp_bounds(block);
+        for (int j = bb.j_min; (j < bb.j_max); ++j) {
+            if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
-            for (int i = bb.i_min; (i < bb.i_max) && block.xmsk[i]; ++i) {
+            for (int i = bb.i_min; (i < bb.i_max); ++i) {
+                if (!block.xmsk[j]) continue;
                 math::qnumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                if (r2.v < r2_max) {
-                    data_model[jj + i] = (
-                        data_model[jj + i]
-                        + src.model.get_model_from_r2(r2, kernel) * src.wdet
-                    );
-                }
+                data_model[jj + i] = (
+                    data_model[jj + i]
+                    + src.model.get_model_from_r2(r2, kernel) * src.wdet
+                );
             }
         }
         return;
@@ -141,23 +109,22 @@ public:
         const modelKernelD & kernel
     ) const {
         math::qnumber m0, norm;
-
         ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = get_stamp_bounds(model, block);
-        for (int j = bb.j_min; (j < bb.j_max) && block.ymsk[j]; ++j) {
+        const StampBounds bb = model.get_stamp_bounds(block);
+        for (int j = bb.j_min; (j < bb.j_max); ++j) {
+            if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
-            for (int i = bb.i_min; (i < bb.i_max) && block.xmsk[i]; ++i) {
+            for (int i = bb.i_min; (i < bb.i_max); ++i) {
+                if (!block.xmsk[j]) continue;
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                if (r2.v.v < r2_max) {
-                    math::qnumber w = src.model.get_func_from_r2(
-                        r2,
-                        kernel
-                    );
-                    norm = norm + w * w;
-                    m0 = m0 + w * data[jj + i];
-                }
+                math::qnumber w = src.model.get_func_from_r2(
+                    r2,
+                    kernel
+                );
+                norm = norm + w * w;
+                m0 = m0 + w * data[jj + i];
             }
         }
         src.model.F = m0 / norm;
@@ -174,18 +141,19 @@ public:
     ) const {
         src.loss.reset();
         ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = get_stamp_bounds(model, block);
-        for (int j = bb.j_min; (j < bb.j_max) && block.ymsk[j]; ++j) {
+        const StampBounds bb = model.get_stamp_bounds(block);
+
+        for (int j = bb.j_min; (j < bb.j_max); ++j) {
+            if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
-            for (int i = bb.i_min; (i < bb.i_max) && block.xmsk[i]; ++i) {
+            for (int i = bb.i_min; (i < bb.i_max); ++i) {
+                if (!block.xmsk[j]) continue;
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                if (r2.v.v < r2_max) {
-                    src.loss = src.loss + model.get_loss(
-                        data[jj + i], variance, r2, kernel
-                    );
-                }
+                src.loss = src.loss + model.get_loss(
+                    data[jj + i], variance, r2, kernel
+                );
             }
         }
         return;
@@ -204,26 +172,27 @@ public:
     ) const {
         src.loss.reset();
         NgmixGaussian & model = src.model;
-        const StampBounds bb = get_stamp_bounds(model, block);
+        const StampBounds bb = model.get_stamp_bounds(block);
+        const StampBounds mbb = mmod.get_stamp_bounds(block);
 
-        for (int j = bb.j_min; (j < bb.j_max) && block.ymsk[j]; ++j) {
+        for (int j = bb.j_min; (j < bb.j_max); ++j) {
+            if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
-            for (int i = bb.i_min; (i < bb.i_max) && block.xmsk[i]; ++i) {
+            for (int i = bb.i_min; (i < bb.i_max); ++i) {
+                if (!block.xmsk[j]) continue;
                 const math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
-                if (r2.v.v < r2_max) {
-                    math::qnumber p = data_m[jj+i];
-                    const math::qnumber mr2 = mmod.get_r2(
-                        block.xvs[i], block.yvs[j], mkernel
-                    );
-                    if (mr2.v < r2_max) {
-                        p = p - mmod.get_model_from_r2(mr2, mkernel) * src.wdet;
-                    }
-                    src.loss = src.loss + model.get_loss_with_p(
-                        data[jj + i], variance, r2, kernel, p, src.wdet
-                    );
+                math::qnumber p = data_m[jj+i];
+                const math::qnumber mr2 = mmod.get_r2(
+                    block.xvs[i], block.yvs[j], mkernel
+                );
+                if (mbb.has_point(i, j)) {
+                    p = p - mmod.get_model_from_r2(mr2, mkernel) * src.wdet;
                 }
+                src.loss = src.loss + model.get_loss_with_p(
+                    data[jj + i], variance, r2, kernel, p
+                );
             }
         }
         return;
@@ -293,46 +262,34 @@ public:
     ) const {
         math::qnumber m0, mxx, myy, mxy, norm;
         double a_ini = 0.15;
+        model.a1 = a_ini;
+        model.a2 = a_ini;
         double dd = 1.0 / (this->sigma2 + a_ini * a_ini);
-        int i_min = std::max(
-            static_cast<int>(
-                std::round(model.x1.v / this->scale)
-            ) - block.xmin - this->ss2,
-            0
-        );
-        int i_max = std::min(i_min + this->stamp_size, block.nx);
-        int j_min = std::max(
-            static_cast<int>(
-                std::round(model.x2.v / this->scale)
-            ) - block.ymin - this->ss2,
-            0
-        );
-        int j_max = std::min(j_min + this->stamp_size, block.ny);
 
-        for (int j = j_min; j < j_max; ++j) {
+        const StampBounds bb = model.get_stamp_bounds(block);
+
+        for (int j = bb.j_min; (j < bb.j_max); ++j) {
+            if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
             math::qnumber ys = block.yvs[j] - model.x2.v;
             math::qnumber y2 = math::pow(ys, 2);
-            for (int i = i_min; i < i_max; ++i) {
+            for (int i = bb.i_min; (i < bb.i_max); ++i) {
+                if (!block.xmsk[j]) continue;
                 math::qnumber xs = block.xvs[i] - model.x1.v;
                 math::qnumber x2 = math::pow(xs, 2);
                 math::qnumber xy = xs * ys;
                 math::qnumber r2 = (x2 + y2) * dd;
-                if (r2.v < r2_max) {
-                    math::qnumber w = math::exp6(-0.5 * r2);
-                    math::qnumber f = (
-                        w * data[jj + i]
-                    );
-                    norm = norm + w * w;
-                    m0 = m0 + f;
-                    mxx = mxx + f * x2;
-                    myy = myy + f * y2;
-                    mxy = mxy + f * xy;
-                }
+                math::qnumber w = math::exp(-0.5 * r2);
+                math::qnumber f = (
+                    w * data[jj + i]
+                );
+                norm = norm + w * w;
+                m0 = m0 + f;
+                mxx = mxx + f * x2;
+                myy = myy + f * y2;
+                mxy = mxy + f * xy;
             }
         }
-        model.a1 = a_ini;
-        model.a2 = a_ini;
         model.t = 0.5 * math::atan2(2.0 * mxy, mxx - myy);
         /* model.F = m0 * (4.0 * M_PI * this->sigma2) / norm / block.scale / block.scale; */
         return;
@@ -445,7 +402,7 @@ public:
                             );
                         }
                         src.model.update_model_params(
-                            src.loss, src.wdet, prior, variance_meas
+                            src.loss, prior, variance_meas
                         );
                     }
                 }

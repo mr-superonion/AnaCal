@@ -16,7 +16,7 @@ def test_task_detection():
 
     scale = 0.2
     psf_fwhm = 0.7
-    ngal = 81
+    ngal = 25
     # PSF
     psf_obj = galsim.Moffat(
         beta=2.5,
@@ -128,9 +128,9 @@ def test_task_detection():
     blocks = anacal.geometry.get_block_list(
         img_array.shape[0],
         img_array.shape[1],
-        800,
-        800,
-        80,
+        512,
+        512,
+        150,
         scale,
     )
     catalog = taskA.process_image(
@@ -147,11 +147,11 @@ def test_task_detection():
     crange = np.arange(nn // 2, img_array.shape[0], nn)
     centers = np.array([[x, y] for y in crange for x in crange])
     np.testing.assert_allclose(
-        centers[:, 0] - np.round(catalog["x1"][ind] / 0.2),
-        0.0,
+        centers[:, 0],
+        np.round(catalog["x1"][ind] / 0.2),
     )
     np.testing.assert_allclose(
-        centers[:, 1] - np.round(catalog["x2"][ind] / 0.2),
-        0.0,
+        centers[:, 1],
+        np.round(catalog["x2"][ind] / 0.2),
     )
     return

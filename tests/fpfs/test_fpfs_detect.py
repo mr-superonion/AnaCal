@@ -40,7 +40,12 @@ def test_convolve_image():
         klim=klim,
         psf_array=psf_array,
     )
-    smooth_data = det_task.smooth_image(gal_array=gal_data, noise_array=None)
+    smooth_data = det_task.smooth_image(
+        gal_array=gal_data,
+        xcen=gal_data.shape[1] // 2,
+        ycen=gal_data.shape[0] // 2,
+        noise_array=None,
+    )
     smooth_data2 = smooth(sigmaf, kmax, gal_data, psf_array)
     np.testing.assert_almost_equal(smooth_data, smooth_data2)
     return
@@ -59,7 +64,10 @@ def test_convolve_noise(seed=2):
 
     noise_array = np.random.randn(ngrid, ngrid)
     smooth_data = det_task.smooth_image(
-        gal_array=gal_data, noise_array=noise_array
+        gal_array=gal_data,
+        xcen=gal_data.shape[1] // 2,
+        ycen=gal_data.shape[0] // 2,
+        noise_array=noise_array,
     )
     smooth_data2 = smooth(sigmaf, kmax, gal_data, psf_array, noise_array)
     np.testing.assert_almost_equal(smooth_data, smooth_data2)

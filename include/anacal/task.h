@@ -178,7 +178,7 @@ public:
         }
 
 
-        for (int run_id = 0; run_id < 3; ++run_id) {
+        for (int run_id = 0; run_id < 5; ++run_id) {
             for (const geometry::block & block: block_list) {
                 measure_block(
                     catalog,
@@ -259,7 +259,7 @@ public:
             }
         }
 
-        for (int run_id = 0; run_id < 3; ++run_id) {
+        for (int run_id = 0; run_id < 5; ++run_id) {
             for (const geometry::block & block: block_list) {
                 py::array_t<double> psf_array = psf_obj.draw(
                     block.xcen, block.ycen

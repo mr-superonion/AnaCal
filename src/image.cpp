@@ -64,12 +64,6 @@ Image::set_r (
     auto r = input.unchecked<2>();
     int arr_ny = r.shape(0);
     int arr_nx = r.shape(1);
-    if (xcen < 0 || xcen > arr_nx) {
-        xcen = arr_nx / 2;
-    }
-    if (ycen < 0 || ycen > arr_ny) {
-        ycen = arr_ny / 2;
-    }
     int ybeg = ycen - this->ny2;
     int yend = ybeg + this->ny;
     int xbeg = xcen - this->nx2;
@@ -92,6 +86,7 @@ Image::set_r (
         off_y = off_y + this->ny / 2;
         off_x = off_x + this->nx / 2;
     }
+
     // First fill in the data_r with 0
     std::fill_n(this->data_r, this->ny * this->nx, 0.0);
     // The part has data
@@ -104,6 +99,27 @@ Image::set_r (
     }
     return;
 }
+
+void
+Image::set_r (
+    const py::array_t<double>& input,
+    bool ishift
+) {
+    assert_mode(this->mode & 1);
+    auto r = input.unchecked<2>();
+    int arr_ny = r.shape(0);
+    int arr_nx = r.shape(1);
+    int xcen = arr_nx / 2;
+    int ycen = arr_ny / 2;
+    this->set_r(
+        input,
+        xcen,
+        ycen,
+        ishift
+    );
+    return;
+}
+
 
 
 void
@@ -698,11 +714,28 @@ pyExportImage(py::module& m) {
             py::arg("use_estimate")=true,
             py::arg("mode")=3
         )
-        .def("set_r", &Image::set_r,
+        .def("set_r",
+            py::overload_cast<
+                const py::array_t<double>&,
+                int,
+                int,
+                bool
+            >
+            (&Image::set_r),
             "Sets up the image in configuration space",
             py::arg("input"),
-            py::arg("xcen")=-1,
-            py::arg("ycen")=-1,
+            py::arg("xcen"),
+            py::arg("ycen"),
+            py::arg("ishift")=false
+        )
+        .def("set_r",
+            py::overload_cast<
+                const py::array_t<double>&,
+                bool
+            >
+            (&Image::set_r),
+            "Sets up the image in configuration space (force center)",
+            py::arg("input"),
             py::arg("ishift")=false
         )
         .def("set_f", &Image::set_f,
@@ -797,9 +830,9 @@ pyExportImage(py::module& m) {
             "prepare the qnumber image",
             py::arg("gal_array"),
             py::arg("psf_array"),
-            py::arg("noise_array")=py::none(),
-            py::arg("xcen")=-1,
-            py::arg("ycen")=-1
+            py::arg("xcen"),
+            py::arg("ycen"),
+            py::arg("noise_array")=py::none()
         );
 }
 

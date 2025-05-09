@@ -246,6 +246,7 @@ find_peaks(
         noise_array,
         image_bound
     );
+
     std::vector<math::qnumber> data(block.nx * block.ny);
     for (const table::galNumber & src: cat){
         const ngmix::NgmixGaussian & model = src.model;

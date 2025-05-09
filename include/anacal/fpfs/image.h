@@ -39,17 +39,17 @@ namespace anacal {
         py::array_t<double>
         smooth_image(
             const py::array_t<double>& gal_array,
-            bool do_rotate,
-            int x,
-            int y
+            int xcen,
+            int ycen,
+            bool do_rotate
         );
 
         py::array_t<double>
         smooth_image(
             const py::array_t<double>& gal_array,
-            const std::optional<py::array_t<double>>& noise_array,
             int xcen,
-            int ycen
+            int ycen,
+            const std::optional<py::array_t<double>>& noise_array
         );
 
         void

@@ -41,6 +41,8 @@ def test_noise_variance():
     img_smoothed = img_obj.prepare_qnumber_image(
         img_array,
         psf_array,
+        xcen=stamp_size//2,
+        ycen=stamp_size//2,
     )[0]
     std1 = np.std(img_smoothed)
 

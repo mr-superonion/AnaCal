@@ -214,6 +214,8 @@ def test_ngmix_gaussian_fit2():
     img_array1 = img_obj.prepare_qnumber_image(
         img_array,
         psf_array,
+        xcen=img_array.shape[1] //2,
+        ycen=img_array.shape[0] //2,
     )
     img_array2 = cat_2.model.get_image_stamp(nx, ny, scale, sigma_arcsec)
     diff = img_array1[0:3] - img_array2

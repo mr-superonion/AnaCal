@@ -48,7 +48,12 @@ public:
 
     void set_r(
         const py::array_t<double>&,
-        int xcen=-1, int ycen=-1,
+        int xcen, int,
+        bool ishift=false
+    );
+
+    void set_r(
+        const py::array_t<double>&,
         bool ishift=false
     );
 
@@ -130,7 +135,7 @@ public:
         double xlim
     ) {
         // Prepare PSF
-        this->set_r(psf_array, -1, -1, true);
+        this->set_r(psf_array, true);
         this->fft();
         const py::array_t<std::complex<double>> parr = this->draw_f();
         // Delta
@@ -220,9 +225,9 @@ public:
     prepare_qnumber_vector(
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
-        int xcen=-1,
-        int ycen=-1
+        int xcen,
+        int ycen,
+        const std::optional<py::array_t<double>>& noise_array=std::nullopt
     ) {
         const py::array_t<std::complex<double>> karr = img_obj.get_lens_kernel(
             psf_array,
@@ -351,9 +356,9 @@ public:
     prepare_qnumber_image(
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
-        int xcen=-1,
-        int ycen=-1
+        int xcen,
+        int ycen,
+        const std::optional<py::array_t<double>>& noise_array=std::nullopt
     ) {
         auto result = py::array_t<double>({5, ny, nx});
         auto r = result.mutable_unchecked<3>();
@@ -361,9 +366,9 @@ public:
         std::vector<math::qnumber> qvec = prepare_qnumber_vector(
             img_array,
             psf_array,
-            noise_array,
             xcen,
-            ycen
+            ycen,
+            noise_array
         );
         for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
             for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
@@ -403,9 +408,9 @@ prepare_data_block(
     return img_obj.prepare_qnumber_vector(
         img_array,
         psf_array,
-        noise_array,
         block.xcen,
-        block.ycen
+        block.ycen,
+        noise_array
     );
 };
 
@@ -423,7 +428,7 @@ inline double get_smoothed_variance(
     Image img_obj(npix, npix, scale, true);
     {
         // Prepare PSF
-        img_obj.set_r(psf_array, -1, -1, true);
+        img_obj.set_r(psf_array, true);
         img_obj.fft();
         const py::array_t<std::complex<double>> parr = img_obj.draw_f();
         {

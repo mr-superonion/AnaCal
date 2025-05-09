@@ -74,12 +74,25 @@ struct frDeriv {
         : fr(fr), dfr(dfr), ddfr(ddfr) {}
 };
 
+
+struct StampBounds {
+    int i_min, i_max;
+    int j_min, j_max;
+
+    inline bool
+    has_point(
+        int i, int j
+    ) const {
+        return (i>=i_min) && (i<i_max) && (j>=j_min) && (j<j_max);
+    };
+};
+
 class NgmixGaussian {
 private:
     frDeriv get_fr(
         math::qnumber r2
     ) const {
-        math::qnumber fr = math::exp6(r2 * (-0.5));
+        math::qnumber fr = math::exp(r2 * (-0.5));
         math::qnumber dfr = fr * (-0.5);
         /* math::qnumber ddfr = dfr * (-0.5); */
         math::qnumber ddfr;
@@ -92,13 +105,37 @@ public:
     math::qnumber a1 = math::qnumber(0.15);
     math::qnumber a2 = math::qnumber(0.15);
     math::qnumber x1, x2;   // parameters
-    bool is_simple=false;
+
     NgmixGaussian(
         bool force_size=false,
         bool force_center=false
     ) :
         force_size(force_size),
         force_center(force_center){};
+
+    inline StampBounds get_stamp_bounds(
+        const geometry::block& block
+    ) const {
+        int i_center = static_cast<int>(std::round(this->x1.v / block.scale));
+        int j_center = static_cast<int>(std::round(this->x2.v / block.scale));
+        int r = static_cast<int>(
+            std::min(
+                std::max(
+                    std::abs(this->a1.v),
+                    std::abs(this->a2.v)
+                ) / block.scale * 5 + 12,
+                64.0
+            )
+        );
+
+        int i_min = std::max(i_center - block.xmin - r, 0);
+        int i_max = std::min(i_min + 2 * r + 1, block.nx);
+
+        int j_min = std::max(j_center - block.ymin - r, 0);
+        int j_max = std::min(j_min + 2 * r + 1, block.ny);
+
+        return {i_min, i_max, j_min, j_max};
+    };
 
     inline modelKernelB
     prepare_modelB(double scale, double sigma_arcsec) const {
@@ -292,7 +329,7 @@ public:
         math::qnumber xx = xs * xs;
         math::qnumber yy = ys * ys;
         math::qnumber xy = xs * ys;
-        math::qnumber model = math::exp6((xx + yy) * rfac) * img_val;
+        math::qnumber model = math::exp((xx + yy) * rfac) * img_val;
         return {model, model * xx, model * yy, model * xy};
     };
 
@@ -346,8 +383,7 @@ public:
         double variance_val,
         const math::lossNumber& r2,
         const modelKernelD & c,
-        const math::qnumber p,
-        const math::qnumber wdet
+        const math::qnumber p
     ) const {
         math::lossNumber res;
         math::lossNumber theory_val = this->get_model_from_r2(r2, c);
@@ -391,7 +427,6 @@ public:
     inline void
     update_model_params(
         const math::lossNumber& loss,
-        const math::qnumber& wdet,
         const modelPrior& prior,
         double variance_val=1.0
     ) {
@@ -423,6 +458,9 @@ public:
             /*     this->a2 = 0.75 + 0.5 / (1 + math::exp(-8.0 * (this->a2 - 1))); */
             /* } */
         }
+
+        /* std::cout<<"t: "<<loss.v_t.v<<", "<<loss.v_tt.v<<std::endl; */
+        /* std::cout<<"a1: "<<loss.v_a1.v<<", "<<loss.v_a1a1.v<<std::endl; */
         if (!this->force_center) {
             this->x1 = this->x1 - (
                 loss.v_x1 / (

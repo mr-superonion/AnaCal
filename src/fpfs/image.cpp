@@ -42,13 +42,13 @@ FpfsImage::FpfsImage(
 py::array_t<double>
 FpfsImage::smooth_image(
     const py::array_t<double>& img_array,
-    bool do_rotate,
     int xcen,
-    int ycen
+    int ycen,
+    bool do_rotate
 ) {
     const Gaussian gauss_model(sigma_f);
     // Prepare PSF
-    img_obj.set_r(psf_array, -1, -1, true);
+    img_obj.set_r(psf_array, true);
     img_obj.fft();
     if (do_rotate) {
         img_obj.rotate90_f();
@@ -71,23 +71,23 @@ FpfsImage::smooth_image(
 py::array_t<double>
 FpfsImage::smooth_image(
     const py::array_t<double>& gal_array,
-    const std::optional<py::array_t<double>>& noise_array,
     int xcen,
-    int ycen
+    int ycen,
+    const std::optional<py::array_t<double>>& noise_array
 ) {
     //TODO: use different PSF here
     py::array_t<double> gal_conv = this->smooth_image(
         gal_array,
-        false,
         xcen,
-        ycen
+        ycen,
+        false
     );
     if (noise_array.has_value()) {
         py::array_t<double> noise_conv = this->smooth_image(
             *noise_array,
-            true,
             xcen,
-            ycen
+            ycen,
+            true
         );
         auto g_r = gal_conv.mutable_unchecked<2>();
         auto n_r = noise_conv.mutable_unchecked<2>();
@@ -223,11 +223,10 @@ FpfsImage::detect_source(
             int xcen = (this->nx - this->npix_overlap) * i + this->nx2 - npad_x;
             py::array_t<double> gal_conv = this->smooth_image(
                 gal_array,
-                noise_array,
                 xcen,
-                ycen
+                ycen,
+                noise_array
             );
-
             this->find_peaks(
                 peaks,
                 gal_conv,
@@ -281,7 +280,7 @@ FpfsImage::measure_source(
     }
 
 
-    img_obj.set_r(psf_array, -1, -1, false);
+    img_obj.set_r(psf_array, false);
     img_obj.fft();
     if (do_rotate){
         img_obj.rotate90_f();
@@ -354,7 +353,7 @@ FpfsImage::measure_source(
         double dx = det_r(j).x - x;
         {
             py::array_t<double> psf_array = psf_obj.draw(x, y);
-            img_obj.set_r(psf_array, -1, -1, false);
+            img_obj.set_r(psf_array, false);
         }
         img_obj.fft();
         if (do_rotate){
@@ -400,28 +399,28 @@ pyExportFpfsImage(py::module_& fpfs) {
         .def("smooth_image",
             py::overload_cast<
                 const py::array_t<double>&,
-                bool,
                 int,
-                int
+                int,
+                bool
             >(&FpfsImage::smooth_image),
             "Smooths the image after PSF deconvolution",
             py::arg("gal_array"),
-            py::arg("do_rotate")=false,
-            py::arg("xcen")=-1,
-            py::arg("ycen")=-1
+            py::arg("xcen"),
+            py::arg("ycen"),
+            py::arg("do_rotate")=false
         )
         .def("smooth_image",
             py::overload_cast<
                 const py::array_t<double>&,
-                const std::optional<py::array_t<double>>&,
                 int,
-                int
+                int,
+                const std::optional<py::array_t<double>>&
             >(&FpfsImage::smooth_image),
             "Smooths the image after PSF deconvolution",
             py::arg("gal_array"),
-            py::arg("noise_array")=py::none(),
-            py::arg("xcen")=-1,
-            py::arg("ycen")=-1
+            py::arg("xcen"),
+            py::arg("ycen"),
+            py::arg("noise_array")=py::none()
         )
         .def("detect_source",
             &FpfsImage::detect_source,

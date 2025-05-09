@@ -52,6 +52,8 @@ pyExportNgmix(py::module_& m) {
         .def_readwrite("a2", &NgmixGaussian::a2)
         .def_readwrite("x1", &NgmixGaussian::x1)
         .def_readwrite("x2", &NgmixGaussian::x2)
+        .def_readwrite("force_size", &NgmixGaussian::force_size)
+        .def_readwrite("force_center", &NgmixGaussian::force_center)
         .def("prepare_modelD", &NgmixGaussian::prepare_modelD,
             "Prepare the gradient function",
             py::arg("scale"), py::arg("sigma_arcsec")
