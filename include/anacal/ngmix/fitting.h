@@ -88,7 +88,7 @@ public:
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
             for (int i = bb.i_min; (i < bb.i_max); ++i) {
-                if (!block.xmsk[j]) continue;
+                if (!block.xmsk[i]) continue;
                 math::qnumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
@@ -115,7 +115,7 @@ public:
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
             for (int i = bb.i_min; (i < bb.i_max); ++i) {
-                if (!block.xmsk[j]) continue;
+                if (!block.xmsk[i]) continue;
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
@@ -147,7 +147,7 @@ public:
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
             for (int i = bb.i_min; (i < bb.i_max); ++i) {
-                if (!block.xmsk[j]) continue;
+                if (!block.xmsk[i]) continue;
                 math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
@@ -179,7 +179,7 @@ public:
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
             for (int i = bb.i_min; (i < bb.i_max); ++i) {
-                if (!block.xmsk[j]) continue;
+                if (!block.xmsk[i]) continue;
                 const math::lossNumber r2 = model.get_r2(
                     block.xvs[i], block.yvs[j], kernel
                 );
@@ -274,7 +274,7 @@ public:
             math::qnumber ys = block.yvs[j] - model.x2.v;
             math::qnumber y2 = math::pow(ys, 2);
             for (int i = bb.i_min; (i < bb.i_max); ++i) {
-                if (!block.xmsk[j]) continue;
+                if (!block.xmsk[i]) continue;
                 math::qnumber xs = block.xvs[i] - model.x1.v;
                 math::qnumber x2 = math::pow(xs, 2);
                 math::qnumber xy = xs * ys;
