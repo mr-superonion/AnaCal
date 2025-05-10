@@ -107,6 +107,7 @@ struct galNumber {
     ngmix::NgmixGaussian model;
     math::qnumber fluxap2;
     math::qnumber wdet = math::qnumber(1.0);
+    math::qnumber wsel = math::qnumber(1.0);
     int mask_value=0;
     bool is_peak=false;
     bool is_primary=true;
@@ -120,7 +121,6 @@ struct galNumber {
     math::qnumber bkg;
     double ra = 0.0;
     double dec = 0.0;
-    math::qnumber wsel = math::qnumber(1.0);
     int block_id;
 
     galNumber() = default;
@@ -144,6 +144,8 @@ struct galNumber {
         result.wdet = this->wdet.decentralize(dx1, dx2);
         result.wsel = this->wsel.decentralize(dx1, dx2);
         result.fluxap2 = this->fluxap2.decentralize(dx1, dx2);
+        result.peakv = this->peakv.decentralize(dx1, dx2);
+        result.bkg = this->bkg.decentralize(dx1, dx2);
         result.model = this->model.decentralize(dx1, dx2);
         result.fpfs_e1 = this->fpfs_e1.decentralize(dx1, dx2);
         result.fpfs_e2 = this->fpfs_e2.decentralize(dx1, dx2);
@@ -161,6 +163,8 @@ struct galNumber {
         result.wdet = this->wdet.centralize(dx1, dx2);
         result.wsel = this->wsel.centralize(dx1, dx2);
         result.fluxap2 = this->fluxap2.centralize(dx1, dx2);
+        result.peakv = this->peakv.centralize(dx1, dx2);
+        result.bkg = this->bkg.centralize(dx1, dx2);
         result.model = this->model.centralize(dx1, dx2);
         result.fpfs_e1 = this->fpfs_e1.centralize(dx1, dx2);
         result.fpfs_e2 = this->fpfs_e2.centralize(dx1, dx2);

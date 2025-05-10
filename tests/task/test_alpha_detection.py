@@ -9,14 +9,14 @@ from .. import mem_used, print_mem
 
 
 def test_task_detection():
-    nn = 28
+    nn = 24
     mag = 23.5
 
     flux = 10 ** ((30.0 - mag) / 2.5)
 
     scale = 0.2
     psf_fwhm = 0.7
-    ngal = 25
+    ngal = 20
     # PSF
     psf_obj = galsim.Moffat(
         beta=2.5,
@@ -36,7 +36,7 @@ def test_task_detection():
     )
 
     obj = galsim.Exponential(
-        half_light_radius=0.25
+        half_light_radius=0.30
     ).shear(g1=0.03).withFlux(flux)
     obj = galsim.Convolve(psf_obj, obj)
 
@@ -72,7 +72,7 @@ def test_task_detection():
         snr_peak_min=10,
         stamp_size=nn,
         image_bound=0,
-        num_epochs=20,
+        num_epochs=30,
         prior=prior,
         force_size=True,
         **kwargs,
@@ -154,4 +154,11 @@ def test_task_detection():
         centers[:, 1],
         np.round(catalog["x2"][ind] / 0.2),
     )
+
+    e1 = catalog["fpfs_e1"] * catalog["wsel"]
+    r1 = (
+        catalog["fpfs_de1_dg1"] * catalog["wsel"]
+        + catalog["dwsel_dg1"] * catalog["fpfs_e1"]
+    )
+    print(np.sum(e1) / np.sum(r1))
     return

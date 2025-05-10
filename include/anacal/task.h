@@ -23,6 +23,7 @@ public:
     bool force_size, force_center;
     ngmix::GaussFit fitter;
     double sigma_arcsec_det;
+    int num_deblend = 2;
 
     TaskAlpha(
         double scale,
@@ -178,7 +179,7 @@ public:
         }
 
 
-        for (int run_id = 0; run_id < 3; ++run_id) {
+        for (int run_id = 0; run_id < this->num_deblend; ++run_id) {
             for (const geometry::block & block: block_list) {
                 measure_block(
                     catalog,
@@ -259,7 +260,7 @@ public:
             }
         }
 
-        for (int run_id = 0; run_id < 3; ++run_id) {
+        for (int run_id = 0; run_id < this->num_deblend; ++run_id) {
             for (const geometry::block & block: block_list) {
                 py::array_t<double> psf_array = psf_obj.draw(
                     block.xcen, block.ycen

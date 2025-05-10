@@ -87,7 +87,7 @@ public:
         const modelKernelB & kernel
     ) const {
         const ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, 7 / block.scale);
+        const StampBounds bb = model.get_stamp_bounds(block, 4.0 / block.scale);
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
@@ -183,7 +183,7 @@ public:
         src.loss.reset();
         NgmixGaussian & model = src.model;
         const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
-        math::qnumber xpval = src.peakv * 0.01;
+        math::qnumber xpval = src.peakv * 0.1;
 
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
@@ -243,6 +243,138 @@ public:
                 if ((x2 + y2) < this->sigma2_lim) {
                     std::array<math::qnumber, 4> mm = src.model.get_fpfs_moments(
                         data[jj + i],
+                        block.xvs[i],
+                        block.yvs[j],
+                        this->rfac
+                    );
+                    m0 = m0 + mm[0];
+                    mxx = mxx + mm[1];
+                    myy = myy + mm[2];
+                    mxy = mxy + mm[3];
+                }
+            }
+        }
+        src.fpfs_m0 = m0 * this->ffac;
+        src.fpfs_m2 = (mxx + myy - m0 * this->sigma2) * this->ffac3;
+        {
+            math::qnumber denom = (src.fpfs_m0 + this->fpfs_c0);
+            src.fpfs_e1 = (mxx - myy) * this->ffac2 / denom;
+            src.fpfs_e2 = 2.0 * mxy * this->ffac2 / denom;
+        }
+        return;
+    };
+
+    inline void
+    measure_fpfs(
+        const std::vector<math::qnumber> & data,
+        const std::vector<math::qnumber> & data_m,
+        table::galNumber & src,
+        const geometry::block & block,
+        const NgmixGaussian & mmod,
+        const modelKernelB & mkernel
+    ) const {
+
+        ngmix::NgmixGaussian & model = src.model;
+        int r = static_cast<int>(this->sigma_arcsec * 8 / block.scale);
+        int i_min = std::max(
+            static_cast<int>(
+                std::round(model.x1.v / this->scale)
+            ) - block.xmin - r,
+            0
+        );
+        int i_max = std::min(i_min + 2 * r + 1, block.nx);
+        int j_min = std::max(
+            static_cast<int>(
+                std::round(model.x2.v / this->scale)
+            ) - block.ymin - r,
+            0
+        );
+        int j_max = std::min(j_min + 2 * r + 1, block.ny);
+
+        math::qnumber m0, mxx, myy, mxy;
+        for (int j = j_min; j < j_max; ++j) {
+            int jj = j * block.nx;
+            double ys = block.yvs[j] - model.x2.v;
+            double y2 = ys * ys;
+            for (int i = i_min; i < i_max; ++i) {
+                double xs = block.xvs[i] - model.x1.v;
+                double x2 = xs * xs;
+                if ((x2 + y2) < this->sigma2_lim) {
+                    const math::qnumber mr2 = mmod.get_r2(
+                        block.xvs[i], block.yvs[j], mkernel
+                    );
+                    math::qnumber p = (
+                        data_m[jj+i]
+                        - mmod.get_model_from_r2(mr2, mkernel) * src.wdet
+                    );
+                    std::array<math::qnumber, 4> mm = src.model.get_fpfs_moments(
+                        data[jj + i]-p,
+                        block.xvs[i],
+                        block.yvs[j],
+                        this->rfac
+                    );
+                    m0 = m0 + mm[0];
+                    mxx = mxx + mm[1];
+                    myy = myy + mm[2];
+                    mxy = mxy + mm[3];
+                }
+            }
+        }
+        src.fpfs_m0 = m0 * this->ffac;
+        src.fpfs_m2 = (mxx + myy - m0 * this->sigma2) * this->ffac3;
+        {
+            math::qnumber denom = (src.fpfs_m0 + this->fpfs_c0);
+            src.fpfs_e1 = (mxx - myy) * this->ffac2 / denom;
+            src.fpfs_e2 = 2.0 * mxy * this->ffac2 / denom;
+        }
+        return;
+    };
+
+    inline void
+    measure_fpfs2(
+        const std::vector<math::qnumber> & data,
+        const std::vector<math::qnumber> & data_m,
+        table::galNumber & src,
+        const geometry::block & block,
+        const NgmixGaussian & mmod,
+        const modelKernelB & mkernel
+    ) const {
+
+        ngmix::NgmixGaussian & model = src.model;
+        int r = static_cast<int>(this->sigma_arcsec * 8 / block.scale);
+        int i_min = std::max(
+            static_cast<int>(
+                std::round(model.x1.v / this->scale)
+            ) - block.xmin - r,
+            0
+        );
+        int i_max = std::min(i_min + 2 * r + 1, block.nx);
+        int j_min = std::max(
+            static_cast<int>(
+                std::round(model.x2.v / this->scale)
+            ) - block.ymin - r,
+            0
+        );
+        int j_max = std::min(j_min + 2 * r + 1, block.ny);
+
+        math::qnumber m0, mxx, myy, mxy;
+        for (int j = j_min; j < j_max; ++j) {
+            int jj = j * block.nx;
+            double ys = block.yvs[j] - model.x2.v;
+            double y2 = ys * ys;
+            for (int i = i_min; i < i_max; ++i) {
+                double xs = block.xvs[i] - model.x1.v;
+                double x2 = xs * xs;
+                if ((x2 + y2) < this->sigma2_lim) {
+                    const math::qnumber mr2 = mmod.get_r2(
+                        block.xvs[i], block.yvs[j], mkernel
+                    );
+                    math::qnumber p = (
+                        data_m[jj+i]
+                        - mmod.get_model_from_r2(mr2, mkernel) * src.wdet
+                    );
+                    std::array<math::qnumber, 4> mm = src.model.get_fpfs_moments(
+                        data[jj + i]-p,
                         block.xvs[i],
                         block.yvs[j],
                         this->rfac
@@ -420,20 +552,20 @@ public:
             }
         }
 
-        if (irun==0) {
-            // finally get FPFS measurement
-            double std_fpfs = std::sqrt(
-                get_smoothed_variance(
-                    block.scale,
-                    this->sigma_arcsec * 1.414,
-                    psf_array,
-                    variance
-                )
-            );
+        // finally get FPFS measurement
+        double std_fpfs = std::sqrt(
+            get_smoothed_variance(
+                block.scale,
+                this->sigma_arcsec * 1.414,
+                psf_array,
+                variance
+            )
+        );
 
-            for (std::size_t i=0; i<ng; ++i) {
-                table::galNumber & src = catalog[inds[i]];
-                if (src.block_id == block.index) {
+        for (std::size_t i=0; i<ng; ++i) {
+            table::galNumber & src = catalog[inds[i]];
+            if (src.block_id == block.index) {
+                if (irun == 0) {
                     this->measure_fpfs(
                         data, src, block
                     );
@@ -446,6 +578,15 @@ public:
                         src.fpfs_m2 - 0.1 * src.fpfs_m0,
                         std_fpfs,
                         std_fpfs
+                    );
+
+                } else {
+                    const NgmixGaussian & mmod = catalog_model[i];
+                    const modelKernelB & mkernel = kernels_model[i];
+                    this->measure_fpfs(
+                        data, data_model,
+                        src, block,
+                        mmod, mkernel
                     );
                 }
             }
