@@ -11,6 +11,9 @@ namespace anacal {
 namespace ngmix {
 
 
+// model fitting upper scale 3.5 arcsec
+// deblending upper scale 7 arcsec
+
 class GaussFit {
 public:
     // stamp dimension
@@ -84,7 +87,7 @@ public:
         const modelKernelB & kernel
     ) const {
         const ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, this->ss2);
+        const StampBounds bb = model.get_stamp_bounds(block, 7 / block.scale);
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
@@ -113,7 +116,7 @@ public:
     ) const {
         math::qnumber m0, norm;
         ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, this->ss2);
+        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
@@ -146,7 +149,7 @@ public:
     ) const {
         src.loss.reset();
         ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, this->ss2);
+        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
 
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
@@ -179,8 +182,7 @@ public:
     ) const {
         src.loss.reset();
         NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, this->ss2);
-        const StampBounds mbb = mmod.get_stamp_bounds(block, this->ss2);
+        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
 
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
@@ -192,9 +194,7 @@ public:
                     const math::qnumber mr2 = mmod.get_r2(
                         block.xvs[i], block.yvs[j], mkernel
                     );
-                    if (mbb.has_point(i, j)) {
-                        p = p - mmod.get_model_from_r2(mr2, mkernel) * src.wdet;
-                    }
+                    p = p - mmod.get_model_from_r2(mr2, mkernel) * src.wdet;
                     const math::lossNumber r2 = model.get_r2(
                         block.xvs[i], block.yvs[j], kernel
                     );
@@ -275,7 +275,7 @@ public:
         model.a2 = a_ini;
         double dd = 1.0 / (this->sigma2 + a_ini * a_ini);
 
-        const StampBounds bb = model.get_stamp_bounds(block, this->ss2);
+        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
 
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
@@ -344,9 +344,14 @@ public:
             block,
             noise_array
         );
-        std::size_t ng = inds.size();
 
-        {
+        std::vector<NgmixGaussian> catalog_model;
+        std::vector<modelKernelB> kernels_model;
+        std::size_t ng = inds.size();
+        std::vector<math::qnumber> data_model;
+        std::size_t n_pix = data.size();
+
+        if (irun == 0) {
             // initialize the sources
             for (const std::size_t ind : inds) {
                 table::galNumber & src = catalog[ind];
@@ -361,13 +366,10 @@ public:
                     src.initialized = true;
                 }
             }
-
-            std::vector<NgmixGaussian> catalog_model;
+        } else {
             catalog_model.reserve(ng);
-            std::vector<modelKernelB> kernels_model;
             kernels_model.reserve(ng);
-            std::size_t n_pix = data.size();
-            std::vector<math::qnumber> data_model(n_pix);
+            data_model.resize(n_pix);
             for (std::size_t i=0; i<ng; ++i) {
                 const table::galNumber mrc = catalog[inds[i]];
                 catalog_model.push_back(mrc.model);
@@ -378,44 +380,41 @@ public:
                 kernels_model.push_back(kernel);
                 add_model_to_block(data_model, mrc, block, kernel);
             }
+        }
 
-            double variance_meas = get_smoothed_variance(
-                block.scale,
-                this->sigma_arcsec,
-                psf_array,
-                variance
-            );
-
-            /* std::cout<<"irun: "<<irun<<std::endl; */
-            /* std::cout<<"block: "<<block.index<<std::endl; */
-            for (int epoch = 0; epoch < num_epochs; ++epoch) {
-                /* std::cout<<"epoch: "<<epoch<<std::endl; */
-                for (std::size_t i=0; i<ng; ++i) {
-                    table::galNumber & src = catalog[inds[i]];
-                    if (src.block_id == block.index) {
-                        const modelKernelD kernel = src.model.prepare_modelD(
-                            this->scale,
-                            this->sigma_arcsec
+        double variance_meas = get_smoothed_variance(
+            block.scale,
+            this->sigma_arcsec,
+            psf_array,
+            variance
+        );
+        for (int epoch = 0; epoch < num_epochs; ++epoch) {
+            /* std::cout<<"epoch: "<<epoch<<std::endl; */
+            for (std::size_t i=0; i<ng; ++i) {
+                table::galNumber & src = catalog[inds[i]];
+                if (src.block_id == block.index) {
+                    const modelKernelD kernel = src.model.prepare_modelD(
+                        this->scale,
+                        this->sigma_arcsec
+                    );
+                    if (irun == 0) {
+                        this->measure_loss(
+                            data, variance_meas, src, block, kernel
                         );
-                        if (irun == 0) {
-                            this->measure_loss(
-                                data, variance_meas, src, block, kernel
-                            );
-                        } else {
-                            const NgmixGaussian & mmod = catalog_model[i];
-                            const modelKernelB & mkernel = kernels_model[i];
-                            this->measure_loss2(
-                                data, data_model,
-                                variance_meas,
-                                src, kernel,
-                                mmod, mkernel,
-                                block
-                            );
-                        }
-                        src.model.update_model_params(
-                            src.loss, prior, variance_meas
+                    } else {
+                        const NgmixGaussian & mmod = catalog_model[i];
+                        const modelKernelB & mkernel = kernels_model[i];
+                        this->measure_loss2(
+                            data, data_model,
+                            variance_meas,
+                            src, kernel,
+                            mmod, mkernel,
+                            block
                         );
                     }
+                    src.model.update_model_params(
+                        src.loss, prior, variance_meas
+                    );
                 }
             }
         }

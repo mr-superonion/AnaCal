@@ -121,8 +121,12 @@ public:
         const geometry::block& block,
         int r
     ) const {
-        int i_cen = static_cast<int>(std::round(this->x1.v / block.scale)) - block.xmin ;
-        int j_cen = static_cast<int>(std::round(this->x2.v / block.scale)) - block.ymin;
+        int i_cen = static_cast<int>(
+            std::round(this->x1.v / block.scale)
+        ) - block.xmin ;
+        int j_cen = static_cast<int>(
+            std::round(this->x2.v / block.scale)
+        ) - block.ymin;
         /* int rr = static_cast<int>( */
         /*     std::max( */
         /*         std::min( */
