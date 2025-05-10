@@ -396,14 +396,16 @@ public:
         double variance_val,
         const math::lossNumber& r2,
         const modelKernelD & c,
-        const math::qnumber p
+        const math::qnumber p,
+        const math::qnumber xpval
     ) const {
         math::lossNumber res;
         math::lossNumber theory_val = this->get_model_from_r2(r2, c);
         math::qnumber residual = img_val - p - theory_val.v;
+        math::qnumber w = xpval / (xpval + p);
 
-        res.v = math::pow(residual, 2.0) / variance_val;
-        math::qnumber mul = 2.0 / variance_val;
+        res.v = math::pow(residual, 2.0) / variance_val * w;
+        math::qnumber mul = 2.0 / variance_val * w;
 
         math::qnumber tmp = -1.0 * residual * mul;
         res.v_F =  tmp * theory_val.v_F ;

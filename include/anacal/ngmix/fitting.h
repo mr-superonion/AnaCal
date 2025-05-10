@@ -183,6 +183,7 @@ public:
         src.loss.reset();
         NgmixGaussian & model = src.model;
         const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
+        math::qnumber xpval = src.peakv * 0.01;
 
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
@@ -199,7 +200,7 @@ public:
                         block.xvs[i], block.yvs[j], kernel
                     );
                     src.loss = src.loss + model.get_loss_with_p(
-                        data[jj + i], variance, r2, kernel, p
+                        data[jj + i], variance, r2, kernel, p, xpval
                     );
                 }
             }
