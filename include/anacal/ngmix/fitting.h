@@ -419,7 +419,7 @@ public:
             }
         }
 
-        {
+        if (irun==2) {
             // finally get FPFS measurement
             double std_fpfs = std::sqrt(
                 get_smoothed_variance(
@@ -449,7 +449,6 @@ public:
                 }
             }
         }
-        std::vector<math::qnumber>().swap(data);
         return;
     };
 
