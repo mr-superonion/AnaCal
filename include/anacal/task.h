@@ -61,6 +61,32 @@ public:
         this->sigma_arcsec_det = sigma_arcsec * 1.414;
     };
 
+    inline void
+    prepare_indices(
+        std::vector<table::galNumber>& catalog,
+        geometry::block & block
+    ) {
+        double x_min = block.xmin * block.scale;
+        double y_min = block.ymin * block.scale;
+        double x_max = block.xmax * block.scale;
+        double y_max = block.ymax * block.scale;
+        std::size_t nrow = catalog.size();
+        std::vector<std::size_t> indices;
+        indices.reserve(static_cast<std::size_t>(nrow / 4));
+        for (std::size_t i = 0; i < nrow; ++i) {
+            const ngmix::NgmixGaussian & m = catalog[i].model;
+            if ((m.x1.v >= x_min) &&
+                (m.x1.v < x_max) &&
+                (m.x2.v >= y_min) &&
+                (m.x2.v < y_max)
+            ) {
+                indices.push_back(i);
+            }
+        }
+        block.indices = indices;
+        return;
+    };
+
     inline std::vector<table::galNumber>
     detect_block(
         const py::array_t<double>& img_array,
@@ -101,25 +127,8 @@ public:
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
         int run_id=0
     ) {
-        double x_min = block.xmin * block.scale;
-        double y_min = block.ymin * block.scale;
-        double x_max = block.xmax * block.scale;
-        double y_max = block.ymax * block.scale;
-        std::size_t nrow = catalog.size();
-        std::vector<std::size_t> indices;
-        indices.reserve(static_cast<std::size_t>(nrow / 4));
-        for (std::size_t i = 0; i < nrow; ++i) {
-            const ngmix::NgmixGaussian & m = catalog[i].model;
-            if ((m.x1.v >= x_min) &&
-                (m.x1.v < x_max) &&
-                (m.x2.v >= y_min) &&
-                (m.x2.v < y_max)
-            ) {
-                indices.push_back(i);
-            }
-        }
-        if (indices.empty()) return;
-        for (std::size_t idx : indices) {
+        if (block.indices.empty()) return;
+        for (std::size_t idx : block.indices) {
             catalog[idx] = catalog[idx].centralize(block);
             catalog_model[idx] = catalog_model[idx].centralize(block);
         }
@@ -133,10 +142,9 @@ public:
             variance,
             block,
             noise_array,
-            indices,
             run_id
         );
-        for (std::size_t idx : indices) {
+        for (std::size_t idx : block.indices) {
             catalog[idx] = catalog[idx].decentralize(block);
             catalog_model[idx] = catalog_model[idx].decentralize(block);
         }
@@ -148,7 +156,7 @@ public:
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         double variance,
-        const std::vector<geometry::block>& block_list,
+        std::vector<geometry::block>& block_list,
         const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
         const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
@@ -182,6 +190,12 @@ public:
             }
         }
 
+        for (geometry::block & block: block_list) {
+            prepare_indices(
+                catalog,
+                block
+            );
+        }
 
         for (int run_id = 0; run_id < this->num_deblend; ++run_id) {
             std::vector<table::galNumber> catalog_model = catalog;
@@ -230,7 +244,7 @@ public:
         const py::array_t<double>& img_array,
         const psf::BasePsf& psf_obj,
         double variance,
-        const std::vector<geometry::block>& block_list,
+        std::vector<geometry::block>& block_list,
         const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
         const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
@@ -264,6 +278,13 @@ public:
                     catalog.push_back(src);
                 }
             }
+        }
+
+        for (geometry::block & block: block_list) {
+            prepare_indices(
+                catalog,
+                block
+            );
         }
 
         for (int run_id = 0; run_id < this->num_deblend; ++run_id) {

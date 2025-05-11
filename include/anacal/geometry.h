@@ -27,6 +27,7 @@ struct block {
     std::vector<bool> xmsk;
     std::vector<bool> ymsk;
 
+    std::vector<std::size_t> indices;
 
     block() = default;
     block(

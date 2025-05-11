@@ -37,7 +37,7 @@ pyExportTask(py::module_& m) {
                 const py::array_t<double>&,
                 const py::array_t<double>&,
                 double,
-                const std::vector<geometry::block>&,
+                std::vector<geometry::block>&,
                 const std::optional<py::array_t<table::galRow>>&,
                 const std::optional<py::array_t<double>>&,
                 const std::optional<py::array_t<int16_t>>&
@@ -56,7 +56,7 @@ pyExportTask(py::module_& m) {
                 const py::array_t<double>&,
                 const psf::BasePsf&,
                 double,
-                const std::vector<geometry::block>&,
+                std::vector<geometry::block>&,
                 const std::optional<py::array_t<table::galRow>>&,
                 const std::optional<py::array_t<double>>&,
                 const std::optional<py::array_t<int16_t>>&

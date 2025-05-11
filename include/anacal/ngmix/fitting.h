@@ -384,8 +384,6 @@ public:
         double variance,
         geometry::block block,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
-        const std::optional<std::vector<std::size_t>>& indices=std::nullopt,
-
         std::optional<int> run_id=std::nullopt
     ) {
         int irun;
@@ -396,8 +394,8 @@ public:
         }
 
         std::vector<std::size_t> inds;
-        if (indices.has_value()) {
-            inds = *indices;
+        if (! block.indices.empty()) {
+            inds = block.indices;
         } else {
             std::size_t ns = catalog.size();
             inds.reserve(ns);
