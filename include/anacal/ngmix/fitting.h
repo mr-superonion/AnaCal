@@ -331,72 +331,6 @@ public:
     };
 
     inline void
-    measure_fpfs2(
-        const std::vector<math::qnumber> & data,
-        const std::vector<math::qnumber> & data_m,
-        table::galNumber & src,
-        const geometry::block & block,
-        const NgmixGaussian & mmod,
-        const modelKernelB & mkernel
-    ) const {
-
-        ngmix::NgmixGaussian & model = src.model;
-        int r = static_cast<int>(this->sigma_arcsec * 8 / block.scale);
-        int i_min = std::max(
-            static_cast<int>(
-                std::round(model.x1.v / this->scale)
-            ) - block.xmin - r,
-            0
-        );
-        int i_max = std::min(i_min + 2 * r + 1, block.nx);
-        int j_min = std::max(
-            static_cast<int>(
-                std::round(model.x2.v / this->scale)
-            ) - block.ymin - r,
-            0
-        );
-        int j_max = std::min(j_min + 2 * r + 1, block.ny);
-
-        math::qnumber m0, mxx, myy, mxy;
-        for (int j = j_min; j < j_max; ++j) {
-            int jj = j * block.nx;
-            double ys = block.yvs[j] - model.x2.v;
-            double y2 = ys * ys;
-            for (int i = i_min; i < i_max; ++i) {
-                double xs = block.xvs[i] - model.x1.v;
-                double x2 = xs * xs;
-                if ((x2 + y2) < this->sigma2_lim) {
-                    const math::qnumber mr2 = mmod.get_r2(
-                        block.xvs[i], block.yvs[j], mkernel
-                    );
-                    math::qnumber p = (
-                        data_m[jj+i]
-                        - mmod.get_model_from_r2(mr2, mkernel) * src.wdet
-                    );
-                    std::array<math::qnumber, 4> mm = src.model.get_fpfs_moments(
-                        data[jj + i]-p,
-                        block.xvs[i],
-                        block.yvs[j],
-                        this->rfac
-                    );
-                    m0 = m0 + mm[0];
-                    mxx = mxx + mm[1];
-                    myy = myy + mm[2];
-                    mxy = mxy + mm[3];
-                }
-            }
-        }
-        src.fpfs_m0 = m0 * this->ffac;
-        src.fpfs_m2 = (mxx + myy - m0 * this->sigma2) * this->ffac3;
-        {
-            math::qnumber denom = (src.fpfs_m0 + this->fpfs_c0);
-            src.fpfs_e1 = (mxx - myy) * this->ffac2 / denom;
-            src.fpfs_e2 = 2.0 * mxy * this->ffac2 / denom;
-        }
-        return;
-    };
-
-    inline void
     initialize_fitting(
         const std::vector<math::qnumber> & data,
         NgmixGaussian & model,
@@ -442,6 +376,7 @@ public:
     inline void
     process_block_impl(
         std::vector<table::galNumber>& catalog,
+        const std::vector<table::galNumber> & catalog_model,
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         const modelPrior & prior,
@@ -450,6 +385,7 @@ public:
         geometry::block block,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
         const std::optional<std::vector<std::size_t>>& indices=std::nullopt,
+
         std::optional<int> run_id=std::nullopt
     ) {
         int irun;
@@ -478,7 +414,6 @@ public:
             noise_array
         );
 
-        std::vector<NgmixGaussian> catalog_model;
         std::vector<modelKernelB> kernels_model;
         std::size_t ng = inds.size();
         std::vector<math::qnumber> data_model;
@@ -500,12 +435,10 @@ public:
                 }
             }
         } else {
-            catalog_model.reserve(ng);
             kernels_model.reserve(ng);
             data_model.resize(n_pix);
             for (std::size_t i=0; i<ng; ++i) {
-                const table::galNumber mrc = catalog[inds[i]];
-                catalog_model.push_back(mrc.model);
+                const table::galNumber & mrc = catalog_model[inds[i]];
                 const modelKernelB kernel = mrc.model.prepare_modelB(
                     this->scale,
                     this->sigma_arcsec
@@ -525,6 +458,7 @@ public:
             /* std::cout<<"epoch: "<<epoch<<std::endl; */
             for (std::size_t i=0; i<ng; ++i) {
                 table::galNumber & src = catalog[inds[i]];
+                const NgmixGaussian & mmod = catalog_model[inds[i]].model;
                 if (src.block_id == block.index) {
                     const modelKernelD kernel = src.model.prepare_modelD(
                         this->scale,
@@ -535,7 +469,6 @@ public:
                             data, variance_meas, src, block, kernel
                         );
                     } else {
-                        const NgmixGaussian & mmod = catalog_model[i];
                         const modelKernelB & mkernel = kernels_model[i];
                         this->measure_loss2(
                             data, data_model,
@@ -565,30 +498,19 @@ public:
         for (std::size_t i=0; i<ng; ++i) {
             table::galNumber & src = catalog[inds[i]];
             if (src.block_id == block.index) {
-                if (irun == 0) {
-                    this->measure_fpfs(
-                        data, src, block
-                    );
-                    src.wsel = src.wdet * math::ssfunc1(
-                        src.fpfs_m0,
-                        5.0 * std_fpfs,
-                        std_fpfs
-                    );
-                    src.wsel = src.wsel * math::ssfunc1(
-                        src.fpfs_m2 - 0.1 * src.fpfs_m0,
-                        std_fpfs,
-                        std_fpfs
-                    );
-
-                } else {
-                    const NgmixGaussian & mmod = catalog_model[i];
-                    const modelKernelB & mkernel = kernels_model[i];
-                    this->measure_fpfs(
-                        data, data_model,
-                        src, block,
-                        mmod, mkernel
-                    );
-                }
+                this->measure_fpfs(
+                    data, src, block
+                );
+                src.wsel = src.wdet * math::ssfunc1(
+                    src.fpfs_m0,
+                    5.0 * std_fpfs,
+                    std_fpfs
+                );
+                src.wsel = src.wsel * math::ssfunc1(
+                    src.fpfs_m2 - 0.1 * src.fpfs_m0,
+                    std_fpfs,
+                    std_fpfs
+                );
             }
         }
         return;
@@ -611,8 +533,10 @@ public:
             image_nx, image_ny, image_nx, image_ny, 0, this->scale
         )[0];
         std::vector<table::galNumber> result = catalog;
+        std::vector<table::galNumber> catalog_model = catalog;
         process_block_impl(
             result,
+            catalog_model,
             img_array,
             psf_array,
             prior,

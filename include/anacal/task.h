@@ -93,6 +93,7 @@ public:
     inline void
     measure_block(
         std::vector<table::galNumber>& catalog,
+        std::vector<table::galNumber>& catalog_model,
         const py::array_t<double>& img_array,
         const py::array_t<double>& psf_array,
         double variance,
@@ -120,9 +121,11 @@ public:
         if (indices.empty()) return;
         for (std::size_t idx : indices) {
             catalog[idx] = catalog[idx].centralize(block);
+            catalog_model[idx] = catalog_model[idx].centralize(block);
         }
         this->fitter.process_block_impl(
             catalog,
+            catalog_model,
             img_array,
             psf_array,
             this->prior,
@@ -135,6 +138,7 @@ public:
         );
         for (std::size_t idx : indices) {
             catalog[idx] = catalog[idx].decentralize(block);
+            catalog_model[idx] = catalog_model[idx].decentralize(block);
         }
         return;
     };
@@ -179,10 +183,12 @@ public:
         }
 
 
+        std::vector<table::galNumber> catalog_model = catalog;
         for (int run_id = 0; run_id < this->num_deblend; ++run_id) {
             for (const geometry::block & block: block_list) {
                 measure_block(
                     catalog,
+                    catalog_model,
                     img_array,
                     psf_array,
                     variance_use,
@@ -260,6 +266,7 @@ public:
             }
         }
 
+        std::vector<table::galNumber> catalog_model = catalog;
         for (int run_id = 0; run_id < this->num_deblend; ++run_id) {
             for (const geometry::block & block: block_list) {
                 py::array_t<double> psf_array = psf_obj.draw(
@@ -267,6 +274,7 @@ public:
                 );
                 measure_block(
                     catalog,
+                    catalog_model,
                     img_array,
                     psf_array,
                     variance_use,
