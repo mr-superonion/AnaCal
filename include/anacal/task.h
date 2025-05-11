@@ -183,8 +183,8 @@ public:
         }
 
 
-        std::vector<table::galNumber> catalog_model = catalog;
         for (int run_id = 0; run_id < this->num_deblend; ++run_id) {
+            std::vector<table::galNumber> catalog_model = catalog;
             for (const geometry::block & block: block_list) {
                 measure_block(
                     catalog,
@@ -266,8 +266,8 @@ public:
             }
         }
 
-        std::vector<table::galNumber> catalog_model = catalog;
         for (int run_id = 0; run_id < this->num_deblend; ++run_id) {
+            std::vector<table::galNumber> catalog_model = catalog;
             for (const geometry::block & block: block_list) {
                 py::array_t<double> psf_array = psf_obj.draw(
                     block.xcen, block.ycen
