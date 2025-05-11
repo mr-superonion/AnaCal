@@ -215,7 +215,7 @@ public:
 
         int image_ny = img_array.shape(0);
         int image_nx = img_array.shape(1);
-        int bound = stamp_size * 2 + 10;
+        int bound = stamp_size * 3 + 10;
         for (table::galNumber& src : catalog) {
             double jj = src.model.x2.v / this->scale;
             double ii = src.model.x1.v / this->scale;

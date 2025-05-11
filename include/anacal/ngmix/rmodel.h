@@ -118,6 +118,37 @@ public:
         force_center(force_center){};
 
     inline StampBounds get_stamp_bounds(
+        const geometry::block& block
+    ) const {
+        int i_cen = static_cast<int>(
+            std::round(this->x1.v / block.scale)
+        ) - block.xmin ;
+        int j_cen = static_cast<int>(
+            std::round(this->x2.v / block.scale)
+        ) - block.ymin;
+        int rr = static_cast<int>(
+            std::max(
+                std::min(
+                    std::max(
+                        std::abs(this->a1.v),
+                        std::abs(this->a2.v)
+                    ) / block.scale * 6 + 12,
+                    60.0
+                ),
+                24.0
+            )
+        );
+
+        int i_min = std::max(i_cen - rr, 0);
+        int i_max = std::min(i_min + 2 * rr + 1, block.nx);
+
+        int j_min = std::max(j_cen - rr, 0);
+        int j_max = std::min(j_min + 2 * rr + 1, block.ny);
+
+        return {i_min, i_max, j_min, j_max, i_cen, j_cen, rr};
+    };
+
+    inline StampBounds get_stamp_bounds(
         const geometry::block& block,
         int r
     ) const {
@@ -127,18 +158,6 @@ public:
         int j_cen = static_cast<int>(
             std::round(this->x2.v / block.scale)
         ) - block.ymin;
-        /* int rr = static_cast<int>( */
-        /*     std::max( */
-        /*         std::min( */
-        /*             std::max( */
-        /*                 std::abs(this->a1.v), */
-        /*                 std::abs(this->a2.v) */
-        /*             ) / block.scale * 5 + 12, */
-        /*             50.0 */
-        /*         ), */
-        /*         24.0 */
-        /*     ) */
-        /* ); */
         int rr = r;
 
         int i_min = std::max(i_cen - rr, 0);

@@ -87,7 +87,7 @@ public:
         const modelKernelB & kernel
     ) const {
         const ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, 4.0 / block.scale);
+        const StampBounds bb = model.get_stamp_bounds(block);
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
