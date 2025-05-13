@@ -131,8 +131,7 @@ public:
     get_lens_kernel(
         const py::array_t<double>& psf_array,
         const Gaussian & gauss_model,
-        double klim,
-        double xlim
+        double klim
     ) {
         // Prepare PSF
         this->set_r(psf_array, true);
@@ -232,8 +231,7 @@ public:
         const py::array_t<std::complex<double>> karr = img_obj.get_lens_kernel(
             psf_array,
             gauss_model,
-            klim,
-            this->sigma_arcsec * 12.0
+            klim
         );
         // signal
         img_obj.set_r(img_array, xcen, ycen, false);

@@ -20,10 +20,10 @@ public:
     int stamp_size, ss2;
     int image_bound;
     int num_epochs;
+    int num_epochs_deblend;
     bool force_size, force_center;
     ngmix::GaussFit fitter;
     double sigma_arcsec_det;
-    int num_deblend = 2;
 
     TaskAlpha(
         double scale,
@@ -37,7 +37,8 @@ public:
         const std::optional<ngmix::modelPrior>& prior=std::nullopt,
         int stamp_size=64,
         int image_bound=0,
-        int num_epochs=10,
+        int num_epochs=3,
+        int num_epochs_deblend=3,
         bool force_size=false,
         bool force_center=false,
         double fpfs_c0=1.0
@@ -46,7 +47,7 @@ public:
         p_min(p_min), omega_p(omega_p),
         prior(prior ? *prior : ngmix::modelPrior()),
         stamp_size(stamp_size), image_bound(image_bound),
-        num_epochs(num_epochs), fitter(
+        num_epochs(num_epochs), num_epochs_deblend(num_epochs_deblend), fitter(
             scale, sigma_arcsec, stamp_size,
             force_size, force_center,
             fpfs_c0
@@ -197,7 +198,7 @@ public:
             );
         }
 
-        for (int run_id = 0; run_id < this->num_deblend; ++run_id) {
+        for (int run_id = 0; run_id < this->num_epochs_deblend; ++run_id) {
             std::vector<table::galNumber> catalog_model = catalog;
             for (const geometry::block & block: block_list) {
                 measure_block(
@@ -287,7 +288,7 @@ public:
             );
         }
 
-        for (int run_id = 0; run_id < this->num_deblend; ++run_id) {
+        for (int run_id = 0; run_id < this->num_epochs_deblend; ++run_id) {
             std::vector<table::galNumber> catalog_model = catalog;
             for (const geometry::block & block: block_list) {
                 py::array_t<double> psf_array = psf_obj.draw(
@@ -308,7 +309,7 @@ public:
 
         int image_ny = img_array.shape(0);
         int image_nx = img_array.shape(1);
-        int bound = stamp_size * 2 + 10;
+        int bound = stamp_size * 3 + 10;
         for (table::galNumber& src : catalog) {
             double jj = src.model.x2.v / this->scale;
             double ii = src.model.x1.v / this->scale;
