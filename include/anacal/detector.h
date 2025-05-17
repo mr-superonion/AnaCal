@@ -58,8 +58,10 @@ void measure_pixel(
         int id3 = (j + 1) * block.nx + i;
         int id4 = (j - 1) * block.nx + i;
         table::galNumber src;
-        src.model.x1.v = x * block.scale;
-        src.model.x2.v = y * block.scale;
+        src.x1_det = x * block.scale;
+        src.x2_det = y * block.scale;
+        src.model.x1.v = src.x1_det;
+        src.model.x2.v = src.x2_det;
         src.is_peak = (
             (data[index].v > data[id1].v) &&
             (data[index].v > data[id2].v) &&

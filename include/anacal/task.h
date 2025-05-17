@@ -200,6 +200,9 @@ public:
 
         for (int run_id = 0; run_id < this->num_epochs_deblend; ++run_id) {
             std::vector<table::galNumber> catalog_model = catalog;
+            for (table::galNumber & src : catalog_model) {
+                src.model.F = src.model.F * src.wdet;
+            }
             for (const geometry::block & block: block_list) {
                 measure_block(
                     catalog,
@@ -250,7 +253,6 @@ public:
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
         const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
     ) {
-
         double variance_use;
         if (noise_array.has_value()) {
             variance_use = variance * 2.0;
@@ -290,6 +292,9 @@ public:
 
         for (int run_id = 0; run_id < this->num_epochs_deblend; ++run_id) {
             std::vector<table::galNumber> catalog_model = catalog;
+            for (table::galNumber & src : catalog_model) {
+                src.model.F = src.model.F * src.wdet;
+            }
             for (const geometry::block & block: block_list) {
                 py::array_t<double> psf_array = psf_obj.draw(
                     block.xcen, block.ycen

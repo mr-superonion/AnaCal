@@ -63,6 +63,8 @@ def test_ngmix_gaussian_fit_additive(test_g1=True):
     src = anacal.table.galNumber()
     src.model.x1.v = 32 * scale
     src.model.x2.v = 32 * scale
+    src.x1_det = 32 * scale
+    src.x2_det = 32 * scale
     src.model.F.v = 1.0
     src.model.t.v = -0.5
     catalog = [src]
@@ -142,10 +144,12 @@ def test_ngmix_gaussian_fit2():
         return full_image.array
 
     flux = 150.0
-    num_epochs = 30
+    num_epochs = 35
     src = anacal.table.galNumber()
     src.model.x1.v = nx // 2 * scale
     src.model.x2.v = nx // 2 * scale
+    src.x1_det = nx // 2 * scale
+    src.x2_det = nx // 2 * scale
     src.model.F.v = 1.0
     catalog = [src]
     prior = anacal.ngmix.modelPrior()
@@ -352,6 +356,8 @@ def test_ngmix_gaussian_fit4():
         src = anacal.table.galNumber()
         src.model.x1.v = center[0] * scale
         src.model.x2.v = center[1] * scale
+        src.x1_det = center[0] * scale
+        src.x2_det = center[1] * scale
         catalog.append(src)
 
     result = fitter.process_block(

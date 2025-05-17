@@ -98,8 +98,7 @@ public:
                         block.xvs[i], block.yvs[j], kernel
                     );
                     data_model[jj + i] = (
-                        data_model[jj + i]
-                        + src.model.get_model_from_r2(r2, kernel) * src.wdet
+                        data_model[jj + i] + src.model.get_model_from_r2(r2, kernel)
                     );
                 }
             }
@@ -183,7 +182,6 @@ public:
         src.loss.reset();
         NgmixGaussian & model = src.model;
         const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
-        math::qnumber xpval = src.peakv * 0.1;
 
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
@@ -195,12 +193,12 @@ public:
                     const math::qnumber mr2 = mmod.get_r2(
                         block.xvs[i], block.yvs[j], mkernel
                     );
-                    p = p - mmod.get_model_from_r2(mr2, mkernel) * src.wdet;
+                    p = p - mmod.get_model_from_r2(mr2, mkernel);
                     const math::lossNumber r2 = model.get_r2(
                         block.xvs[i], block.yvs[j], kernel
                     );
                     src.loss = src.loss + model.get_loss_with_p(
-                        data[jj + i], variance, r2, kernel, p, xpval
+                        data[jj + i], variance, r2, kernel, p
                     );
                 }
             }
@@ -336,14 +334,10 @@ public:
         NgmixGaussian & model,
         const geometry::block & block
     ) const {
-        math::qnumber m0, mxx, myy, mxy, norm;
-        double a_ini = 0.15;
-        model.a1 = a_ini;
-        model.a2 = a_ini;
-        double dd = 1.0 / (this->sigma2 + a_ini * a_ini);
+        math::qnumber m0, mxx, myy, mxy, mx, my, norm;
+        double dd = 1.0 / this->sigma2;
 
         const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
-
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
@@ -362,14 +356,21 @@ public:
                     );
                     norm = norm + w * w;
                     m0 = m0 + f;
+                    mx = mx + f * xs;
+                    my = my + f * ys;
                     mxx = mxx + f * x2;
                     myy = myy + f * y2;
                     mxy = mxy + f * xy;
                 }
             }
         }
+        /* model.F = m0 * (2.0 * M_PI * this->sigma2) / norm / block.scale / block.scale; */
+        /* model.x1 = model.x1 + mx / m0; */
+        /* model.x2 = model.x2 + my / m0; */
         model.t = 0.5 * math::atan2(2.0 * mxy, mxx - myy);
-        /* model.F = m0 * (4.0 * M_PI * this->sigma2) / norm / block.scale / block.scale; */
+        /* math::qnumber a_eff = math::sqrt((mxx + myy) / 2.0 / m0); */
+        /* model.a1 = a_eff; */
+        /* model.a2 = a_eff; */
         return;
     };
 
@@ -477,7 +478,7 @@ public:
                         );
                     }
                     src.model.update_model_params(
-                        src.loss, prior, variance_meas
+                        src.loss, prior, src.x1_det, src.x2_det, variance_meas
                     );
                 }
             }

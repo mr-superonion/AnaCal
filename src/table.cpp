@@ -24,7 +24,8 @@ pyExportTable(py::module_& m) {
         fpfs_m0, fpfs_dm0_dg1, fpfs_dm0_dg2, fpfs_dm0_dj1, fpfs_dm0_dj2,
         fpfs_m2, fpfs_dm2_dg1, fpfs_dm2_dg2, fpfs_dm2_dj1, fpfs_dm2_dj2,
         peakv, dpeakv_dg1, dpeakv_dg2, dpeakv_dj1, dpeakv_dj2,
-        bkg, dbkg_dg1, dbkg_dg2, dbkg_dj1, dbkg_dj2
+        bkg, dbkg_dg1, dbkg_dg2, dbkg_dj1, dbkg_dj2,
+        x1_det, x2_det, block_id
     );
     py::module_ table = m.def_submodule(
         "table", "submodule for table"
@@ -46,6 +47,8 @@ pyExportTable(py::module_& m) {
             py::arg("loss")
         )
         .def_readwrite("model", &galNumber::model)
+        .def_readwrite("x1_det", &galNumber::x1_det)
+        .def_readwrite("x2_det", &galNumber::x2_det)
         .def_readonly("fluxap2", &galNumber::fluxap2)
         .def_readonly("wdet", &galNumber::wdet)
         .def_readonly("mask_value", &galNumber::mask_value)

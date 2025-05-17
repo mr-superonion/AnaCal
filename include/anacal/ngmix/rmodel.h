@@ -108,7 +108,8 @@ public:
     math::qnumber t = math::qnumber(0.0);
     math::qnumber a1 = math::qnumber(0.15);
     math::qnumber a2 = math::qnumber(0.15);
-    math::qnumber x1, x2;   // parameters
+    math::qnumber x1;
+    math::qnumber x2;
 
     NgmixGaussian(
         bool force_size=false,
@@ -415,13 +416,11 @@ public:
         double variance_val,
         const math::lossNumber& r2,
         const modelKernelD & c,
-        const math::qnumber p,
-        const math::qnumber xpval
+        const math::qnumber p
     ) const {
         math::lossNumber res;
         math::lossNumber theory_val = this->get_model_from_r2(r2, c);
         math::qnumber residual = img_val - p - theory_val.v;
-        /* math::qnumber w = xpval / (xpval + p); */
 
         res.v = math::pow(residual, 2.0) / variance_val;
         math::qnumber mul = 2.0 / variance_val;
@@ -462,6 +461,8 @@ public:
     update_model_params(
         const math::lossNumber& loss,
         const modelPrior& prior,
+        double x1_det,
+        double x2_det,
         double variance_val=1.0
     ) {
         this->F = this->F - (
@@ -485,24 +486,16 @@ public:
                     loss.v + (loss.v_a2a2 + prior.w_a)
                 )
             );
-            /* if (this->a1.v > 1.0) { */
-            /*     this->a1 = 0.75 + 0.5 / (1 + math::exp(-8.0 * (this->a1 - 1))); */
-            /* } */
-            /* if (this->a2.v > 1.0) { */
-            /*     this->a2 = 0.75 + 0.5 / (1 + math::exp(-8.0 * (this->a2 - 1))); */
-            /* } */
         }
 
-        /* std::cout<<"t: "<<loss.v_t.v<<", "<<loss.v_tt.v<<std::endl; */
-        /* std::cout<<"a1: "<<loss.v_a1.v<<", "<<loss.v_a1a1.v<<std::endl; */
         if (!this->force_center) {
             this->x1 = this->x1 - (
-                loss.v_x1 / (
+                (loss.v_x1 + prior.w_x * (this->x1 - x1_det)) / (
                     loss.v + (loss.v_x1x1 + prior.w_x)
                 )
             );
             this->x2 = this->x2 - (
-                loss.v_x2 / (
+                (loss.v_x2 + prior.w_x * (this->x2 - x2_det)) / (
                     loss.v + (loss.v_x2x2 + prior.w_x)
                 )
             );

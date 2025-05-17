@@ -99,6 +99,8 @@ struct galRow{
     double dbkg_dg2;
     double dbkg_dj1;
     double dbkg_dj2;
+    double x1_det;
+    double x2_det;
     int block_id;
 };
 
@@ -121,6 +123,7 @@ struct galNumber {
     math::qnumber bkg;
     double ra = 0.0;
     double dec = 0.0;
+    double x1_det, x2_det;
     int block_id;
 
     galNumber() = default;
@@ -137,8 +140,8 @@ struct galNumber {
 
     inline galNumber
     decentralize(const geometry::block & block) const {
-        double dx1 = this->model.x1.v - block.xcen * block.scale;
-        double dx2 = this->model.x2.v - block.ycen * block.scale;
+        double dx1 = this->x1_det - block.xcen * block.scale;
+        double dx2 = this->x2_det - block.ycen * block.scale;
         // (dx1, dx2) is the position of the source wrt center of block
         galNumber result= *this;
         result.wdet = this->wdet.decentralize(dx1, dx2);
@@ -156,8 +159,8 @@ struct galNumber {
 
     inline galNumber
     centralize(const geometry::block & block) const {
-        double dx1 = this->model.x1.v - block.xcen * block.scale;
-        double dx2 = this->model.x2.v - block.ycen * block.scale;
+        double dx1 = this->x1_det - block.xcen * block.scale;
+        double dx2 = this->x2_det - block.ycen * block.scale;
         // (dx1, dx2) is the position of the source wrt center of block
         galNumber result= *this;
         result.wdet = this->wdet.centralize(dx1, dx2);
@@ -267,6 +270,8 @@ struct galNumber {
             bkg.g2,
             bkg.x1,
             bkg.x2,
+            x1_det,
+            x2_det,
             block_id
         };
         return row;
@@ -354,6 +359,8 @@ struct galNumber {
             row.dbkg_dg1, row.dbkg_dg2,
             row.dbkg_dj1, row.dbkg_dj2
         );
+        x1_det = row.x1_det;
+        x2_det = row.x2_det;
         block_id = row.block_id;
         initialized = true;
     };
