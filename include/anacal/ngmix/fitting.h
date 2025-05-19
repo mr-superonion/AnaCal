@@ -184,7 +184,6 @@ public:
         table::galNumber & src,
         const geometry::block & block
     ) const {
-
         ngmix::NgmixGaussian & model = src.model;
         int r = static_cast<int>(this->sigma_arcsec * 8 / block.scale);
         int i_min = std::max(
@@ -406,6 +405,11 @@ public:
                 }
             }
         } else {
+            for (const std::size_t ind : inds) {
+                table::galNumber & src = catalog[ind];
+                src.model.force_size=this->force_size;
+                src.model.force_center=true;
+            }
             kernels_model.reserve(ng);
             data_model.resize(n_pix);
             for (std::size_t i=0; i<ng; ++i) {
