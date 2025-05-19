@@ -707,6 +707,38 @@ pyExportImage(py::module& m) {
         py::arg("scale"),
         py::arg("klim")
     );
+    image.def(
+        "prepare_data_block", &prepare_data_block,
+        "prepare the qnumber data in block",
+        py::arg("img_array"),
+        py::arg("psf_array"),
+        py::arg("sigma_arcsec"),
+        py::arg("block"),
+        py::arg("noise_array")=py::none()
+    );
+    image.def(
+        "prepare_data_block_image", &prepare_data_block_image,
+        "prepare the qnumber data in block return image",
+        py::arg("img_array"),
+        py::arg("psf_array"),
+        py::arg("sigma_arcsec"),
+        py::arg("block"),
+        py::arg("noise_array")=py::none()
+    );
+    image.def(
+        "prepare_model_block", &prepare_model_block,
+        "prepare the qnumber model in block",
+        py::arg("catalog"),
+        py::arg("sigma_arcsec"),
+        py::arg("block")
+    );
+    image.def(
+        "prepare_model_block_image", &prepare_model_block_image,
+        "prepare the qnumber model in block",
+        py::arg("catalog"),
+        py::arg("sigma_arcsec"),
+        py::arg("block")
+    );
     py::class_<Image>(image, "Image")
         .def(py::init<int, int, double, bool, unsigned int>(),
             "Initialize the Convolution object using an ndarray",

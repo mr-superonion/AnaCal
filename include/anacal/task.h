@@ -2,8 +2,7 @@
 #define ANACAL_TASK_H
 
 #include "detector.h"
-#include "stdafx.h"
-#include "mask2.h"
+#include "mask.h"
 #include "psf.h"
 
 namespace anacal {
@@ -75,11 +74,11 @@ public:
         std::vector<std::size_t> indices;
         indices.reserve(static_cast<std::size_t>(nrow / 4));
         for (std::size_t i = 0; i < nrow; ++i) {
-            const ngmix::NgmixGaussian & m = catalog[i].model;
-            if ((m.x1.v >= x_min) &&
-                (m.x1.v < x_max) &&
-                (m.x2.v >= y_min) &&
-                (m.x2.v < y_max)
+            const table::galNumber & src = catalog[i];
+            if ((src.x1_det >= x_min) &&
+                (src.x1_det < x_max) &&
+                (src.x2_det >= y_min) &&
+                (src.x2_det < y_max)
             ) {
                 indices.push_back(i);
             }
@@ -233,7 +232,7 @@ public:
         }
 
         if (mask_array.has_value()) {
-            mask2::add_pixel_mask_column_catalog(
+            mask::add_pixel_mask_column_catalog(
                 catalog,
                 *mask_array,
                 this->sigma_arcsec_det,
@@ -328,7 +327,7 @@ public:
         }
 
         if (mask_array.has_value()) {
-            mask2::add_pixel_mask_column_catalog(
+            mask::add_pixel_mask_column_catalog(
                 catalog,
                 *mask_array,
                 this->sigma_arcsec_det,

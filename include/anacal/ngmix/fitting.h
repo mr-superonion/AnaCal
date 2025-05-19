@@ -3,7 +3,6 @@
 
 #include "../image.h"
 #include "../math.h"
-#include "../stdafx.h"
 #include "../table.h"
 
 
@@ -73,33 +72,6 @@ public:
                 if (dr2 < this->ap2_r2) {
                     int _i = (j + dj) * block.nx + (i + di);
                     src.fluxap2 = src.fluxap2 + data[_i];
-                }
-            }
-        }
-        return;
-    };
-
-    inline void
-    add_model_to_block(
-        std::vector<math::qnumber> & data_model,
-        const table::galNumber & src,
-        const geometry::block & block,
-        const modelKernelB & kernel
-    ) const {
-        const ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block);
-        for (int j = bb.j_min; (j < bb.j_max); ++j) {
-            if (!block.ymsk[j]) continue;
-            int jj = j * block.nx;
-            for (int i = bb.i_min; (i < bb.i_max); ++i) {
-                if (!block.xmsk[i]) continue;
-                if (bb.has_point(i, j)) {
-                    math::qnumber r2 = model.get_r2(
-                        block.xvs[i], block.yvs[j], kernel
-                    );
-                    data_model[jj + i] = (
-                        data_model[jj + i] + src.model.get_model_from_r2(r2, kernel)
-                    );
                 }
             }
         }
@@ -443,7 +415,7 @@ public:
                     this->sigma_arcsec
                 );
                 kernels_model.push_back(kernel);
-                add_model_to_block(data_model, mrc, block, kernel);
+                mrc.model.add_to_block(data_model, block, kernel);
             }
         }
 

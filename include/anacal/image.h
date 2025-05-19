@@ -1,9 +1,8 @@
 #ifndef ANACAL_IMAGE_H
 #define ANACAL_IMAGE_H
 
+#include "table.h"
 #include "model.h"
-#include "math.h"
-#include "geometry.h"
 #include <fftw3.h>
 
 namespace anacal {
@@ -410,6 +409,78 @@ prepare_data_block(
         block.ycen,
         noise_array
     );
+};
+
+inline py::array_t<double>
+prepare_data_block_image(
+    const py::array_t<double>& img_array,
+    const py::array_t<double>& psf_array,
+    double sigma_arcsec,
+    const geometry::block & block,
+    const std::optional<py::array_t<double>>& noise_array=std::nullopt
+) {
+    auto result = py::array_t<double>({5, block.ny, block.nx});
+    auto r = result.mutable_unchecked<3>();
+
+    std::vector<math::qnumber> qvec = prepare_data_block(
+        img_array, psf_array, sigma_arcsec, block, noise_array
+    );
+    for (ssize_t j = 0, idx=0; j < block.ny; ++j) {
+        for (ssize_t i = 0; i < block.nx; ++i, ++idx) {
+            r(0, j, i) = qvec[idx].v;
+            r(1, j, i) = qvec[idx].g1;
+            r(2, j, i) = qvec[idx].g2;
+            r(3, j, i) = qvec[idx].x1;
+            r(4, j, i) = qvec[idx].x2;
+        }
+    }
+    return result;
+};
+
+
+inline std::vector<math::qnumber>
+prepare_model_block(
+    const py::array_t<table::galRow> catalog,
+    double sigma_arcsec,
+    const geometry::block & block
+){
+    std::vector<table::galNumber> cat = table::array_to_objlist(
+        catalog
+    );
+    std::size_t n_pix = block.nx * block.ny;
+    std::vector<math::qnumber> data_model(n_pix);
+    for (const table::galNumber& ss : cat) {
+        const ngmix::modelKernelB kernel = ss.model.prepare_modelB(
+            block.scale,
+            sigma_arcsec
+        );
+        ss.model.add_to_block(data_model, block, kernel);
+    }
+    return data_model;
+};
+
+inline py::array_t<double>
+prepare_model_block_image(
+    const py::array_t<table::galRow> catalog,
+    double sigma_arcsec,
+    const geometry::block & block
+) {
+    auto result = py::array_t<double>({5, block.ny, block.nx});
+    auto r = result.mutable_unchecked<3>();
+
+    std::vector<math::qnumber> qvec = prepare_model_block(
+        catalog, sigma_arcsec, block
+    );
+    for (ssize_t j = 0, idx=0; j < block.ny; ++j) {
+        for (ssize_t i = 0; i < block.nx; ++i, ++idx) {
+            r(0, j, i) = qvec[idx].v;
+            r(1, j, i) = qvec[idx].g1;
+            r(2, j, i) = qvec[idx].g2;
+            r(3, j, i) = qvec[idx].x1;
+            r(4, j, i) = qvec[idx].x2;
+        }
+    }
+    return result;
 };
 
 

@@ -1,8 +1,7 @@
 #ifndef ANACAL_MATH_QN_H
 #define ANACAL_MATH_QN_H
 
-#include <cmath>
-#include <ostream>
+#include "../stdafx.h"
 
 // Class for Quintuple number
 

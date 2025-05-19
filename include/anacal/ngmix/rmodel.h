@@ -1,7 +1,7 @@
 #ifndef ANACAL_NGMIX_RMODEL_H
 #define ANACAL_NGMIX_RMODEL_H
 
-#include "../stdafx.h"
+#include "../math.h"
 
 namespace anacal {
 namespace ngmix {
@@ -455,6 +455,31 @@ public:
             );
         }
         return res;
+    };
+
+    inline void
+    add_to_block(
+        std::vector<math::qnumber> & data_model,
+        const geometry::block & block,
+        const modelKernelB & kernel
+    ) const {
+        const StampBounds bb = this->get_stamp_bounds(block);
+        for (int j = bb.j_min; (j < bb.j_max); ++j) {
+            if (!block.ymsk[j]) continue;
+            int jj = j * block.nx;
+            for (int i = bb.i_min; (i < bb.i_max); ++i) {
+                if (!block.xmsk[i]) continue;
+                if (bb.has_point(i, j)) {
+                    math::qnumber r2 = this->get_r2(
+                        block.xvs[i], block.yvs[j], kernel
+                    );
+                    data_model[jj + i] = (
+                        data_model[jj + i] + this->get_model_from_r2(r2, kernel)
+                    );
+                }
+            }
+        }
+        return;
     };
 
     inline void

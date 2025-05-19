@@ -1,7 +1,7 @@
 #ifndef ANACAL_MASK_H
 #define ANACAL_MASK_H
 
-#include "anacal.h"
+#include "table.h"
 
 namespace anacal {
 namespace mask {
@@ -216,7 +216,36 @@ namespace mask {
             }
         }
         return out;
-    }
+    };
+
+    void
+    inline add_pixel_mask_column_catalog(
+        std::vector<table::galNumber>& catalog,
+        const py::array_t<int16_t>& mask_array,
+        double sigma,
+        double scale
+    ) {
+        py::array_t<float> mask_conv = smooth_mask_image(
+            mask_array, sigma, scale
+        );
+
+        auto conv_r = mask_conv.unchecked<2>();
+        int ny = conv_r.shape(0);
+        int nx = conv_r.shape(1);
+
+        for (table::galNumber & src : catalog) {
+            int y = static_cast<int>(
+                std::round(src.model.x2.v / scale)
+            );
+            int x = static_cast<int>(
+                std::round(src.model.x1.v / scale)
+            );
+            if (y>=0 && y< ny && x>=0 && x<nx) {
+                src.mask_value = static_cast<int>(conv_r(y, x) * 1000);
+            }
+        }
+        return;
+    };
 
     void pyExportMask(py::module& m);
 

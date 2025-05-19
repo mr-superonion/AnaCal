@@ -2,9 +2,6 @@
 #define ANACAL_DETECTOR
 
 #include "image.h"
-#include "math.h"
-#include "stdafx.h"
-#include "table.h"
 
 namespace anacal {
 namespace detector {

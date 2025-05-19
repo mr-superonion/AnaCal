@@ -1,9 +1,9 @@
 #ifndef ANACAL_TABLE_H
 #define ANACAL_TABLE_H
 
-#include "stdafx.h"
 #include "math.h"
 #include "geometry.h"
+#include "ngmix/rmodel.h"
 
 namespace anacal {
 namespace table {
@@ -398,10 +398,10 @@ array_to_objlist(
 
     for (ssize_t i = 0; i < n; ++i) {
         const galRow &row = r(i);                     // read‑only reference
-        if (row.x1 >= x_min &&
-            row.x1 < x_max &&
-            row.x2 >= y_min &&
-            row.x2 < y_max
+        if (row.x1_det >= x_min &&
+            row.x1_det < x_max &&
+            row.x2_det >= y_min &&
+            row.x2_det < y_max
         ) {
             galNumber gn;
             gn.from_row(row);
