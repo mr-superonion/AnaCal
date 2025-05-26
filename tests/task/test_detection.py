@@ -66,7 +66,7 @@ def test_task_detection():
     noise_variance = 0.10
     prior = anacal.ngmix.modelPrior()
     prior.set_sigma_x(anacal.math.qnumber(0.5))
-    taskA = anacal.task.TaskAlpha(
+    taskA = anacal.task.Task(
         scale=scale,
         sigma_arcsec=0.4,
         snr_peak_min=10,

@@ -8,7 +8,7 @@ pyExportTask(py::module_& m) {
     py::module_ task = m.def_submodule(
         "task", "submodule for task"
     );
-    py::class_<TaskAlpha>(task, "TaskAlpha")
+    py::class_<Task>(task, "Task")
         .def(py::init<
             double, double, double, double,
             double, double, double, double,
@@ -42,7 +42,7 @@ pyExportTask(py::module_& m) {
                 const std::optional<py::array_t<table::galRow>>&,
                 const std::optional<py::array_t<double>>&,
                 const std::optional<py::array_t<int16_t>>&
-            >(&TaskAlpha::process_image),
+            >(&Task::process_image),
             "process image with PSF array",
             py::arg("img_array"),
             py::arg("psf_array"),
@@ -61,7 +61,7 @@ pyExportTask(py::module_& m) {
                 const std::optional<py::array_t<table::galRow>>&,
                 const std::optional<py::array_t<double>>&,
                 const std::optional<py::array_t<int16_t>>&
-            >(&TaskAlpha::process_image),
+            >(&Task::process_image),
             "process image with PSF object",
             py::arg("img_array"),
             py::arg("psf_obj"),

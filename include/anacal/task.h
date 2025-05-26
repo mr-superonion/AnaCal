@@ -9,7 +9,7 @@ namespace anacal {
 namespace task {
 
 
-class TaskAlpha {
+class Task {
 public:
     // stamp dimension
     double scale;
@@ -24,7 +24,7 @@ public:
     ngmix::GaussFit fitter;
     double sigma_arcsec_det;
 
-    TaskAlpha(
+    Task(
         double scale,
         double sigma_arcsec,
         double snr_peak_min,
