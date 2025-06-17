@@ -135,19 +135,15 @@ ext_modules.append(
 )
 
 this_dir = os.path.dirname(os.path.realpath(__file__))
-__version__ = ""
-fname = os.path.join(this_dir, "python/anacal", "__version__.py")
-with open(fname, "r") as ff:
-    exec(ff.read())
 long_description = open(os.path.join(this_dir, "README.md")).read()
 
 setup(
     name="anacal",
-    version=__version__,
+    use_scm_version=True,
     author="Xiangchong Li",
     author_email="mr.superonion@hotmail.com",
     python_requires=">=3.10",
-    setup_requires=["pybind11>=2.2", "setuptools>=38", "wheel"],
+    setup_requires=["pybind11>=2.2", "setuptools>=62", "setuptools_scm"],
     install_requires=[
         "pybind11>=2.2",
         "numpy",
