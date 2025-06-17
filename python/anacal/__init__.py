@@ -1,5 +1,5 @@
 from . import _anacal, base, fpfs, simulation, utils
-from .__version__ import __version__
+from .__version__ import __version__  # noqa
 from ._anacal import (
     detector,
     geometry,
@@ -29,5 +29,6 @@ __all__ = [
     "ngmix",
     "detector",
     "geometry",
+    "table",
     "task",
 ]
