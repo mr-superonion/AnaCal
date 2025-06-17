@@ -139,15 +139,9 @@ long_description = open(os.path.join(this_dir, "README.md")).read()
 
 setup(
     name="anacal",
-    use_scm_version={
-        "version_scheme": "post-release",
-        "local_scheme": "dirty-tag",
-        "write_to": "python/anacal/__version__.py"
-    },
     author="Xiangchong Li",
     author_email="mr.superonion@hotmail.com",
     python_requires=">=3.10",
-    setup_requires=["pybind11>=2.2", "setuptools>=62", "setuptools_scm"],
     install_requires=[
         "pybind11>=2.2",
         "numpy",
