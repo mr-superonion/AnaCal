@@ -141,7 +141,7 @@ setup(
     name="anacal",
     use_scm_version={
         "fallback_version": "0.0.0",
-        "local_scheme": "no-local-version",
+        "local_scheme": "dirty-tag",
     },
     author="Xiangchong Li",
     author_email="mr.superonion@hotmail.com",
