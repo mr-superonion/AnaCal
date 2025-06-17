@@ -13,7 +13,7 @@ pyExportTask(py::module_& m) {
             double, double, double, double,
             double, double, double, double,
             const std::optional<ngmix::modelPrior>,
-            int, int, int, int,
+            int, int, int,
             bool, bool, double
             >(),
             py::arg("scale"),
@@ -28,7 +28,6 @@ pyExportTask(py::module_& m) {
             py::arg("stamp_size")=32,
             py::arg("image_bound")=0,
             py::arg("num_epochs")=3,
-            py::arg("num_epochs_deblend")=3,
             py::arg("force_size")=false,
             py::arg("force_center")=false,
             py::arg("fpfs_c0")=1.0

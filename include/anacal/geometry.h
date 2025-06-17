@@ -26,8 +26,8 @@ struct block {
     std::vector<double> yvs;
     std::vector<bool> xmsk;
     std::vector<bool> ymsk;
-
     std::vector<std::size_t> indices;
+    py::array_t<double> psf_array;
 
     block() = default;
     block(

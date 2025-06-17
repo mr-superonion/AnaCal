@@ -19,7 +19,6 @@ public:
     int stamp_size, ss2;
     int image_bound;
     int num_epochs;
-    int num_epochs_deblend;
     bool force_size, force_center;
     ngmix::GaussFit fitter;
     double sigma_arcsec_det;
@@ -37,7 +36,6 @@ public:
         int stamp_size=64,
         int image_bound=0,
         int num_epochs=3,
-        int num_epochs_deblend=3,
         bool force_size=false,
         bool force_center=false,
         double fpfs_c0=1.0
@@ -46,7 +44,7 @@ public:
         p_min(p_min), omega_p(omega_p),
         prior(prior ? *prior : ngmix::modelPrior()),
         stamp_size(stamp_size), image_bound(image_bound),
-        num_epochs(num_epochs), num_epochs_deblend(num_epochs_deblend), fitter(
+        num_epochs(num_epochs), fitter(
             scale, sigma_arcsec, stamp_size,
             force_size, force_center,
             fpfs_c0
@@ -176,9 +174,19 @@ public:
             );
         } else {
             for (const geometry::block & block: block_list) {
+                py::array_t<double> psf;
+                if (
+                    block.psf_array.ndim() == 2 &&
+                    psf_array.shape(0) == this->stamp_size &&
+                    psf_array.shape(1) == this->stamp_size
+                ) {
+                    psf = block.psf_array;
+                } else {
+                    psf = psf_array;
+                }
                 std::vector<table::galNumber> det = detect_block(
                     img_array,
-                    psf_array,
+                    psf,
                     variance_use,
                     block,
                     noise_array
@@ -197,23 +205,31 @@ public:
             );
         }
 
-        for (int run_id = 0; run_id < this->num_epochs_deblend; ++run_id) {
-            std::vector<table::galNumber> catalog_model = catalog;
-            for (table::galNumber & src : catalog_model) {
-                src.model.F = src.model.F * src.wdet;
+        std::vector<table::galNumber> catalog_model = catalog;
+        for (table::galNumber & src : catalog_model) {
+            src.model.F = src.model.F * src.wdet;
+        }
+        for (const geometry::block & block: block_list) {
+            py::array_t<double> psf;
+            if (
+                block.psf_array.ndim() == 2 &&
+                psf_array.shape(0) == this->stamp_size &&
+                psf_array.shape(1) == this->stamp_size
+            ) {
+                psf = block.psf_array;
+            } else {
+                psf = psf_array;
             }
-            for (const geometry::block & block: block_list) {
-                measure_block(
-                    catalog,
-                    catalog_model,
-                    img_array,
-                    psf_array,
-                    variance_use,
-                    block,
-                    noise_array,
-                    run_id
-                );
-            }
+            measure_block(
+                catalog,
+                catalog_model,
+                img_array,
+                psf,
+                variance_use,
+                block,
+                noise_array,
+                0 // run_id
+            );
         }
 
         if (mask_array.has_value()) {
