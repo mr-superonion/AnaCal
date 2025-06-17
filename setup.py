@@ -139,7 +139,10 @@ long_description = open(os.path.join(this_dir, "README.md")).read()
 
 setup(
     name="anacal",
-    use_scm_version=True,
+    use_scm_version={
+        "fallback_version": "0.0.0",
+        "local_scheme": "no-local-version",
+    },
     author="Xiangchong Li",
     author_email="mr.superonion@hotmail.com",
     python_requires=">=3.10",
