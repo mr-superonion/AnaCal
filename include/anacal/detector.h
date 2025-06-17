@@ -83,15 +83,6 @@ void measure_pixel(
         src.peakv = data[index];
         src.bkg = fluxbg / nbg;
         src.fluxap2 = fluxap2;
-        src.wsel = math::ssfunc1(
-            data[index],
-            f_min,
-            omega_f
-        )* math::ssfunc1(
-            data[index] - src.bkg * 0.9,
-            5.0 * std_noise,
-            omega_f
-        );
         src.block_id = block.index;
         src.wdet = math::ssfunc1(
             wdet,
@@ -102,8 +93,8 @@ void measure_pixel(
             f_min,
             omega_f
         )* math::ssfunc1(
-            data[index] - src.bkg * 0.9,
-            5.0 * std_noise,
+            data[index] - src.bkg * 0.6,
+            3.0 * std_noise,
             omega_f
         );
         if (src.wdet.v > 1e-8) catalog.push_back(src);

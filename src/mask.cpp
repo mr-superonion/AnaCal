@@ -32,8 +32,14 @@ namespace mask {
             py::arg("star_array")=py::none()
         );
         mask.def(
-            "smooth_mask_image", &smooth_mask_image,
-            "Smooths the mask image",
+            "convolve_mask", &convolve_mask,
+            "Smooths the mask image with a kernel",
+            py::arg("mask_array"),
+            py::arg("kernel")
+        );
+        mask.def(
+            "convolve_mask_gauss", &convolve_mask_gauss,
+            "Smooths the mask image with a Gaussian kernel",
             py::arg("mask_array"),
             py::arg("sigma"),
             py::arg("scale")

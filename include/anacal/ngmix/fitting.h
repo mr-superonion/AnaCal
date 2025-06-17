@@ -482,7 +482,7 @@ public:
                     std_fpfs
                 );
                 src.wsel = src.wsel * math::ssfunc1(
-                    src.fpfs_m2 - 0.1 * src.fpfs_m0,
+                    src.fpfs_m2 - 0.05 * src.fpfs_m0,
                     std_fpfs,
                     std_fpfs
                 );

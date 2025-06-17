@@ -33,38 +33,10 @@ pyExportTask(py::module_& m) {
             py::arg("force_center")=false,
             py::arg("fpfs_c0")=1.0
         )
-        .def("process_image",
-            py::overload_cast<
-                const py::array_t<double>&,
-                const py::array_t<double>&,
-                double,
-                std::vector<geometry::block>&,
-                const std::optional<py::array_t<table::galRow>>&,
-                const std::optional<py::array_t<double>>&,
-                const std::optional<py::array_t<int16_t>>&
-            >(&Task::process_image),
+        .def("process_image", &Task::process_image,
             "process image with PSF array",
             py::arg("img_array"),
             py::arg("psf_array"),
-            py::arg("variance"),
-            py::arg("block_list"),
-            py::arg("detection")=py::none(),
-            py::arg("noise_array")=py::none(),
-            py::arg("mask_array")=py::none()
-        )
-        .def("process_image",
-            py::overload_cast<
-                const py::array_t<double>&,
-                const psf::BasePsf&,
-                double,
-                std::vector<geometry::block>&,
-                const std::optional<py::array_t<table::galRow>>&,
-                const std::optional<py::array_t<double>>&,
-                const std::optional<py::array_t<int16_t>>&
-            >(&Task::process_image),
-            "process image with PSF object",
-            py::arg("img_array"),
-            py::arg("psf_obj"),
             py::arg("variance"),
             py::arg("block_list"),
             py::arg("detection")=py::none(),

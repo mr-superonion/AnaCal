@@ -115,10 +115,10 @@ class FpfsTask(FpfsKernel):
         """
         if mask_array is not None:
             # Set the value inside star mask to zero
-            mask_galaxy_image(gal_array, mask_array, True, star_cat)
+            mask_galaxy_image(gal_array, mask_array, False, star_cat)
             if noise_array is not None:
                 # Also do it for pure noise image
-                mask_galaxy_image(noise_array, mask_array, True, star_cat)
+                mask_galaxy_image(noise_array, mask_array, False, star_cat)
         assert self.dtask is not None
         return self.dtask.detect_source(
             gal_array=gal_array,

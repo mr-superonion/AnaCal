@@ -8,7 +8,7 @@ def test_mask():
     scale = 0.2
     mask = np.zeros((ngrid, ngrid), dtype=np.int16)
     mask[ngrid // 2 + 10, ngrid // 2 - 20] = 1
-    b = anacal.mask.smooth_mask_image(
+    b = anacal.mask.convolve_mask_gauss(
         mask,
         sigma=sigma_arcsec,
         scale=scale,
@@ -58,7 +58,7 @@ def test_mask():
     anacal.mask.add_bright_star_mask(mask, star_array)
     np.testing.assert_almost_equal(mask, np.ones((ngrid, ngrid)))
     mask = np.ones((ngrid, ngrid))
-    b = anacal.mask.smooth_mask_image(
+    b = anacal.mask.convolve_mask_gauss(
         mask,
         sigma=sigma_arcsec,
         scale=scale,
