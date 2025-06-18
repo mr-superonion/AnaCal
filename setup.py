@@ -149,6 +149,7 @@ setup(
         "fitsio",
         "pydantic",
     ],
+    use_scm_version=True,
     packages=find_packages(where="python"),
     package_dir={"": "python"},
     include_package_data=True,
