@@ -10,7 +10,7 @@ namespace anacal {
 namespace ngmix {
 
 
-// model fitting upper scale 3.0 arcsec
+// model fitting upper scale 3.5 arcsec
 // deblending upper scale 7 arcsec
 
 class GaussFit {
@@ -87,7 +87,7 @@ public:
     ) const {
         math::qnumber m0, norm;
         ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, 3.0 / block.scale);
+        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
@@ -120,7 +120,7 @@ public:
     ) const {
         src.loss.reset();
         ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, 3.0 / block.scale);
+        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
 
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
@@ -153,7 +153,7 @@ public:
     ) const {
         src.loss.reset();
         NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, 3.0 / block.scale);
+        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
 
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
@@ -308,7 +308,7 @@ public:
         math::qnumber m0, mxx, myy, mxy, mx, my, norm;
         double dd = 1.0 / this->sigma2;
 
-        const StampBounds bb = model.get_stamp_bounds(block, 3.0 / block.scale);
+        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
