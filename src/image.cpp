@@ -203,18 +203,16 @@ Image::set_noise_f(
 
     {
         // k = (0, 0)
-        int i = 0;
-        int j = 0;
-        double ff = std::sqrt(2.0 * std::abs(r(i, j)));
+        double ff = std::sqrt(2.0 * std::abs(r(0, 0)));
         data_f[0][0] = ff * dist(engine);
         data_f[0][1] = 0.0;
 
         // k = (0, ny / 2)
         // F(0, ny / 2)  = F(0, -ny / 2)
         // F(0, ny / 2)  = F(0, -ny / 2) *
-        i = 0;
-        j = ny2;
-        ff = std::sqrt(2.0 * std::abs(r(i, j)));
+        int i = 0;
+        int j = ny2;
+        ff = std::sqrt(2.0 * std::abs(r(j, i)));
         int index = j * kx_length + i;
         data_f[index][0] = ff * dist(engine);
         data_f[index][1] = 0.0;
@@ -224,14 +222,23 @@ Image::set_noise_f(
         // F(nx / 2, 0)  = F(-nx / 2, 0) *
         i = nx2;
         j = 0;
-        ff = std::sqrt(2.0 * std::abs(r(i, j)));
+        ff = std::sqrt(2.0 * std::abs(r(j, i)));
         index = j * kx_length + i;
         data_f[index][0] = ff * dist(engine);
         data_f[index][1] = 0.0;
     }
 
+    if (nx % 2 == 0 && ny % 2 == 0) {
+        int i = nx2;
+        int j = ny2;
+        int index = j * kx_length + i;
+        double ff = std::sqrt(2.0 * std::abs(r(j, i)));
+        data_f[index][0] = ff * dist(engine);
+        data_f[index][1] = 0.0;
+    }
+
     for (int j = 1; j < ny2; ++j) {
-        int j2 = -j + ny;
+        int j2 = -j + ny;  // -j mod ny
         {
             int i = 0;
             int index = j * kx_length + i;
