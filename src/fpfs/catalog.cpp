@@ -45,7 +45,11 @@ pyExportFpfsCatalog(py::module_& fpfs) {
         dm00_dg2,
         m20,
         dm20_dg1,
-        dm20_dg2
+        dm20_dg2,
+        m22c,
+        dm22c_dg1,
+        m22s,
+        dm22s_dg2
     );
 
     PYBIND11_NUMPY_DTYPE(
