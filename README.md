@@ -8,19 +8,19 @@
 
 Analytic Calibration for Perturbation Estimation from Galaxy Images.
 
-This framework is devised to measure the responses for shape estimators that
-have been developed or are anticipated to be created in the future. We intend
-to develop a suite of analytical shear estimators capable of inferring shear
-with subpercent accuracy, all while maintaining minimal computational time. To
-derive the shear response of shapes, we introudce [ pixel shear
-response](https://ui.adsabs.harvard.edu/abs/2023MNRAS.521.4904L/abstract), the
-derivatives of pixel values with respect to shear distortions, then we
-propogate pixel shear response using [quintuple
-numbers](https://ui.adsabs.harvard.edu/abs/2025arXiv250616607L/abstract). A
-[renoising
-approach](https://ui.adsabs.harvard.edu/abs/2025MNRAS.536.3663L/abstract) is
-addopt to analytically derive noise bias correction. The currently supported
-analytic shear estimators are:
+This framework is designed to measure the shear responses of both existing and future shape estimators. 
+Our goal is to develop a suite of analytical shear estimators that can infer shear with sub-percent accuracy 
+while remaining computationally efficient.
+
+To compute shear response, we introduce the concept of 
+[pixel shear response](https://ui.adsabs.harvard.edu/abs/2023MNRAS.521.4904L/abstract)---the derivatives 
+of pixel values with respect to applied shear distortions. We then propagate these responses using 
+[quintuple numbers](https://ui.adsabs.harvard.edu/abs/2025arXiv250616607L/abstract), a  technique for efficient
+shear response tracking. For accurate noise bias correction, we adopt a [renoising
+approach](https://ui.adsabs.harvard.edu/abs/2025MNRAS.536.3663L/abstract) approach that enables analytical
+ treatment of noise effects.
+
+Currently, the framework supports the following analytical shear estimators:
 + [FPFS](https://github.com/mr-superonion/FPFS): A fixed moments method based
   on shapelets including analytic correction for selection, detection and noise
   bias. (see [ref1](https://ui.adsabs.harvard.edu/abs/2018MNRAS.481.4445L/abstract),
