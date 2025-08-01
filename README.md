@@ -18,12 +18,12 @@ the derivatives of pixel values with respect to shear distortions, then we propo
 response using [quintuple numbers](https://ui.adsabs.harvard.edu/abs/2025arXiv250616607L/abstract). 
 A [renoising approach](https://ui.adsabs.harvard.edu/abs/2025MNRAS.536.3663L/abstract) is addopt to 
 analytically derive noise bias correction. The currently supported analytic shear estimators are:
-+ FPFS: A fixed moments method based
++ [FPFS](https://github.com/mr-superonion/FPFS): A fixed moments method based
   on shapelets including analytic correction for selection, detection and noise
   bias. (see [ref1](https://ui.adsabs.harvard.edu/abs/2018MNRAS.481.4445L/abstract),
   [ref2](https://ui.adsabs.harvard.edu/abs/2022MNRAS.511.4850L/abstract) and
   [ref3](https://ui.adsabs.harvard.edu/abs/2024MNRAS.52710388L/abstract).)
-+ NGMIX: Gassian model fitting.
++ [NGMIX](https://github.com/esheldon/ngmix): Gassian model fitting.
   (see [ref4](https://ui.adsabs.harvard.edu/abs/2025arXiv250616607L/abstract))
 
 ## Installation
@@ -48,12 +48,6 @@ conda install -c conda-forge anacal
 
 ## Examples
 Examples can be found [here](https://github.com/mr-superonion/AnaCal/blob/main/examples/).
-
-## Reference
-
-+ [Li et. al
-  (2023)](https://ui.adsabs.harvard.edu/abs/2023arXiv230906506L/abstract)
-  introduces the AnaCal framework.
 
 ## Development
 
