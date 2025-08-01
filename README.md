@@ -26,7 +26,7 @@ analytic shear estimators are:
   bias. (see [ref1](https://ui.adsabs.harvard.edu/abs/2018MNRAS.481.4445L/abstract),
   [ref2](https://ui.adsabs.harvard.edu/abs/2022MNRAS.511.4850L/abstract),
   [ref3](https://ui.adsabs.harvard.edu/abs/2024MNRAS.52710388L/abstract),
-  and [ref4](https://ui.adsabs.harvard.edu/abs/2025MNRAS.540.1668P/abstract).)
+  and [ref4](https://ui.adsabs.harvard.edu/abs/2025MNRAS.537..507P/abstract).)
 + [NGMIX](https://github.com/esheldon/ngmix): Gassian model fitting.
   (see [ref5](https://ui.adsabs.harvard.edu/abs/2025arXiv250616607L/abstract))
 
