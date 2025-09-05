@@ -98,14 +98,13 @@ def test_detect():
         v_min=std * scale**2.0 * 0.8,
     )
     out1 = rfn.structured_to_unstructured(out1)
-    out1 = out1[:, :-1]
     out1 = out1[np.lexsort((out1[:, 0], out1[:, 1]))]
-    assert out1.shape == (48666, 3)
+    assert out1.shape == (48666, 2)
     arr = np.array(
         [
-            [50, 21, 0],
-            [67, 21, 0],
-            [111, 21, 1],
+            [50, 21],
+            [67, 21],
+            [111, 21],
         ]
     )
     np.testing.assert_almost_equal(out1[:3], arr)

@@ -87,15 +87,12 @@ def test_ngmix_fpfs():
     )
 
     coords = np.array(
-        [(ny / 2.0 , nx / 2.0, True, 0)],
+        [(ny / 2.0 , nx / 2.0)],
         dtype=[
             ("y", "f8"),
             ("x", "f8"),
-            ("is_peak", "i4"),
-            ("mask_value", "i4"),
         ],
     )
-
 
     src = ftask.run(
         gal_array=img_array,

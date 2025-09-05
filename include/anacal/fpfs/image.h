@@ -54,7 +54,7 @@ namespace anacal {
 
         void
         find_peaks(
-            std::vector<std::tuple<int, int, bool>>& peaks,
+            std::vector<std::tuple<int, int>>& peaks,
             const py::array_t<double>& gal_conv,
             double fthres,
             double pthres,
@@ -65,7 +65,7 @@ namespace anacal {
             int ycen
         );
 
-        py::array_t<FpfsPeaks>
+        py::array_t<Position>
         detect_source(
             py::array_t<double>& gal_array,
             double fthres,
@@ -82,16 +82,7 @@ namespace anacal {
             const py::array_t<double>& gal_array,
             const py::array_t<std::complex<double>>& filter_image,
             const py::array_t<double>& psf_array,
-            const std::optional<py::array_t<FpfsPeaks>>& det=std::nullopt,
-            bool do_rotate=false
-        );
-
-        py::array_t<double>
-        measure_source(
-            const py::array_t<double>& gal_array,
-            const py::array_t<std::complex<double>>& filter_image,
-            const psf::BasePsf& psf_obj,
-            const std::optional<py::array_t<FpfsPeaks>>& det=std::nullopt,
+            const std::optional<py::array_t<Position>>& det=std::nullopt,
             bool do_rotate=false
         );
 

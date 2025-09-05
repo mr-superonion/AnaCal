@@ -9,7 +9,6 @@ namespace anacal {
         pyExportFpfs(m);
         math::pyExportMath(m);
         noise::pyExportNoise(m);
-        psf::pyExportPsf(m);
         mask::pyExportMask(m);
         ngmix::pyExportNgmix(m);
         table::pyExportTable(m);

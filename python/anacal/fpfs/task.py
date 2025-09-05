@@ -6,8 +6,10 @@ import numpy.lib.recfunctions as rfn
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
-from . import BasePsf, FpfsImage, mask_galaxy_image, measure_fpfs
+from . import FpfsImage, measure_fpfs
+from . import BasePsf
 from .base import FpfsKernel
+
 
 npix_patch = 256
 npix_overlap = 64
@@ -54,13 +56,14 @@ class FpfsTask(FpfsKernel):
             do_detection=do_detection,
             verbose=verbose,
         )
+        klim = 1e10 if self.kmax is None else (self.kmax / self.pixel_scale)
         self.prepare_fpfs_bases()
         self.mtask = FpfsImage(
             nx=self.npix,
             ny=self.npix,
             scale=self.pixel_scale,
             sigma_arcsec=self.sigma_arcsec,
-            klim=self.kmax / self.pixel_scale,
+            klim=klim,
             psf_array=self.psf_array,
             use_estimate=True,
         )
@@ -71,7 +74,7 @@ class FpfsTask(FpfsKernel):
                 ny=npix_patch,
                 scale=self.pixel_scale,
                 sigma_arcsec=self.sigma_arcsec,
-                klim=self.kmax / self.pixel_scale,
+                klim=klim,
                 psf_array=self.psf_array,
                 use_estimate=True,
                 npix_overlap=npix_overlap,
@@ -219,47 +222,6 @@ class FpfsTask(FpfsKernel):
         src_g = np.array(src_g)
         return src_g, src_n
 
-    def run_psf_cpp(
-        self,
-        gal_array: NDArray,
-        psf_obj: BasePsf,
-        noise_array: NDArray | None = None,
-        det: NDArray | None = None,
-    ) -> tuple[NDArray, NDArray | None]:
-        """This function measure galaxy shapes at the position of the detection
-        using PSF model with spacial variation
-
-        Args:
-        gal_array (NDArray): galaxy image data
-        psf_obj (BasePsf): psf object in cpp
-        noise_array (NDArray | None): noise image data [default: None]
-        det (list|None): detection catalog
-
-        Returns:
-        src_g (NDArray): source measurement catalog
-        src_n (NDArray): noise measurement catalog
-        """
-
-        # self.logger.warning("Input PSF is cpp object")
-        src_g = self.mtask.measure_source(
-            gal_array=gal_array,
-            filter_image=self.bfunc_use,
-            psf_obj=psf_obj,
-            det=det,
-            do_rotate=False,
-        )
-        if noise_array is not None:
-            src_n = self.mtask.measure_source(
-                gal_array=noise_array,
-                filter_image=self.bfunc_use,
-                psf_obj=psf_obj,
-                det=det,
-                do_rotate=True,
-            )
-            src_g = src_g + src_n
-        else:
-            src_n = None
-        return src_g, src_n
 
     def run(
         self,
@@ -288,23 +250,13 @@ class FpfsTask(FpfsKernel):
             )
         elif isinstance(psf, BasePsf):
             assert det is not None
-            if psf.crun:
-                # For the case PSF is a C++ object
-                src_g, src_n = self.run_psf_cpp(
-                    gal_array=gal_array,
-                    psf_obj=psf,
-                    noise_array=noise_array,
-                    det=det,
-                )
-            else:
-                # For the case PSF is a Python object
-                src_g, src_n = self.run_psf_python(
-                    gal_array=gal_array,
-                    psf_obj=psf,
-                    noise_array=noise_array,
-                    det=det,
-                )
-
+            # For the case PSF is a Python object
+            src_g, src_n = self.run_psf_python(
+                gal_array=gal_array,
+                psf_obj=psf,
+                noise_array=noise_array,
+                det=det,
+            )
         else:
             raise RuntimeError("psf does not have a correct type")
         src_g = rfn.unstructured_to_structured(
@@ -479,8 +431,8 @@ def process_image(
                 star_cat=star_catalog,
             )
         else:
-            det_names = ("y", "x", "is_peak", "mask_value")
-            if detection.dtype.names != det_names:
+            colnames = ("y", "x")
+            if detection.dtype.names != colnames:
                 raise ValueError("detection has wrong cloumn names")
         out_list.append(detection)
 

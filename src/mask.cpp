@@ -6,10 +6,8 @@ namespace mask {
     pyExportMask(py::module& m) {
         PYBIND11_NUMPY_DTYPE(BrightStar, x, y, r);
         PYBIND11_NUMPY_DTYPE(
-            FpfsPeaks,
-            y, x,
-            is_peak,
-            mask_value
+            Position,
+            y, x
         );
         py::module_ mask = m.def_submodule("mask", "submodule for mask");
         mask.def(
@@ -47,7 +45,7 @@ namespace mask {
         mask.def(
             "add_pixel_mask_column", &add_pixel_mask_column,
             "Update the detection catalog with the pixel mask value",
-            py::arg("det"),
+            py::arg("catalog"),
             py::arg("mask_array"),
             py::arg("sigma"),
             py::arg("scale")

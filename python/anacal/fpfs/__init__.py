@@ -10,8 +10,7 @@ from .._anacal.fpfs import (
     measure_shapelets_dg,
 )
 from .._anacal.image import Image
-from .._anacal.mask import mask_galaxy_image
-from .._anacal.psf import BasePsf
+from ..psf import BasePsf
 from . import base
 from .task import FpfsConfig, FpfsTask, process_image
 

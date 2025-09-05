@@ -24,11 +24,9 @@ struct BrightStar {
     float r;
 };
 
-struct FpfsPeaks {
+struct Position {
     double y;
     double x;
-    int is_peak;
-    int mask_value;
 };
 
 

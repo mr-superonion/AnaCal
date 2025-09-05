@@ -3,7 +3,6 @@
 
 #include "detector.h"
 #include "mask.h"
-#include "psf.h"
 
 namespace anacal {
 namespace task {
@@ -233,7 +232,7 @@ public:
         }
 
         if (mask_array.has_value()) {
-            mask::add_pixel_mask_column_catalog(
+            mask::add_pixel_mask_column(
                 catalog,
                 *mask_array,
                 this->sigma_arcsec_det * 1.5,
