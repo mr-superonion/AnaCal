@@ -5,7 +5,7 @@ import galsim
 import numpy as np
 
 
-class MyPsf(anacal.psf.PyPsf):
+class MyPsf(anacal.psf.BasePsf):
     def __init__(self, psf_array):
         super().__init__()
         self.psf_array = psf_array

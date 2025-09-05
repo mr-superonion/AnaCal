@@ -27,12 +27,10 @@ def simulate_gal_psf(scale, shift_x, shift_y):
 
     # force detection at center
     coords = np.array(
-        [(ngrid / 2.0 + shift_y, ngrid / 2.0 + shift_x, True, 0)],
+        [(ngrid / 2.0 + shift_y, ngrid / 2.0 + shift_x)],
         dtype=[
             ("y", "f8"),
             ("x", "f8"),
-            ("is_peak", "i4"),
-            ("mask_value", "i4"),
         ],
     )
     return gal_array, psf_array, coords

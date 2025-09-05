@@ -4,7 +4,6 @@
 #include "anacal/image.h"
 #include "anacal/fpfs.h"
 #include "anacal/noise.h"
-#include "anacal/psf.h"
 #include "anacal/mask.h"
 #include "anacal/ngmix.h"
 #include "anacal/table.h"

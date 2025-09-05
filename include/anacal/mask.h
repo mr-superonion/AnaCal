@@ -226,43 +226,8 @@ namespace mask {
         return mask_conv;
     };
 
-    py::array_t<FpfsPeaks>
-    inline add_pixel_mask_column(
-        const py::array_t<FpfsPeaks>& det,
-        const py::array_t<int16_t>& mask_array,
-        double sigma,
-        double scale
-    ) {
-        py::array_t<float> mask_conv = convolve_mask_gauss(
-            mask_array, sigma, scale
-        );
-
-        auto conv_r = mask_conv.unchecked<2>();
-        int ny = conv_r.shape(0);
-        int nx = conv_r.shape(1);
-
-        auto det_r = det.unchecked<1>();
-        ssize_t nrow = det_r.shape(0);
-
-        py::array_t<FpfsPeaks> out(nrow);
-        auto out_r = out.template mutable_unchecked<1>();
-
-        for (ssize_t j = 0; j < nrow; ++j) {
-            out_r(j).mask_value = det_r(j).mask_value;
-            out_r(j).is_peak = det_r(j).is_peak;
-            out_r(j).y = det_r(j).y;
-            out_r(j).x = det_r(j).x;
-            int y = static_cast<int>(std::round(det_r(j).y));
-            int x = static_cast<int>(std::round(det_r(j).x));
-            if (y>=0 && y< ny && x>=0 && x<nx) {
-                out_r(j).mask_value = int(conv_r(y, x) * 1000);
-            }
-        }
-        return out;
-    };
-
     void
-    inline add_pixel_mask_column_catalog(
+    inline add_pixel_mask_column(
         std::vector<table::galNumber>& catalog,
         const py::array_t<int16_t>& mask_array,
         double sigma,

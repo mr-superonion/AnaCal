@@ -1,4 +1,4 @@
-from . import _anacal, base, fpfs, simulation, utils
+from . import _anacal, base, fpfs, simulation, utils, psf
 from .__version__ import __version__  # noqa
 from ._anacal import (
     detector,
@@ -9,7 +9,6 @@ from ._anacal import (
     model,
     ngmix,
     noise,
-    psf,
     table,
     task,
 )
@@ -18,10 +17,10 @@ __all__ = [
     "_anacal",
     "image",
     "fpfs",
+    "psf",
     "model",
     "base",
     "noise",
-    "psf",
     "mask",
     "simulation",
     "utils",

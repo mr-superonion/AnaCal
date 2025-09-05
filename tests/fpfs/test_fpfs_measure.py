@@ -78,17 +78,17 @@ def test_fpfs_measure():
     # use grid PSF
     psf_array2 = np.zeros((1, 1, ngrid2, ngrid2))
     psf_array2[0, 0] = psf_array
-    grid_psf = anacal.psf.GridPsf(
-        x0=0,
-        y0=0,
-        dx=ngrid,
-        dy=ngrid,
-        model_array=psf_array2,
-    )
+    # grid_psf = anacal.psf.GridPsf(
+    #     x0=0,
+    #     y0=0,
+    #     dx=ngrid,
+    #     dy=ngrid,
+    #     model_array=psf_array2,
+    # )
 
-    src = ftask.run(gal_array=gal_array, psf=grid_psf, det=det1)
-    src3 = rfn.structured_to_unstructured(src["data"])
-    np.testing.assert_almost_equal(src1, src3, decimal=5)
+    # src = ftask.run(gal_array=gal_array, psf=grid_psf, det=det1)
+    # src3 = rfn.structured_to_unstructured(src["data"])
+    # np.testing.assert_almost_equal(src1, src3, decimal=5)
     return
 
 

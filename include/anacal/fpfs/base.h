@@ -2,7 +2,6 @@
 #define ANACAL_FPFS_BASE_H
 
 #include "../image.h"
-#include "../psf.h"
 #include "../math.h"
 #include "../mask.h"
 #include "../stdafx.h"

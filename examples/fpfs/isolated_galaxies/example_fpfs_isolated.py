@@ -41,15 +41,11 @@ else:
         [
             ("y", np.int32),
             ("x", np.int32),
-            ("is_peak", np.int32),
-            ("mask_value", np.int32),
         ]
     )
     detection = np.empty(ns, dtype=dtype)
     detection["y"] = yx[0]
     detection["x"] = yx[1]
-    detection["is_peak"] = np.ones(ns)
-    detection["mask_value"] = np.zeros(ns)
 
 fpfs_config = anacal.fpfs.FpfsConfig(
     sigma_arcsec=0.52,  # base measurement kernel (also for detection)

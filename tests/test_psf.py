@@ -2,7 +2,7 @@ import anacal
 import numpy as np
 
 
-class my_psf(anacal.psf.PyPsf):
+class my_psf(anacal.psf.BasePsf):
 
     def __init__(self, a):
         super().__init__()
@@ -14,7 +14,6 @@ class my_psf(anacal.psf.PyPsf):
 
 def test_pypsf():
     psf_obj = my_psf(a=1)
-    assert psf_obj.crun is False
     return
 
 

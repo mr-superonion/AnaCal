@@ -102,7 +102,7 @@ FpfsImage::smooth_image(
 
 void
 FpfsImage::find_peaks(
-    std::vector<std::tuple<int, int, bool>>& peaks,
+    std::vector<std::tuple<int, int>>& peaks,
     const py::array_t<double>& gal_conv,
     double fthres,
     double pthres,
@@ -166,13 +166,7 @@ FpfsImage::find_peaks(
                 (x > this->bound) && (x < this->nx_array - this->bound)
             );
             if (sel) {
-                bool is_peak = (
-                    (c > r(j-1, i)) &&
-                    (c > r(j+1, i)) &&
-                    (c > r(j, i-1)) &&
-                    (c > r(j, i+1))
-                );
-                peaks.emplace_back(y, x, is_peak);
+                peaks.emplace_back(y, x);
             }
         }
     }
@@ -180,7 +174,7 @@ FpfsImage::find_peaks(
 }
 
 
-py::array_t<FpfsPeaks>
+py::array_t<Position>
 FpfsImage::detect_source(
     py::array_t<double>& gal_array,
     double fthres,
@@ -215,7 +209,7 @@ FpfsImage::detect_source(
     int nx2 = npatch_x * (this->nx - this->npix_overlap) + this->npix_overlap;
     int npad_x = (nx2 - this->nx_array) / 2;
 
-    std::vector<std::tuple<int, int, bool>> peaks;
+    std::vector<std::tuple<int, int>> peaks;
     // Do detection in each patch
     for (int j = 0; j < npatch_y; ++j) {
         int ycen = (this->ny - this->npix_overlap) * j + this->ny2 - npad_y;
@@ -242,24 +236,13 @@ FpfsImage::detect_source(
     }
 
     int nrow = peaks.size();
-    py::array_t<FpfsPeaks> detection(nrow);
+    py::array_t<Position> detection(nrow);
     auto src_r = detection.mutable_unchecked<1>();
 
     for (ssize_t j = 0; j < nrow; ++j) {
         const auto& elem = peaks[j];
         src_r(j).y = std::get<0>(elem);
         src_r(j).x = std::get<1>(elem);
-        src_r(j).is_peak = int(std::get<2>(elem));
-        src_r(j).mask_value = 0;
-    }
-
-    if (mask_array.has_value()) {
-        detection = mask::add_pixel_mask_column(
-            detection,
-            *mask_array,
-            sigma_arcsec,
-            scale
-        );
     }
     return detection;
 }
@@ -269,7 +252,7 @@ FpfsImage::measure_source(
     const py::array_t<double>& gal_array,
     const py::array_t<std::complex<double>>& filter_image,
     const py::array_t<double>& psf_array,
-    const std::optional<py::array_t<FpfsPeaks>>& det,
+    const std::optional<py::array_t<Position>>& det,
     bool do_rotate
 ) {
     ssize_t ndim = filter_image.ndim();
@@ -294,11 +277,10 @@ FpfsImage::measure_source(
     );
 
     ssize_t ncol = filter_image.shape()[ndim - 1];
-    py::array_t<FpfsPeaks> det_default(1);
+    py::array_t<Position> det_default(1);
     auto r = det_default.mutable_unchecked<1>();
     r(0).y = ny / 2; r(0).x = nx / 2;
-    r(0).is_peak = 1; r(0).mask_value = 0;
-    const py::array_t<FpfsPeaks>& det_use = det.has_value() ? *det : det_default;
+    const py::array_t<Position>& det_use = det.has_value() ? *det : det_default;
     auto det_r = det_use.unchecked<1>();
 
     ssize_t nrow = det_use.shape()[0];
@@ -319,61 +301,6 @@ FpfsImage::measure_source(
     }
     return src;
 }
-
-py::array_t<double>
-FpfsImage::measure_source(
-    const py::array_t<double>& gal_array,
-    const py::array_t<std::complex<double>>& filter_image,
-    const psf::BasePsf& psf_obj,
-    const std::optional<py::array_t<FpfsPeaks>>& det,
-    bool do_rotate
-) {
-    ssize_t ndim = filter_image.ndim();
-    if ( ndim != 3) {
-        throw std::runtime_error(
-            "FPFS Error: Input filter image must be 3-dimensional."
-        );
-    }
-    ssize_t ncol = filter_image.shape()[ndim - 1];
-
-    py::array_t<FpfsPeaks> det_default(1);
-    auto r = det_default.mutable_unchecked<1>();
-    r(0).y = ny / 2; r(0).x = nx / 2;
-    r(0).is_peak = 1; r(0).mask_value = 0;
-    const py::array_t<FpfsPeaks>& det_use = det.has_value() ? *det : det_default;
-    auto det_r = det_use.unchecked<1>();
-
-    ssize_t nrow = det_use.shape()[0];
-    py::array_t<double> src({nrow, ncol});
-    auto src_r = src.mutable_unchecked<2>();
-    for (ssize_t j = 0; j < nrow; ++j) {
-        int y = static_cast<int>(std::round(det_r(j).y));
-        int x = static_cast<int>(std::round(det_r(j).x));
-        double dy = det_r(j).y - y;
-        double dx = det_r(j).x - x;
-        {
-            py::array_t<double> psf_array = psf_obj.draw(x, y);
-            img_obj.set_r(psf_array, false);
-        }
-        img_obj.fft();
-        if (do_rotate){
-            img_obj.rotate90_f();
-        }
-        {
-            const py::array_t<std::complex<double>> parr = img_obj.draw_f();
-            img_obj.set_r(gal_array, x, y, false);
-            img_obj.fft();
-            img_obj.deconvolve(parr, klim);
-        }
-        py::array_t<double> row = img_obj.measure(filter_image, dy, dx);
-        auto row_r = row.unchecked<1>();
-        for (ssize_t i = 0; i < ncol; ++i) {
-            src_r(j, i) = row_r(i) * fft_ratio;
-        }
-    }
-    return src;
-}
-
 
 FpfsImage::~FpfsImage() {
 }
@@ -435,32 +362,11 @@ pyExportFpfsImage(py::module_& fpfs) {
             py::arg("mask_array")=py::none()
         )
         .def("measure_source",
-            py::overload_cast<
-                const py::array_t<double>&,
-                const py::array_t<std::complex<double>>&,
-                const py::array_t<double>&,
-                const std::optional<py::array_t<FpfsPeaks>>&,
-                bool
-            >(&FpfsImage::measure_source),
+            &FpfsImage::measure_source,
             "measure source properties using filter at the position of det",
             py::arg("gal_array"),
             py::arg("filter_image"),
             py::arg("psf_array"),
-            py::arg("det")=py::none(),
-            py::arg("do_rotate")=false
-        )
-        .def("measure_source",
-            py::overload_cast<
-                const py::array_t<double>&,
-                const py::array_t<std::complex<double>>&,
-                const psf::BasePsf&,
-                const std::optional<py::array_t<FpfsPeaks>>&,
-                bool
-            >(&FpfsImage::measure_source),
-            "measure source properties using filter at the position of det",
-            py::arg("gal_array"),
-            py::arg("filter_image"),
-            py::arg("psf_obj"),
             py::arg("det")=py::none(),
             py::arg("do_rotate")=false
         );
