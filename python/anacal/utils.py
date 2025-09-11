@@ -31,7 +31,7 @@ def resize_array(array: NDArray[Any], target_shape: tuple[int, int] = (64, 64)):
         pad_bottom = pad_height - pad_top
         array = np.pad(
             array,
-            ((pad_bottom, pad_top), (0, 0)),
+            ((pad_bottom, pad_top), (0, 0)),   # bottom->top array
             mode="constant",
             constant_values=0.0,
         )
@@ -42,8 +42,9 @@ def resize_array(array: NDArray[Any], target_shape: tuple[int, int] = (64, 64)):
         pad_left = pad_width - pad_right
         array = np.pad(
             array,
-            ((0, 0), (pad_left, pad_right)),
+            ((0, 0), (pad_left, pad_right)),  # left->right array
             mode="constant",
+            constant_values=0.0,
         )
     return array
 

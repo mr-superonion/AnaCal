@@ -8,13 +8,13 @@
 
 Analytic Calibration for Perturbation Estimation from Galaxy Images.
 
-This framework is designed to measure the shear responses of both existing and future shape estimators. 
-Our goal is to develop a suite of analytical shear estimators that can infer shear with sub-percent accuracy 
+This framework is designed to measure the shear responses of both existing and future shape estimators.
+Our goal is to develop a suite of analytical shear estimators that can infer shear with sub-percent accuracy
 while remaining computationally efficient.
 
-To compute shear response, we introduce the concept of 
-[pixel shear response](https://ui.adsabs.harvard.edu/abs/2023MNRAS.521.4904L/abstract)---the derivatives 
-of pixel values with respect to applied shear distortions. We then propagate these responses using 
+To compute shear response, we introduce the concept of
+[pixel shear response](https://ui.adsabs.harvard.edu/abs/2023MNRAS.521.4904L/abstract)---the derivatives
+of pixel values with respect to applied shear distortions. We then propagate these responses using
 [quintuple numbers](https://ui.adsabs.harvard.edu/abs/2025arXiv250616607L/abstract), a  technique for efficient
 shear response tracking. For accurate noise bias correction, we adopt a [renoising
 approach](https://ui.adsabs.harvard.edu/abs/2025MNRAS.536.3663L/abstract) approach that enables analytical
@@ -41,7 +41,7 @@ conda install -c conda-forge --file requirements.txt
 conda install -c conda-forge --file requirements_test.txt
 pip install . --user
 ```
-or install stable verion
+or install stable version
 ```
 pip install anacal
 ```

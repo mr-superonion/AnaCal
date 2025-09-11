@@ -98,7 +98,6 @@ class FpfsTask(FpfsKernel):
         v_min: float,
         noise_array: NDArray | None = None,
         mask_array: NDArray | None = None,
-        star_cat: NDArray | None = None,
     ) -> NDArray:
         """This function detects galaxy from image
 
@@ -109,7 +108,6 @@ class FpfsTask(FpfsKernel):
         omega_v (float): smoothness parameter for pixel difference
         noise_array (NDArray|None): pure noise image
         mask_array (NDArray|None): mask image
-        star_cat (NDArray|None): bright star catalog
 
         Returns:
         (NDArray): galaxy detection catalog
@@ -181,8 +179,8 @@ class FpfsTask(FpfsKernel):
         Args:
         gal_array (NDArray): galaxy image data
         psf_obj (BasePsf): PSF object in python
-        noise_array (NDArray | None): noise image data [default: None]
         det (list|None): detection catalog
+        noise_array (NDArray | None): noise image data [default: None]
 
         Returns:
         src_g (NDArray): source measurement catalog
@@ -361,7 +359,6 @@ def process_image(
     psf_array: NDArray,
     noise_array: NDArray | None = None,
     mask_array: NDArray | None = None,
-    star_catalog: NDArray | None = None,
     detection: NDArray | None = None,
     psf_object: BasePsf | None = None,
     do_compute_detect_weight: bool = True,
@@ -381,7 +378,6 @@ def process_image(
     psf_array (ndarray): an average PSF image
     noise_array (NDArray | None): pure noise array
     mask_array (NDArray | None): mask array (1 for masked)
-    star_catalog (NDArray | None): bright star catalog
     detection (NDArray | None): detection catalog
     psf_object (BasePsf | None): PSF object
     do_compute_detect_weight (bool): whether to compute detection weight
@@ -402,7 +398,9 @@ def process_image(
     fpfs_c0 = fpfs_config.c0 * ratio
 
     if psf_object is None:
-        psf_object = psf_array
+        psf_use = psf_array
+    else:
+        psf_use = psf_object
 
     out_list = []
 
@@ -428,7 +426,6 @@ def process_image(
                 v_min=v_min,
                 omega_v=omega_v,
                 mask_array=mask_array,
-                star_cat=star_catalog,
             )
         else:
             colnames = ("y", "x")
@@ -439,7 +436,7 @@ def process_image(
         if do_compute_detect_weight:
             src = ftask.run(
                 gal_array=gal_array,
-                psf=psf_object,
+                psf=psf_use,
                 det=detection,
                 noise_array=noise_array,
             )
@@ -474,7 +471,7 @@ def process_image(
         )
         src = ftask.run(
             gal_array=gal_array,
-            psf=psf_object,
+            psf=psf_use,
             det=detection,
             noise_array=noise_array,
         )
@@ -499,7 +496,7 @@ def process_image(
         )
         src = ftask.run(
             gal_array=gal_array,
-            psf=psf_object,
+            psf=psf_use,
             det=detection,
             noise_array=noise_array,
         )
