@@ -33,21 +33,29 @@ def _galsim_round_sersic(n, sersic_prec):
 
 
 def coord_distort_1(x, y, xref, yref, gamma1, gamma2, kappa=0.0, inverse=False):
-    """Distorts coordinates by shear
+    """Apply shear and convergence distortion to coordinates.
 
     Args:
-    x (ndarray): input coordinates [x]
-    y (ndarray): input coordinates [y]
-    xref (float): reference point [x]
-    yref (float): reference point [y]
-    gamma1 (float): first component of shear distortion
-    gamma2 (float): second component of shear distortion
-    kappa (float): kappa distortion [default: 0]
-    inverse(bool): if true, from source to lens; else, from lens to source
+        x (np.ndarray): x-coordinates in pixels.
+        y (np.ndarray): y-coordinates in pixels.
+        xref (float): Reference x-coordinate in pixels.
+        yref (float): Reference y-coordinate in pixels.
+        gamma1 (float): First component of shear (dimensionless).
+        gamma2 (float): Second component of shear (dimensionless).
+        kappa (float, optional): Convergence distortion. Defaults to ``0.0``.
+        inverse (bool, optional): If ``True``, transform from source plane to
+            lens plane; otherwise transform from lens plane to source plane.
 
     Returns:
-    x2 (ndarray): distorted coordiantes [x]
-    y2 (ndarray): distorted coordiantes [y]
+        Tuple[np.ndarray, np.ndarray]: Distorted ``x`` and ``y`` coordinates in
+        pixels.
+
+    Notes:
+        This function returns new arrays and does not modify ``x`` or ``y``.
+
+    References:
+        Bartelmann, M., & Schneider, P. (2001). *Weak gravitational lensing*.
+        Physics Reports, 340(4-5), 291–472.
     """
     if inverse:
         xu = x - xref
@@ -64,18 +72,24 @@ def coord_distort_1(x, y, xref, yref, gamma1, gamma2, kappa=0.0, inverse=False):
 
 
 def coord_rotate(x, y, xref, yref, theta):
-    """Rotates coordinates by an angle theta (anticlockwise)
+    """Rotate coordinates around a reference point.
 
     Args:
-    x (ndarray): input coordinates [x]
-    y (ndarray): input coordinates [y]
-    xref (float): reference point [x]
-    yref (float): reference point [y]
-    theta (float): rotation angle [rads]
+        x (np.ndarray): x-coordinates in pixels.
+        y (np.ndarray): y-coordinates in pixels.
+        xref (float): Reference x-coordinate in pixels.
+        yref (float): Reference y-coordinate in pixels.
+        theta (float): Rotation angle in radians, positive anticlockwise.
 
     Returns:
-    x2 (ndarray): rotated coordiantes [x]
-    y2 (ndarray): rotated coordiantes [y]
+        Tuple[np.ndarray, np.ndarray]: Rotated ``x`` and ``y`` coordinates in
+        pixels.
+
+    Notes:
+        This function returns new arrays and does not modify ``x`` or ``y``.
+
+    References:
+        Rotation matrix: https://en.wikipedia.org/wiki/Rotation_matrix
     """
     xu = x - xref
     yu = y - yref
