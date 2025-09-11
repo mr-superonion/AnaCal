@@ -5,13 +5,14 @@ from numpy.typing import NDArray
 
 
 def resize_array(array: NDArray[Any], target_shape: tuple[int, int] = (64, 64)):
-    """This is a util function to resize array to the target shape
+    """Resize a 2D array to a target shape.
+
     Args:
-    array (NDArray): input array
-    target_shape (tuple): output array's shape
+        array: Input array to be resized.
+        target_shape: Desired output shape as ``(height, width)``.
 
     Returns:
-    array (NDArray): output array with the target shape
+        NDArray[Any]: Array with the specified ``target_shape``.
     """
     target_height, target_width = target_shape
     input_height, input_width = array.shape
@@ -49,6 +50,14 @@ def resize_array(array: NDArray[Any], target_shape: tuple[int, int] = (64, 64)):
 
 
 def rotate90(image):
+    """Rotate a 2D image 90 degrees clockwise.
+
+    Args:
+        image: Input array with shape ``(H, W)``.
+
+    Returns:
+        NDArray[Any]: Rotated image of the same shape.
+    """
     rotated_image = np.zeros_like(image)
     rotated_image[1:, 1:] = np.rot90(m=image[1:, 1:], k=-1)
     return rotated_image
