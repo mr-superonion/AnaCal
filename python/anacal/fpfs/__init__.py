@@ -1,3 +1,9 @@
+"""Fourier Power Function Shapelets (FPFS) utilities.
+
+Convenience exports of low-level measurements from ``_anacal.fpfs`` and
+task helpers available under :mod:`anacal.fpfs`.
+"""
+
 from .._anacal.fpfs import (
     FpfsImage,
     fpfs_cut_sigma_ratio,
