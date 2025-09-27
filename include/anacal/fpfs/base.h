@@ -287,7 +287,9 @@ namespace anacal {
             false, false, false, true, false, false, true, false, true, false, false, true
         };
 
-        py::array_t<double> chi({indices.size(), ny, nx});
+        py::array_t<double> chi(py::array::ShapeContainer{
+            static_cast<py::ssize_t>(indices.size()), ny, nx
+        });
         auto out = chi.mutable_unchecked<3>();
         for (size_t mode = 0; mode < indices.size(); ++mode) {
             const int idx_mode = indices[mode];
