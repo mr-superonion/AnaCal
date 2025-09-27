@@ -16,6 +16,14 @@ namespace anacal {
         const py::array_t<double> psf_array;
         int nx_array, ny_array;
         int nx2, ny2;
+
+        py::array_t<double>
+        measure_with_filter(
+            const py::array_t<double>& gal_array,
+            const py::array_t<std::complex<double>>& filter_fft,
+            double y,
+            double x
+        );
     public:
         double scale = 1.0;
         double sigma_arcsec;
@@ -83,6 +91,16 @@ namespace anacal {
             const py::array_t<std::complex<double>>& filter_image,
             const py::array_t<double>& psf_array,
             const std::optional<py::array_t<Position>>& det=std::nullopt,
+            bool do_rotate=false
+        );
+
+        py::array_t<double>
+        measure_source_at(
+            const py::array_t<double>& gal_array,
+            const py::array_t<std::complex<double>>& filter_image,
+            const py::array_t<double>& psf_array,
+            double y,
+            double x,
             bool do_rotate=false
         );
 

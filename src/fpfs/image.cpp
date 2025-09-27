@@ -248,6 +248,29 @@ FpfsImage::detect_source(
 }
 
 py::array_t<double>
+FpfsImage::measure_with_filter(
+    const py::array_t<double>& gal_array,
+    const py::array_t<std::complex<double>>& filter_fft,
+    double y,
+    double x
+) {
+    int y_index = static_cast<int>(std::round(y));
+    int x_index = static_cast<int>(std::round(x));
+    double dy = y - y_index;
+    double dx = x - x_index;
+
+    img_obj.set_r(gal_array, x_index, y_index, false);
+    img_obj.fft();
+    py::array_t<double> row = img_obj.measure(filter_fft, dy, dx);
+    auto row_r = row.mutable_unchecked<1>();
+    const ssize_t ncol = row.shape(0);
+    for (ssize_t i = 0; i < ncol; ++i) {
+        row_r(i) *= fft_ratio;
+    }
+    return row;
+}
+
+py::array_t<double>
 FpfsImage::measure_source(
     const py::array_t<double>& gal_array,
     const py::array_t<std::complex<double>>& filter_image,
@@ -287,19 +310,50 @@ FpfsImage::measure_source(
     py::array_t<double> src({nrow, ncol});
     auto src_r = src.mutable_unchecked<2>();
     for (ssize_t j = 0; j < nrow; ++j) {
-        int y = static_cast<int>(std::round(det_r(j).y));
-        int x = static_cast<int>(std::round(det_r(j).x));
-        double dy = det_r(j).y - y;
-        double dx = det_r(j).x - x;
-        img_obj.set_r(gal_array, x, y, false);
-        img_obj.fft();
-        py::array_t<double> row = img_obj.measure(fimg, dy, dx);
+        py::array_t<double> row = this->measure_with_filter(
+            gal_array,
+            fimg,
+            det_r(j).y,
+            det_r(j).x
+        );
         auto row_r = row.unchecked<1>();
         for (ssize_t i = 0; i < ncol; ++i) {
-            src_r(j, i) = row_r(i) * fft_ratio;
+            src_r(j, i) = row_r(i);
         }
     }
     return src;
+}
+
+py::array_t<double>
+FpfsImage::measure_source_at(
+    const py::array_t<double>& gal_array,
+    const py::array_t<std::complex<double>>& filter_image,
+    const py::array_t<double>& psf_array,
+    double y,
+    double x,
+    bool do_rotate
+) {
+    ssize_t ndim = filter_image.ndim();
+    if (ndim != 3) {
+        throw std::runtime_error(
+            "FPFS Error: Input filter image must be 3-dimensional."
+        );
+    }
+
+    img_obj.set_r(psf_array, false);
+    img_obj.fft();
+    if (do_rotate) {
+        img_obj.rotate90_f();
+    }
+    const py::array_t<std::complex<double>> parr = img_obj.draw_f();
+    const py::array_t<std::complex<double>> fimg = deconvolve_filter(
+        filter_image,
+        parr,
+        scale,
+        klim
+    );
+
+    return this->measure_with_filter(gal_array, fimg, y, x);
 }
 
 FpfsImage::~FpfsImage() {
@@ -368,6 +422,16 @@ pyExportFpfsImage(py::module_& fpfs) {
             py::arg("filter_image"),
             py::arg("psf_array"),
             py::arg("det")=py::none(),
+            py::arg("do_rotate")=false
+        )
+        .def("measure_source_at",
+            &FpfsImage::measure_source_at,
+            "Measure source properties using the filter at a single position",
+            py::arg("gal_array"),
+            py::arg("filter_image"),
+            py::arg("psf_array"),
+            py::arg("y"),
+            py::arg("x"),
             py::arg("do_rotate")=false
         );
 }
