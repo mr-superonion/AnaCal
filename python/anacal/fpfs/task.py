@@ -13,7 +13,6 @@ from .base import FpfsKernel
 
 npix_patch = 256
 npix_overlap = 64
-npix_default = 64
 
 
 class FpfsTask(FpfsKernel):
