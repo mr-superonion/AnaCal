@@ -188,28 +188,27 @@ class FpfsTask(FpfsKernel):
         src_n (NDArray): noise measurement catalog
         """
         # self.logger.warning("Input PSF is python object")
-        det_dtype = det.dtype
         src_g = []
         src_n = []
         for _d in det:
             this_psf_array = psf_obj.draw(x=_d["x"], y=_d["y"])
-            # TODO: remove det_array
-            det_array = np.array([_d], dtype=det_dtype)
-            srow = self.mtask.measure_source(
+            srow = self.mtask.measure_source_at(
                 gal_array=gal_array,
                 filter_image=self.bfunc_use,
                 psf_array=this_psf_array,
-                det=det_array,
+                y=_d["y"],
+                x=_d["x"],
                 do_rotate=False,
-            )[0]
+            )
             if noise_array is not None:
-                nrow = self.mtask.measure_source(
+                nrow = self.mtask.measure_source_at(
                     gal_array=noise_array,
                     filter_image=self.bfunc_use,
                     psf_array=this_psf_array,
-                    det=det_array,
+                    y=_d["y"],
+                    x=_d["x"],
                     do_rotate=True,
-                )[0]
+                )
                 srow = srow + nrow
                 src_n.append(nrow)
             src_g.append(srow)
