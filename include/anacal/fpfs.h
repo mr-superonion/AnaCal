@@ -1,6 +1,7 @@
 #ifndef ANACAL_FPFS_H
 #define ANACAL_FPFS_H
 
+#include "fpfs/base.h"
 #include "fpfs/catalog.h"
 #include "fpfs/image.h"
 
