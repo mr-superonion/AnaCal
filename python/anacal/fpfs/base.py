@@ -30,22 +30,6 @@ name_s = [
     "m64c",
     "m64s",
 ]
-ind_s = [
-    [0, False],
-    [14, False],
-    [16, False],
-    [16, True],
-    [28, False],
-    [30, False],
-    [30, True],
-    [32, False],
-    [32, True],
-    [42, False],
-    [46, False],
-    [46, True],
-]
-
-det_nrot = 4
 name_d = [
     "v0",
     "v1",
