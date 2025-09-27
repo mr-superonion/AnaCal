@@ -382,9 +382,9 @@ namespace anacal {
                     const std::complex<double> term1 = q1[idx] + cx * d1[idx] - cy * d2[idx];
                     const std::complex<double> term2 = q2[idx] + cy * d1[idx] + cx * d2[idx];
 
-                    out(irot * 3 + 0, j, i) = psi0;
-                    out(irot * 3 + 1, j, i) = q1[idx] - term1 * foub;
-                    out(irot * 3 + 2, j, i) = q2[idx] - term2 * foub;
+                    out(0 * det_nrot + irot, j, i) = psi0;
+                    out(1 * det_nrot + irot, j, i) = q1[idx] - term1 * foub;
+                    out(2 * det_nrot + irot, j, i) = q2[idx] - term2 * foub;
                 }
             }
         }
