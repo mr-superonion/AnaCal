@@ -257,23 +257,3 @@ def get_kmax(
     """Estimate the truncation radius ``kmax`` for the Gaussian kernel."""
 
     return _get_kmax(psf_pow, sigma, kmax_thres)
-
-
-def truncate_square(arr: NDArray, rcut: int) -> None:
-    """Truncate the input array with square
-
-    Args:
-    arr (ndarray): image array
-    rcut (int): radius of the square (width / 2)
-    """
-    if len(arr.shape) != 2 or arr.shape[0] != arr.shape[1]:
-        raise ValueError("Input array must be a 2D square array")
-    npix = arr.shape[0]
-    npix2 = npix // 2
-    assert rcut < npix2, "truncation radius too large."
-    if rcut < npix2 - 1:
-        arr[: npix2 - rcut, :] = 0
-        arr[npix2 + rcut + 1 :, :] = 0
-        arr[:, : npix2 - rcut] = 0
-        arr[:, npix2 + rcut + 1 :] = 0
-    return
