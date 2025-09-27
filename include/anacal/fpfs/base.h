@@ -284,12 +284,11 @@ namespace anacal {
             0, 14, 16, 16, 28, 30, 30, 32, 32, 42, 46, 46
         };
         static constexpr std::array<bool, 12> use_imag = {
-            false, false, false, true, false, false, true, false, true, false, false, true
+            false, false, false, true, false, false, true,
+            false, true, false, false, true
         };
 
-        py::array_t<double> chi(py::array::ShapeContainer{
-            static_cast<py::ssize_t>(indices.size()), ny, nx
-        });
+        py::array_t<double> chi({12, ny, nx});
         auto out = chi.mutable_unchecked<3>();
         for (size_t mode = 0; mode < indices.size(); ++mode) {
             const int idx_mode = indices[mode];
