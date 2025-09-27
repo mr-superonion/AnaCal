@@ -5,7 +5,7 @@ submodules such as :mod:`fpfs`, :mod:`psf`, :mod:`simulation`, and general
 utilities.
 """
 
-from . import _anacal, base, fpfs, simulation, utils, psf
+from . import _anacal, base, fpfs, psf, simulation, utils
 from .__version__ import __version__  # noqa
 from ._anacal import (
     detector,
