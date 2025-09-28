@@ -61,6 +61,106 @@ namespace math {
         math.def("exp", &exp, "Compute the exponential of a qnumber");
         math.def("pow", &pow, "Compute the exponential of a qnumber");
 
+        using size_type = qtensor::size_type;
+        py::class_<qtensor>(math, "qtensor")
+            .def(py::init<>())
+            .def(py::init<const std::vector<size_type>&>())
+            .def(py::init<const std::vector<size_type>&, const qnumber&>())
+            .def_static(
+                "from_flat",
+                [](std::vector<qnumber> data,
+                   const std::vector<size_type>& shape) {
+                    return qtensor::from_vector(std::move(data), shape);
+                },
+                py::arg("data"),
+                py::arg("shape"),
+                "Create a qtensor from a flat buffer of qnumbers"
+            )
+            .def_static(
+                "from_image",
+                [](std::vector<qnumber> data,
+                   size_type height,
+                   size_type width) {
+                    return qtensor::from_image(
+                        std::move(data),
+                        height,
+                        width
+                    );
+                },
+                py::arg("data"),
+                py::arg("height"),
+                py::arg("width"),
+                "Create a qtensor from ImageQ output"
+            )
+            .def_property_readonly(
+                "shape",
+                [](const qtensor& self) { return self.shape(); },
+                "Tensor shape expressed as a tuple of dimension lengths"
+            )
+            .def_property_readonly(
+                "strides",
+                [](const qtensor& self) { return self.strides(); },
+                "Tensor strides in units of qnumbers"
+            )
+            .def_property_readonly(
+                "ndim",
+                [](const qtensor& self) { return self.ndim(); },
+                "Number of tensor dimensions"
+            )
+            .def("size", &qtensor::size, "Total number of qnumbers")
+            .def("empty", &qtensor::empty, "Return True if the tensor is empty")
+            .def(
+                "is_contiguous",
+                &qtensor::is_contiguous,
+                "Return True if the tensor uses contiguous storage"
+            )
+            .def(
+                "reshape",
+                &qtensor::reshape,
+                py::arg("shape"),
+                "Return a reshaped view of the tensor"
+            )
+            .def(
+                "slice",
+                &qtensor::slice,
+                py::arg("dim"),
+                py::arg("start"),
+                py::arg("stop"),
+                py::arg("step") = 1,
+                "Return a view defined by slicing a single dimension"
+            )
+            .def(
+                "select",
+                &qtensor::select,
+                py::arg("dim"),
+                py::arg("index"),
+                "Return a view with a dimension fixed to a single index"
+            )
+            .def(
+                "get",
+                [](const qtensor& self, const std::vector<size_type>& indices) {
+                    return self.at(indices);
+                },
+                py::arg("indices"),
+                "Access a single qnumber using multidimensional indices"
+            )
+            .def(
+                "set",
+                [](qtensor& self,
+                   const std::vector<size_type>& indices,
+                   const qnumber& value) {
+                    self.at(indices) = value;
+                },
+                py::arg("indices"),
+                py::arg("value"),
+                "Assign a qnumber using multidimensional indices"
+            )
+            .def(
+                "to_list",
+                &qtensor::to_vector,
+                "Return a flat list of qnumbers in row-major order"
+            );
+
         py::class_<qmatrix<6, 6>>(math, "qmatrix6")
             .def(py::init<>())
             .def(

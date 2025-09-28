@@ -872,6 +872,16 @@ pyExportImage(py::module& m) {
             py::arg("xcen"),
             py::arg("ycen"),
             py::arg("noise_array")=py::none()
+        )
+        .def(
+            "prepare_qtensor",
+            &ImageQ::prepare_qtensor,
+            "Prepare a qtensor view over the qnumber image",
+            py::arg("gal_array"),
+            py::arg("psf_array"),
+            py::arg("xcen"),
+            py::arg("ycen"),
+            py::arg("noise_array")=py::none()
         );
 }
 
