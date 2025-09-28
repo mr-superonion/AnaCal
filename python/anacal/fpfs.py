@@ -66,17 +66,67 @@ name_d = [
 ]
 
 
-class FpfsKernel(AnacalBase):
-    """Fpfs measurement kernel object
+def gauss_kernel_rfft(
+    ny: int, nx: int, sigma: float, kmax: float, return_grid: bool = False
+):
+    """Generate a Gaussian kernel on grids for :func:`numpy.fft.rfft`.
+
+    This function is provided for backwards compatibility with the original
+    NumPy implementation but now delegates to the high-performance C++
+    extension.
+    """
+
+    return _gauss_kernel_rfft(ny, nx, sigma, kmax, return_grid)
+
+
+def shapelets2d_func(npix: int, norder: int, sigma: float, kmax: float):
+    """Generate complex shapelet functions in Fourier space."""
+
+    return _shapelets2d_func(npix, norder, sigma, kmax)
+
+
+def shapelets2d(norder: int, npix: int, sigma: float, kmax: float):
+    """Generate real-valued shapelet functions in Fourier space."""
+
+    chi = _shapelets2d(norder, npix, sigma, kmax)
+    return np.array(chi), name_s
+
+
+def detlets2d(
+    npix: int,
+    sigma: float,
+    kmax: float,
+):
+    """Generate complex detection basis functions in Fourier space."""
+
+    psi = _detlets2d(npix, sigma, kmax)
+    return psi, name_d
+
+
+def get_kmax(
+    psf_pow: NDArray,
+    sigma: float,
+    kmax_thres: float = 1e-20,
+) -> float:
+    """Estimate the truncation radius ``kmax`` for the Gaussian kernel."""
+
+    return _get_kmax(psf_pow, sigma, kmax_thres)
+
+
+class FpfsTask(AnacalBase):
+    """A base class for measurement
 
     Args:
     npix (int): number of pixels in a postage stamp
     pixel_scale (float): pixel scale in arcsec
     sigma_arcsec (float): Shapelet kernel size
+    noise_variance (float): variance of image noise
     kmax (float | None): maximum k
     psf_array (ndarray): an average PSF image [default: None]
     kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
-    do_detection (bool): whether compute detection kernel
+    do_detection (bool): whether compute detection kernels
+    bound (int): minimum distance to boundary [default: 0]
+    verbose (bool): whether display INFO
     """
 
     def __init__(
@@ -85,11 +135,13 @@ class FpfsKernel(AnacalBase):
         npix: int,
         pixel_scale: float,
         sigma_arcsec: float,
+        noise_variance: float = -1,
         kmax: float | None = None,
         psf_array: NDArray | None = None,
         kmax_thres: float = 1e-20,
         do_detection: bool = True,
-        verbose=False,
+        bound: int = 0,
+        verbose: bool = False,
     ) -> None:
         super().__init__(verbose=verbose)
         self.npix = npix
@@ -131,6 +183,35 @@ class FpfsKernel(AnacalBase):
             self.kmax = kmax
 
         self.prepare_fpfs_bases()
+        klim = 1e10 if self.kmax is None else (self.kmax / self.pixel_scale)
+        self.mtask = FpfsImage(
+            nx=self.npix,
+            ny=self.npix,
+            scale=self.pixel_scale,
+            sigma_arcsec=self.sigma_arcsec,
+            klim=klim,
+            psf_array=self.psf_array,
+            use_estimate=True,
+        )
+
+        if self.do_detection:
+            self.dtask = FpfsImage(
+                nx=npix_patch,
+                ny=npix_patch,
+                scale=self.pixel_scale,
+                sigma_arcsec=self.sigma_arcsec,
+                klim=klim,
+                psf_array=self.psf_array,
+                use_estimate=True,
+                npix_overlap=npix_overlap,
+                bound=bound,
+            )
+            if not noise_variance > 0:
+                raise ValueError("Noise variance should be positive")
+            self.prepare_covariance(variance=noise_variance)
+        else:
+            self.dtask = None
+
         return
 
     def prepare_fpfs_bases(self):
@@ -214,126 +295,6 @@ class FpfsKernel(AnacalBase):
         self.std_modes = np.sqrt(np.diagonal(cov_elems))
         self.std_m00 = self.std_modes[self.di["m00"]]
         return cov_elems
-
-
-def gauss_kernel_rfft(
-    ny: int, nx: int, sigma: float, kmax: float, return_grid: bool = False
-):
-    """Generate a Gaussian kernel on grids for :func:`numpy.fft.rfft`.
-
-    This function is provided for backwards compatibility with the original
-    NumPy implementation but now delegates to the high-performance C++
-    extension.
-    """
-
-    return _gauss_kernel_rfft(ny, nx, sigma, kmax, return_grid)
-
-
-def shapelets2d_func(npix: int, norder: int, sigma: float, kmax: float):
-    """Generate complex shapelet functions in Fourier space."""
-
-    return _shapelets2d_func(npix, norder, sigma, kmax)
-
-
-def shapelets2d(norder: int, npix: int, sigma: float, kmax: float):
-    """Generate real-valued shapelet functions in Fourier space."""
-
-    chi = _shapelets2d(norder, npix, sigma, kmax)
-    return np.array(chi), name_s
-
-
-def detlets2d(
-    npix: int,
-    sigma: float,
-    kmax: float,
-):
-    """Generate complex detection basis functions in Fourier space."""
-
-    psi = _detlets2d(npix, sigma, kmax)
-    return psi, name_d
-
-
-def get_kmax(
-    psf_pow: NDArray,
-    sigma: float,
-    kmax_thres: float = 1e-20,
-) -> float:
-    """Estimate the truncation radius ``kmax`` for the Gaussian kernel."""
-
-    return _get_kmax(psf_pow, sigma, kmax_thres)
-
-
-class FpfsTask(FpfsKernel):
-    """A base class for measurement
-
-    Args:
-    npix (int): number of pixels in a postage stamp
-    pixel_scale (float): pixel scale in arcsec
-    sigma_arcsec (float): Shapelet kernel size
-    noise_variance (float): variance of image noise
-    kmax (float | None): maximum k
-    psf_array (ndarray): an average PSF image [default: None]
-    kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
-    do_detection (bool): whether compute detection kernels
-    bound (int): minimum distance to boundary [default: 0]
-    verbose (bool): whether display INFO
-    """
-
-    def __init__(
-        self,
-        *,
-        npix: int,
-        pixel_scale: float,
-        sigma_arcsec: float,
-        noise_variance: float = -1,
-        kmax: float | None = None,
-        psf_array: NDArray | None = None,
-        kmax_thres: float = 1e-20,
-        do_detection: bool = True,
-        bound: int = 0,
-        verbose: bool = False,
-    ) -> None:
-        super().__init__(
-            npix=npix,
-            pixel_scale=pixel_scale,
-            sigma_arcsec=sigma_arcsec,
-            kmax=kmax,
-            psf_array=psf_array,
-            kmax_thres=kmax_thres,
-            do_detection=do_detection,
-            verbose=verbose,
-        )
-        klim = 1e10 if self.kmax is None else (self.kmax / self.pixel_scale)
-        self.prepare_fpfs_bases()
-        self.mtask = FpfsImage(
-            nx=self.npix,
-            ny=self.npix,
-            scale=self.pixel_scale,
-            sigma_arcsec=self.sigma_arcsec,
-            klim=klim,
-            psf_array=self.psf_array,
-            use_estimate=True,
-        )
-
-        if self.do_detection:
-            self.dtask = FpfsImage(
-                nx=npix_patch,
-                ny=npix_patch,
-                scale=self.pixel_scale,
-                sigma_arcsec=self.sigma_arcsec,
-                klim=klim,
-                psf_array=self.psf_array,
-                use_estimate=True,
-                npix_overlap=npix_overlap,
-                bound=bound,
-            )
-            if not noise_variance > 0:
-                raise ValueError("Noise variance should be positive")
-            self.prepare_covariance(variance=noise_variance)
-        else:
-            self.dtask = None
-
-        return
 
     def detect(
         self,
