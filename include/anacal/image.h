@@ -3,21 +3,20 @@
 
 #include "table.h"
 #include "model.h"
-#include <fftw3.h>
+#include <torch/extension.h>
 
 namespace anacal {
 inline constexpr double min_deconv_ratio = 1e-5;
 
 class Image {
 private:
-    fftw_plan plan_forward = nullptr;
-    fftw_plan plan_backward = nullptr;
     int nx2, ny2, npixels, npixels_f;
     int kx_length, ky_length;
     double dkx, dky;
     double norm_factor;
-    double* data_r = nullptr;
-    fftw_complex* data_f = nullptr;
+    torch::Tensor data_r;
+    torch::Tensor data_f;
+    torch::Tensor data_f_work;
 
     // Preventing copy (implement these if you need copy semantics)
     Image(const Image&) = delete;
@@ -100,12 +99,14 @@ public:
     Image(Image&& other) noexcept = default;
     Image& operator=(Image&& other) noexcept = default;
 
-    ~Image();
+    ~Image() = default;
 
     inline void truncate(double xlim, bool ishift) {
         int off_x = ishift ? this->nx2 : 0;
         int off_y = ishift ? this->ny2 : 0;
         double xlim2 = xlim * xlim;
+
+        auto data_r_accessor = this->data_r.accessor<double, 2>();
 
         for (int j = 0; j < this->ny; ++j) {
             int jj = ((j + off_y) % this->ny - this->ny2);
@@ -116,10 +117,9 @@ public:
                 double x = ii * this->scale;
 
                 double r2 = x * x + y * y;
-                int index = j * this->nx + i;
 
                 if (r2 > xlim2) {
-                    this->data_r[index] = 0.0;
+                    data_r_accessor[j][i] = 0.0;
                 }
             }
         }

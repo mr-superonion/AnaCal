@@ -1,5 +1,7 @@
 #include "anacal.h"
 
+#include <c10/util/complex.h>
+
 
 namespace anacal {
 
@@ -21,6 +23,7 @@ Image::Image(
     this->ny = ny;
     this->scale = scale;
     this->mode = mode;
+    (void)use_estimate;
     // mode = 1: only initialize configuration space
     // mode = 2: only initialize Fourier space
     // mode = 3: initialize both spaces and forward and backward operations
@@ -35,19 +38,16 @@ Image::Image(
     ky_length = ny;
     dkx = 2.0 * M_PI / nx / scale;
     dky = 2.0 * M_PI / ny / scale;
-    unsigned fftw_flag = use_estimate ? FFTW_ESTIMATE : FFTW_MEASURE;
 
     if (mode & 1) {
-        data_r = (double*) fftw_malloc(sizeof(double) * npixels);
-        memset(data_r, 0, sizeof(double) * npixels);
+        auto options = torch::TensorOptions().dtype(torch::kFloat64);
+        data_r = torch::zeros({ny, nx}, options);
     }
+
     if (mode & 2) {
-        data_f = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npixels_f);
-        memset(data_f, 0, sizeof(fftw_complex) * npixels_f);
-    }
-    if (mode == 3) {
-        plan_forward = fftw_plan_dft_r2c_2d(ny, nx, data_r, data_f, fftw_flag);
-        plan_backward = fftw_plan_dft_c2r_2d(ny, nx, data_f, data_r, fftw_flag);
+        auto options = torch::TensorOptions().dtype(torch::kComplexDouble);
+        data_f = torch::zeros({ny, kx_length}, options);
+        data_f_work = torch::empty_like(data_f);
     }
     return;
 }
@@ -88,13 +88,14 @@ Image::set_r (
     }
 
     // First fill in the data_r with 0
-    std::fill_n(this->data_r, this->ny * this->nx, 0.0);
+    this->data_r.zero_();
+    auto data_r_accessor = this->data_r.accessor<double, 2>();
     // The part has data
     for (int j = ybeg; j < yend; ++j) {
         int jj = (j - ybeg + off_y)  % this->ny;
         for (int i = xbeg; i < xend; ++i) {
             int ii = (i - xbeg + off_x) % this->nx;
-            data_r[jj * this->nx + ii] = r(j, i);
+            data_r_accessor[jj][ii] = r(j, i);
         }
     }
     return;
@@ -124,13 +125,14 @@ Image::set_r (
 
 void
 Image::set_delta_r (bool ishift) {
-    std::fill_n(data_r, ny * nx, 0.0);
+    this->data_r.zero_();
+    auto data_r_accessor = this->data_r.accessor<double, 2>();
     if (ishift){
-        data_r[0] = 1.0;
+        data_r_accessor[0][0] = 1.0;
     } else {
         int jj = ny / 2;
         int ii = nx / 2;
-        data_r[jj * nx + ii] = 1.0;
+        data_r_accessor[jj][ii] = 1.0;
     }
     return;
 }
@@ -146,12 +148,11 @@ Image::set_f(
         throw std::runtime_error("Error: input filter shape not correct");
     }
     auto r = input.unchecked<2>();
+    auto data_f_accessor = this->data_f.accessor<c10::complex<double>, 2>();
     for (int j = 0; j < ky_length ; ++j) {
-        int ji = j * kx_length;
         for (int i = 0; i < kx_length ; ++i) {
-            int index = ji + i;
-            data_f[index][0] = r(j, i).real();
-            data_f[index][1] = r(j, i).imag();
+            const auto value = r(j, i);
+            data_f_accessor[j][i] = c10::complex<double>(value.real(), value.imag());
         }
     }
     return;
@@ -161,14 +162,7 @@ Image::set_f(
 void
 Image::set_delta_f() {
     assert_mode(this->mode & 2);
-    for (int j = 0; j < ky_length; ++j) {
-        int ji = j * kx_length;
-        for (int i = 0; i < kx_length; ++i) {
-            int index = ji + i;
-            data_f[index][0] = 1.0;
-            data_f[index][1] = 0.0;
-        }
-    }
+    this->data_f.fill_(c10::complex<double>(1.0, 0.0));
 }
 
 
@@ -187,25 +181,22 @@ Image::set_noise_f(
         true
     );
     auto r = ps.unchecked<2>();
+    auto data_f_accessor = this->data_f.accessor<c10::complex<double>, 2>();
 
     std::mt19937 engine(seed);
     double std_f = std::sqrt(nx * ny / 2.0);
     std::normal_distribution<double> dist(0.0, std_f);
     for (int j = 0; j < ky_length; ++j) {
-        int ji = j * kx_length;
         for (int i = 0; i < kx_length; ++i) {
-            int index = ji + i;
             double ff = std::sqrt(std::abs(r(j, i)));
-            data_f[index][0] = ff * dist(engine);
-            data_f[index][1] = ff * dist(engine);
+            data_f_accessor[j][i] = c10::complex<double>(ff * dist(engine), ff * dist(engine));
         }
     }
 
     {
         // k = (0, 0)
         double ff = std::sqrt(2.0 * std::abs(r(0, 0)));
-        data_f[0][0] = ff * dist(engine);
-        data_f[0][1] = 0.0;
+        data_f_accessor[0][0] = c10::complex<double>(ff * dist(engine), 0.0);
 
         // k = (0, ny / 2)
         // F(0, ny / 2)  = F(0, -ny / 2)
@@ -213,9 +204,7 @@ Image::set_noise_f(
         int i = 0;
         int j = ny2;
         ff = std::sqrt(2.0 * std::abs(r(j, i)));
-        int index = j * kx_length + i;
-        data_f[index][0] = ff * dist(engine);
-        data_f[index][1] = 0.0;
+        data_f_accessor[j][i] = c10::complex<double>(ff * dist(engine), 0.0);
 
         // k = (nx / 2, 0)
         // F(nx / 2, 0)  = F(-nx / 2, 0)
@@ -223,36 +212,28 @@ Image::set_noise_f(
         i = nx2;
         j = 0;
         ff = std::sqrt(2.0 * std::abs(r(j, i)));
-        index = j * kx_length + i;
-        data_f[index][0] = ff * dist(engine);
-        data_f[index][1] = 0.0;
+        data_f_accessor[j][i] = c10::complex<double>(ff * dist(engine), 0.0);
     }
 
     if (nx % 2 == 0 && ny % 2 == 0) {
         int i = nx2;
         int j = ny2;
-        int index = j * kx_length + i;
         double ff = std::sqrt(2.0 * std::abs(r(j, i)));
-        data_f[index][0] = ff * dist(engine);
-        data_f[index][1] = 0.0;
+        data_f_accessor[j][i] = c10::complex<double>(ff * dist(engine), 0.0);
     }
 
     for (int j = 1; j < ny2; ++j) {
         int j2 = -j + ny;  // -j mod ny
         {
             int i = 0;
-            int index = j * kx_length + i;
-            int index2 = j2 * kx_length + i;
-            data_f[index][0] = data_f[index2][0];
-            data_f[index][1] = -data_f[index2][1];
+            const auto value = data_f_accessor[j2][i];
+            data_f_accessor[j][i] = c10::complex<double>(value.real(), -value.imag());
         }
 
         {
             int i = nx2;
-            int index = j * kx_length + i;
-            int index2 = j2 * kx_length + i;
-            data_f[index][0] = data_f[index2][0];
-            data_f[index][1] = -data_f[index2][1];
+            const auto value = data_f_accessor[j2][i];
+            data_f_accessor[j][i] = c10::complex<double>(value.real(), -value.imag());
         }
     }
 }
@@ -261,32 +242,25 @@ Image::set_noise_f(
 void
 Image::fft() {
     assert_mode(this->mode == 3);
-    fftw_execute(plan_forward);
-    return;
+    auto result = torch::fft::rfftn(this->data_r);
+    this->data_f.copy_(result);
 }
 
 
 void
 Image::ifft() {
     assert_mode(this->mode == 3);
-    fftw_execute(plan_backward);
-    for (int i = 0; i < npixels; ++i){
-        data_r[i] = data_r[i] * this->norm_factor;
-    }
-    return;
+    auto result = torch::fft::irfftn(this->data_f, {ny, nx});
+    this->data_r.copy_(result);
 }
 
 
 void
 Image::_rotate90_f(int flip) {
     assert_mode(this->mode & 2);
-    // copy data (fourier space)
-    fftw_complex* data = nullptr;
-    data = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npixels_f);
-    for (int i =0; i < npixels_f; ++i) {
-        data[i][0] = data_f[i][0];
-        data[i][1] = data_f[i][1];
-    }
+    this->data_f_work.copy_(this->data_f);
+    auto data_accessor = this->data_f.accessor<c10::complex<double>, 2>();
+    auto work_accessor = this->data_f_work.accessor<c10::complex<double>, 2>();
 
     // update data
     // upper half
@@ -294,10 +268,10 @@ Image::_rotate90_f(int flip) {
         int xx = j - ny2;
         for (int i = 0; i < kx_length; ++i) {
             int yy = ny2 - i;
-            int index = (j + ny2) % ny * kx_length + i;
-            int index2 = (yy + ny2) % ny * kx_length + xx;
-            data_f[index][0] = data[index2][0];
-            data_f[index][1] = data[index2][1] * flip;
+            int jj = (j + ny2) % ny;
+            int yy_index = (yy + ny2) % ny;
+            const auto value = work_accessor[yy_index][xx];
+            data_accessor[jj][i] = c10::complex<double>(value.real(), value.imag() * flip);
         }
     }
     // lower half
@@ -305,10 +279,10 @@ Image::_rotate90_f(int flip) {
         int xx = ny2 - j;
         for (int i = 0; i < kx_length - 1; ++i) {
             int yy = ny2 + i;
-            int index = (j + ny2) % ny * kx_length + i;
-            int index2 = (yy + ny2) % ny * kx_length + xx;
-            data_f[index][0] = data[index2][0];
-            data_f[index][1] = -data[index2][1] * flip;
+            int jj = (j + ny2) % ny;
+            int yy_index = (yy + ny2) % ny;
+            const auto value = work_accessor[yy_index][xx];
+            data_accessor[jj][i] = c10::complex<double>(value.real(), -value.imag() * flip);
         }
     }
     // lower half with i = kx_length - 1
@@ -316,13 +290,11 @@ Image::_rotate90_f(int flip) {
     int yy = 0;
     for (int j = 0; j < ny2; ++j) {
         int xx = nx2 - j;
-        int index = (j + ny2) % ny * kx_length + i;
-        int index2 = (yy + ny2) % ny * kx_length + xx;
-        data_f[index][0] = data[index2][0];
-        data_f[index][1] = -data[index2][1] * flip;
+        int jj = (j + ny2) % ny;
+        int yy_index = (yy + ny2) % ny;
+        const auto value = work_accessor[yy_index][xx];
+        data_accessor[jj][i] = c10::complex<double>(value.real(), -value.imag() * flip);
     }
-    fftw_free(data);
-    data = nullptr;
 }
 
 
@@ -346,11 +318,15 @@ Image::add_image_f(
 ) {
     assert_mode(this->mode & 2);
     auto r = image.unchecked<2>();
+    auto data_f_accessor = this->data_f.accessor<c10::complex<double>, 2>();
     for (int j = 0; j < ky_length ; ++j) {
         for (int i = 0; i < kx_length ; ++i) {
-            int index = j * kx_length + i;
-            data_f[index][0] = data_f[index][0] + r(j, i).real();
-            data_f[index][1] = data_f[index][1] + r(j, i).imag();
+            const auto value = r(j, i);
+            auto current = data_f_accessor[j][i];
+            data_f_accessor[j][i] = c10::complex<double>(
+                current.real() + value.real(),
+                current.imag() + value.imag()
+            );
         }
     }
 }
@@ -362,11 +338,15 @@ Image::subtract_image_f(
 ) {
     assert_mode(this->mode & 2);
     auto r = image.unchecked<2>();
+    auto data_f_accessor = this->data_f.accessor<c10::complex<double>, 2>();
     for (int j = 0; j < ky_length ; ++j) {
         for (int i = 0; i < kx_length ; ++i) {
-            int index = j * kx_length + i;
-            data_f[index][0] = data_f[index][0] - r(j, i).real();
-            data_f[index][1] = data_f[index][1] - r(j, i).imag();
+            const auto value = r(j, i);
+            auto current = data_f_accessor[j][i];
+            data_f_accessor[j][i] = c10::complex<double>(
+                current.real() - value.real(),
+                current.imag() - value.imag()
+            );
         }
     }
 }
@@ -377,15 +357,14 @@ Image::filter(
     const BaseModel& filter_model
 ) {
     assert_mode(this->mode & 2);
+    auto data_f_accessor = this->data_f.accessor<c10::complex<double>, 2>();
     for (int j = 0; j < ky_length; ++j) {
         double ky = ((j < ny2) ? j : (j - ny)) * dky ;
         for (int i = 0; i < kx_length; ++i) {
-            int index = j * kx_length + i;
             double kx = i * dkx;
-            std::complex<double> val(data_f[index][0], data_f[index][1]);
+            auto val = static_cast<std::complex<double>>(data_f_accessor[j][i]);
             std::complex<double> result = val * filter_model.apply(kx, ky);
-            data_f[index][0] = result.real();
-            data_f[index][1] = result.imag();
+            data_f_accessor[j][i] = c10::complex<double>(result.real(), result.imag());
         }
     }
 }
@@ -397,13 +376,12 @@ Image::filter(
 ) {
     assert_mode(this->mode & 2);
     auto r = filter_image.unchecked<2>();
+    auto data_f_accessor = this->data_f.accessor<c10::complex<double>, 2>();
     for (int j = 0; j < ky_length ; ++j) {
         for (int i = 0; i < kx_length ; ++i) {
-            int index = j * kx_length + i;
-            std::complex<double> val1(data_f[index][0], data_f[index][1]);
+            auto val1 = static_cast<std::complex<double>>(data_f_accessor[j][i]);
             val1 = val1 * r(j, i);
-            data_f[index][0] = val1.real();
-            data_f[index][1] = val1.imag();
+            data_f_accessor[j][i] = c10::complex<double>(val1.real(), val1.imag());
         }
     }
 }
@@ -432,13 +410,12 @@ Image::measure(
     }
 
     auto fr = filter_image.unchecked<3>();
+    auto data_f_accessor = this->data_f.accessor<c10::complex<double>, 2>();
     for (int j = 0; j < ky_length; ++j) {
-        int ji = j * kx_length;
         double kj = two_pi * (j <= ny / 2 ? j : j - ny) / ny;
         for (int i = -1; i < 1; ++i) {
             int ii = (i + kx_length) % kx_length;
-            int index = ji + ii;
-            std::complex<double> val(data_f[index][0], data_f[index][1]);
+            auto val = static_cast<std::complex<double>>(data_f_accessor[j][ii]);
             double ki = two_pi * ii / nx;
             double phase = kj * dy + ki * dx;
             std::complex<double> factor(
@@ -449,8 +426,7 @@ Image::measure(
             }
         }
         for (int i = 1; i < kx_length - 1; ++i) {
-            int index = ji + i;
-            std::complex<double> val(data_f[index][0], data_f[index][1]);
+            auto val = static_cast<std::complex<double>>(data_f_accessor[j][i]);
             double ki = two_pi * i / nx;
             double phase = kj * dy + ki * dx;
             std::complex<double> factor(
@@ -484,26 +460,26 @@ Image::deconvolve(
     // minimum value allowed for deconvolution
     double min_deconv_value = min_deconv_ratio * fp_0.real();
 
+    auto data_f_accessor = this->data_f.accessor<c10::complex<double>, 2>();
     for (int j = 0; j < ky_length; ++j) {
         double ky = ((j < ny2) ? j : (j - ny)) * dky ;
         for (int i = 0; i < kx_length; ++i) {
             double kx = i * dkx;
             double r2 = kx * kx + ky * ky;
-            int index = j * kx_length + i;
             if (r2 > klim_sq) {
-                data_f[index][0] = 0.0;
-                data_f[index][1] = 0.0;
+                data_f_accessor[j][i] = c10::complex<double>(0.0, 0.0);
             } else {
-                std::complex<double> val(data_f[index][0], data_f[index][1]);
+                auto val = static_cast<std::complex<double>>(data_f_accessor[j][i]);
                 std::complex<double> fp_k = psf_model.apply(kx, ky);
                 double abs_kval = std::abs(fp_k);
                 if (abs_kval < min_deconv_value) {
-                    data_f[index][0] = val.real() / min_deconv_value;
-                    data_f[index][1] = val.imag() / min_deconv_value;
+                    data_f_accessor[j][i] = c10::complex<double>(
+                        val.real() / min_deconv_value,
+                        val.imag() / min_deconv_value
+                    );
                 } else {
                     std::complex<double> result = val / fp_k;
-                    data_f[index][0] = result.real();
-                    data_f[index][1] = result.imag();
+                    data_f_accessor[j][i] = c10::complex<double>(result.real(), result.imag());
                 }
             }
         }
@@ -530,26 +506,25 @@ Image::deconvolve(
     // minimum value allowed for deconvolution
     double min_deconv_value = min_deconv_ratio * rd(0, 0).real();
 
+    auto data_f_accessor = this->data_f.accessor<c10::complex<double>, 2>();
     for (int j = 0; j < ky_length; ++j) {
         double ky = ((j < ny2) ? j : (j - ny)) * dky;
-        int ji = j * kx_length;
         for (int i = 0; i < kx_length; ++i) {
             double kx = i * dkx;
             double r2 = kx * kx + ky * ky;
-            int index = ji + i;
             if (r2 > klim_sq) {
-                data_f[index][0] = 0.0;
-                data_f[index][1] = 0.0;
+                data_f_accessor[j][i] = c10::complex<double>(0.0, 0.0);
             } else {
-                std::complex<double> val(data_f[index][0], data_f[index][1]);
+                auto val = static_cast<std::complex<double>>(data_f_accessor[j][i]);
                 double abs_kval = std::abs(rd(j, i));
                 if (abs_kval < min_deconv_value) {
-                    data_f[index][0] = val.real() / min_deconv_value;
-                    data_f[index][1] = val.imag() / min_deconv_value;
+                    data_f_accessor[j][i] = c10::complex<double>(
+                        val.real() / min_deconv_value,
+                        val.imag() / min_deconv_value
+                    );
                 } else {
                     val = val / rd(j, i);
-                    data_f[index][0] = val.real();
-                    data_f[index][1] = val.imag();
+                    data_f_accessor[j][i] = c10::complex<double>(val.real(), val.imag());
                 }
             }
         }
@@ -563,11 +538,11 @@ Image::draw_f() const {
     // Prepare data_fput array
     auto result = py::array_t<std::complex<double>>({ky_length, kx_length});
     auto r = result.mutable_unchecked<2>(); // Accessor
+    auto data_f_accessor = this->data_f.accessor<c10::complex<double>, 2>();
     for (int j = 0; j < ky_length ; ++j) {
         for (int i = 0; i < kx_length ; ++i) {
-            int index = j * kx_length + i;
-            std::complex<double> val(data_f[index][0], data_f[index][1]);
-            r(j, i) = val;
+            const auto val = data_f_accessor[j][i];
+            r(j, i) = std::complex<double>(val.real(), val.imag());
         }
     }
     return result;
@@ -580,36 +555,23 @@ Image::draw_r(bool ishift) const {
     assert_mode(this->mode & 1);
     auto result = py::array_t<double>({ny, nx});
     auto r = result.mutable_unchecked<2>();
+    auto data_r_accessor = this->data_r.accessor<double, 2>();
     if (ishift) {
         for (int j = 0; j < ny; ++j) {
             int jj = (j + ny2) % ny;
-            int ji = jj * nx;
             for (int i = 0; i < nx; ++i) {
                 int ii = (i + nx2) % nx;
-                r(j, i) = data_r[ji + ii];
+                r(j, i) = data_r_accessor[jj][ii];
             }
         }
     } else {
         for (int j = 0; j < ny; ++j) {
-            int ji = j * nx;
             for (int i = 0; i < nx; ++i) {
-                r(j, i) = data_r[ji + i];
+                r(j, i) = data_r_accessor[j][i];
             }
         }
     }
     return result;
-}
-
-
-Image::~Image() {
-    if (plan_forward) fftw_destroy_plan(plan_forward);
-    if (plan_backward) fftw_destroy_plan(plan_backward);
-    fftw_free(data_r);
-    fftw_free(data_f);
-    plan_forward = nullptr;
-    plan_backward = nullptr;
-    data_r = nullptr;
-    data_f = nullptr;
 }
 
 
