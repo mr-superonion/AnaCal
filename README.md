@@ -15,10 +15,10 @@ while remaining computationally efficient.
 To compute shear response, we introduce the concept of 
 [pixel shear response](https://ui.adsabs.harvard.edu/abs/2023MNRAS.521.4904L/abstract)---the derivatives 
 of pixel values with respect to applied shear distortions. We then propagate these responses using 
-[quintuple numbers](https://ui.adsabs.harvard.edu/abs/2025arXiv250616607L/abstract), a  technique for efficient
+[quintuple numbers](https://ui.adsabs.harvard.edu/abs/2025arXiv250616607L/abstract), a technique for efficient
 shear response tracking. For accurate noise bias correction, we adopt a [renoising
-approach](https://ui.adsabs.harvard.edu/abs/2025MNRAS.536.3663L/abstract) approach that enables analytical
- treatment of noise effects.
+approach](https://ui.adsabs.harvard.edu/abs/2025MNRAS.536.3663L/abstract) that enables analytical treatment
+of noise effects.
 
 Currently, the framework supports the following analytical shear estimators:
 + [FPFS](https://github.com/mr-superonion/FPFS): A fixed moments method based
@@ -27,7 +27,7 @@ Currently, the framework supports the following analytical shear estimators:
   [ref2](https://ui.adsabs.harvard.edu/abs/2022MNRAS.511.4850L/abstract),
   [ref3](https://ui.adsabs.harvard.edu/abs/2024MNRAS.52710388L/abstract),
   and [ref4](https://ui.adsabs.harvard.edu/abs/2025MNRAS.537..507P/abstract).)
-+ [NGMIX](https://github.com/esheldon/ngmix): Gassian model fitting.
++ [NGMIX](https://github.com/esheldon/ngmix): Gaussian model fitting.
   (see [ref5](https://ui.adsabs.harvard.edu/abs/2025arXiv250616607L/abstract))
 
 ## Installation
@@ -41,7 +41,7 @@ conda install -c conda-forge --file requirements.txt
 conda install -c conda-forge --file requirements_test.txt
 pip install . --user
 ```
-or install stable verion
+or install stable version
 ```
 pip install anacal
 ```
