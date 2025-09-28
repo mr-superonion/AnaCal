@@ -21,14 +21,12 @@ from ._anacal.fpfs import (
 from ._anacal.fpfs import shapelets2d as _shapelets2d
 from ._anacal.fpfs import shapelets2d_func as _shapelets2d_func
 from ._anacal.image import Image
-from base import AnacalBase
 from numpy.typing import NDArray
-from psf import BasePsf
+from .psf import BasePsf
 from pydantic import BaseModel, Field
 
 npix_patch = 256
 npix_overlap = 64
-
 
 
 # M_{nm}
@@ -66,7 +64,7 @@ name_d = [
 ]
 
 
-class FpfsKernel(AnacalBase):
+class FpfsKernel:
     """Fpfs measurement kernel object
 
     Args:
