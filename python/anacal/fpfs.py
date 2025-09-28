@@ -1,5 +1,8 @@
 import numpy as np
 import numpy.lib.recfunctions as rfn
+from numpy.typing import NDArray
+from pydantic import BaseModel, Field
+
 from ._anacal.fpfs import (
     FpfsImage,
 )
@@ -21,9 +24,8 @@ from ._anacal.fpfs import (
 from ._anacal.fpfs import shapelets2d as _shapelets2d
 from ._anacal.fpfs import shapelets2d_func as _shapelets2d_func
 from ._anacal.image import Image
-from numpy.typing import NDArray
+from ._anacal.task import AnacalBase
 from .psf import BasePsf
-from pydantic import BaseModel, Field
 
 npix_patch = 256
 npix_overlap = 64
@@ -62,154 +64,6 @@ name_d = [
     "v2r2",
     "v3r2",
 ]
-
-
-class FpfsKernel:
-    """Fpfs measurement kernel object
-
-    Args:
-    npix (int): number of pixels in a postage stamp
-    pixel_scale (float): pixel scale in arcsec
-    sigma_arcsec (float): Shapelet kernel size
-    kmax (float | None): maximum k
-    psf_array (ndarray): an average PSF image [default: None]
-    kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
-    do_detection (bool): whether compute detection kernel
-    """
-
-    def __init__(
-        self,
-        *,
-        npix: int,
-        pixel_scale: float,
-        sigma_arcsec: float,
-        kmax: float | None = None,
-        psf_array: NDArray | None = None,
-        kmax_thres: float = 1e-20,
-        do_detection: bool = True,
-    ) -> None:
-        self.npix = npix
-        self.do_detection = do_detection
-
-        self.sigma_arcsec = sigma_arcsec
-        if self.sigma_arcsec > 3.0:
-            raise ValueError("sigma_arcsec should be < 3 arcsec")
-
-        # A few import scales
-        self.pixel_scale = pixel_scale
-        self._dk = 2.0 * np.pi / self.npix  # assuming pixel scale is 1
-
-        # the following two assumes pixel_scale = 1
-        self.sigmaf = float(self.pixel_scale / self.sigma_arcsec)
-        if psf_array is None:
-            # make a delta psf
-            psf_array = np.zeros((npix, npix))
-            psf_array[npix // 2, npix // 2] = 1
-        else:
-            if not psf_array.shape == (npix, npix):
-                raise ValueError("psf arry has a wrong shape")
-
-        psf_f = np.fft.rfft2(psf_array)
-        self.psf_array = psf_array
-        self.psf_pow = (np.abs(psf_f) ** 2.0).astype(np.float64)
-        if kmax is None:
-            assert psf_array is not None
-            # truncation raduis for PSF in Fourier space
-            self.kmax = (
-                get_kmax(
-                    psf_pow=self.psf_pow,
-                    sigma=self.sigmaf / np.sqrt(2.0),
-                    kmax_thres=kmax_thres,
-                )
-                * self._dk
-            )
-        else:
-            self.kmax = kmax
-
-        self.prepare_fpfs_bases()
-        return
-
-    def prepare_fpfs_bases(self):
-        """This fucntion prepare the FPFS bases (shapelets and detectlets)"""
-        bfunc = []
-        self.colnames = []
-        sfunc, snames = shapelets2d(
-            norder=norder_shapelets,
-            npix=self.npix,
-            sigma=self.sigmaf,
-            kmax=self.kmax,
-        )
-        bfunc.append(sfunc)
-        self.colnames = self.colnames + snames
-        if self.do_detection:
-            dfunc, dnames = detlets2d(
-                npix=self.npix,
-                sigma=self.sigmaf,
-                kmax=self.kmax,
-            )
-            bfunc.append(dfunc)
-            self.colnames = self.colnames + dnames
-        self.bfunc = np.vstack(bfunc)
-        self.ncol = len(self.colnames)
-        self.dtype = [(name, "f8") for name in self.colnames]
-        self.bfunc_use = np.transpose(self.bfunc, (1, 2, 0))
-        self.di = {
-            element: index for index, element in enumerate(self.colnames)
-        }
-        return
-
-    def prepare_covariance(
-        self, variance: float, noise_pf: NDArray | None = None
-    ):
-        """Estimate covariance of measurement error
-
-        Args:
-        variance (float): Noise variance
-        noise_pf (NDArray | None): Power spectrum (assuming homogeneous) of
-        noise
-        """
-        variance = variance * 2.0
-        if noise_pf is not None:
-            if noise_pf.shape == (self.npix, self.npix // 2 + 1):
-                # rfft
-                noise_pf = np.array(noise_pf, dtype=np.float64)
-            elif noise_pf.shape == (self.npix, self.npix):
-                # fft
-                noise_pf = np.fft.ifftshift(noise_pf)
-                noise_pf = np.array(
-                    noise_pf[:, : self.npix // 2 + 1], dtype=np.float64
-                )
-            else:
-                raise ValueError("noise power not in correct shape")
-        else:
-            ss = (self.npix, self.npix // 2 + 1)
-            noise_pf = np.ones(ss)
-        norm_factor = variance * self.npix**2.0 / noise_pf[0, 0]
-        noise_pf = noise_pf * norm_factor
-
-        img_obj = Image(nx=self.npix, ny=self.npix, scale=self.pixel_scale)
-        img_obj.set_f(noise_pf)
-        img_obj.deconvolve(
-            psf_image=self.psf_pow,
-            klim=self.kmax / self.pixel_scale,
-        )
-        noise_pf_deconv = img_obj.draw_f().real
-        del img_obj
-
-        _w = np.ones(self.psf_pow.shape) * 2.0
-        _w[:, 0] = 1.0
-        _w[:, -1] = 1.0
-        cov_elems = (
-            np.tensordot(
-                self.bfunc * (_w * noise_pf_deconv)[np.newaxis, :, :],
-                np.conjugate(self.bfunc),
-                axes=((1, 2), (1, 2)),
-            ).real
-            / self.pixel_scale**4.0
-        )
-        self.std_modes = np.sqrt(np.diagonal(cov_elems))
-        self.std_m00 = self.std_modes[self.di["m00"]]
-        return cov_elems
 
 
 def gauss_kernel_rfft(
@@ -259,7 +113,7 @@ def get_kmax(
     return _get_kmax(psf_pow, sigma, kmax_thres)
 
 
-class FpfsTask(FpfsKernel):
+class FpfsTask(AnacalBase):
     """A base class for measurement
 
     Args:
@@ -287,17 +141,42 @@ class FpfsTask(FpfsKernel):
         do_detection: bool = True,
         bound: int = 0,
     ) -> None:
-        super().__init__(
-            npix=npix,
-            pixel_scale=pixel_scale,
-            sigma_arcsec=sigma_arcsec,
-            kmax=kmax,
-            psf_array=psf_array,
-            kmax_thres=kmax_thres,
-            do_detection=do_detection,
-        )
-        klim = 1e10 if self.kmax is None else (self.kmax / self.pixel_scale)
+        self.npix = npix
+        self.do_detection = do_detection
+
+        self.sigma_arcsec = sigma_arcsec
+        if self.sigma_arcsec > 3.0:
+            raise ValueError("sigma_arcsec should be < 3 arcsec")
+
+        self.pixel_scale = pixel_scale
+        self._dk = 2.0 * np.pi / self.npix
+
+        self.sigmaf = float(self.pixel_scale / self.sigma_arcsec)
+        if psf_array is None:
+            psf_array = np.zeros((npix, npix))
+            psf_array[npix // 2, npix // 2] = 1
+        else:
+            if not psf_array.shape == (npix, npix):
+                raise ValueError("psf arry has a wrong shape")
+
+        psf_f = np.fft.rfft2(psf_array)
+        self.psf_array = psf_array
+        self.psf_pow = (np.abs(psf_f) ** 2.0).astype(np.float64)
+        if kmax is None:
+            assert psf_array is not None
+            self.kmax = (
+                get_kmax(
+                    psf_pow=self.psf_pow,
+                    sigma=self.sigmaf / np.sqrt(2.0),
+                    kmax_thres=kmax_thres,
+                )
+                * self._dk
+            )
+        else:
+            self.kmax = kmax
+
         self.prepare_fpfs_bases()
+        klim = 1e10 if self.kmax is None else (self.kmax / self.pixel_scale)
         self.mtask = FpfsImage(
             nx=self.npix,
             ny=self.npix,
@@ -327,6 +206,82 @@ class FpfsTask(FpfsKernel):
             self.dtask = None
 
         return
+
+    def prepare_fpfs_bases(self):
+        """Prepare the FPFS bases (shapelets and detectlets)."""
+
+        bfunc = []
+        self.colnames = []
+        sfunc, snames = shapelets2d(
+            norder=norder_shapelets,
+            npix=self.npix,
+            sigma=self.sigmaf,
+            kmax=self.kmax,
+        )
+        bfunc.append(sfunc)
+        self.colnames = self.colnames + snames
+        if self.do_detection:
+            dfunc, dnames = detlets2d(
+                npix=self.npix,
+                sigma=self.sigmaf,
+                kmax=self.kmax,
+            )
+            bfunc.append(dfunc)
+            self.colnames = self.colnames + dnames
+        self.bfunc = np.vstack(bfunc)
+        self.ncol = len(self.colnames)
+        self.dtype = [(name, "f8") for name in self.colnames]
+        self.bfunc_use = np.transpose(self.bfunc, (1, 2, 0))
+        self.di = {
+            element: index for index, element in enumerate(self.colnames)
+        }
+        return
+
+    def prepare_covariance(
+        self, variance: float, noise_pf: NDArray | None = None
+    ):
+        """Estimate covariance of measurement error."""
+
+        variance = variance * 2.0
+        if noise_pf is not None:
+            if noise_pf.shape == (self.npix, self.npix // 2 + 1):
+                noise_pf = np.array(noise_pf, dtype=np.float64)
+            elif noise_pf.shape == (self.npix, self.npix):
+                noise_pf = np.fft.ifftshift(noise_pf)
+                noise_pf = np.array(
+                    noise_pf[:, : self.npix // 2 + 1], dtype=np.float64
+                )
+            else:
+                raise ValueError("noise power not in correct shape")
+        else:
+            ss = (self.npix, self.npix // 2 + 1)
+            noise_pf = np.ones(ss)
+        norm_factor = variance * self.npix**2.0 / noise_pf[0, 0]
+        noise_pf = noise_pf * norm_factor
+
+        img_obj = Image(nx=self.npix, ny=self.npix, scale=self.pixel_scale)
+        img_obj.set_f(noise_pf)
+        img_obj.deconvolve(
+            psf_image=self.psf_pow,
+            klim=self.kmax / self.pixel_scale,
+        )
+        noise_pf_deconv = img_obj.draw_f().real
+        del img_obj
+
+        _w = np.ones(self.psf_pow.shape) * 2.0
+        _w[:, 0] = 1.0
+        _w[:, -1] = 1.0
+        cov_elems = (
+            np.tensordot(
+                self.bfunc * (_w * noise_pf_deconv)[np.newaxis, :, :],
+                np.conjugate(self.bfunc),
+                axes=((1, 2), (1, 2)),
+            ).real
+            / self.pixel_scale**4.0
+        )
+        self.std_modes = np.sqrt(np.diagonal(cov_elems))
+        self.std_m00 = self.std_modes[self.di["m00"]]
+        return cov_elems
 
     def detect(
         self,
