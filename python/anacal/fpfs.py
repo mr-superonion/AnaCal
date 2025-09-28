@@ -1,16 +1,16 @@
 import numpy as np
 import numpy.lib.recfunctions as rfn
-from _anacal.fpfs import (
+from ._anacal.fpfs import (
     FpfsImage,
 )
-from _anacal.fpfs import detlets2d as _detlets2d
-from _anacal.fpfs import (
+from ._anacal.fpfs import detlets2d as _detlets2d
+from ._anacal.fpfs import (
     fpfs_cut_sigma_ratio,
     fpfs_det_sigma2,
 )
-from _anacal.fpfs import gauss_kernel_rfft as _gauss_kernel_rfft
-from _anacal.fpfs import get_kmax as _get_kmax
-from _anacal.fpfs import (
+from ._anacal.fpfs import gauss_kernel_rfft as _gauss_kernel_rfft
+from ._anacal.fpfs import get_kmax as _get_kmax
+from ._anacal.fpfs import (
     measure_fpfs,
     measure_fpfs_shape,
     measure_fpfs_wdet,
@@ -18,9 +18,9 @@ from _anacal.fpfs import (
     measure_fpfs_wsel,
     measure_shapelets_dg,
 )
-from _anacal.fpfs import shapelets2d as _shapelets2d
-from _anacal.fpfs import shapelets2d_func as _shapelets2d_func
-from _anacal.image import Image
+from ._anacal.fpfs import shapelets2d as _shapelets2d
+from ._anacal.fpfs import shapelets2d_func as _shapelets2d_func
+from ._anacal.image import Image
 from base import AnacalBase
 from numpy.typing import NDArray
 from psf import BasePsf
