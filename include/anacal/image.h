@@ -3,7 +3,9 @@
 
 #include "table.h"
 #include "model.h"
+#include "math/tensor.h"
 #include <fftw3.h>
+#include <utility>
 
 namespace anacal {
 inline constexpr double min_deconv_ratio = 1e-5;
@@ -347,6 +349,28 @@ public:
             }
         }
         return result;
+    };
+
+    math::qtensor
+    prepare_qtensor(
+        const py::array_t<double>& img_array,
+        const py::array_t<double>& psf_array,
+        int xcen,
+        int ycen,
+        const std::optional<py::array_t<double>>& noise_array=std::nullopt
+    ) {
+        auto data = prepare_qnumber_vector(
+            img_array,
+            psf_array,
+            xcen,
+            ycen,
+            noise_array
+        );
+        return math::qtensor::from_image(
+            std::move(data),
+            static_cast<std::size_t>(this->ny),
+            static_cast<std::size_t>(this->nx)
+        );
     };
 
     py::array_t<double>
