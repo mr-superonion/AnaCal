@@ -87,9 +87,7 @@ class FpfsKernel:
         psf_array: NDArray | None = None,
         kmax_thres: float = 1e-20,
         do_detection: bool = True,
-        verbose=False,
     ) -> None:
-        super().__init__(verbose=verbose)
         self.npix = npix
         self.do_detection = do_detection
 
@@ -274,7 +272,6 @@ class FpfsTask(FpfsKernel):
     kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
     do_detection (bool): whether compute detection kernels
     bound (int): minimum distance to boundary [default: 0]
-    verbose (bool): whether display INFO
     """
 
     def __init__(
@@ -289,7 +286,6 @@ class FpfsTask(FpfsKernel):
         kmax_thres: float = 1e-20,
         do_detection: bool = True,
         bound: int = 0,
-        verbose: bool = False,
     ) -> None:
         super().__init__(
             npix=npix,
@@ -299,7 +295,6 @@ class FpfsTask(FpfsKernel):
             psf_array=psf_array,
             kmax_thres=kmax_thres,
             do_detection=do_detection,
-            verbose=verbose,
         )
         klim = 1e10 if self.kmax is None else (self.kmax / self.pixel_scale)
         self.prepare_fpfs_bases()
@@ -607,7 +602,7 @@ def process_image(
     mask_array: NDArray | None = None,
     star_catalog: NDArray | None = None,
     detection: NDArray | None = None,
-    psf_object: BasePsf | None = None,
+    psf_object: BasePsf | None | NDArray = None,
     do_compute_detect_weight: bool = True,
     only_return_detection_modes: bool = False,
     base_column_name: str | None = None,
