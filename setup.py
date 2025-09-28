@@ -112,7 +112,6 @@ ext_modules.append(
             "src/noise.cpp",
             "src/mask.cpp",
             "src/math.cpp",
-            "src/nn/tensor.cpp",
             "src/ngmix.cpp",
             "src/table.cpp",
             "src/detector.cpp",
