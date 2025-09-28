@@ -1,9 +1,10 @@
+import gc
+import time
+
 import anacal
 import galsim
-import gc
 import numpy as np
 from memory_profiler import memory_usage
-import time
 
 from .. import mem_used, print_mem
 

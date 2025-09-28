@@ -1,5 +1,8 @@
 import numpy as np
 import numpy.lib.recfunctions as rfn
+from numpy.typing import NDArray
+from pydantic import BaseModel, Field
+
 from ._anacal.fpfs import (
     FpfsImage,
 )
@@ -21,9 +24,7 @@ from ._anacal.fpfs import (
 from ._anacal.fpfs import shapelets2d as _shapelets2d
 from ._anacal.fpfs import shapelets2d_func as _shapelets2d_func
 from ._anacal.image import Image
-from numpy.typing import NDArray
 from .psf import BasePsf
-from pydantic import BaseModel, Field
 
 npix_patch = 256
 npix_overlap = 64
