@@ -20,7 +20,6 @@ import fitsio
 import galsim
 import numpy as np
 
-from .base import setup_custom_logger
 
 _data_dir = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -426,10 +425,7 @@ class CosmosCatalog(object):
         max_hlr=None,
         min_hlr=None,
         gal_type="mixed",
-        logger=None,
     ):
-        if logger is None:
-            logger = setup_custom_logger(verbose=False)
         src = read_cosmos_catalog(filename)
         # Initializing selector mask with all Trues
         sel = np.ones(len(src), dtype=bool)
@@ -454,18 +450,14 @@ class CosmosCatalog(object):
                 sel &= (src["hlr"][:, 1:3] >= max_hlr).all(axis=1)
         # Applying selector mask
         src = src[sel]
-
         if gal_type == "mixed":
-            logger.info("Creating Mixed galaxy profiles")
+            pass
         elif gal_type == "sersic":
-            logger.info("Creating single Sersic profiles")
             src = src[src["use_bulgefit"] == 0]
         elif gal_type == "bulgedisk":
-            logger.info("Creating Bulge + Disk profiles")
             src = src[src["use_bulgefit"] != 0]
         elif gal_type == "debug":
             # This is used for debug
-            logger.info("Creating profile for debug")
             src = src[src["use_bulgefit"] == 0]
             # src["sersicfit"][:, 3] = 1.0  # round galaxies
             # src["sersicfit"][:, 2] = 0.5  # only Gaussian
@@ -542,7 +534,6 @@ def make_isolated_sim(
     verbose (bool): whether show log info
     """
 
-    logger = setup_custom_logger(verbose=verbose)
     if nx % ngrid != 0:
         raise ValueError("nx is not divisible by ngrid")
     if ny % ngrid != 0:
@@ -562,7 +553,6 @@ def make_isolated_sim(
         max_hlr=max_hlr,
         min_hlr=min_hlr,
         gal_type=gal_type,
-        logger=logger,
     )
     cat_input = cosmos_cat.make_catalog(rng=rng, n=ngeff)
     # Get the shear information
@@ -585,7 +575,6 @@ def make_isolated_sim(
         g2 = shear_const
     else:
         raise ValueError("cannot decide g1 or g2")
-    logger.info("Processing for %s, and shear is %s." % (gname, shear_const))
 
     if rot_field is None:
         rot_field = [0.0]
@@ -632,9 +621,6 @@ def make_noise_sim(
     scale (float): pixel scale
     verbose (bool): whether show log info
     """
-    logger = setup_custom_logger(verbose=verbose)
-    logger.info("begining for field %04d" % (ind0))
-    logger.info("simulating noise for field %s" % (ind0))
     variance = 0.01
     ud = galsim.UniformDeviate(ind0 * 10000 + 1)
 
@@ -685,7 +671,6 @@ def make_blended_sim(
     verbose (bool): whether show log info
     """
 
-    logger = setup_custom_logger(verbose=verbose)
     np.random.seed(ind0)
 
     bigfft = galsim.GSParams(maximum_fft_size=10240)  # galsim setup
@@ -701,9 +686,6 @@ def make_blended_sim(
     ngal = max(int(r2 * np.pi * scale**2.0 / 3600.0 * density), nrot)
     ngal = int(ngal // (nrot * 2) * (nrot * 2))
     ngeff = ngal // (nrot * 2)
-    logger.info(
-        "We have %d galaxies in total, and each %d are the same" % (ngal, nrot)
-    )
     if cat_name is None:
         cat_name = os.path.join(_data_dir, "src_cosmos.fits")
 

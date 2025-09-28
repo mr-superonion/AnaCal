@@ -9,10 +9,10 @@ anacal Package
     :undoc-members:
     :show-inheritance:
 
-:mod:`base` Module
-------------------
+:mod:`fpfs` Module
+------------------------
 
-.. automodule:: anacal.base
+.. automodule:: anacal.fpfs
     :members:
     :undoc-members:
     :show-inheritance:
