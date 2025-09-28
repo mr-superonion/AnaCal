@@ -31,6 +31,12 @@ Currently, the framework supports the following analytical shear estimators:
   (see [ref5](https://ui.adsabs.harvard.edu/abs/2025arXiv250616607L/abstract))
 
 ## Installation
+AnaCal depends on the [PyTorch](https://pytorch.org/) C++ runtime. Ensure a
+matching version of PyTorch/libtorch (>=2.0) is available in your environment
+before building from source. When using standalone libtorch archives, set the
+`TORCH_HOME` environment variable to the extraction directory so the build can
+locate the headers and libraries.
+
 Users can clone this repository and install the latest package by
 ```shell
 git clone https://github.com/mr-superonion/AnaCal.git
