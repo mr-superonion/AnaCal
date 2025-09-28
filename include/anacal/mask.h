@@ -1,6 +1,7 @@
 #ifndef ANACAL_MASK_H
 #define ANACAL_MASK_H
 
+#include <cmath>
 #include "table.h"
 
 namespace anacal {
@@ -24,7 +25,14 @@ namespace mask {
         for (int k = 0; k < nn; ++k) {
             int x = static_cast<int>(star_r(k).x + 0.5);
             int y = static_cast<int>(star_r(k).y + 0.5);
-            int r = static_cast<int>(star_r(k).r + 0.5);
+            float radius = star_r(k).r;
+            if (!std::isfinite(radius) || radius < 0.0f) {
+                continue;
+            }
+            int r = static_cast<int>(std::round(radius));
+            if (r == 0) {
+                r = 1;
+            }
             int r2 = r * r;
             for (int j = y-r; j <= y+r; ++j) {
                 if ((j < 0) || (j >= ny)) {
