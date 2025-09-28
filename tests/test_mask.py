@@ -65,3 +65,21 @@ def test_mask():
     np.testing.assert_array_less(-b, -0.3 * np.ones((ngrid, ngrid)))
 
     return
+
+
+def test_add_bright_star_mask_min_radius():
+    ngrid = 32
+    mask = np.zeros((ngrid, ngrid), dtype=np.int16)
+    stars = np.array(
+        [(4.49, 5.49, 0.2)],
+        dtype=[
+            ("x", "f4"),
+            ("y", "f4"),
+            ("r", "f4"),
+        ],
+    )
+
+    anacal.mask.add_bright_star_mask(mask, stars)
+
+    assert mask[5, 4] == 1
+    assert mask.sum() == 1
