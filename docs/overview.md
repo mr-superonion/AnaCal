@@ -1,7 +1,7 @@
 # Overview
 
-AnaCal is a analytic calibrator for accurate measurement of perturbation on
-images
+AnaCal is an analytic calibrator for accurate measurement of perturbations on
+images.
 
 ## Basic installation
 
