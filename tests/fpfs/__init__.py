@@ -48,7 +48,7 @@ def smooth(
                     )
                 )
             )
-            * anacal.fpfs.base.gauss_kernel_rfft(
+            * anacal.fpfs.gauss_kernel_rfft(
                 ny,
                 nx,
                 sigmaf,
@@ -69,7 +69,7 @@ def smooth(
                     ),
                 )
             )
-            * anacal.fpfs.base.gauss_kernel_rfft(
+            * anacal.fpfs.gauss_kernel_rfft(
                 ny,
                 nx,
                 sigmaf,
