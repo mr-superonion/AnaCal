@@ -14,6 +14,7 @@ subpercent accuracy, all while maintaining minimal computational time. The
 currently supported analytic shear estimators are:
 
 * **FPFS**: https://github.com/mr-superonion/FPFS
+* **NGMIX**: https://github.com/esheldon/ngmix — Gaussian model fitting.
 
 .. toctree::
     :maxdepth: 2
