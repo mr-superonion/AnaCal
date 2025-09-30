@@ -1,6 +1,8 @@
 #ifndef ANACAL_TABLE_H
 #define ANACAL_TABLE_H
 
+#include <stdexcept>
+
 #include "math.h"
 #include "geometry.h"
 #include "ngmix/rmodel.h"
@@ -376,6 +378,41 @@ objlist_to_array(
     for (ssize_t j = 0; j < nrow; ++j) {
         r_r(j) = catalog[j].to_row();
     }
+    return result;
+};
+
+
+inline py::array_t<galRow>
+make_catalog_empty(
+    py::array_t<double> x1,
+    py::array_t<double> x2
+) {
+    if (x1.ndim() != 1 || x2.ndim() != 1) {
+        throw std::invalid_argument("x1 and x2 must be one-dimensional arrays");
+    }
+    if (x1.shape(0) != x2.shape(0)) {
+        throw std::invalid_argument("x1 and x2 must have the same length");
+    }
+
+    ssize_t n = x1.shape(0);
+    auto x1_view = x1.unchecked<1>();
+    auto x2_view = x2.unchecked<1>();
+
+    py::array_t<galRow> result(n);
+    auto catalog_view = result.mutable_unchecked<1>();
+
+    for (ssize_t i = 0; i < n; ++i) {
+        galRow row{};
+        row.x1 = x1_view(i);
+        row.x2 = x2_view(i);
+        row.x1_det = x1_view(i);
+        row.x2_det = x2_view(i);
+        row.wdet = 1.0;
+        row.wsel = 1.0;
+        row.is_primary = true;
+        catalog_view(i) = row;
+    }
+
     return result;
 };
 
