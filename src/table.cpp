@@ -5,6 +5,20 @@ namespace table {
 
 void
 pyExportTable(py::module_& m) {
+    PYBIND11_NUMPY_DTYPE(math::qnumber, v, g1, g2, x1, x2);
+    PYBIND11_NUMPY_DTYPE(math::lossNumber,
+        v, v_F, v_t, v_a1, v_a2, v_x1, v_x2,
+        v_FF, v_tt, v_a1a1, v_a2a2, v_x1x1, v_x2x2
+    );
+    PYBIND11_NUMPY_DTYPE(ngmix::NgmixGaussian,
+        force_size, force_center, F, t, a1, a2, x1, x2
+    );
+    PYBIND11_NUMPY_DTYPE(galNumber,
+        model, fluxap2, wdet, wsel,
+        mask_value, is_peak, is_primary, initialized,
+        loss, fpfs_e1, fpfs_e2, fpfs_m0, fpfs_m2,
+        peakv, bkg, ra, dec, x1_det, x2_det, block_id
+    );
     PYBIND11_NUMPY_DTYPE(galRow,
         ra, dec,
         flux, dflux_dg1, dflux_dg2, dflux_dj1, dflux_dj2,
@@ -60,6 +74,16 @@ pyExportTable(py::module_& m) {
         .def_readonly("fpfs_m2", &galNumber::fpfs_m2)
         .def("to_row", &galNumber::to_row)
         .def("from_row", &galNumber::from_row);
+
+    table.def(
+        "make_catalog_empty",
+        static_cast<py::array_t<galNumber>(*)(py::array_t<double>, py::array_t<double>)>(
+            &make_catalog_empty
+        ),
+        "Return galNumbers with zeroed derivatives at the provided positions",
+        py::arg("x1"),
+        py::arg("x2")
+    );
 
     table.def(
         "objlist_to_array", &objlist_to_array,

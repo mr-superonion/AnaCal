@@ -366,6 +366,76 @@ struct galNumber {
     };
 };
 
+inline galNumber
+make_catalog_empty_single(
+    double x1,
+    double x2
+) {
+    galNumber gn;
+
+    // Reset gaussian model parameters and set centroid
+    gn.model.F = math::qnumber(0.0);
+    gn.model.t = math::qnumber(0.0);
+    gn.model.a1 = math::qnumber(0.0);
+    gn.model.a2 = math::qnumber(0.0);
+    gn.model.x1 = math::qnumber(x1);
+    gn.model.x2 = math::qnumber(x2);
+
+    // Ensure detection weights follow requested defaults
+    gn.wdet = math::qnumber(1.0);
+    gn.wsel = math::qnumber(1.0);
+
+    // Reset remaining qnumber based measurements
+    gn.fluxap2 = math::qnumber(0.0);
+    gn.fpfs_e1 = math::qnumber(0.0);
+    gn.fpfs_e2 = math::qnumber(0.0);
+    gn.fpfs_m0 = math::qnumber(0.0);
+    gn.fpfs_m2 = math::qnumber(0.0);
+    gn.peakv = math::qnumber(0.0);
+    gn.bkg = math::qnumber(0.0);
+
+    // Reset loss bookkeeping
+    gn.loss.reset();
+
+    // Synchronize centroid positions
+    gn.x1_det = x1;
+    gn.x2_det = x2;
+
+    // Ensure scalar metadata is zeroed
+    gn.block_id = 0;
+
+    return gn;
+}
+
+inline py::array_t<galNumber>
+make_catalog_empty(
+    py::array_t<double> x1,
+    py::array_t<double> x2
+) {
+    if (x1.ndim() != 1) {
+        throw py::value_error("x1 must be a 1-D array");
+    }
+    if (x2.ndim() != 1) {
+        throw py::value_error("x2 must be a 1-D array");
+    }
+    if (x1.size() != x2.size()) {
+        throw py::value_error("x1 and x2 must have the same length");
+    }
+
+    ssize_t n_sources = x1.size();
+    py::array_t<galNumber> result(n_sources);
+
+    auto x1_view = x1.unchecked<1>();
+    auto x2_view = x2.unchecked<1>();
+    auto result_view = result.mutable_unchecked<1>();
+
+    for (ssize_t i = 0; i < n_sources; ++i) {
+        result_view(i) = make_catalog_empty_single(x1_view(i), x2_view(i));
+    }
+
+    return result;
+}
+
 inline py::array_t<galRow>
 objlist_to_array(
     const std::vector<galNumber> & catalog
