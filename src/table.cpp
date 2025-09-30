@@ -5,11 +5,6 @@ namespace table {
 
 void
 pyExportTable(py::module_& m) {
-    PYBIND11_NUMPY_DTYPE(math::qnumber, v, g1, g2, x1, x2);
-    PYBIND11_NUMPY_DTYPE(math::lossNumber,
-        v, v_F, v_t, v_a1, v_a2, v_x1, v_x2,
-        v_FF, v_tt, v_a1a1, v_a2a2, v_x1x1, v_x2x2
-    );
     PYBIND11_NUMPY_DTYPE(galRow,
         ra, dec,
         flux, dflux_dg1, dflux_dg2, dflux_dj1, dflux_dj2,
@@ -67,10 +62,7 @@ pyExportTable(py::module_& m) {
         .def("from_row", &galNumber::from_row);
 
     table.def(
-        "make_catalog_empty",
-        static_cast<py::array_t<galNumber>(*)(py::array_t<double>, py::array_t<double>)>(
-            &make_catalog_empty
-        ),
+        "make_catalog_empty", &make_catalog_empty,
         "Return galNumbers with zeroed derivatives at the provided positions",
         py::arg("x1"),
         py::arg("x2")
