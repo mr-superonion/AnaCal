@@ -66,6 +66,12 @@ pyExportTable(py::module_& m) {
         "return structured array for catalog",
         py::arg("catalog")
     );
+    table.def(
+        "make_catalog_empty", &make_catalog_empty,
+        "return empty structured catalog initialized with coordinates",
+        py::arg("x1"),
+        py::arg("x2")
+    );
 }
 
 } // end of table
