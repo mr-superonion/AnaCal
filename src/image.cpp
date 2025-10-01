@@ -797,7 +797,7 @@ pyExportImage(py::module& m) {
         .def("rotate90_f", &Image::rotate90_f,
             "Rotates the image by 90 degree anti-clockwise"
         )
-        .def("irotate90_f", &Image::rotate90_f,
+        .def("irotate90_f", &Image::irotate90_f,
             "Rotates the image by 90 degree clockwise"
         )
         .def("filter",

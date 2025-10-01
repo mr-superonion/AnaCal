@@ -142,10 +142,19 @@ def test_rotate90():
     imobj = anacal.image.Image(nx=ngrid, ny=ngrid, scale=1.0)
     imobj.set_r(psf_data)
     imobj.fft()
+    original_freq = imobj.draw_f().copy()
     imobj.rotate90_f()
+    rotated_freq = imobj.draw_f().copy()
     imobj.ifft()
     psf_rot = imobj.draw_r()
     np.testing.assert_almost_equal(psf_rot, psf_data2)
+    imobj.fft()
+    np.testing.assert_almost_equal(imobj.draw_f(), rotated_freq)
+    imobj.irotate90_f()
+    np.testing.assert_almost_equal(imobj.draw_f(), original_freq)
+    imobj.ifft()
+    psf_ir = imobj.draw_r()
+    np.testing.assert_almost_equal(psf_ir, psf_data)
     return
 
 
