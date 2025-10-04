@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from anacal import math
 from anacal.utils import (
     numpy_to_qtensor,

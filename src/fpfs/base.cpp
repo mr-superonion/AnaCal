@@ -43,6 +43,24 @@ pyExportFpfsBase(py::module_& fpfs) {
         py::arg("sigma"),
         py::arg("kmax_thres") = 1e-20
     );
+    fpfs.def(
+        "m00_to_flux",
+        py::overload_cast<double, double, double>(
+            &m00_to_flux
+        ),
+        py::arg("m00"),
+        py::arg("sigma_arcsec"),
+        py::arg("pixel_scale")
+    );
+    fpfs.def(
+        "m00_to_flux",
+        py::overload_cast<const py::array_t<double>&, double, double>(
+            &m00_to_flux
+        ),
+        py::arg("m00"),
+        py::arg("sigma_arcsec"),
+        py::arg("pixel_scale")
+    );
 }
 
 } // namespace anacal

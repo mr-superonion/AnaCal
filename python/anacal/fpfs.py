@@ -13,6 +13,7 @@ from ._anacal.fpfs import (
 )
 from ._anacal.fpfs import gauss_kernel_rfft as _gauss_kernel_rfft
 from ._anacal.fpfs import get_kmax as _get_kmax
+from ._anacal.fpfs import m00_to_flux as _m00_to_flux
 from ._anacal.fpfs import (
     measure_fpfs,
     measure_fpfs_shape,
@@ -110,6 +111,31 @@ def get_kmax(
     """Estimate the truncation radius ``kmax`` for the Gaussian kernel."""
 
     return _get_kmax(psf_pow, sigma, kmax_thres)
+
+
+def m00_to_flux(
+    m00: float | NDArray,
+    pixel_scale: float,
+    ff: float,
+):
+    """Convert the ``m00`` shapelet coefficient to flux.
+
+    Parameters
+    ----------
+    m00
+        Scalar or array of monopole shapelet coefficients.
+    pixel_scale
+        Pixel scale in arcseconds.
+    ff
+        Precomputed flux factor returned by FPFS measurements.
+
+    Returns
+    -------
+    float | NDArray
+        Flux values corresponding to the provided ``m00`` coefficients.
+    """
+
+    return _m00_to_flux(m00, pixel_scale, ff)
 
 
 class FpfsTask:

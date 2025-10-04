@@ -80,9 +80,6 @@ namespace anacal {
             std::vector<std::complex<double>> eulfunc(static_cast<size_t>(ny) * nx);
 
             const double kmax2 = kmax * kmax;
-            if (sigma <= 0.0) {
-                throw std::runtime_error("sigma must be positive in shapelets2d_func");
-            }
             const double sigma2 = sigma * sigma;
             for (int j = 0; j < ny; ++j) {
                 const double ky = yfreq[j];
@@ -210,9 +207,6 @@ namespace anacal {
         double kmax,
         bool return_grid = false
     ) {
-        if (sigma <= 0.0) {
-            throw std::runtime_error("sigma must be positive in gauss_kernel_rfft");
-        }
         const int nx_r = nx / 2 + 1;
         py::array_t<double> kernel({ny, nx_r});
         py::array_t<double> ygrid({ny, nx_r});
@@ -245,6 +239,40 @@ namespace anacal {
         }
 
         return py::make_tuple(kernel, py::make_tuple(ygrid, xgrid));
+    }
+
+    inline double
+    m00_to_flux(
+        double m00,
+        double sigma_arcsec,
+        double pixel_scale
+    ) {
+        const double sigma_use = sigma_arcsec / std::sqrt(2.0);
+        const double sigma_pix = sigma_use / pixel_scale;
+        const double ff = 4.0 * M_PI * sigma_pix * sigma_pix;
+        return m00 * pixel_scale * pixel_scale * ff;
+    }
+
+    inline py::array_t<double>
+    m00_to_flux(
+        const py::array_t<double>& m00,
+        double sigma_arcsec,
+        double pixel_scale
+    ) {
+        const double factor = m00_to_flux(
+            1.0,
+            sigma_arcsec,
+            pixel_scale
+        );
+
+        int nn = m00.shape(0);
+        auto in_r = m00.unchecked<1>();
+        py::array_t<double> flux(nn);
+        auto out_r = flux.mutable_unchecked<1>();
+        for (py::ssize_t i = 0; i < nn; ++i) {
+            out_r(i) = in_r(i) * factor;
+        }
+        return flux;
     }
 
     inline py::array_t<std::complex<double>>
@@ -325,9 +353,6 @@ namespace anacal {
         std::vector<double> k2grid(static_cast<size_t>(ny) * nx, 0.0);
 
         const double kmax2 = kmax * kmax;
-        if (sigma <= 0.0) {
-            throw std::runtime_error("sigma must be positive in detlets2d");
-        }
         const double sigma2 = sigma * sigma;
 
         for (int j = 0; j < ny; ++j) {
@@ -409,9 +434,6 @@ namespace anacal {
         std::vector<double> xfreq = fpfs_detail::make_rfftfreq(nx_full);
         std::vector<double> yfreq = fpfs_detail::make_fftfreq(npix);
 
-        if (sigma <= 0.0) {
-            throw std::runtime_error("sigma must be positive in get_kmax");
-        }
         const double sigma2 = sigma * sigma;
         const double kmax = M_PI;
         const double kmax2 = kmax * kmax;
