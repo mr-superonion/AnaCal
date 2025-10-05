@@ -7,9 +7,9 @@ import numpy as np
 data_dir = os.path.dirname(os.path.abspath(__file__))
 
 fpfs_config = anacal.fpfs.FpfsConfig(
-    sigma_arcsec=0.52,  # The first measurement scale (also for detection)
-    sigma_arcsec1=0.45,  # The second measurement scale
-    sigma_arcsec2=0.55,  # The second measurement scale
+    sigma_shapelets=0.52,  # The first measurement scale (also for detection)
+    sigma_shapelets1=0.45,  # The second measurement scale
+    sigma_shapelets2=0.55,  # The second measurement scale
 )
 gal_array = fitsio.read(os.path.join(data_dir, "image-00000_g1-0_rot0_i.fits"))
 psf_array = fitsio.read(os.path.join(data_dir, "PSF_Fixed.fits"))

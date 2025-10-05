@@ -16,7 +16,7 @@ psf_array = (
     .array
 )
 
-sigma_arcsec = 0.53
+sigma_shapelets = 0.53
 
 gal_obj = (
     psf_obj.shift(-3.5, 2) * 2
@@ -36,7 +36,7 @@ def test_convolve_image():
         nx=ngrid,
         ny=ngrid,
         scale=scale,
-        sigma_arcsec=sigma_arcsec,
+        sigma_arcsec=sigma_shapelets,
         klim=klim,
         psf_array=psf_array,
     )
@@ -57,7 +57,7 @@ def test_convolve_noise(seed=2):
         nx=ngrid,
         ny=ngrid,
         scale=scale,
-        sigma_arcsec=sigma_arcsec,
+        sigma_arcsec=sigma_shapelets,
         klim=klim,
         psf_array=psf_array,
     )
@@ -82,7 +82,7 @@ def test_detect():
         nx=150,
         ny=200,
         scale=scale,
-        sigma_arcsec=sigma_arcsec,
+        sigma_arcsec=sigma_shapelets,
         klim=klim,
         psf_array=psf_array,
         npix_overlap=64,

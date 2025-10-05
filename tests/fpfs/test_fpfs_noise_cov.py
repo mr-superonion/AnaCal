@@ -28,7 +28,7 @@ def test_noise_covariance():
         npix=psf_array.shape[0],
         psf_array=psf_array,
         pixel_scale=pixel_scale,
-        sigma_arcsec=sigma_as,
+        sigma_shapelets=sigma_as,
         do_detection=True,
         kmax_thres=1e-20,
         noise_variance=variance,

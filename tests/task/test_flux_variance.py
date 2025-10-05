@@ -14,7 +14,7 @@ data_dir = os.path.join(
 def gaussian_flux_variance(
     img_array,
     psf_array,
-    sigma_arcsec,
+    sigma_shapelets,
     pixel_scale=1.0,
     noise_variance=1.0,
     eps=1e-6,
@@ -27,7 +27,7 @@ def gaussian_flux_variance(
     k2 = kx**2 + ky**2
     psf_array = psf_array / psf_array.sum()
     P = np.fft.fft2(np.fft.ifftshift(psf_array))
-    sigma_pix = sigma_arcsec / pixel_scale
+    sigma_pix = sigma_shapelets / pixel_scale
     T = np.exp(-0.5 * sigma_pix**2 * k2)
     denom = P.copy()
     tiny = eps * np.abs(P[0, 0])
@@ -50,7 +50,7 @@ def test_flux_variance():
     mag_zero = 30
     noise_std = 0.3
     pixel_scale = 0.2
-    sigma_arcsec = 0.38
+    sigma_shapelets = 0.38
     npix = 64
     psf_obj = galsim.Moffat(beta=3.5, fwhm=0.8, trunc=0.6 * 4.0).shear(
         e1=0.02, e2=-0.02
@@ -85,14 +85,14 @@ def test_flux_variance():
     flux, flux_var = gaussian_flux_variance(
         img_array=gal_array,
         psf_array=psf_array,
-        sigma_arcsec=sigma_arcsec,
+        sigma_shapelets=sigma_shapelets,
         pixel_scale=pixel_scale,
         noise_variance=noise_std**2.0,
     )
     flux_var2 = anacal.task.gaussian_flux_variance(
         psf_array=psf_array,
         sigma_kernel=0.0,
-        sigma_smooth=sigma_arcsec,
+        sigma_smooth=sigma_shapelets,
         pixel_scale=pixel_scale,
         klim=100
     ) * noise_std**2.0
@@ -100,7 +100,7 @@ def test_flux_variance():
 
 
     fpfs_config = anacal.fpfs.FpfsConfig(
-        sigma_arcsec1=sigma_arcsec * np.sqrt(2.0),
+        sigma_shapelets1=sigma_shapelets * np.sqrt(2.0),
     )
 
     fpfs_peaks_dtype = np.dtype([("y", np.float64), ("x", np.float64)])
@@ -124,7 +124,7 @@ def test_flux_variance():
     flux2 = anacal.fpfs.m00_to_flux(
         catalog["fpfs1_m00"],
         pixel_scale=pixel_scale,
-        sigma_arcsec=sigma_arcsec * np.sqrt(2.0)
+        sigma_shapelets=sigma_shapelets * np.sqrt(2.0)
     )[0]
     np.testing.assert_allclose(flux, flux2, rtol=0.001, atol=0.01)
 

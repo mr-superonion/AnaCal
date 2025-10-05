@@ -113,7 +113,7 @@ nn_st = np.array(
 snr_min = 8
 r2_min = 0.1
 c0 = 5.0
-sigma_arcsec = 0.52
+sigma_shapelets = 0.52
 pixel_scale = 0.2
 pthres = 0.12
 

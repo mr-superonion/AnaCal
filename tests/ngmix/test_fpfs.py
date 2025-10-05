@@ -8,7 +8,7 @@ def test_ngmix_fpfs():
     ny = 64
     scale = 0.2
     psf_fwhm = 0.8
-    sigma_arcsec = 0.38
+    sigma_shapelets = 0.38
     # PSF
     psf_obj = galsim.Moffat(
         beta=2.5,
@@ -47,7 +47,7 @@ def test_ngmix_fpfs():
     num_epochs = 20
     fitter = anacal.ngmix.GaussFit(
         scale=scale,
-        sigma_arcsec=sigma_arcsec,
+        sigma_arcsec=sigma_shapelets,
         stamp_size=32,
         fpfs_c0=0.0,
     )
@@ -72,14 +72,14 @@ def test_ngmix_fpfs():
     m22c = cat.fpfs_e1.v * cat.fpfs_m0.v
     m22s = cat.fpfs_e2.v * cat.fpfs_m0.v
 
-    sigma_arcsec = sigma_arcsec * np.sqrt(2.0)
+    sigma_shapelets_fpfs = sigma_shapelets * np.sqrt(2.0)
     bound = 35
     std = 0.2
 
     ftask = anacal.fpfs.FpfsTask(
         npix=64,
         pixel_scale=scale,
-        sigma_arcsec=sigma_arcsec,
+        sigma_shapelets=sigma_shapelets_fpfs,
         psf_array=psf_array,
         do_detection=True,
         noise_variance=std**2.0,

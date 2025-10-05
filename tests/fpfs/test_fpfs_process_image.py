@@ -32,8 +32,8 @@ def test_fpfs_init():
     buff = 15
 
     fpfs_config = anacal.fpfs.FpfsConfig(
-        sigma_arcsec=0.52,  # The first measurement scale (also for detection)
-        sigma_arcsec2=0.45,  # The second measurement scale
+        sigma_shapelets=0.52,  # The first measurement scale (also for detection)
+        sigma_shapelets2=0.45,  # The second measurement scale
     )
 
     psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0)
