@@ -52,8 +52,10 @@ namespace anacal {
         inline size_t
         idx4(int n, int m, int y, int x, int norder, int mord, int ny, int nx) {
             return (
-                (static_cast<size_t>(n) * (mord + 1) + static_cast<size_t>(m)) * ny
-                + static_cast<size_t>(y)
+                (
+                    static_cast<size_t>(n) * (mord + 1)
+                    + static_cast<size_t>(m)
+                ) * ny + static_cast<size_t>(y)
             ) * nx + static_cast<size_t>(x);
         }
 
