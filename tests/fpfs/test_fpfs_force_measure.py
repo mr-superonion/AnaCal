@@ -37,7 +37,7 @@ def simulate_gal_psf(scale, shift_x, shift_y):
 
 
 def do_test(scale, shift_x, shift_y):
-    sigma_arcsec = 0.53
+    sigma_shapelets = 0.53
 
     gal_array, psf_array, coords = simulate_gal_psf(
         scale,
@@ -48,7 +48,7 @@ def do_test(scale, shift_x, shift_y):
     ftask = anacal.fpfs.FpfsTask(
         npix=64,
         pixel_scale=scale,
-        sigma_arcsec=sigma_arcsec,
+        sigma_shapelets=sigma_shapelets,
         psf_array=psf_array,
         do_detection=False,
     )

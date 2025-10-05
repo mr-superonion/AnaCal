@@ -48,9 +48,9 @@ else:
     detection["x"] = yx[1]
 
 fpfs_config = anacal.fpfs.FpfsConfig(
-    sigma_arcsec=0.52,  # base measurement kernel (also for detection)
-    sigma_arcsec1=0.45,  # kernel 1
-    sigma_arcsec2=0.55,  # kernel 2
+    sigma_shapelets=0.52,  # base measurement kernel (also for detection)
+    sigma_shapelets1=0.45,  # kernel 1
+    sigma_shapelets2=0.55,  # kernel 2
 )
 
 
@@ -110,7 +110,7 @@ for gname in ["g%d-1" % test_component, "g%d-0" % test_component]:
 
 # Printing the results
 print("Testing for shear component: %d" % test_component)
-print("Measurement with sigma_arcsec=%.2f:" % fpfs_config.sigma_arcsec)
+print("Measurement with sigma_shapelets=%.2f:" % fpfs_config.sigma_shapelets)
 
 wname = "fpfs_w"
 wgname = "fpfs_dw_dg%d" % test_component
@@ -143,7 +143,7 @@ if do_force_detect:
     print("    Additive bias is %.3f e-5" % (cbias * 1e5))
 
 
-print("Measurement with sigma_arcsec=%.2f:" % fpfs_config.sigma_arcsec1)
+print("Measurement with sigma_shapelets=%.2f:" % fpfs_config.sigma_shapelets1)
 ename = "fpfs1_e%d" % test_component
 egname = "fpfs1_de%d_dg%d" % (test_component, test_component)
 e1_0 = out[0][wname] * out[0][ename]
@@ -159,7 +159,7 @@ cbias = (np.sum(e1_0) + np.sum(e1_1)) / (np.sum(e1g1_0) + np.sum(e1g1_1))
 print("    Additive bias is %.3f e-5" % (cbias * 1e5))
 assert mbias < 2e-3
 
-print("Measurement with sigma_arcsec=%.2f:" % fpfs_config.sigma_arcsec2)
+print("Measurement with sigma_shapelets=%.2f:" % fpfs_config.sigma_shapelets2)
 ename = "fpfs2_e%d" % test_component
 egname = "fpfs2_de%d_dg%d" % (test_component, test_component)
 e1_0 = out[0][wname] * out[0][ename]

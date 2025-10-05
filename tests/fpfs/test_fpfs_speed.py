@@ -13,7 +13,7 @@ bound = 40
 mag_zero = 30.0
 pixel_scale = 0.2
 
-sigma_arcsec = 0.55
+sigma_shapelets = 0.55
 psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
     e1=0.02, e2=-0.02
 )
@@ -43,7 +43,7 @@ def func():
     ftask = anacal.fpfs.FpfsTask(
         npix=64,
         pixel_scale=pixel_scale,
-        sigma_arcsec=sigma_arcsec,
+        sigma_shapelets=sigma_shapelets,
         psf_array=psf_array,
         do_detection=True,
         noise_variance=noise_variance,

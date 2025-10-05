@@ -54,7 +54,7 @@ def do_test(scale, seed, rcut, gcomp):
         g2 = -0.02
     else:
         raise ValueError("gcomp should be g1 or g2")
-    sigma_arcsec = 0.53
+    sigma_shapelets = 0.53
 
     nrot = 12
     gal_array, psf_array, coords = simulate_gal_psf(
@@ -64,7 +64,7 @@ def do_test(scale, seed, rcut, gcomp):
     ftask = anacal.fpfs.FpfsTask(
         npix=64,
         pixel_scale=scale,
-        sigma_arcsec=sigma_arcsec,
+        sigma_shapelets=sigma_shapelets,
         psf_array=psf_array,
         do_detection=False,
     )

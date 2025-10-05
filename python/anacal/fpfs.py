@@ -115,7 +115,7 @@ def get_kmax(
 
 def m00_to_flux(
     m00: float | NDArray,
-    sigma_arcsec: float,
+    sigma_shapelets: float,
     pixel_scale: float,
 ):
     """Convert the ``m00`` shapelet coefficient to flux.
@@ -124,7 +124,7 @@ def m00_to_flux(
     ----------
     m00
         Scalar or array of monopole shapelet coefficients.
-    sigma_arcsec
+    sigma_shapelets
         sigma of Gaussian kernel for shapelets
     pixel_scale
         Pixel scale in arcseconds.
@@ -135,7 +135,7 @@ def m00_to_flux(
         Flux values corresponding to the provided ``m00`` coefficients.
     """
 
-    return _m00_to_flux(m00, sigma_arcsec, pixel_scale)
+    return _m00_to_flux(m00, sigma_shapelets, pixel_scale)
 
 
 class FpfsTask:
@@ -144,7 +144,7 @@ class FpfsTask:
     Args:
     npix (int): number of pixels in a postage stamp
     pixel_scale (float): pixel scale in arcsec
-    sigma_arcsec (float): Shapelet kernel size
+    sigma_shapelets (float): Shapelet kernel size
     noise_variance (float): variance of image noise
     kmax (float | None): maximum k
     psf_array (ndarray): an average PSF image [default: None]
@@ -158,7 +158,7 @@ class FpfsTask:
         *,
         npix: int,
         pixel_scale: float,
-        sigma_arcsec: float,
+        sigma_shapelets: float,
         noise_variance: float = -1,
         kmax: float | None = None,
         psf_array: NDArray | None = None,
@@ -169,14 +169,14 @@ class FpfsTask:
         self.npix = npix
         self.do_detection = do_detection
 
-        self.sigma_arcsec = sigma_arcsec
-        if self.sigma_arcsec > 3.0:
-            raise ValueError("sigma_arcsec should be < 3 arcsec")
+        self.sigma_shapelets = sigma_shapelets
+        if self.sigma_shapelets > 3.0:
+            raise ValueError("sigma_shapelets should be < 3 arcsec")
 
         self.pixel_scale = pixel_scale
         self._dk = 2.0 * np.pi / self.npix
 
-        self.sigmaf = float(self.pixel_scale / self.sigma_arcsec)
+        self.sigmaf = float(self.pixel_scale / self.sigma_shapelets)
         if psf_array is None:
             psf_array = np.zeros((npix, npix))
             psf_array[npix // 2, npix // 2] = 1
@@ -206,7 +206,7 @@ class FpfsTask:
             nx=self.npix,
             ny=self.npix,
             scale=self.pixel_scale,
-            sigma_arcsec=self.sigma_arcsec,
+            sigma_arcsec=self.sigma_shapelets,
             klim=klim,
             psf_array=self.psf_array,
             use_estimate=True,
@@ -217,7 +217,7 @@ class FpfsTask:
                 nx=npix_patch,
                 ny=npix_patch,
                 scale=self.pixel_scale,
-                sigma_arcsec=self.sigma_arcsec,
+                sigma_arcsec=self.sigma_shapelets,
                 klim=klim,
                 psf_array=self.psf_array,
                 use_estimate=True,
@@ -509,17 +509,17 @@ class FpfsConfig(BaseModel):
         are not counted.
         """,
     )
-    sigma_arcsec: float = Field(
+    sigma_shapelets: float = Field(
         default=0.52,
         description="""Smoothing scale of the shapelet and detection kernel.
         """,
     )
-    sigma_arcsec1: float = Field(
+    sigma_shapelets1: float = Field(
         default=-1,
         description="""Smoothing scale of the second shapelet kernel.
         """,
     )
-    sigma_arcsec2: float = Field(
+    sigma_shapelets2: float = Field(
         default=-1,
         description="""Smoothing scale of the third shapelet kernel.
         """,
@@ -629,7 +629,7 @@ def process_image(
         ftask = FpfsTask(
             npix=fpfs_config.npix,
             pixel_scale=pixel_scale,
-            sigma_arcsec=fpfs_config.sigma_arcsec,
+            sigma_shapelets=fpfs_config.sigma_shapelets,
             noise_variance=noise_variance,
             psf_array=psf_array,
             kmax_thres=fpfs_config.kmax_thres,
@@ -682,11 +682,11 @@ def process_image(
 
         del ftask
 
-    if fpfs_config.sigma_arcsec1 > 0:
+    if fpfs_config.sigma_shapelets1 > 0:
         ftask = FpfsTask(
             npix=fpfs_config.npix,
             pixel_scale=pixel_scale,
-            sigma_arcsec=fpfs_config.sigma_arcsec1,
+            sigma_shapelets=fpfs_config.sigma_shapelets1,
             psf_array=psf_array,
             kmax_thres=fpfs_config.kmax_thres,
             do_detection=False,
@@ -707,11 +707,11 @@ def process_image(
         out_list.append(rfn.rename_fields(meas1, map_dict))
         del meas1
 
-    if fpfs_config.sigma_arcsec2 > 0:
+    if fpfs_config.sigma_shapelets2 > 0:
         ftask = FpfsTask(
             npix=fpfs_config.npix,
             pixel_scale=pixel_scale,
-            sigma_arcsec=fpfs_config.sigma_arcsec2,
+            sigma_shapelets=fpfs_config.sigma_shapelets2,
             psf_array=psf_array,
             kmax_thres=fpfs_config.kmax_thres,
             do_detection=False,

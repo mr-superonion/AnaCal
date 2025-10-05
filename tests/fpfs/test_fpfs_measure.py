@@ -36,14 +36,14 @@ def test_fpfs_measure():
     ngrid2 = 64
     psf_array = fitsio.read(psf_fname)
     gal_array = fitsio.read(gal_fname)
-    sigma_arcsec = 0.53
+    sigma_shapelets = 0.53
     bound = 35
     std = 0.2
 
     ftask = anacal.fpfs.FpfsTask(
         npix=64,
         pixel_scale=scale,
-        sigma_arcsec=sigma_arcsec,
+        sigma_shapelets=sigma_shapelets,
         psf_array=psf_array,
         do_detection=True,
         noise_variance=std**2.0,
