@@ -10,204 +10,205 @@
 #include <vector>
 
 namespace anacal {
-    inline constexpr double fpfs_det_sigma2 = 0.04;
-    inline constexpr double fpfs_cut_sigma_ratio = 1.6;
+    namespace fpfs {
+        inline constexpr double fpfs_det_sigma2 = 0.04;
+        inline constexpr double fpfs_cut_sigma_ratio = 1.6;
 
-    namespace fpfs_detail {
-        inline std::vector<double>
-        make_rfftfreq(int n) {
-            const int n_r = n / 2 + 1;
-            std::vector<double> freq(n_r);
-            const double factor = 2.0 * M_PI / static_cast<double>(n);
-            for (int k = 0; k < n_r; ++k) {
-                freq[k] = factor * static_cast<double>(k);
+        namespace detail {
+            inline std::vector<double>
+            make_rfftfreq(int n) {
+                const int n_r = n / 2 + 1;
+                std::vector<double> freq(n_r);
+                const double factor = 2.0 * M_PI / static_cast<double>(n);
+                for (int k = 0; k < n_r; ++k) {
+                    freq[k] = factor * static_cast<double>(k);
+                }
+                return freq;
             }
-            return freq;
-        }
 
-        inline std::vector<double>
-        make_fftfreq(int n) {
-            std::vector<double> freq(n);
-            const double factor = 2.0 * M_PI / static_cast<double>(n);
-            const int n_half = n / 2;
-            for (int k = 0; k <= n_half; ++k) {
-                freq[k] = factor * static_cast<double>(k);
+            inline std::vector<double>
+            make_fftfreq(int n) {
+                std::vector<double> freq(n);
+                const double factor = 2.0 * M_PI / static_cast<double>(n);
+                const int n_half = n / 2;
+                for (int k = 0; k <= n_half; ++k) {
+                    freq[k] = factor * static_cast<double>(k);
+                }
+                for (int k = n_half + 1; k < n; ++k) {
+                    freq[k] = factor * static_cast<double>(k - n);
+                }
+                return freq;
             }
-            for (int k = n_half + 1; k < n; ++k) {
-                freq[k] = factor * static_cast<double>(k - n);
-            }
-            return freq;
-        }
 
-        inline std::complex<double>
-        pow_i(int n) {
-            switch (n % 4) {
-                case 0: return {1.0, 0.0};
-                case 1: return {0.0, 1.0};
-                case 2: return {-1.0, 0.0};
-                default: return {0.0, -1.0};
-            }
-        }
-
-        inline size_t
-        idx4(int n, int m, int y, int x, int norder, int mord, int ny, int nx) {
-            return (
-                (
-                    static_cast<size_t>(n) * (mord + 1)
-                    + static_cast<size_t>(m)
-                ) * ny + static_cast<size_t>(y)
-            ) * nx + static_cast<size_t>(x);
-        }
-
-        struct ShapeletResult {
-            int ny;
-            int nx;
-            int norder;
-            std::vector<std::complex<double>> chi;
-        };
-
-        inline ShapeletResult
-        compute_shapelet_modes(int npix, int norder, double sigma, double kmax) {
-            const int ny = npix;
-            const int nx = npix / 2 + 1;
-            const int mord = norder;
-            const int nmodes = (norder + 1) * (mord + 1);
-            const size_t total_size = static_cast<size_t>(nmodes) * ny * nx;
-
-            std::vector<double> xfreq = make_rfftfreq(npix);
-            std::vector<double> yfreq = make_fftfreq(npix);
-
-            std::vector<double> gauss(static_cast<size_t>(ny) * nx, 0.0);
-            std::vector<double> r2_over_sigma2(static_cast<size_t>(ny) * nx, 0.0);
-            std::vector<std::complex<double>> eulfunc(static_cast<size_t>(ny) * nx);
-
-            const double kmax2 = kmax * kmax;
-            const double sigma2 = sigma * sigma;
-            for (int j = 0; j < ny; ++j) {
-                const double ky = yfreq[j];
-                for (int i = 0; i < nx; ++i) {
-                    const double kx = xfreq[i];
-                    const double r2 = kx * kx + ky * ky;
-                    const bool inside = r2 <= kmax2;
-                    const size_t idx = static_cast<size_t>(j) * nx + static_cast<size_t>(i);
-                    if (inside) {
-                        gauss[idx] = std::exp(-r2 / (2.0 * sigma2));
-                    } else {
-                        gauss[idx] = 0.0;
-                    }
-                    if (sigma2 > 0.0) {
-                        r2_over_sigma2[idx] = r2 / sigma2;
-                    } else {
-                        r2_over_sigma2[idx] = 0.0;
-                    }
-                    if (r2 > 0.0) {
-                        const double inv_r = 1.0 / std::sqrt(r2);
-                        const double cos_phi = kx * inv_r;
-                        const double sin_phi = ky * inv_r;
-                        eulfunc[idx] = {cos_phi, sin_phi};
-                    } else {
-                        eulfunc[idx] = {0.0, 0.0};
-                    }
+            inline std::complex<double>
+            pow_i(int n) {
+                switch (n % 4) {
+                    case 0: return {1.0, 0.0};
+                    case 1: return {0.0, 1.0};
+                    case 2: return {-1.0, 0.0};
+                    default: return {0.0, -1.0};
                 }
             }
 
-            std::vector<double> lfunc(static_cast<size_t>(norder + 1) * (mord + 1) * ny * nx, 0.0);
-            for (int m = 0; m <= mord; ++m) {
+            inline size_t
+            idx4(int n, int m, int y, int x, int norder, int mord, int ny, int nx) {
+                return (
+                    (
+                        static_cast<size_t>(n) * (mord + 1)
+                        + static_cast<size_t>(m)
+                    ) * ny + static_cast<size_t>(y)
+                ) * nx + static_cast<size_t>(x);
+            }
+
+            struct ShapeletResult {
+                int ny;
+                int nx;
+                int norder;
+                std::vector<std::complex<double>> chi;
+            };
+
+            inline ShapeletResult
+            compute_shapelet_modes(int npix, int norder, double sigma, double kmax) {
+                const int ny = npix;
+                const int nx = npix / 2 + 1;
+                const int mord = norder;
+                const int nmodes = (norder + 1) * (mord + 1);
+                const size_t total_size = static_cast<size_t>(nmodes) * ny * nx;
+
+                std::vector<double> xfreq = make_rfftfreq(npix);
+                std::vector<double> yfreq = make_fftfreq(npix);
+
+                std::vector<double> gauss(static_cast<size_t>(ny) * nx, 0.0);
+                std::vector<double> r2_over_sigma2(static_cast<size_t>(ny) * nx, 0.0);
+                std::vector<std::complex<double>> eulfunc(static_cast<size_t>(ny) * nx);
+
+                const double kmax2 = kmax * kmax;
+                const double sigma2 = sigma * sigma;
                 for (int j = 0; j < ny; ++j) {
+                    const double ky = yfreq[j];
                     for (int i = 0; i < nx; ++i) {
-                        lfunc[idx4(0, m, j, i, norder, mord, ny, nx)] = 1.0;
-                        if (norder >= 1) {
-                            lfunc[idx4(1, m, j, i, norder, mord, ny, nx)] = (
-                                1.0 - r2_over_sigma2[static_cast<size_t>(j) * nx + static_cast<size_t>(i)]
-                                + static_cast<double>(m)
-                            );
+                        const double kx = xfreq[i];
+                        const double r2 = kx * kx + ky * ky;
+                        const bool inside = r2 <= kmax2;
+                        const size_t idx = static_cast<size_t>(j) * nx + static_cast<size_t>(i);
+                        if (inside) {
+                            gauss[idx] = std::exp(-r2 / (2.0 * sigma2));
+                        } else {
+                            gauss[idx] = 0.0;
+                        }
+                        if (sigma2 > 0.0) {
+                            r2_over_sigma2[idx] = r2 / sigma2;
+                        } else {
+                            r2_over_sigma2[idx] = 0.0;
+                        }
+                        if (r2 > 0.0) {
+                            const double inv_r = 1.0 / std::sqrt(r2);
+                            const double cos_phi = kx * inv_r;
+                            const double sin_phi = ky * inv_r;
+                            eulfunc[idx] = {cos_phi, sin_phi};
+                        } else {
+                            eulfunc[idx] = {0.0, 0.0};
                         }
                     }
                 }
-            }
 
-            for (int n = 2; n <= norder; ++n) {
+                std::vector<double> lfunc(static_cast<size_t>(norder + 1) * (mord + 1) * ny * nx, 0.0);
                 for (int m = 0; m <= mord; ++m) {
-                    const double a_coeff = 2.0;
-                    const double b_coeff = 1.0 + (static_cast<double>(m) - 1.0) / static_cast<double>(n);
                     for (int j = 0; j < ny; ++j) {
                         for (int i = 0; i < nx; ++i) {
-                            const size_t base_idx = static_cast<size_t>(j) * nx + static_cast<size_t>(i);
-                            const double r_term = (
-                                static_cast<double>(m) - 1.0
-                                - r2_over_sigma2[base_idx]
-                            ) / static_cast<double>(n);
-                            const double prev1 = lfunc[idx4(n - 1, m, j, i, norder, mord, ny, nx)];
-                            const double prev2 = lfunc[idx4(n - 2, m, j, i, norder, mord, ny, nx)];
-                            lfunc[idx4(n, m, j, i, norder, mord, ny, nx)] = (
-                                (a_coeff + r_term) * prev1
-                                - b_coeff * prev2
-                            );
-                        }
-                    }
-                }
-            }
-
-            std::vector<std::complex<double>> chi(total_size);
-            for (int nn = 0; nn <= norder; ++nn) {
-                for (int mm = nn; mm >= 0; mm -= 2) {
-                    const int abs_m = std::abs(mm);
-                    const int c1 = (nn - abs_m) / 2;
-                    const int d1 = (nn + abs_m) / 2;
-                    const double factorial_c1 = std::tgamma(static_cast<double>(c1) + 1.0);
-                    const double factorial_d1 = std::tgamma(static_cast<double>(d1) + 1.0);
-                    double coeff_ratio = 0.0;
-                    if (factorial_d1 != 0.0) {
-                        coeff_ratio = factorial_c1 / factorial_d1;
-                    }
-                    const double sign = (d1 % 2 == 0) ? 1.0 : -1.0;
-                    const double sqrt_coeff = std::sqrt(coeff_ratio);
-                    const std::complex<double> i_pow = pow_i(nn);
-                    for (int j = 0; j < ny; ++j) {
-                        for (int i = 0; i < nx; ++i) {
-                            const size_t base_idx = static_cast<size_t>(j) * nx + static_cast<size_t>(i);
-                            const double r_pow = std::pow(
-                                r2_over_sigma2[base_idx],
-                                static_cast<double>(abs_m) / 2.0
-                            );
-                            const double laguerre = lfunc[idx4(
-                                c1, abs_m, j, i, norder, mord, ny, nx
-                            )];
-                            std::complex<double> eul_pow = 1.0;
-                            if (abs_m > 0) {
-                                eul_pow = std::pow(eulfunc[base_idx], abs_m);
+                            lfunc[idx4(0, m, j, i, norder, mord, ny, nx)] = 1.0;
+                            if (norder >= 1) {
+                                lfunc[idx4(1, m, j, i, norder, mord, ny, nx)] = (
+                                    1.0 - r2_over_sigma2[static_cast<size_t>(j) * nx + static_cast<size_t>(i)]
+                                    + static_cast<double>(m)
+                                );
                             }
-                            const std::complex<double> value = (
-                                sign
-                                * sqrt_coeff
-                                * laguerre
-                                * r_pow
-                                * gauss[base_idx]
-                                * i_pow
-                            );
-                            chi[idx4(nn, mm, j, i, norder, mord, ny, nx)] = value * eul_pow;
                         }
                     }
                 }
+
+                for (int n = 2; n <= norder; ++n) {
+                    for (int m = 0; m <= mord; ++m) {
+                        const double a_coeff = 2.0;
+                        const double b_coeff = 1.0 + (static_cast<double>(m) - 1.0) / static_cast<double>(n);
+                        for (int j = 0; j < ny; ++j) {
+                            for (int i = 0; i < nx; ++i) {
+                                const size_t base_idx = static_cast<size_t>(j) * nx + static_cast<size_t>(i);
+                                const double r_term = (
+                                    static_cast<double>(m) - 1.0
+                                    - r2_over_sigma2[base_idx]
+                                ) / static_cast<double>(n);
+                                const double prev1 = lfunc[idx4(n - 1, m, j, i, norder, mord, ny, nx)];
+                                const double prev2 = lfunc[idx4(n - 2, m, j, i, norder, mord, ny, nx)];
+                                lfunc[idx4(n, m, j, i, norder, mord, ny, nx)] = (
+                                    (a_coeff + r_term) * prev1
+                                    - b_coeff * prev2
+                                );
+                            }
+                        }
+                    }
+                }
+
+                std::vector<std::complex<double>> chi(total_size);
+                for (int nn = 0; nn <= norder; ++nn) {
+                    for (int mm = nn; mm >= 0; mm -= 2) {
+                        const int abs_m = std::abs(mm);
+                        const int c1 = (nn - abs_m) / 2;
+                        const int d1 = (nn + abs_m) / 2;
+                        const double factorial_c1 = std::tgamma(static_cast<double>(c1) + 1.0);
+                        const double factorial_d1 = std::tgamma(static_cast<double>(d1) + 1.0);
+                        double coeff_ratio = 0.0;
+                        if (factorial_d1 != 0.0) {
+                            coeff_ratio = factorial_c1 / factorial_d1;
+                        }
+                        const double sign = (d1 % 2 == 0) ? 1.0 : -1.0;
+                        const double sqrt_coeff = std::sqrt(coeff_ratio);
+                        const std::complex<double> i_pow = pow_i(nn);
+                        for (int j = 0; j < ny; ++j) {
+                            for (int i = 0; i < nx; ++i) {
+                                const size_t base_idx = static_cast<size_t>(j) * nx + static_cast<size_t>(i);
+                                const double r_pow = std::pow(
+                                    r2_over_sigma2[base_idx],
+                                    static_cast<double>(abs_m) / 2.0
+                                );
+                                const double laguerre = lfunc[idx4(
+                                    c1, abs_m, j, i, norder, mord, ny, nx
+                                )];
+                                std::complex<double> eul_pow = 1.0;
+                                if (abs_m > 0) {
+                                    eul_pow = std::pow(eulfunc[base_idx], abs_m);
+                                }
+                                const std::complex<double> value = (
+                                    sign
+                                    * sqrt_coeff
+                                    * laguerre
+                                    * r_pow
+                                    * gauss[base_idx]
+                                    * i_pow
+                                );
+                                chi[idx4(nn, mm, j, i, norder, mord, ny, nx)] = value * eul_pow;
+                            }
+                        }
+                    }
+                }
+
+                // Divide Gaussian kernel by npix**2 for inverse FFT normalization
+                const double norm = static_cast<double>(npix) * static_cast<double>(npix);
+                for (auto& val : chi) {
+                    val /= norm;
+                }
+
+                return {ny, nx, norder, std::move(chi)};
             }
+        } // namespace detail
 
-            // Divide Gaussian kernel by npix**2 for inverse FFT normalization
-            const double norm = static_cast<double>(npix) * static_cast<double>(npix);
-            for (auto& val : chi) {
-                val /= norm;
-            }
-
-            return {ny, nx, norder, std::move(chi)};
-        }
-    } // namespace fpfs_detail
-
-    inline py::object
-    gauss_kernel_rfft(
-        int ny,
-        int nx,
-        double sigma,
-        double kmax,
-        bool return_grid = false
+        inline py::object
+        gauss_kernel_rfft(
+            int ny,
+            int nx,
+            double sigma,
+            double kmax,
+            bool return_grid = false
     ) {
         const int nx_r = nx / 2 + 1;
         py::array_t<double> kernel({ny, nx_r});
@@ -218,8 +219,8 @@ namespace anacal {
         auto yg = ygrid.mutable_unchecked<2>();
         auto xg = xgrid.mutable_unchecked<2>();
 
-        std::vector<double> xfreq = fpfs_detail::make_rfftfreq(nx);
-        std::vector<double> yfreq = fpfs_detail::make_fftfreq(ny);
+        std::vector<double> xfreq = detail::make_rfftfreq(nx);
+        std::vector<double> yfreq = detail::make_fftfreq(ny);
 
         const double kmax2 = kmax * kmax;
         const double sigma2 = sigma * sigma;
@@ -279,7 +280,7 @@ namespace anacal {
 
     inline py::array_t<std::complex<double>>
     shapelets2d_func(int npix, int norder, double sigma, double kmax) {
-        fpfs_detail::ShapeletResult result = fpfs_detail::compute_shapelet_modes(
+        detail::ShapeletResult result = detail::compute_shapelet_modes(
             npix, norder, sigma, kmax
         );
         const int ny = result.ny;
@@ -292,7 +293,7 @@ namespace anacal {
                 const int mode_index = nn * (norder + 1) + mm;
                 for (int j = 0; j < ny; ++j) {
                     for (int i = 0; i < nx; ++i) {
-                        const size_t idx = fpfs_detail::idx4(
+                        const size_t idx = detail::idx4(
                             nn, mm, j, i, norder, norder, ny, nx
                         );
                         out(mode_index, j, i) = result.chi[idx];
@@ -305,7 +306,7 @@ namespace anacal {
 
     inline py::array_t<double>
     shapelets2d(int norder, int npix, double sigma, double kmax) {
-        fpfs_detail::ShapeletResult result = fpfs_detail::compute_shapelet_modes(
+        detail::ShapeletResult result = detail::compute_shapelet_modes(
             npix, norder, sigma, kmax
         );
         const int ny = result.ny;
@@ -326,7 +327,7 @@ namespace anacal {
             const int mm = idx_mode % (norder + 1);
             for (int j = 0; j < ny; ++j) {
                 for (int i = 0; i < nx; ++i) {
-                    const size_t idx = fpfs_detail::idx4(
+                    const size_t idx = detail::idx4(
                         nn, mm, j, i, norder, norder, ny, nx
                     );
                     const std::complex<double>& value = result.chi[idx];
@@ -347,8 +348,8 @@ namespace anacal {
         py::array_t<std::complex<double>> psi({nmode, ny, nx});
         auto out = psi.mutable_unchecked<3>();
 
-        std::vector<double> xfreq = fpfs_detail::make_rfftfreq(npix);
-        std::vector<double> yfreq = fpfs_detail::make_fftfreq(npix);
+        std::vector<double> xfreq = detail::make_rfftfreq(npix);
+        std::vector<double> yfreq = detail::make_fftfreq(npix);
 
         std::vector<double> gauss(static_cast<size_t>(ny) * nx, 0.0);
         std::vector<double> k1grid(static_cast<size_t>(ny) * nx, 0.0);
@@ -433,8 +434,8 @@ namespace anacal {
         if (nx_full <= 0) {
             nx_full = nx;
         }
-        std::vector<double> xfreq = fpfs_detail::make_rfftfreq(nx_full);
-        std::vector<double> yfreq = fpfs_detail::make_fftfreq(npix);
+        std::vector<double> xfreq = detail::make_rfftfreq(nx_full);
+        std::vector<double> yfreq = detail::make_fftfreq(npix);
 
         const double sigma2 = sigma * sigma;
         const double kmax = M_PI;
@@ -486,7 +487,8 @@ namespace anacal {
         return kmax_pix;
     }
 
-    void pyExportFpfsBase(py::module_& fpfs);
+        void pyExportFpfsBase(py::module_& fpfs);
+    } // namespace fpfs
 }
 
 #endif // ANACAL_FPFS_BASE_H
