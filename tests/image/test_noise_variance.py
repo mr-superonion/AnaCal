@@ -47,7 +47,7 @@ def test_noise_variance():
     std1 = np.std(img_smoothed)
 
     std2 = np.sqrt(
-        anacal.task.get_smoothed_variance(
+        anacal.image.get_smoothed_variance(
             scale,
             sigma_arcsec,
             psf_array,

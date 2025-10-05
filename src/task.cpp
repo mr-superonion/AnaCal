@@ -5,6 +5,7 @@ namespace task {
 
 void
 pyExportTask(py::module_& m) {
+
     py::module_ task = m.def_submodule(
         "task", "submodule for task"
     );
@@ -43,12 +44,15 @@ pyExportTask(py::module_& m) {
             py::arg("mask_array")=py::none()
         );
     task.def(
-        "get_smoothed_variance", &get_smoothed_variance,
-        "get noise variance for smoothed image",
-        py::arg("scale"),
-        py::arg("sigma_arcsec"),
+        "gaussian_flux_variance",
+        &gaussian_flux_variance,
+        "Compute Gaussian-weighted flux variance for a PSF",
         py::arg("psf_array"),
-        py::arg("variance")
+        py::arg("sigma_kernel"),
+        py::arg("sigma_smooth"),
+        py::arg("pixel_scale")=1.0,
+        py::arg("klim")=std::numeric_limits<double>::infinity(),
+        py::arg("noise_corr")=py::none()
     );
 }
 

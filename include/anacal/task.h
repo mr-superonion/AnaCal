@@ -3,9 +3,141 @@
 
 #include "detector.h"
 #include "mask.h"
+#include <limits>
+#include <optional>
 
 namespace anacal {
 namespace task {
+
+
+inline double
+gaussian_flux_variance(
+    const py::array_t<double>& psf_array,
+    double sigma_kernel,
+    double sigma_smooth,
+    double pixel_scale = 1.0,
+    double klim = std::numeric_limits<double>::infinity(),
+    const std::optional<py::array_t<double>>& noise_corr = std::nullopt
+) {
+    // ---- input checks
+    if (psf_array.ndim() != 2) {
+        throw std::runtime_error("ngmix Error: PSF image must be 2-dimensional.");
+    }
+    if (sigma_smooth <= 0.0) {
+        throw std::runtime_error("ngmix Error: sigma_smooth must be positive.");
+    }
+    if (sigma_kernel < 0.0) {
+        throw std::runtime_error("ngmix Error: sigma_kernel must be non-negative.");
+    }
+    if (pixel_scale <= 0.0) {
+        throw std::runtime_error("ngmix Error: pixel_scale must be positive.");
+    }
+
+    const ssize_t ny = psf_array.shape(0);
+    const ssize_t nx = psf_array.shape(1);
+    if (ny <= 0 || nx <= 0) {
+        throw std::runtime_error("ngmix Error: PSF image has invalid shape.");
+    }
+    // enforce even sizes for r2c folding logic below
+    if ((ny % 2) != 0 || (nx % 2) != 0) {
+        throw std::runtime_error(
+            "ngmix Error: this routine assumes even ny and nx."
+        );
+    }
+
+    // ---- scales: convert to pixels
+    const double sigma_pix_rec = sigma_smooth / pixel_scale;  // reconvolution σ (pix)
+    const double sigma_pix     = std::sqrt(
+        sigma_kernel * sigma_kernel + sigma_smooth * sigma_smooth
+    ) / pixel_scale; // meas sigma (pixel)
+    if (sigma_pix_rec <= 0.0 || sigma_pix <= 0.0) {
+        throw std::runtime_error("ngmix Error: invalid Gaussian widths.");
+    }
+
+    // default klim safety (units: same k-units used by Image/filter)
+    if (!std::isfinite(klim) || klim <= 0.0) {
+        klim = 3.1 / pixel_scale;
+    }
+
+    // ---- PSF → Fourier
+    Image psf_img(static_cast<int>(nx), static_cast<int>(ny), pixel_scale, true);
+    psf_img.set_r(psf_array, true);  // assumes real-space layout compatible with Image
+    psf_img.fft();
+    const py::array_t<std::complex<double>> psf_fft = psf_img.draw_f();
+    const double sigma_k = 1.0 / std::sqrt(
+        sigma_kernel * sigma_kernel  + sigma_smooth * sigma_smooth * 2.0
+    );
+    const Gaussian filter_gauss(sigma_k);
+
+    Image filter_img(static_cast<int>(nx), static_cast<int>(ny), pixel_scale, true);
+    filter_img.set_delta_f();             // start from unity impulse in k
+    filter_img.filter(filter_gauss);      // multiply by exp(-0.5*k^2/sigma_k^2)
+    filter_img.deconvolve(psf_fft, klim); // divide by P(k) within |k|<=klim (and/or floor internally)
+    const py::array_t<std::complex<double>> filter_fft = filter_img.draw_f();
+
+    // ---- noise power spectrum
+    const ssize_t ky_length = filter_fft.shape(0); // == ny
+    const ssize_t kx_length = filter_fft.shape(1); // == nx/2 + 1
+    auto filter_fft_r = filter_fft.unchecked<2>();
+
+    py::array_t<double> noise_pow({ky_length, kx_length});
+    auto noise_pow_r = noise_pow.mutable_unchecked<2>();
+    if (noise_corr.has_value()) {
+        if ((*noise_corr).ndim() != 2 ||
+            (*noise_corr).shape(0) != ny || (*noise_corr).shape(1) != nx) {
+            throw std::runtime_error("ngmix Error: noise correlation image has incompatible shape.");
+        }
+        Image noise_img(static_cast<int>(nx), static_cast<int>(ny), pixel_scale, true);
+        noise_img.set_r(*noise_corr, true);
+        noise_img.fft();
+        const py::array_t<std::complex<double>> noise_fft = noise_img.draw_f();
+        auto noise_fft_r = noise_fft.unchecked<2>();
+        for (ssize_t j = 0; j < ky_length; ++j) {
+            for (ssize_t i = 0; i < kx_length; ++i) {
+                // FFT(C) should be real ≥ 0 up to round-off
+                noise_pow_r(j, i) = noise_fft_r(j, i).real();
+            }
+        }
+    } else {
+        for (ssize_t j = 0; j < ky_length; ++j) {
+            for (ssize_t i = 0; i < kx_length; ++i) {
+                noise_pow_r(j, i) = 1.0;  // unit-variance white noise
+            }
+        }
+    }
+
+    // ---- r2c folding along x (even nx): DC once, interior doubled, Nyquist once
+    double var_sum = 0.0;
+
+    for (ssize_t j = 0; j < ky_length; ++j) {
+        // i = 0 (DC): count once
+        {
+            const std::complex<double> v = filter_fft_r(j, 0);
+            var_sum += std::norm(v) * noise_pow_r(j, 0);
+        }
+
+        // interior 1..nx/2-1 : doubled
+        for (ssize_t i = 1; i < kx_length - 1; ++i) {
+            const std::complex<double> v = filter_fft_r(j, i);
+            var_sum += 2.0 * std::norm(v) * noise_pow_r(j, i);
+        }
+
+        // i = nx/2 (Nyquist): count once
+        {
+            const ssize_t iNy = kx_length - 1;     // == nx/2
+            const std::complex<double> v = filter_fft_r(j, iNy);
+            var_sum += std::norm(v) * noise_pow_r(j, iNy);
+        }
+    }
+
+    // ---- outer normalization (matches your Python: ff = 4πσ_pix^2, then / (nx*ny))
+    const double ff   = 4.0 * M_PI * sigma_pix * sigma_pix;
+    const double norm = 1.0 / (static_cast<double>(nx) * static_cast<double>(ny));
+    double flux_var   = var_sum * ff * ff * norm;
+
+    if (flux_var < 0.0) flux_var = 0.0;
+    return flux_var;
+}
 
 
 class Task {

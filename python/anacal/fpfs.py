@@ -115,8 +115,8 @@ def get_kmax(
 
 def m00_to_flux(
     m00: float | NDArray,
+    sigma_arcsec: float,
     pixel_scale: float,
-    ff: float,
 ):
     """Convert the ``m00`` shapelet coefficient to flux.
 
@@ -124,10 +124,10 @@ def m00_to_flux(
     ----------
     m00
         Scalar or array of monopole shapelet coefficients.
+    sigma_arcsec
+        sigma of Gaussian kernel for shapelets
     pixel_scale
         Pixel scale in arcseconds.
-    ff
-        Precomputed flux factor returned by FPFS measurements.
 
     Returns
     -------
@@ -135,7 +135,7 @@ def m00_to_flux(
         Flux values corresponding to the provided ``m00`` coefficients.
     """
 
-    return _m00_to_flux(m00, pixel_scale, ff)
+    return _m00_to_flux(m00, sigma_arcsec, pixel_scale)
 
 
 class FpfsTask:

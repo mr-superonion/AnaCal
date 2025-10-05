@@ -781,6 +781,13 @@ pyExportImage(py::module& m) {
             "Sets up the image in Fourier space",
             py::arg("input")
         )
+        .def("set_delta_r", &Image::set_delta_r,
+            "Sets up the delta image in configuration space",
+            py::arg("ishift")=false
+        )
+        .def("set_delta_f", &Image::set_delta_f,
+            "Sets up the delta image in Fourier space"
+        )
         .def("set_noise_f",
             py::overload_cast<unsigned int, const py::array_t<double>&>
             (&Image::set_noise_f),
@@ -883,6 +890,13 @@ pyExportImage(py::module& m) {
             py::arg("ycen"),
             py::arg("noise_array")=py::none()
         );
+    image.def(
+        "get_smoothed_variance", &get_smoothed_variance,
+        "get noise variance for smoothed image",
+        py::arg("scale"),
+        py::arg("sigma_arcsec"),
+        py::arg("psf_array"),
+        py::arg("variance")
+    );
 }
-
 }

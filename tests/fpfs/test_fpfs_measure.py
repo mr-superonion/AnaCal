@@ -33,7 +33,6 @@ bi_fname = os.path.join(
 
 def test_fpfs_measure():
     scale = 0.2
-    ngrid = 1024
     ngrid2 = 64
     psf_array = fitsio.read(psf_fname)
     gal_array = fitsio.read(gal_fname)
