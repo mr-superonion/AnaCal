@@ -118,7 +118,7 @@ find_peaks_impl(
     int image_bound=0
 ) {
     double sigma_arcsec_det = sigma_arcsec * 1.414;
-    std::vector<math::qnumber> data = prepare_data_block(
+    std::vector<math::qnumber> data = image::prepare_data_block(
         img_array,
         psf_array,
         sigma_arcsec_det,
@@ -127,7 +127,7 @@ find_peaks_impl(
     );
 
     double std_noise = std::pow(
-        get_smoothed_variance(
+        image::get_smoothed_variance(
             block.scale,
             sigma_arcsec_det,
             psf_array,

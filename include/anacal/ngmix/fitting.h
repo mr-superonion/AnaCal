@@ -376,7 +376,7 @@ public:
             }
         }
 
-        std::vector<math::qnumber> data = prepare_data_block(
+        std::vector<math::qnumber> data = image::prepare_data_block(
             img_array,
             psf_array,
             this->sigma_arcsec,
@@ -423,7 +423,7 @@ public:
             }
         }
 
-        double variance_meas = get_smoothed_variance(
+        double variance_meas = image::get_smoothed_variance(
             block.scale,
             this->sigma_arcsec,
             psf_array,
@@ -462,7 +462,7 @@ public:
 
         // finally get FPFS measurement
         double std_fpfs = std::sqrt(
-            get_smoothed_variance(
+            image::get_smoothed_variance(
                 block.scale,
                 this->sigma_arcsec * 1.414,
                 psf_array,

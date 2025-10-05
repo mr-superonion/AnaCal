@@ -5,7 +5,7 @@ namespace anacal {
     PYBIND11_MODULE(_anacal, m)
     {
         pyExportModel(m);
-        pyExportImage(m);
+        image::pyExportImage(m);
         pyExportFpfs(m);
         math::pyExportMath(m);
         noise::pyExportNoise(m);

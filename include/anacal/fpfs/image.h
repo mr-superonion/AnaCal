@@ -15,7 +15,7 @@ namespace anacal {
         // Preventing copy (implement these if you need copy semantics)
         FpfsImage(const FpfsImage&) = delete;
         FpfsImage& operator=(const FpfsImage&) = delete;
-        Image img_obj;
+        image::Image img_obj;
         double fft_ratio;
         const py::array_t<double> psf_array;
         int nx_array, ny_array;

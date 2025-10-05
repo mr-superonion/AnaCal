@@ -60,7 +60,7 @@ gaussian_flux_variance(
     }
 
     // ---- PSF → Fourier
-    Image psf_img(static_cast<int>(nx), static_cast<int>(ny), pixel_scale, true);
+    image::Image psf_img(static_cast<int>(nx), static_cast<int>(ny), pixel_scale, true);
     psf_img.set_r(psf_array, true);  // assumes real-space layout compatible with Image
     psf_img.fft();
     const py::array_t<std::complex<double>> psf_fft = psf_img.draw_f();
@@ -69,7 +69,7 @@ gaussian_flux_variance(
     );
     const Gaussian filter_gauss(sigma_k);
 
-    Image filter_img(static_cast<int>(nx), static_cast<int>(ny), pixel_scale, true);
+    image::Image filter_img(static_cast<int>(nx), static_cast<int>(ny), pixel_scale, true);
     filter_img.set_delta_f();             // start from unity impulse in k
     filter_img.filter(filter_gauss);      // multiply by exp(-0.5*k^2/sigma_k^2)
     filter_img.deconvolve(psf_fft, klim); // divide by P(k) within |k|<=klim (and/or floor internally)
@@ -87,7 +87,7 @@ gaussian_flux_variance(
             (*noise_corr).shape(0) != ny || (*noise_corr).shape(1) != nx) {
             throw std::runtime_error("ngmix Error: noise correlation image has incompatible shape.");
         }
-        Image noise_img(static_cast<int>(nx), static_cast<int>(ny), pixel_scale, true);
+        image::Image noise_img(static_cast<int>(nx), static_cast<int>(ny), pixel_scale, true);
         noise_img.set_r(*noise_corr, true);
         noise_img.fft();
         const py::array_t<std::complex<double>> noise_fft = noise_img.draw_f();
