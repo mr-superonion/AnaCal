@@ -1,6 +1,7 @@
 #include "anacal.h"
 
 namespace anacal {
+    namespace fpfs {
 
 void
 pyExportFpfsImage(py::module_& fpfs) {
@@ -78,4 +79,5 @@ pyExportFpfsImage(py::module_& fpfs) {
         );
 }
 
+    } // namespace fpfs
 } // namespace anacal

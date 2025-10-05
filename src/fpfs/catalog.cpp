@@ -2,6 +2,7 @@
 
 
 namespace anacal {
+    namespace fpfs {
 
 void
 pyExportFpfsCatalog(py::module_& fpfs) {
@@ -286,4 +287,5 @@ pyExportFpfsCatalog(py::module_& fpfs) {
         py::arg("y_array") = std::nullopt
     );
 }
-}
+    } // namespace fpfs
+} // namespace anacal
