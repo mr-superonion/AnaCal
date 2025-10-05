@@ -36,7 +36,7 @@ namespace noise {
         double scale,
         bool do_rotate=false
     ) {
-        Image image(nx, ny, scale);
+        image::Image image(nx, ny, scale);
         image.set_noise_f(seed, correlation);
         if (do_rotate){
             image.rotate90_f();
@@ -55,7 +55,7 @@ namespace noise {
         int ny,
         double scale
     ) {
-        Image image(nx, ny, scale);
+        image::Image image(nx, ny, scale);
         image.set_delta_f();
         image.filter(corr_model);
         image.ifft();
