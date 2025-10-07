@@ -4,6 +4,7 @@
 #include "../image.h"
 #include "../math.h"
 #include "../table.h"
+#include <cmath>
 
 
 namespace anacal {
@@ -25,6 +26,7 @@ public:
     double sigma2_lim;
     double ap2_r, ap2_r2;
     double r2_lim_stamp;
+    mutable double sigma2_flux;
 
     GaussFit(
         double scale,
@@ -48,6 +50,7 @@ public:
         this->ap2_r = 2.0 / scale;
         this->ap2_r2 = std::pow(ap2_r, 2.0);
         this->r2_lim_stamp = std::pow((this->ss2-1) * scale, 2.0);
+        this->sigma2_flux = this->sigma2;
     };
 
     inline void
@@ -305,7 +308,7 @@ public:
         NgmixGaussian & model,
         const geometry::block & block
     ) const {
-        math::qnumber m0, mxx, myy, mxy, mx, my, norm;
+        math::qnumber mxx, myy, mxy;
         double dd = 1.0 / this->sigma2;
 
         const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
@@ -322,26 +325,56 @@ public:
                 math::qnumber r2 = (x2 + y2) * dd;
                 if (bb.has_point(i, j)) {
                     math::qnumber w = math::exp(-0.5 * r2);
-                    math::qnumber f = (
-                        w * data[jj + i]
-                    );
-                    norm = norm + w * w;
-                    m0 = m0 + f;
-                    mx = mx + f * xs;
-                    my = my + f * ys;
+                    math::qnumber f = w * data[jj + i];
                     mxx = mxx + f * x2;
                     myy = myy + f * y2;
                     mxy = mxy + f * xy;
                 }
             }
         }
-        /* model.F = m0 * (2.0 * M_PI * this->sigma2) / norm / block.scale / block.scale; */
-        /* model.x1 = model.x1 + mx / m0; */
-        /* model.x2 = model.x2 + my / m0; */
         model.t = 0.5 * math::atan2(2.0 * mxy, mxx - myy);
-        /* math::qnumber a_eff = math::sqrt((mxx + myy) / 2.0 / m0); */
-        /* model.a1 = a_eff; */
-        /* model.a2 = a_eff; */
+        return;
+    };
+
+    inline void
+    initialize_flux(
+        const std::vector<math::qnumber> & data,
+        NgmixGaussian & model,
+        const geometry::block & block
+    ) const {
+        math::qnumber m0, norm;
+        double a_sum = model.a1.v + model.a2.v;
+        this->sigma2_flux = this->sigma2 + 0.25 * a_sum * a_sum;
+        double dd = 1.0 / this->sigma2_flux;
+
+        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
+        for (int j = bb.j_min; (j < bb.j_max); ++j) {
+            if (!block.ymsk[j]) continue;
+            int jj = j * block.nx;
+            math::qnumber ys = block.yvs[j] - model.x2.v;
+            math::qnumber y2 = math::pow(ys, 2);
+            for (int i = bb.i_min; (i < bb.i_max); ++i) {
+                if (!block.xmsk[i]) continue;
+                math::qnumber xs = block.xvs[i] - model.x1.v;
+                math::qnumber x2 = math::pow(xs, 2);
+                math::qnumber r2 = (x2 + y2) * dd;
+                if (bb.has_point(i, j)) {
+                    math::qnumber w = math::exp(-0.5 * r2);
+                    math::qnumber f = w * data[jj + i];
+                    norm = norm + w * w;
+                    m0 = m0 + f;
+                }
+            }
+        }
+
+        model.F = math::qnumber(0.0);
+        if (norm.v > 0.0) {
+            math::qnumber flux = m0 * (2.0 * M_PI * this->sigma2_flux);
+            flux = flux / norm;
+            double scale2 = block.scale * block.scale;
+            flux = flux / scale2;
+            model.F = flux;
+        }
         return;
     };
 
@@ -396,11 +429,13 @@ public:
                 src.model.force_size=this->force_size;
                 src.model.force_center=this->force_center;
                 if (
-                    (!this->force_size) &&
                     (!src.initialized) &&
                     (src.block_id == block.index)
                 ) {
-                    initialize_fitting(data, src.model, block);
+                    if (!this->force_size) {
+                        initialize_fitting(data, src.model, block);
+                    }
+                    initialize_flux(data, src.model, block);
                     src.initialized = true;
                 }
             }

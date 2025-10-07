@@ -41,7 +41,8 @@ pyExportTask(py::module_& m) {
             py::arg("block_list"),
             py::arg("detection")=py::none(),
             py::arg("noise_array")=py::none(),
-            py::arg("mask_array")=py::none()
+            py::arg("mask_array")=py::none(),
+            py::arg("a_ini")=0.2
         );
     task.def(
         "gaussian_flux_variance",

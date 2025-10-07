@@ -420,7 +420,8 @@ make_catalog_empty(
 inline std::vector<galNumber>
 array_to_objlist(
     const py::array_t<galRow> &records,
-    const geometry::block & block
+    const geometry::block & block,
+    double a_ini = 0.2
 ) {
     /* Fast zero‑copy view of the NumPy buffer */
     auto r = records.unchecked<1>();          // one‑dimensional view
@@ -442,6 +443,13 @@ array_to_objlist(
         ) {
             galNumber gn;
             gn.from_row(row);
+            if (!(gn.model.a1.v > 0.0)) {
+                gn.model.a1 = math::qnumber(a_ini);
+            }
+            if (!(gn.model.a2.v > 0.0)) {
+                gn.model.a2 = math::qnumber(a_ini);
+            }
+            gn.initialized = false;
             result.push_back(gn.centralize(block));
         }
     }
@@ -451,7 +459,8 @@ array_to_objlist(
 
 inline std::vector<galNumber>
 array_to_objlist(
-    const py::array_t<galRow> &records
+    const py::array_t<galRow> &records,
+    double a_ini = 0.2
 ) {
     /* Fast zero‑copy view of the NumPy buffer */
     auto r = records.unchecked<1>();          // one‑dimensional view
@@ -464,6 +473,13 @@ array_to_objlist(
         const galRow &row = r(i);                     // read‑only reference
         galNumber gn;
         gn.from_row(row);
+        if (!(gn.model.a1.v > 0.0)) {
+            gn.model.a1 = math::qnumber(a_ini);
+        }
+        if (!(gn.model.a2.v > 0.0)) {
+            gn.model.a2 = math::qnumber(a_ini);
+        }
+        gn.initialized = false;
         result.push_back(gn);
     }
     return result;
