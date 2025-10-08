@@ -185,12 +185,12 @@ def test_flux_variance():
         block_list=blocks,
         a_ini=0.2,
     )
-    np.testing.assert_allclose(catalog4["flux"][0], flux4, rtol=0.001, atol=0.01)
+    np.testing.assert_allclose(catalog4["flux"][0], flux4, rtol=1e-3, atol=0.01)
     catalog5 = det_task.process_image(
         gal_array,
         psf_array,
         variance=noise_std**2.0,
         block_list=blocks,
     )
-    np.testing.assert_allclose(catalog5["flux"][0], flux4, rtol=0.001, atol=0.01)
+    np.testing.assert_allclose(catalog5["flux"][0], flux4, rtol=1e-3, atol=0.01)
     return
