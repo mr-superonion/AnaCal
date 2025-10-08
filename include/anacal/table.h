@@ -81,6 +81,9 @@ struct galRow{
     double dflux_gauss4_dg2;
     double dflux_gauss4_dj1;
     double dflux_gauss4_dj2;
+    double flux_gauss0_err;
+    double flux_gauss2_err;
+    double flux_gauss4_err;
     double fpfs_e1;
     double fpfs_de1_dg1;
     double fpfs_de1_dg2;
@@ -123,6 +126,9 @@ struct galNumber {
     math::qnumber flux_gauss0 = math::qnumber(0.0);
     math::qnumber flux_gauss2 = math::qnumber(0.0);
     math::qnumber flux_gauss4 = math::qnumber(0.0);
+    double flux_gauss0_err = 0.0;
+    double flux_gauss2_err = 0.0;
+    double flux_gauss4_err = 0.0;
     double ra = 0.0;
     double dec = 0.0;
     double x1_det, x2_det;
@@ -251,6 +257,9 @@ struct galNumber {
             flux_gauss4.g2,
             flux_gauss4.x1,
             flux_gauss4.x2,
+            flux_gauss0_err,
+            flux_gauss2_err,
+            flux_gauss4_err,
             fpfs_e1.v,
             fpfs_e1.g1,
             fpfs_e1.g2,
@@ -340,6 +349,9 @@ struct galNumber {
             row.dflux_gauss4_dg1, row.dflux_gauss4_dg2,
             row.dflux_gauss4_dj1, row.dflux_gauss4_dj2
         );
+        flux_gauss0_err = row.flux_gauss0_err;
+        flux_gauss2_err = row.flux_gauss2_err;
+        flux_gauss4_err = row.flux_gauss4_err;
         fpfs_e1 = math::qnumber(
             row.fpfs_e1,
             row.fpfs_de1_dg1, row.fpfs_de1_dg2,

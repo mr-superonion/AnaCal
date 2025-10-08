@@ -3,6 +3,9 @@
 
 #include "detector.h"
 #include "mask.h"
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <limits>
 #include <optional>
 
@@ -299,6 +302,35 @@ public:
             variance_use = variance;
         }
 
+        const double sigma_smooth = this->sigma_arcsec;
+        auto compute_flux_errors = [&](const py::array_t<double>& psf) {
+            const double flux_gauss0_var = gaussian_flux_variance(
+                psf,
+                0.0,
+                sigma_smooth,
+                this->scale
+            );
+            const double flux_gauss2_var = gaussian_flux_variance(
+                psf,
+                0.2,
+                sigma_smooth,
+                this->scale
+            );
+            const double flux_gauss4_var = gaussian_flux_variance(
+                psf,
+                0.4,
+                sigma_smooth,
+                this->scale
+            );
+            std::array<double, 3> errs{};
+            errs[0] = std::sqrt(std::max(0.0, flux_gauss0_var) * variance_use);
+            errs[1] = std::sqrt(std::max(0.0, flux_gauss2_var) * variance_use);
+            errs[2] = std::sqrt(std::max(0.0, flux_gauss4_var) * variance_use);
+            return errs;
+        };
+
+        const std::array<double, 3> default_flux_errs = compute_flux_errors(psf_array);
+
         std::vector<table::galNumber> catalog;
         if (detection.has_value()) {
             catalog = table::array_to_objlist(
@@ -333,11 +365,39 @@ public:
             }
         }
 
+        for (table::galNumber & src : catalog) {
+            src.flux_gauss0_err = default_flux_errs[0];
+            src.flux_gauss2_err = default_flux_errs[1];
+            src.flux_gauss4_err = default_flux_errs[2];
+        }
+
         for (geometry::block & block: block_list) {
             prepare_indices(
                 catalog,
                 block
             );
+
+            if (block.indices.empty()) {
+                continue;
+            }
+
+            const bool has_custom_psf = (
+                block.psf_array.ndim() == 2 &&
+                psf_array.shape(0) == this->stamp_size &&
+                psf_array.shape(1) == this->stamp_size
+            );
+            if (!has_custom_psf) {
+                continue;
+            }
+
+            const std::array<double, 3> block_flux_errs = compute_flux_errors(
+                block.psf_array
+            );
+            for (std::size_t idx : block.indices) {
+                catalog[idx].flux_gauss0_err = block_flux_errs[0];
+                catalog[idx].flux_gauss2_err = block_flux_errs[1];
+                catalog[idx].flux_gauss4_err = block_flux_errs[2];
+            }
         }
 
         std::vector<table::galNumber> catalog_model = catalog;
