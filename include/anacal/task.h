@@ -288,7 +288,8 @@ public:
         std::vector<geometry::block>& block_list,
         const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
-        const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
+        const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt,
+        double a_ini=0.2
     ) {
 
         double variance_use;
@@ -323,7 +324,10 @@ public:
                     noise_array
                 );
                 catalog.reserve(catalog.size() + det.size());
-                for (const table::galNumber& src : det) {
+                for (const table::galNumber& det_src : det) {
+                    table::galNumber src = det_src;
+                    src.model.a1 = math::qnumber(a_ini);
+                    src.model.a2 = math::qnumber(a_ini);
                     catalog.push_back(src);
                 }
             }

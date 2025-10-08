@@ -364,7 +364,6 @@ struct galNumber {
         x1_det = row.x1_det;
         x2_det = row.x2_det;
         block_id = row.block_id;
-        initialized = true;
     };
 };
 
