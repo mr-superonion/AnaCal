@@ -25,7 +25,6 @@ public:
     double sigma2, sigma_m2, rfac, ffac, ffac2, ffac3;
     double sigma2_lim;
     double r2_lim_stamp;
-    mutable double sigma2_flux;
 
     GaussFit(
         double scale,
@@ -47,7 +46,6 @@ public:
         this->ffac3 = this->ffac * 2.0 * this->sigma_m2;
         this->sigma2_lim = sigma2 * 20;
         this->r2_lim_stamp = std::pow((this->ss2-1) * scale, 2.0);
-        this->sigma2_flux = this->sigma2;
     };
 
     inline void
@@ -147,6 +145,21 @@ public:
                 }
             }
         }
+        return;
+    };
+
+    inline void
+    measure_gaussian_fluxes(
+        const std::vector<math::qnumber> & data,
+        table::galNumber & src,
+        const geometry::block & block
+    ) const {
+        const double sigma0_2 = this->sigma2 + 0 * 0;
+        const double sigma2_2 = this->sigma2 + 0.2 * 0.2;
+        const double sigma4_2 = this->sigma2 + 0.4 * 0.4;
+        src.flux_gauss0 = measure_flux(sigma0_2, block, data, src.model);
+        src.flux_gauss2 = measure_flux(sigma2_2, block, data, src.model);
+        src.flux_gauss4 = measure_flux(sigma4_2, block, data, src.model);
         return;
     };
 
@@ -305,16 +318,15 @@ public:
         return;
     };
 
-    inline void
-    initialize_flux(
+    inline math::qnumber
+    measure_flux(
+        double sigma_meas2,
+        const geometry::block & block,
         const std::vector<math::qnumber> & data,
-        NgmixGaussian & model,
-        const geometry::block & block
+        const NgmixGaussian & model
     ) const {
         math::qnumber m0, norm;
-        double a_sum = model.a1.v + model.a2.v;
-        this->sigma2_flux = this->sigma2 + 0.25 * a_sum * a_sum;
-        double dd = 1.0 / this->sigma2_flux;
+        double dd = 1.0 / sigma_meas2;
 
         const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
@@ -336,14 +348,26 @@ public:
             }
         }
 
-        model.F = math::qnumber(0.0);
         if (norm.v > 0.0) {
-            math::qnumber flux = m0 * (2.0 * M_PI * this->sigma2_flux);
+            math::qnumber flux = m0 * (2.0 * M_PI * sigma_meas2);
             flux = flux / norm;
             double scale2 = block.scale * block.scale;
             flux = flux / scale2;
-            model.F = flux;
+            return flux;
         }
+
+        return math::qnumber(0.0);
+    };
+
+    inline void
+    initialize_flux(
+        const std::vector<math::qnumber> & data,
+        NgmixGaussian & model,
+        const geometry::block & block
+    ) const {
+        double a_sum = model.a1.v + model.a2.v;
+        double sigma2_flux = this->sigma2 + 0.25 * a_sum * a_sum;
+        model.F = measure_flux(sigma2_flux, block, data, model);
         return;
     };
 
@@ -477,6 +501,9 @@ public:
         for (std::size_t i=0; i<ng; ++i) {
             table::galNumber & src = catalog[inds[i]];
             if (src.block_id == block.index) {
+                this->measure_gaussian_fluxes(
+                    data, src, block
+                );
                 this->measure_fpfs(
                     data, src, block
                 );

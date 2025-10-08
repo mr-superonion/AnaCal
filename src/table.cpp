@@ -18,6 +18,12 @@ pyExportTable(py::module_& m) {
         wdet, dwdet_dg1, dwdet_dg2, dwdet_dj1, dwdet_dj2,
         wsel, dwsel_dg1, dwsel_dg2, dwsel_dj1, dwsel_dj2,
         mask_value, is_peak, is_primary,
+        flux_gauss0, dflux_gauss0_dg1, dflux_gauss0_dg2,
+        dflux_gauss0_dj1, dflux_gauss0_dj2,
+        flux_gauss2, dflux_gauss2_dg1, dflux_gauss2_dg2,
+        dflux_gauss2_dj1, dflux_gauss2_dj2,
+        flux_gauss4, dflux_gauss4_dg1, dflux_gauss4_dg2,
+        dflux_gauss4_dj1, dflux_gauss4_dj2,
         fpfs_e1, fpfs_de1_dg1, fpfs_de1_dg2, fpfs_de1_dj1, fpfs_de1_dj2,
         fpfs_e2, fpfs_de2_dg1, fpfs_de2_dg2, fpfs_de2_dj1, fpfs_de2_dj2,
         fpfs_m0, fpfs_dm0_dg1, fpfs_dm0_dg2, fpfs_dm0_dj1, fpfs_dm0_dj2,
@@ -50,6 +56,9 @@ pyExportTable(py::module_& m) {
         .def_readonly("mask_value", &galNumber::mask_value)
         .def_readonly("is_peak", &galNumber::is_peak)
         .def_readonly("loss", &galNumber::loss)
+        .def_readonly("flux_gauss0", &galNumber::flux_gauss0)
+        .def_readonly("flux_gauss2", &galNumber::flux_gauss2)
+        .def_readonly("flux_gauss4", &galNumber::flux_gauss4)
         .def_readonly("fpfs_e1", &galNumber::fpfs_e1)
         .def_readonly("fpfs_e2", &galNumber::fpfs_e2)
         .def_readonly("fpfs_m0", &galNumber::fpfs_m0)
