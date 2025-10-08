@@ -4,7 +4,6 @@
 #include "../image.h"
 #include "../math.h"
 #include "../table.h"
-#include <cmath>
 
 
 namespace anacal {

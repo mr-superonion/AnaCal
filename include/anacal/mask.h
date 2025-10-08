@@ -1,7 +1,6 @@
 #ifndef ANACAL_MASK_H
 #define ANACAL_MASK_H
 
-#include <cmath>
 #include "table.h"
 
 namespace anacal {

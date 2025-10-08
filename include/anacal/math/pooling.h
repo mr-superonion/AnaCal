@@ -1,8 +1,6 @@
 #ifndef ANACAL_MATH_POOLING_H
 #define ANACAL_MATH_POOLING_H
 
-#include <cmath>
-
 namespace anacal {
 namespace math {
 
