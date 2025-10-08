@@ -4,7 +4,6 @@
 
 #include "base.h"
 
-#include <optional>
 #include <vector>
 
 namespace anacal {

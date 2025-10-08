@@ -6,7 +6,6 @@
 #include "../mask.h"
 #include "../stdafx.h"
 
-#include <limits>
 #include <vector>
 
 namespace anacal {

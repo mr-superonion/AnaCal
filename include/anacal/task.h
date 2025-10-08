@@ -3,11 +3,6 @@
 
 #include "detector.h"
 #include "mask.h"
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <limits>
-#include <optional>
 
 namespace anacal {
 namespace task {

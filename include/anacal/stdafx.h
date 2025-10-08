@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <stdexcept>
 #include <array>
+#include <limits>
+#include <optional>
 
 namespace py = pybind11;
 
