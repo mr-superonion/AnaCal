@@ -3,6 +3,8 @@
 
 #include "detector.h"
 #include "mask.h"
+#include <algorithm>
+#include <cmath>
 #include <limits>
 #include <optional>
 
@@ -299,6 +301,41 @@ public:
             variance_use = variance;
         }
 
+        const double sigma_smooth = this->sigma_arcsec;
+        const double flux_gauss0_var = gaussian_flux_variance(
+            psf_array,
+            0.0,
+            sigma_smooth,
+            this->scale
+        );
+        const double flux_gauss2_var = gaussian_flux_variance(
+            psf_array,
+            0.2,
+            sigma_smooth,
+            this->scale
+        );
+        const double flux_gauss4_var = gaussian_flux_variance(
+            psf_array,
+            0.4,
+            sigma_smooth,
+            this->scale
+        );
+        const double flux_gauss0_err_val = std::sqrt(
+            std::max(0.0, flux_gauss0_var) * variance_use
+        );
+        const double flux_gauss2_err_val = std::sqrt(
+            std::max(0.0, flux_gauss2_var) * variance_use
+        );
+        const double flux_gauss4_err_val = std::sqrt(
+            std::max(0.0, flux_gauss4_var) * variance_use
+        );
+
+        auto assign_flux_errors = [&](table::galNumber& src) {
+            src.flux_gauss0_err = flux_gauss0_err_val;
+            src.flux_gauss2_err = flux_gauss2_err_val;
+            src.flux_gauss4_err = flux_gauss4_err_val;
+        };
+
         std::vector<table::galNumber> catalog;
         if (detection.has_value()) {
             catalog = table::array_to_objlist(
@@ -331,6 +368,10 @@ public:
                     catalog.push_back(src);
                 }
             }
+        }
+
+        for (table::galNumber & src : catalog) {
+            assign_flux_errors(src);
         }
 
         for (geometry::block & block: block_list) {

@@ -24,6 +24,7 @@ pyExportTable(py::module_& m) {
         dflux_gauss2_dj1, dflux_gauss2_dj2,
         flux_gauss4, dflux_gauss4_dg1, dflux_gauss4_dg2,
         dflux_gauss4_dj1, dflux_gauss4_dj2,
+        flux_gauss0_err, flux_gauss2_err, flux_gauss4_err,
         fpfs_e1, fpfs_de1_dg1, fpfs_de1_dg2, fpfs_de1_dj1, fpfs_de1_dj2,
         fpfs_e2, fpfs_de2_dg1, fpfs_de2_dg2, fpfs_de2_dj1, fpfs_de2_dj2,
         fpfs_m0, fpfs_dm0_dg1, fpfs_dm0_dg2, fpfs_dm0_dj1, fpfs_dm0_dj2,
@@ -59,6 +60,9 @@ pyExportTable(py::module_& m) {
         .def_readonly("flux_gauss0", &galNumber::flux_gauss0)
         .def_readonly("flux_gauss2", &galNumber::flux_gauss2)
         .def_readonly("flux_gauss4", &galNumber::flux_gauss4)
+        .def_readwrite("flux_gauss0_err", &galNumber::flux_gauss0_err)
+        .def_readwrite("flux_gauss2_err", &galNumber::flux_gauss2_err)
+        .def_readwrite("flux_gauss4_err", &galNumber::flux_gauss4_err)
         .def_readonly("fpfs_e1", &galNumber::fpfs_e1)
         .def_readonly("fpfs_e2", &galNumber::fpfs_e2)
         .def_readonly("fpfs_m0", &galNumber::fpfs_m0)
