@@ -304,15 +304,6 @@ public:
             catalog = table::array_to_objlist(
                 *detection
             );
-            for (table::galNumber & src : catalog) {
-                if (!(src.model.a1.v > 0.0)) {
-                    src.model.a1 = math::qnumber(a_ini);
-                }
-                if (!(src.model.a2.v > 0.0)) {
-                    src.model.a2 = math::qnumber(a_ini);
-                }
-                src.initialized = false;
-            }
         } else {
             for (const geometry::block & block: block_list) {
                 py::array_t<double> psf;
@@ -337,7 +328,6 @@ public:
                     table::galNumber src = det_src;
                     src.model.a1 = math::qnumber(a_ini);
                     src.model.a2 = math::qnumber(a_ini);
-                    src.initialized = false;
                     catalog.push_back(src);
                 }
             }

@@ -1,5 +1,4 @@
 import gc
-import time
 
 import anacal
 import galsim
@@ -67,7 +66,7 @@ def test_task_detection():
     noise_variance = 0.10
     prior = anacal.ngmix.modelPrior()
     prior.set_sigma_x(anacal.math.qnumber(0.5))
-    taskA = anacal.task.Task(
+    det_task = anacal.task.Task(
         scale=scale,
         sigma_arcsec=0.4,
         snr_peak_min=10,
@@ -91,7 +90,7 @@ def test_task_detection():
     print_mem(initial_memory_usage)
 
     def func():
-        taskA.process_image(
+        det_task.process_image(
             img_array,
             psf_array,
             variance=noise_variance,
@@ -107,7 +106,7 @@ def test_task_detection():
     print("Additional Mem:")
     print_mem(final_memory_usage - initial_memory_usage)
 
-    catalog = taskA.process_image(
+    catalog = det_task.process_image(
         img_array, psf_array, variance=noise_variance, block_list=blocks,
     )
     assert len(catalog) == ngal * ngal
@@ -134,7 +133,7 @@ def test_task_detection():
         150,
         scale,
     )
-    catalog = taskA.process_image(
+    catalog = det_task.process_image(
         img_array,
         psf_array,
         variance=noise_variance,

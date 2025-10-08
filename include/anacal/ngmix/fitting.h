@@ -303,7 +303,7 @@ public:
     };
 
     inline void
-    initialize_fitting(
+    initialize_angle(
         const std::vector<math::qnumber> & data,
         NgmixGaussian & model,
         const geometry::block & block
@@ -433,7 +433,7 @@ public:
                     (src.block_id == block.index)
                 ) {
                     if (!this->force_size) {
-                        initialize_fitting(data, src.model, block);
+                        initialize_angle(data, src.model, block);
                     }
                     initialize_flux(data, src.model, block);
                     src.initialized = true;
@@ -499,7 +499,7 @@ public:
         double std_fpfs = std::sqrt(
             get_smoothed_variance(
                 block.scale,
-                this->sigma_arcsec * 1.414,
+                this->sigma_arcsec * 1.41421356,
                 psf_array,
                 variance
             )
