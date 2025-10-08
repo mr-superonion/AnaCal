@@ -15,7 +15,6 @@ pyExportTable(py::module_& m) {
         e2, de2_dg1, de2_dg2, de2_dj1, de2_dj2,
         x1, dx1_dg1, dx1_dg2, dx1_dj1, dx1_dj2,
         x2, dx2_dg1, dx2_dg2, dx2_dj1, dx2_dj2,
-        fluxap2, dfluxap2_dg1, dfluxap2_dg2, dfluxap2_dj1, dfluxap2_dj2,
         wdet, dwdet_dg1, dwdet_dg2, dwdet_dj1, dwdet_dj2,
         wsel, dwsel_dg1, dwsel_dg2, dwsel_dj1, dwsel_dj2,
         mask_value, is_peak, is_primary,
@@ -23,8 +22,6 @@ pyExportTable(py::module_& m) {
         fpfs_e2, fpfs_de2_dg1, fpfs_de2_dg2, fpfs_de2_dj1, fpfs_de2_dj2,
         fpfs_m0, fpfs_dm0_dg1, fpfs_dm0_dg2, fpfs_dm0_dj1, fpfs_dm0_dj2,
         fpfs_m2, fpfs_dm2_dg1, fpfs_dm2_dg2, fpfs_dm2_dj1, fpfs_dm2_dj2,
-        peakv, dpeakv_dg1, dpeakv_dg2, dpeakv_dj1, dpeakv_dj2,
-        bkg, dbkg_dg1, dbkg_dg2, dbkg_dj1, dbkg_dj2,
         x1_det, x2_det, block_id
     );
     py::module_ table = m.def_submodule(
@@ -39,17 +36,16 @@ pyExportTable(py::module_& m) {
     py::class_<galNumber>(table, "galNumber")
         .def(py::init<>())
         .def(py::init<
-            ngmix::NgmixGaussian, math::qnumber, math::qnumber,
+            ngmix::NgmixGaussian, math::qnumber,
             int, bool, math::lossNumber
             >(),
-            py::arg("model"), py::arg("fluxap2"),
-            py::arg("wdet"), py::arg("mask_value"), py::arg("is_peak"),
+            py::arg("model"), py::arg("wdet"),
+            py::arg("mask_value"), py::arg("is_peak"),
             py::arg("loss")
         )
         .def_readwrite("model", &galNumber::model)
         .def_readwrite("x1_det", &galNumber::x1_det)
         .def_readwrite("x2_det", &galNumber::x2_det)
-        .def_readonly("fluxap2", &galNumber::fluxap2)
         .def_readonly("wdet", &galNumber::wdet)
         .def_readonly("mask_value", &galNumber::mask_value)
         .def_readonly("is_peak", &galNumber::is_peak)

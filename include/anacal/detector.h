@@ -66,23 +66,20 @@ void measure_pixel(
             (data[index].v > data[id4].v)
         );
 
-        math::qnumber fluxbg, fluxap2;
+        math::qnumber fluxbg;
         for (int dj = -drmax_flux; dj <= drmax_flux; dj++) {
             int dj2 = dj * dj;
             for (int di = -drmax_flux; di <= drmax_flux; di++) {
                 int dr2 = di * di + dj2;
-                if ((dr2 < drmax2_flux)) {
+                if ((dr2 < drmax2_flux) && (dr2 >= drmax2_bg)) {
                     int _i = (j + dj) * block.nx + (i + di);
-                    fluxap2 = fluxap2 + data[_i];
-                    if ((dr2 >= drmax2_bg)) {
-                        fluxbg = fluxbg + data[_i];
-                    }
+                    fluxbg = fluxbg + data[_i];
                 }
             }
         }
-        src.peakv = data[index];
-        src.bkg = fluxbg / nbg;
-        src.fluxap2 = fluxap2;
+
+        math::qnumber bkg = fluxbg / nbg;
+
         src.block_id = block.index;
         src.wdet = math::ssfunc1(
             wdet,
@@ -92,8 +89,8 @@ void measure_pixel(
             data[index],
             f_min,
             omega_f
-        )* math::ssfunc1(
-            data[index] - src.bkg * 0.6,
+        ) * math::ssfunc1(
+            data[index] - bkg * 0.6,
             3.0 * std_noise,
             omega_f
         );
@@ -149,13 +146,13 @@ find_peaks_impl(
     int drmax_bg = static_cast<int>(1.0 / block.scale) + 1;
     int drmax2_bg = drmax_bg * drmax_bg;
 
-    double nbg=0.0;
+    double nbg = 0.0;
     for (int dj = -drmax_flux; dj <= drmax_flux; ++dj) {
         int dj2 = dj * dj;
         for (int di = -drmax_flux; di <= drmax_flux; ++di) {
             int dr2 = di * di + dj2;
             if (dr2 >= drmax2_bg && dr2 < drmax2_flux) {
-                nbg=nbg+1;
+                nbg = nbg + 1;
             }
         }
     }
@@ -275,7 +272,6 @@ find_peaks(
             0.4,
             0.399
         );
-        src.model.F = src.fluxap2;
         if (src.wdet.v > 1e-8) catalog.push_back(src);
     }
     return catalog;

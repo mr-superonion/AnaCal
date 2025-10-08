@@ -24,7 +24,6 @@ public:
     double fpfs_c0;
     double sigma2, sigma_m2, rfac, ffac, ffac2, ffac3;
     double sigma2_lim;
-    double ap2_r, ap2_r2;
     double r2_lim_stamp;
     mutable double sigma2_flux;
 
@@ -47,38 +46,8 @@ public:
         this->ffac2 = this->ffac * 1.41421356 * this->sigma_m2;
         this->ffac3 = this->ffac * 2.0 * this->sigma_m2;
         this->sigma2_lim = sigma2 * 20;
-        this->ap2_r = 2.0 / scale;
-        this->ap2_r2 = std::pow(ap2_r, 2.0);
         this->r2_lim_stamp = std::pow((this->ss2-1) * scale, 2.0);
         this->sigma2_flux = this->sigma2;
-    };
-
-    inline void
-    measure_aperture_flux(
-        const std::vector<math::qnumber> & data,
-        table::galNumber & src,
-        const geometry::block & block
-    ) const {
-        // stamp center index
-        int i = static_cast<int>(
-            std::round(src.model.x1.v / this->scale)
-        ) - block.xmin;
-        int j = static_cast<int>(
-            std::round(src.model.x2.v / this->scale)
-        ) - block.ymin;
-
-        math::qnumber fluxap2;
-        for (int dj = -ap2_r; dj <= ap2_r; dj++) {
-            int dj2 = dj * dj;
-            for (int di = -ap2_r; di <= ap2_r; di++) {
-                int dr2 = di * di + dj2;
-                if (dr2 < this->ap2_r2) {
-                    int _i = (j + dj) * block.nx + (i + di);
-                    src.fluxap2 = src.fluxap2 + data[_i];
-                }
-            }
-        }
-        return;
     };
 
     inline void
