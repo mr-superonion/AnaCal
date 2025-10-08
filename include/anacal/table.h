@@ -287,21 +287,6 @@ struct galNumber {
             row.dflux_dg1, row.dflux_dg2,
             row.dflux_dj1, row.dflux_dj2
         );
-        flux_gauss0 = math::qnumber(
-            row.flux_gauss0,
-            row.dflux_gauss0_dg1, row.dflux_gauss0_dg2,
-            row.dflux_gauss0_dj1, row.dflux_gauss0_dj2
-        );
-        flux_gauss2 = math::qnumber(
-            row.flux_gauss2,
-            row.dflux_gauss2_dg1, row.dflux_gauss2_dg2,
-            row.dflux_gauss2_dj1, row.dflux_gauss2_dj2
-        );
-        flux_gauss4 = math::qnumber(
-            row.flux_gauss4,
-            row.dflux_gauss4_dg1, row.dflux_gauss4_dg2,
-            row.dflux_gauss4_dj1, row.dflux_gauss4_dj2
-        );
         model.t = math::qnumber(
             row.t,
             row.dt_dg1, row.dt_dg2,
@@ -340,6 +325,21 @@ struct galNumber {
         mask_value = row.mask_value;
         is_peak = row.is_peak;
         is_primary = row.is_primary;
+        flux_gauss0 = math::qnumber(
+            row.flux_gauss0,
+            row.dflux_gauss0_dg1, row.dflux_gauss0_dg2,
+            row.dflux_gauss0_dj1, row.dflux_gauss0_dj2
+        );
+        flux_gauss2 = math::qnumber(
+            row.flux_gauss2,
+            row.dflux_gauss2_dg1, row.dflux_gauss2_dg2,
+            row.dflux_gauss2_dj1, row.dflux_gauss2_dj2
+        );
+        flux_gauss4 = math::qnumber(
+            row.flux_gauss4,
+            row.dflux_gauss4_dg1, row.dflux_gauss4_dg2,
+            row.dflux_gauss4_dj1, row.dflux_gauss4_dj2
+        );
         fpfs_e1 = math::qnumber(
             row.fpfs_e1,
             row.fpfs_de1_dg1, row.fpfs_de1_dg2,
