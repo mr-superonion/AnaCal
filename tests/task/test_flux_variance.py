@@ -178,6 +178,14 @@ def test_flux_variance():
         pixel_scale=pixel_scale,
         noise_variance=noise_std**2.0,
     )
+    flux5, flux_var5 = gaussian_flux_variance(
+        img_array=gal_array,
+        psf_array=psf_array,
+        sigma_arcsec=sigma_arcsec,
+        sigma_kernel=0.4,
+        pixel_scale=pixel_scale,
+        noise_variance=noise_std**2.0,
+    )
     catalog4 = det_task.process_image(
         gal_array,
         psf_array,
@@ -193,4 +201,16 @@ def test_flux_variance():
         block_list=blocks,
     )
     np.testing.assert_allclose(catalog5["flux"][0], flux4, rtol=1e-3, atol=0.01)
+    np.testing.assert_allclose(
+        catalog5["flux_gauss0"][0],
+        flux, rtol=1e-4, atol=1e-3,
+    )
+    np.testing.assert_allclose(
+        catalog5["flux_gauss2"][0],
+        flux4, rtol=1e-4, atol=1e-3,
+    )
+    np.testing.assert_allclose(
+        catalog5["flux_gauss4"][0],
+        flux5, rtol=1e-4, atol=1e-3,
+    )
     return
