@@ -87,9 +87,9 @@ pyExportTable(py::module_& m) {
             py::dtype dtype = py::dtype::of<galRow>();
             py::object names = dtype.attr("names");
             if (names.is_none()) {
-                return py::tuple();
+                return py::list();
             }
-            return names.cast<py::tuple>();
+            return py::list(names);
         },
         "return the column names for galNumber structured arrays"
     );

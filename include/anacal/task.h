@@ -17,20 +17,6 @@ gaussian_flux_variance(
     double klim = std::numeric_limits<double>::infinity(),
     const std::optional<py::array_t<double>>& noise_corr = std::nullopt
 ) {
-    // ---- input checks
-    if (psf_array.ndim() != 2) {
-        throw std::runtime_error("ngmix Error: PSF image must be 2-dimensional.");
-    }
-    if (sigma_smooth <= 0.0) {
-        throw std::runtime_error("ngmix Error: sigma_smooth must be positive.");
-    }
-    if (sigma_kernel < 0.0) {
-        throw std::runtime_error("ngmix Error: sigma_kernel must be non-negative.");
-    }
-    if (pixel_scale <= 0.0) {
-        throw std::runtime_error("ngmix Error: pixel_scale must be positive.");
-    }
-
     const ssize_t ny = psf_array.shape(0);
     const ssize_t nx = psf_array.shape(1);
     if (ny <= 0 || nx <= 0) {
@@ -324,8 +310,6 @@ public:
             return errs;
         };
 
-        const std::array<double, 3> default_flux_errs = compute_flux_errors(psf_array);
-
         std::vector<table::galNumber> catalog;
         if (detection.has_value()) {
             catalog = table::array_to_objlist(
@@ -360,11 +344,6 @@ public:
             }
         }
 
-        for (table::galNumber & src : catalog) {
-            src.flux_gauss0_err = default_flux_errs[0];
-            src.flux_gauss2_err = default_flux_errs[1];
-            src.flux_gauss4_err = default_flux_errs[2];
-        }
 
         for (geometry::block & block: block_list) {
             prepare_indices(
@@ -376,17 +355,18 @@ public:
                 continue;
             }
 
-            const bool has_custom_psf = (
+            py::array_t<double> psf;
+            if (
                 block.psf_array.ndim() == 2 &&
                 psf_array.shape(0) == this->stamp_size &&
                 psf_array.shape(1) == this->stamp_size
-            );
-            if (!has_custom_psf) {
-                continue;
+            ) {
+                psf = block.psf_array;
+            } else {
+                psf = psf_array;
             }
-
             const std::array<double, 3> block_flux_errs = compute_flux_errors(
-                block.psf_array
+                psf
             );
             for (std::size_t idx : block.indices) {
                 catalog[idx].flux_gauss0_err = block_flux_errs[0];
