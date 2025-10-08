@@ -53,11 +53,6 @@ struct galRow{
     double dx2_dg2;
     double dx2_dj1;
     double dx2_dj2;
-    double fluxap2;
-    double dfluxap2_dg1;
-    double dfluxap2_dg2;
-    double dfluxap2_dj1;
-    double dfluxap2_dj2;
     double wdet;
     double dwdet_dg1;
     double dwdet_dg2;
@@ -91,16 +86,6 @@ struct galRow{
     double fpfs_dm2_dg2;
     double fpfs_dm2_dj1;
     double fpfs_dm2_dj2;
-    double peakv;
-    double dpeakv_dg1;
-    double dpeakv_dg2;
-    double dpeakv_dj1;
-    double dpeakv_dj2;
-    double bkg;
-    double dbkg_dg1;
-    double dbkg_dg2;
-    double dbkg_dj1;
-    double dbkg_dj2;
     double x1_det;
     double x2_det;
     int block_id;
@@ -109,7 +94,6 @@ struct galRow{
 struct galNumber {
     // value with derivatives to Gaussian model parameters
     ngmix::NgmixGaussian model;
-    math::qnumber fluxap2;
     math::qnumber wdet = math::qnumber(1.0);
     math::qnumber wsel = math::qnumber(1.0);
     int mask_value=0;
@@ -121,8 +105,6 @@ struct galNumber {
     math::qnumber fpfs_e2;
     math::qnumber fpfs_m0;
     math::qnumber fpfs_m2;
-    math::qnumber peakv;
-    math::qnumber bkg;
     double ra = 0.0;
     double dec = 0.0;
     double x1_det, x2_det;
@@ -132,12 +114,11 @@ struct galNumber {
 
     galNumber(
         ngmix::NgmixGaussian model,
-        math::qnumber fluxap2,
         math::qnumber wdet,
         int mask_value,
         bool is_peak,
         math::lossNumber loss
-    ) : model(model), fluxap2(fluxap2), wdet(wdet),
+    ) : model(model), wdet(wdet),
         mask_value(mask_value), is_peak(is_peak), loss(loss) {}
 
     inline galNumber
@@ -148,9 +129,6 @@ struct galNumber {
         galNumber result= *this;
         result.wdet = this->wdet.decentralize(dx1, dx2);
         result.wsel = this->wsel.decentralize(dx1, dx2);
-        result.fluxap2 = this->fluxap2.decentralize(dx1, dx2);
-        result.peakv = this->peakv.decentralize(dx1, dx2);
-        result.bkg = this->bkg.decentralize(dx1, dx2);
         result.model = this->model.decentralize(dx1, dx2);
         result.fpfs_e1 = this->fpfs_e1.decentralize(dx1, dx2);
         result.fpfs_e2 = this->fpfs_e2.decentralize(dx1, dx2);
@@ -167,9 +145,6 @@ struct galNumber {
         galNumber result= *this;
         result.wdet = this->wdet.centralize(dx1, dx2);
         result.wsel = this->wsel.centralize(dx1, dx2);
-        result.fluxap2 = this->fluxap2.centralize(dx1, dx2);
-        result.peakv = this->peakv.centralize(dx1, dx2);
-        result.bkg = this->bkg.centralize(dx1, dx2);
         result.model = this->model.centralize(dx1, dx2);
         result.fpfs_e1 = this->fpfs_e1.centralize(dx1, dx2);
         result.fpfs_e2 = this->fpfs_e2.centralize(dx1, dx2);
@@ -224,11 +199,6 @@ struct galNumber {
             model.x2.g2,
             model.x2.x1,
             model.x2.x2,
-            fluxap2.v,
-            fluxap2.g1,
-            fluxap2.g2,
-            fluxap2.x1,
-            fluxap2.x2,
             wdet.v,
             wdet.g1,
             wdet.g2,
@@ -262,16 +232,6 @@ struct galNumber {
             fpfs_m2.g2,
             fpfs_m2.x1,
             fpfs_m2.x2,
-            peakv.v,
-            peakv.g1,
-            peakv.g2,
-            peakv.x1,
-            peakv.x2,
-            bkg.v,
-            bkg.g1,
-            bkg.g2,
-            bkg.x1,
-            bkg.x2,
             x1_det,
             x2_det,
             block_id
@@ -313,11 +273,6 @@ struct galNumber {
             row.dx2_dg1, row.dx2_dg2,
             row.dx2_dj1, row.dx2_dj2
         );
-        fluxap2 = math::qnumber(
-            row.fluxap2,
-            row.dfluxap2_dg1, row.dfluxap2_dg2,
-            row.dfluxap2_dj1, row.dfluxap2_dj2
-        );
         wdet = math::qnumber(
             row.wdet,
             row.dwdet_dg1, row.dwdet_dg2,
@@ -350,16 +305,6 @@ struct galNumber {
             row.fpfs_m2,
             row.fpfs_dm2_dg1, row.fpfs_dm2_dg2,
             row.fpfs_dm2_dj1, row.fpfs_dm2_dj2
-        );
-        peakv = math::qnumber(
-            row.peakv,
-            row.dpeakv_dg1, row.dpeakv_dg2,
-            row.dpeakv_dj1, row.dpeakv_dj2
-        );
-        bkg = math::qnumber(
-            row.bkg,
-            row.dbkg_dg1, row.dbkg_dg2,
-            row.dbkg_dj1, row.dbkg_dj2
         );
         x1_det = row.x1_det;
         x2_det = row.x2_det;
