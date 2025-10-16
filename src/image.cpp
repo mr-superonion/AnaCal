@@ -601,6 +601,91 @@ Image::draw_r(bool ishift) const {
 }
 
 
+Image::Image(Image&& other) noexcept
+    : plan_forward(other.plan_forward),
+      plan_backward(other.plan_backward),
+      nx2(other.nx2),
+      ny2(other.ny2),
+      npixels(other.npixels),
+      npixels_f(other.npixels_f),
+      kx_length(other.kx_length),
+      ky_length(other.ky_length),
+      dkx(other.dkx),
+      dky(other.dky),
+      norm_factor(other.norm_factor),
+      data_r(other.data_r),
+      data_f(other.data_f),
+      mode(other.mode),
+      ny(other.ny),
+      nx(other.nx),
+      scale(other.scale) {
+    other.plan_forward = nullptr;
+    other.plan_backward = nullptr;
+    other.data_r = nullptr;
+    other.data_f = nullptr;
+    other.nx2 = 0;
+    other.ny2 = 0;
+    other.npixels = 0;
+    other.npixels_f = 0;
+    other.kx_length = 0;
+    other.ky_length = 0;
+    other.dkx = 0.0;
+    other.dky = 0.0;
+    other.norm_factor = 0.0;
+    other.mode = 0;
+    other.ny = 0;
+    other.nx = 0;
+    other.scale = 0.0;
+}
+
+
+Image& Image::operator=(Image&& other) noexcept {
+    if (this != &other) {
+        if (plan_forward) fftw_destroy_plan(plan_forward);
+        if (plan_backward) fftw_destroy_plan(plan_backward);
+        fftw_free(data_r);
+        fftw_free(data_f);
+
+        plan_forward = other.plan_forward;
+        plan_backward = other.plan_backward;
+        nx2 = other.nx2;
+        ny2 = other.ny2;
+        npixels = other.npixels;
+        npixels_f = other.npixels_f;
+        kx_length = other.kx_length;
+        ky_length = other.ky_length;
+        dkx = other.dkx;
+        dky = other.dky;
+        norm_factor = other.norm_factor;
+        data_r = other.data_r;
+        data_f = other.data_f;
+        mode = other.mode;
+        ny = other.ny;
+        nx = other.nx;
+        scale = other.scale;
+
+        other.plan_forward = nullptr;
+        other.plan_backward = nullptr;
+        other.data_r = nullptr;
+        other.data_f = nullptr;
+        other.nx2 = 0;
+        other.ny2 = 0;
+        other.npixels = 0;
+        other.npixels_f = 0;
+        other.kx_length = 0;
+        other.ky_length = 0;
+        other.dkx = 0.0;
+        other.dky = 0.0;
+        other.norm_factor = 0.0;
+        other.mode = 0;
+        other.ny = 0;
+        other.nx = 0;
+        other.scale = 0.0;
+    }
+    return *this;
+}
+
+
 Image::~Image() {
     if (plan_forward) fftw_destroy_plan(plan_forward);
     if (plan_backward) fftw_destroy_plan(plan_backward);
