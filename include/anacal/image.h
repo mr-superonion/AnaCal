@@ -99,8 +99,8 @@ public:
 
     py::array_t<double> draw_r(bool ishift=false) const;
 
-    Image(Image&& other) noexcept = default;
-    Image& operator=(Image&& other) noexcept = default;
+    Image(Image&& other) noexcept;
+    Image& operator=(Image&& other) noexcept;
 
     ~Image();
 
