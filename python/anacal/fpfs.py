@@ -318,7 +318,6 @@ class FpfsTask:
         v_min: float,
         noise_array: NDArray | None = None,
         mask_array: NDArray | None = None,
-        star_cat: NDArray | None = None,
     ) -> NDArray:
         """This function detects galaxy from image
 
@@ -329,7 +328,6 @@ class FpfsTask:
         omega_v (float): smoothness parameter for pixel difference
         noise_array (NDArray|None): pure noise image
         mask_array (NDArray|None): mask image
-        star_cat (NDArray|None): bright star catalog
 
         Returns:
         (NDArray): galaxy detection catalog
@@ -580,7 +578,6 @@ def process_image(
     psf_array: NDArray,
     noise_array: NDArray | None = None,
     mask_array: NDArray | None = None,
-    star_catalog: NDArray | None = None,
     detection: NDArray | None = None,
     psf_object: BasePsf | None | NDArray = None,
     do_compute_detect_weight: bool = True,
@@ -600,7 +597,6 @@ def process_image(
     psf_array (ndarray): an average PSF image
     noise_array (NDArray | None): pure noise array
     mask_array (NDArray | None): mask array (1 for masked)
-    star_catalog (NDArray | None): bright star catalog
     detection (NDArray | None): detection catalog
     psf_object (BasePsf | None): PSF object
     do_compute_detect_weight (bool): whether to compute detection weight
@@ -647,7 +643,6 @@ def process_image(
                 v_min=v_min,
                 omega_v=omega_v,
                 mask_array=mask_array,
-                star_cat=star_catalog,
             )
         else:
             colnames = ("y", "x")
