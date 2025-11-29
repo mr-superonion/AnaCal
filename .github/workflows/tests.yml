@@ -60,7 +60,7 @@ jobs:
 
       - name: Lint with black
         run: |
-          black
+          black python/anacal
 
       - name: Test with pytest
         run: |
