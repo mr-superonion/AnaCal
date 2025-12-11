@@ -153,7 +153,8 @@ public:
         int num_epochs=3,
         bool force_size=false,
         bool force_center=false,
-        double fpfs_c0=1.0
+        double fpfs_c0=1.0,
+        bool do_fpfs=true
     ) : scale(scale), sigma_arcsec(sigma_arcsec), snr_peak_min(snr_peak_min),
         omega_f(omega_f), v_min(v_min), omega_v(omega_v),
         p_min(p_min), omega_p(omega_p),
@@ -162,7 +163,7 @@ public:
         num_epochs(num_epochs), fitter(
             scale, sigma_arcsec, stamp_size,
             force_size, force_center,
-            fpfs_c0
+            fpfs_c0, do_fpfs
         )
     {
         if (stamp_size % 2 != 0 ) {
