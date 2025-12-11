@@ -119,3 +119,44 @@ def test_ngmix_fpfs():
         src["m22s"][0], m22s,
         atol=0.0, rtol=1e-4,
     )
+
+
+def test_ngmix_fpfs_disabled():
+    nx = 8
+    ny = 8
+    scale = 0.2
+    sigma_shapelets = 0.3
+
+    psf_array = np.ones((ny, nx), dtype=float)
+    img_array = np.zeros((ny, nx), dtype=float)
+
+    fitter = anacal.ngmix.GaussFit(
+        scale=scale,
+        sigma_arcsec=sigma_shapelets,
+        stamp_size=8,
+        do_fpfs=False,
+    )
+
+    src = anacal.table.galNumber()
+    src.model.x1.v = (nx / 2) * scale
+    src.model.x2.v = (ny / 2) * scale
+    src.x1_det = src.model.x1.v
+    src.x2_det = src.model.x2.v
+    src.model.F.v = 1.0
+    src.model.t.v = -0.5
+
+    catalog = [src]
+    prior = anacal.ngmix.modelPrior()
+
+    cat = fitter.process_block(
+        catalog=catalog,
+        img_array=img_array,
+        psf_array=psf_array,
+        prior=prior,
+        num_epochs=1,
+        variance=0.1,
+    )[0]
+
+    np.testing.assert_allclose(cat.wsel.v, cat.wdet.v)
+    np.testing.assert_allclose(cat.fpfs_m0.v, 0.0)
+    np.testing.assert_allclose(cat.fpfs_m2.v, 0.0)
