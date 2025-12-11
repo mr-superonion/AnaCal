@@ -15,7 +15,7 @@ pyExportTask(py::module_& m) {
             double, double, double, double,
             const std::optional<ngmix::modelPrior>,
             int, int, int,
-            bool, bool, double
+            bool, bool, double, bool
             >(),
             py::arg("scale"),
             py::arg("sigma_arcsec"),
@@ -31,7 +31,8 @@ pyExportTask(py::module_& m) {
             py::arg("num_epochs")=3,
             py::arg("force_size")=false,
             py::arg("force_center")=false,
-            py::arg("fpfs_c0")=1.0
+            py::arg("fpfs_c0")=1.0,
+            py::arg("do_fpfs")=true
         )
         .def("process_image", &Task::process_image,
             "process image with PSF array",
