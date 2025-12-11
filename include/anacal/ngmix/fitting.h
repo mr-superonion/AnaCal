@@ -21,6 +21,7 @@ public:
     int stamp_size, ss2;
     bool force_size, force_center;
     double fpfs_c0;
+    bool do_fpfs;
     double sigma2, sigma_m2, rfac, ffac, ffac2, ffac3;
     double sigma2_lim;
     double r2_lim_stamp;
@@ -31,11 +32,13 @@ public:
         int stamp_size=64,
         bool force_size=false,
         bool force_center=false,
-        double fpfs_c0=1.0
+        double fpfs_c0=1.0,
+        bool do_fpfs=true
     ) : scale(scale), sigma_arcsec(sigma_arcsec), stamp_size(stamp_size),
         ss2(stamp_size / 2), force_size(force_size),
         force_center(force_center),
-        fpfs_c0(fpfs_c0)
+        fpfs_c0(fpfs_c0),
+        do_fpfs(do_fpfs)
     {
         this->sigma2 = sigma_arcsec * sigma_arcsec;
         this->sigma_m2 = 1.0 / this->sigma2;
@@ -488,14 +491,17 @@ public:
         }
 
         // finally get FPFS measurement
-        double std_fpfs = std::sqrt(
-            get_smoothed_variance(
-                block.scale,
-                this->sigma_arcsec * 1.41421356,
-                psf_array,
-                variance
-            )
-        );
+        double std_fpfs = 0.0;
+        if (this->do_fpfs) {
+            std_fpfs = std::sqrt(
+                get_smoothed_variance(
+                    block.scale,
+                    this->sigma_arcsec * 1.41421356,
+                    psf_array,
+                    variance
+                )
+            );
+        }
 
         for (std::size_t i=0; i<ng; ++i) {
             table::galNumber & src = catalog[inds[i]];
@@ -503,19 +509,23 @@ public:
                 this->measure_gaussian_fluxes(
                     data, src, block
                 );
-                this->measure_fpfs(
-                    data, src, block
-                );
-                src.wsel = src.wdet * math::ssfunc1(
-                    src.fpfs_m0,
-                    5.0 * std_fpfs,
-                    std_fpfs
-                );
-                src.wsel = src.wsel * math::ssfunc1(
-                    src.fpfs_m2 - 0.05 * src.fpfs_m0,
-                    std_fpfs,
-                    std_fpfs
-                );
+                if (this->do_fpfs) {
+                    this->measure_fpfs(
+                        data, src, block
+                    );
+                    src.wsel = src.wdet * math::ssfunc1(
+                        src.fpfs_m0,
+                        5.0 * std_fpfs,
+                        std_fpfs
+                    );
+                    src.wsel = src.wsel * math::ssfunc1(
+                        src.fpfs_m2 - 0.05 * src.fpfs_m0,
+                        std_fpfs,
+                        std_fpfs
+                    );
+                } else {
+                    src.wsel = src.wdet;
+                }
             }
         }
         return;

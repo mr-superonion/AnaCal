@@ -91,14 +91,15 @@ pyExportNgmix(py::module_& m) {
     py::class_<GaussFit>(ngmix, "GaussFit")
         .def(
             py::init<
-                double, double, int, bool, bool, double
+                double, double, int, bool, bool, double, bool
             >(),
             py::arg("scale"),
             py::arg("sigma_arcsec"),
             py::arg("stamp_size")=64,
             py::arg("force_size")=false,
             py::arg("force_center")=false,
-            py::arg("fpfs_c0")=1.0
+            py::arg("fpfs_c0")=1.0,
+            py::arg("do_fpfs")=true
         )
         .def("process_block", &GaussFit::process_block,
             "Run iteration for fitting",
