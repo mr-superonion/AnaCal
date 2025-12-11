@@ -54,6 +54,7 @@ pyExportTable(py::module_& m) {
         .def_readwrite("x1_det", &galNumber::x1_det)
         .def_readwrite("x2_det", &galNumber::x2_det)
         .def_readonly("wdet", &galNumber::wdet)
+        .def_readonly("wsel", &galNumber::wdet)
         .def_readonly("mask_value", &galNumber::mask_value)
         .def_readonly("is_peak", &galNumber::is_peak)
         .def_readonly("loss", &galNumber::loss)
