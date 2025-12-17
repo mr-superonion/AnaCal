@@ -568,6 +568,94 @@ class FpfsConfig(BaseModel):
     )
 
 
+def _rename_linear_fields(
+    arr: np.ndarray,
+    *,
+    prefix: str,
+    is_noise: bool,
+    base_column_name: str | None,
+) -> np.ndarray | None:
+    """Rename structured-array fields for linear modes.
+
+    - data*:   <name> -> f"{prefix}{name}"
+    - noise*:  mXX... -> nXX..., then -> f"{prefix}{nXX...}"
+    """
+    if arr is None:
+        return arr
+    if arr.dtype.names is None:
+        raise TypeError("Expected a structured array (names is None).")
+
+    mapping: dict[str, str] = {}
+    for name in arr.dtype.names:
+        new = name
+        if is_noise and name.startswith("m"):
+            new = "n" + name[1:]
+        if base_column_name is None:
+            mapping[name] = prefix + new
+        else:
+            mapping[name] = base_column_name + prefix + new
+    return rfn.rename_fields(arr, mapping)
+
+
+def _pack_linear_modes(linear_modes, base_column_name):
+    blocks: list[np.ndarray] = [linear_modes["detection"]]
+    if "data" in linear_modes:
+        blocks.append(
+            _rename_linear_fields(
+                linear_modes["data"],
+                prefix="fpfs_",
+                is_noise=False,
+                base_column_name=base_column_name,
+            )
+        )
+    if "noise" in linear_modes:
+        blocks.append(
+            _rename_linear_fields(
+                linear_modes["noise"],
+                prefix="fpfs_",
+                is_noise=True,
+                base_column_name=base_column_name,
+            )
+        )
+    if "data1" in linear_modes:
+        blocks.append(
+            _rename_linear_fields(
+                linear_modes["data1"],
+                prefix="fpfs1_",
+                is_noise=False,
+                base_column_name=base_column_name,
+            )
+        )
+    if "noise1" in linear_modes:
+        blocks.append(
+            _rename_linear_fields(
+                linear_modes["noise1"],
+                prefix="fpfs1_",
+                is_noise=True,
+                base_column_name=base_column_name,
+            )
+        )
+    if "data2" in linear_modes:
+        blocks.append(
+            _rename_linear_fields(
+                linear_modes["data2"],
+                prefix="fpfs2_",
+                is_noise=False,
+                base_column_name=base_column_name,
+            )
+        )
+    if "noise2" in linear_modes:
+        blocks.append(
+            _rename_linear_fields(
+                linear_modes["noise2"],
+                prefix="fpfs2_",
+                is_noise=True,
+                base_column_name=base_column_name,
+            )
+        )
+    return rfn.merge_arrays(blocks, flatten=True, usemask=False)
+
+
 def process_image(
     *,
     fpfs_config: FpfsConfig,
@@ -581,8 +669,10 @@ def process_image(
     detection: NDArray | None = None,
     psf_object: BasePsf | None | NDArray = None,
     do_compute_detect_weight: bool = True,
-    only_return_detection_modes: bool = False,
+    return_only_linear_modes: bool = False,
+    pack_linear_modes: bool = False,
     base_column_name: str | None = None,
+    **kwargs,
 ):
     """Run measurement algorithms on the input exposure, and optionally
     populate the resulting catalog with extra information.
@@ -600,15 +690,13 @@ def process_image(
     detection (NDArray | None): detection catalog
     psf_object (BasePsf | None): PSF object
     do_compute_detect_weight (bool): whether to compute detection weight
-    only_return_detection_modes (bool): only return linear modes for detection
+    return_only_linear_modes (bool): only return linear modes for detection
+    pack_linear_modes (bool): whether pack linear modes into structured array
     base_column_name (str | None): base column name
 
     Returns:
     (NDArray) FPFS catalog
     """
-    if only_return_detection_modes:
-        assert do_compute_detect_weight
-
     ratio = 1.0 / (10 ** ((30 - mag_zero) / 2.5))
     r2_min = fpfs_config.r2_min * ratio
     omega_r2 = fpfs_config.omega_r2 * ratio
@@ -619,7 +707,9 @@ def process_image(
     if psf_object is None:
         psf_object = psf_array
 
-    out_list = []
+    linear_modes: dict[str, np.ndarray] | None = {"detection": detection} \
+        if return_only_linear_modes else None
+    out_list: list[np.ndarray] | None = None if return_only_linear_modes else []
 
     if do_compute_detect_weight or (detection is None):
         ftask = FpfsTask(
@@ -647,8 +737,12 @@ def process_image(
         else:
             colnames = ("y", "x")
             if detection.dtype.names != colnames:
-                raise ValueError("detection has wrong cloumn names")
-        out_list.append(detection)
+                raise ValueError("detection has wrong column names")
+
+        if linear_modes is not None:
+            linear_modes["detection"] = detection
+        else:
+            out_list.append(detection)
 
         if do_compute_detect_weight:
             src = ftask.run(
@@ -657,25 +751,31 @@ def process_image(
                 det=detection,
                 noise_array=noise_array,
             )
-            if only_return_detection_modes:
-                return src
-            meas = measure_fpfs(
-                C0=fpfs_c0,
-                v_min=v_min,
-                omega_v=omega_v,
-                pthres=fpfs_config.pthres,
-                m00_min=m00_min,
-                std_m00=std_m00,
-                r2_min=r2_min,
-                omega_r2=omega_r2,
-                x_array=src["data"],
-                y_array=src["noise"],
-            )
-            del src
-            map_dict = {name: "fpfs_" + name for name in meas.dtype.names}
-            out_list.append(rfn.rename_fields(meas, map_dict))
+            del ftask
+            if linear_modes is not None:
+                linear_modes["data"] = src["data"]
+                linear_modes["noise"] = src["noise"]
+            else:
+                meas = measure_fpfs(
+                    C0=fpfs_c0,
+                    v_min=v_min,
+                    omega_v=omega_v,
+                    pthres=fpfs_config.pthres,
+                    m00_min=m00_min,
+                    std_m00=std_m00,
+                    r2_min=r2_min,
+                    omega_r2=omega_r2,
+                    x_array=src["data"],
+                    y_array=src["noise"],
+                )
+                map_dict = {name: "fpfs_" + name for name in meas.dtype.names}
+                out_list.append(rfn.rename_fields(meas, map_dict))
+        del src
 
-        del ftask
+    if detection is None and (
+        fpfs_config.sigma_shapelets1 > 0 or fpfs_config.sigma_shapelets2 > 0
+    ):
+        raise RuntimeError("Do not have detection array")
 
     if fpfs_config.sigma_shapelets1 > 0:
         ftask = FpfsTask(
@@ -692,15 +792,20 @@ def process_image(
             det=detection,
             noise_array=noise_array,
         )
-        meas1 = measure_fpfs(
-            C0=fpfs_c0,
-            x_array=src["data"],
-            y_array=src["noise"],
-        )
-        del src, ftask
-        map_dict = {name: "fpfs1_" + name for name in meas1.dtype.names}
-        out_list.append(rfn.rename_fields(meas1, map_dict))
-        del meas1
+        del ftask
+        if linear_modes is not None:
+            linear_modes["data1"] = src["data"]
+            linear_modes["noise1"] = src["noise"]
+        else:
+            meas1 = measure_fpfs(
+                C0=fpfs_c0,
+                x_array=src["data"],
+                y_array=src["noise"],
+            )
+            map_dict = {name: "fpfs1_" + name for name in meas1.dtype.names}
+            out_list.append(rfn.rename_fields(meas1, map_dict))
+            del meas1
+        del src
 
     if fpfs_config.sigma_shapelets2 > 0:
         ftask = FpfsTask(
@@ -717,26 +822,40 @@ def process_image(
             det=detection,
             noise_array=noise_array,
         )
-        meas2 = measure_fpfs(
-            C0=fpfs_c0,
-            x_array=src["data"],
-            y_array=src["noise"],
+        del ftask
+        if linear_modes is not None:
+            linear_modes["data2"] = src["data"]
+            linear_modes["noise2"] = src["noise"]
+        else:
+            meas2 = measure_fpfs(
+                C0=fpfs_c0,
+                x_array=src["data"],
+                y_array=src["noise"],
+            )
+            map_dict = {name: "fpfs2_" + name for name in meas2.dtype.names}
+            out_list.append(rfn.rename_fields(meas2, map_dict))
+            del meas2
+        del src
+
+    if out_list is not None:
+        result = rfn.merge_arrays(
+            out_list,
+            flatten=True,
+            usemask=False,
         )
-        del src, ftask
-        map_dict = {name: "fpfs2_" + name for name in meas2.dtype.names}
-        out_list.append(rfn.rename_fields(meas2, map_dict))
-        del meas2
-
-    result = rfn.merge_arrays(
-        out_list,
-        flatten=True,
-        usemask=False,
-    )
-    if base_column_name is not None:
-        assert result.dtype.names is not None
-        map_dict = {
-            name: base_column_name + name for name in result.dtype.names
-        }
-        result = rfn.rename_fields(result, map_dict)
-
-    return result
+        if base_column_name is not None:
+            assert result.dtype.names is not None
+            map_dict = {
+                name: base_column_name + name for name in result.dtype.names
+            }
+            result = rfn.rename_fields(result, map_dict)
+        return result
+    else:
+        if not pack_linear_modes:
+            return linear_modes
+        else:
+            assert linear_modes is not None
+            return _pack_linear_modes(
+                linear_modes,
+                base_column_name=base_column_name,
+            )
