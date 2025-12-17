@@ -122,8 +122,12 @@ namespace anacal {
         double dm20_dg1;
         double dm20_dg2;
         double dm22c_dg1;
+        double dm22c_dg2;
+        double dm22s_dg1;
         double dm22s_dg2;
         double dm42c_dg1;
+        double dm42c_dg2;
+        double dm42s_dg1;
         double dm42s_dg2;
     };
 
@@ -250,11 +254,15 @@ namespace anacal {
         struct FpfsShape {
         double e1;
         double de1_dg1;
+        double de1_dg2;
         double e2;
+        double de2_dg1;
         double de2_dg2;
         double q1;
         double dq1_dg1;
+        double dq1_dg2;
         double q2;
+        double dq2_dg1;
         double dq2_dg2;
         double m00;
         double dm00_dg1;
@@ -264,8 +272,16 @@ namespace anacal {
         double dm20_dg2;
         double m22c;
         double dm22c_dg1;
+        double dm22c_dg2;
         double m22s;
+        double dm22s_dg1;
         double dm22s_dg2;
+        double m42c;
+        double dm42c_dg1;
+        double dm42c_dg2;
+        double m42s;
+        double dm42s_dg1;
+        double dm42s_dg2;
     };
 
         struct FpfsWeight {
@@ -309,29 +325,26 @@ namespace anacal {
         double dm22c_dg1 = (
             1.0 / std::sqrt(2.0)
         ) * (xx.m00 - xx.m40) - std::sqrt(3.0) * xx.m44c;
+        double dm22c_dg2 = -std::sqrt(3.0) * xx.m44s;
         double dm22s_dg2 = (
             1.0 / std::sqrt(2.0)
         ) * (xx.m00 - xx.m40) + std::sqrt(3.0) * xx.m44c;
-
-        // Off-diagonal terms
-        // double dm22c_dg2 = -std::sqrt(3.0) * xx.m44s;
-        // double dm22s_dg1 = -std::sqrt(3.0) * xx.m44s;
+        double dm22s_dg1 = -std::sqrt(3.0) * xx.m44s;
 
         double dm42c_dg1 = (
             std::sqrt(6.0) / 2.0
         ) * (xx.m20 - xx.m60) - std::sqrt(5.0) * xx.m64c;
+        double dm42c_dg2 = -std::sqrt(5.0) * xx.m64s;
         double dm42s_dg2 = (
             std::sqrt(6.0) / 2.0
         ) * (xx.m20 - xx.m60) + std::sqrt(5.0) * xx.m64c;
-
-        // Off-diagonal terms
-        // double dm42c_dg2 = -std::sqrt(5.0) * xx.m64s;
-        // double dm42s_dg1 = -std::sqrt(5.0) * xx.m64s;
+        double dm42s_dg1 = -std::sqrt(5.0) * xx.m64s;
 
         return FpfsShapeletsResponse{
             dm00_dg1, dm00_dg2, dm20_dg1,
-            dm20_dg2, dm22c_dg1, dm22s_dg2,
-            dm42c_dg1, dm42s_dg2
+            dm20_dg2, dm22c_dg1, dm22c_dg2,
+            dm22s_dg1, dm22s_dg2, dm42c_dg1,
+            dm42c_dg2, dm42s_dg1, dm42s_dg2
         };
     };
 
@@ -375,30 +388,40 @@ namespace anacal {
         double e1 = x.m22c / denom;
         double e1_dg1 = x_dg.dm22c_dg1 / denom
             - (x_dg.dm00_dg1 * x.m22c) / (denom * denom);
+        double e1_dg2 = x_dg.dm22c_dg2 / denom
+            - (x_dg.dm00_dg2 * x.m22c) / (denom * denom);
 
         // Compute ellipticity 2
         double e2 = x.m22s / denom;
         double e2_dg2 = x_dg.dm22s_dg2 / denom
             - (x_dg.dm00_dg2 * x.m22s) / (denom * denom);
+        double e2_dg1 = x_dg.dm22s_dg1 / denom
+            - (x_dg.dm00_dg1 * x.m22s) / (denom * denom);
 
         // Compute ellipticity 1 (4th order)
         double q1 = x.m42c / denom;
         double q1_dg1 = x_dg.dm42c_dg1 / denom
             - (x_dg.dm00_dg1 * x.m42c) / (denom * denom);
+        double q1_dg2 = x_dg.dm42c_dg2 / denom
+            - (x_dg.dm00_dg2 * x.m42c) / (denom * denom);
 
         // Compute ellipticity 2 (4th order)
         double q2 = x.m42s / denom;
         double q2_dg2 = x_dg.dm42s_dg2 / denom
             - (x_dg.dm00_dg2 * x.m42s) / (denom * denom);
+        double q2_dg1 = x_dg.dm42s_dg1 / denom
+            - (x_dg.dm00_dg1 * x.m42s) / (denom * denom);
 
         // Return the result as FpfsShape
         return FpfsShape{
-            e1, e1_dg1, e2, e2_dg2,
-            q1, q1_dg1, q2, q2_dg2,
+            e1, e1_dg1, e1_dg2, e2, e2_dg1, e2_dg2,
+            q1, q1_dg1, q1_dg2, q2, q2_dg1, q2_dg2,
             x.m00, x_dg.dm00_dg1, x_dg.dm00_dg2,
             x.m20, x_dg.dm20_dg1, x_dg.dm20_dg2,
-            x.m22c, x_dg.dm22c_dg1,
-            x.m22s, x_dg.dm22s_dg2
+            x.m22c, x_dg.dm22c_dg1, x_dg.dm22c_dg2,
+            x.m22s, x_dg.dm22s_dg1, x_dg.dm22s_dg2,
+            x.m42c, x_dg.dm42c_dg1, x_dg.dm42c_dg2,
+            x.m42s, x_dg.dm42s_dg1, x_dg.dm42s_dg2
         };
     }
 

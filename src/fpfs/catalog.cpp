@@ -27,19 +27,25 @@ pyExportFpfsCatalog(py::module_& fpfs) {
         FpfsShapeletsResponse,
         dm00_dg1, dm00_dg2,
         dm20_dg1, dm20_dg2,
-        dm22c_dg1, dm22s_dg2,
-        dm42c_dg1, dm42s_dg2
+        dm22c_dg1, dm22c_dg2,
+        dm22s_dg1, dm22s_dg2,
+        dm42c_dg1, dm42c_dg2,
+        dm42s_dg1, dm42s_dg2
     );
 
     PYBIND11_NUMPY_DTYPE(
         FpfsShape,
         e1,
         de1_dg1,
+        de1_dg2,
         e2,
+        de2_dg1,
         de2_dg2,
         q1,
         dq1_dg1,
+        dq1_dg2,
         q2,
+        dq2_dg1,
         dq2_dg2,
         m00,
         dm00_dg1,
@@ -49,8 +55,16 @@ pyExportFpfsCatalog(py::module_& fpfs) {
         dm20_dg2,
         m22c,
         dm22c_dg1,
+        dm22c_dg2,
         m22s,
-        dm22s_dg2
+        dm22s_dg1,
+        dm22s_dg2,
+        m42c,
+        dm42c_dg1,
+        dm42c_dg2,
+        m42s,
+        dm42s_dg1,
+        dm42s_dg2
     );
 
     PYBIND11_NUMPY_DTYPE(
