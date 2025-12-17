@@ -293,21 +293,37 @@ namespace anacal {
         struct FpfsCatalog {
         double e1;
         double de1_dg1;
+        double de1_dg2;
         double e2;
+        double de2_dg1;
         double de2_dg2;
         double q1;
         double dq1_dg1;
+        double dq1_dg2;
         double q2;
+        double dq2_dg1;
         double dq2_dg2;
-        double w;
-        double dw_dg1;
-        double dw_dg2;
         double m00;
         double dm00_dg1;
         double dm00_dg2;
         double m20;
         double dm20_dg1;
         double dm20_dg2;
+        double m22c;
+        double dm22c_dg1;
+        double dm22c_dg2;
+        double m22s;
+        double dm22s_dg1;
+        double dm22s_dg2;
+        double m42c;
+        double dm42c_dg1;
+        double dm42c_dg2;
+        double m42s;
+        double dm42s_dg1;
+        double dm42s_dg2;
+        double w;
+        double dw_dg1;
+        double dw_dg2;
     };
 
 
@@ -634,15 +650,35 @@ namespace anacal {
         return FpfsCatalog{
             ell.e1,
             ell.de1_dg1,
+            ell.de1_dg2,
             ell.e2,
+            ell.de2_dg1,
             ell.de2_dg2,
             ell.q1,
             ell.dq1_dg1,
+            ell.dq1_dg2,
             ell.q2,
+            ell.dq2_dg1,
             ell.dq2_dg2,
-            w, w_dg1, w_dg2,
-            x.m00, x_dg.dm00_dg1, x_dg.dm00_dg2,
-            x.m20, x_dg.dm20_dg1, x_dg.dm20_dg2
+            ell.m00,
+            ell.dm00_dg1,
+            ell.dm00_dg2,
+            ell.m20,
+            ell.dm20_dg1,
+            ell.dm20_dg2,
+            ell.m22c,
+            ell.dm22c_dg1,
+            ell.dm22c_dg2,
+            ell.m22s,
+            ell.dm22s_dg1,
+            ell.dm22s_dg2,
+            ell.m42c,
+            ell.dm42c_dg1,
+            ell.dm42c_dg2,
+            ell.m42s,
+            ell.dm42s_dg1,
+            ell.dm42s_dg2,
+            w, w_dg1, w_dg2
         };
     };
 
