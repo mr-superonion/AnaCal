@@ -5,8 +5,8 @@
 #include "base.h"
 
 namespace anacal {
-    namespace fpfs {
-        struct FpfsShapelets {
+namespace fpfs {
+    struct FpfsShapelets {
         double m00;
         double m20;
         double m22c;
@@ -115,8 +115,7 @@ namespace anacal {
         };
     };
 
-
-        struct FpfsShapeletsResponse {
+    struct FpfsShapeletsResponse {
         double dm00_dg1;
         double dm00_dg2;
         double dm20_dg1;
@@ -131,7 +130,7 @@ namespace anacal {
         double dm42s_dg2;
     };
 
-        struct FpfsDetect {
+    struct FpfsDetect {
         // Fields from FpfsDetect
         double m00;
         double m20;
@@ -251,7 +250,7 @@ namespace anacal {
         };
     };
 
-        struct FpfsShape {
+    struct FpfsShape {
         double e1;
         double de1_dg1;
         double de1_dg2;
@@ -284,13 +283,13 @@ namespace anacal {
         double dm42s_dg2;
     };
 
-        struct FpfsWeight {
+    struct FpfsWeight {
         double w;
         double dw_dg1;
         double dw_dg2;
     };
 
-        struct FpfsCatalog {
+    struct FpfsCatalog {
         double e1;
         double de1_dg1;
         double de1_dg2;
@@ -326,9 +325,8 @@ namespace anacal {
         double dw_dg2;
     };
 
-
-        template <typename T>
-        inline FpfsShapeletsResponse measure_shapelets_dg(
+    template <typename T>
+    inline FpfsShapeletsResponse measure_shapelets_dg(
         const T& x,
         const std::optional<T>& y=std::nullopt
     ) {
@@ -364,8 +362,8 @@ namespace anacal {
         };
     };
 
-        template <typename T>
-        inline py::array_t<FpfsShapeletsResponse> measure_shapelets_dg(
+    template <typename T>
+    inline py::array_t<FpfsShapeletsResponse> measure_shapelets_dg(
         const py::array_t<T> &x_array,
         const std::optional<py::array_t<T>> &y_array=std::nullopt
     ) {
@@ -391,8 +389,8 @@ namespace anacal {
         return out;
     };
 
-        template <typename T>
-        inline FpfsShape measure_fpfs_shape(
+    template <typename T>
+    inline FpfsShape measure_fpfs_shape(
         double C0,
         const T& x,
         const FpfsShapeletsResponse& x_dg
@@ -441,8 +439,8 @@ namespace anacal {
         };
     }
 
-        template <typename T>
-        inline py::array_t<FpfsShape> measure_fpfs_shape(
+    template <typename T>
+    inline py::array_t<FpfsShape> measure_fpfs_shape(
         double C0,
         const py::array_t<T> &x_array,
         const py::array_t<FpfsShapeletsResponse> &x_dg_array
@@ -462,8 +460,8 @@ namespace anacal {
         return out;
     };
 
-        template <typename T>
-        inline FpfsWeight measure_fpfs_wsel(
+    template <typename T>
+    inline FpfsWeight measure_fpfs_wsel(
         double m00_min,
         double std_m00,
         double r2_min,
@@ -510,7 +508,7 @@ namespace anacal {
         };
     };
 
-        inline FpfsWeight measure_fpfs_wdet0(
+    inline FpfsWeight measure_fpfs_wdet0(
         double v_min,
         double omega_v,
         const FpfsDetect &x,
@@ -557,7 +555,7 @@ namespace anacal {
         };
     };
 
-        inline py::array_t<FpfsWeight> measure_fpfs_wdet0(
+    inline py::array_t<FpfsWeight> measure_fpfs_wdet0(
         double v_min,
         double omega_v,
         const py::array_t<FpfsDetect> &x_array,
@@ -580,7 +578,7 @@ namespace anacal {
         return out;
     };
 
-        inline FpfsWeight measure_fpfs_wdet(
+    inline FpfsWeight measure_fpfs_wdet(
         double v_min,
         double omega_v,
         double pthres,
@@ -610,7 +608,7 @@ namespace anacal {
         return ell;
     };
 
-        inline FpfsCatalog measure_fpfs(
+    inline FpfsCatalog measure_fpfs(
         double C0,
         double v_min,
         double omega_v,
@@ -682,8 +680,7 @@ namespace anacal {
         };
     };
 
-
-        inline py::array_t<FpfsShape> measure_fpfs(
+    inline py::array_t<FpfsShape> measure_fpfs(
         double C0,
         const py::array_t<FpfsShapelets> &x_array,
         const std::optional<py::array_t<FpfsShapelets>> &y_array=std::nullopt
@@ -706,7 +703,7 @@ namespace anacal {
     };
 
 
-        inline py::array_t<FpfsCatalog> measure_fpfs(
+    inline py::array_t<FpfsCatalog> measure_fpfs(
         double C0,
         double v_min,
         double omega_v,
@@ -755,9 +752,8 @@ namespace anacal {
         }
         return out;
     };
-
-        void pyExportFpfsCatalog(py::module_& fpfs);
-    } // namespace fpfs
+    void pyExportFpfsCatalog(py::module_& fpfs);
+} // namespace fpfs
 }
 
 #endif // ANACAL_FPFS_CAT_H
