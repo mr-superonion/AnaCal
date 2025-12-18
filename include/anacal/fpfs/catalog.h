@@ -594,7 +594,7 @@ namespace fpfs {
         };
     };
 
-        inline FpfsShape measure_fpfs(
+    inline FpfsShape measure_fpfs(
         double C0,
         const FpfsShapelets &x,
         const std::optional<FpfsShapelets> &y=std::nullopt
@@ -619,7 +619,7 @@ namespace fpfs {
         double omega_r2,
         const FpfsDetect &x,
         const std::optional<FpfsDetect> &y=std::nullopt
-    ){
+    ) {
         FpfsShapeletsResponse x_dg = measure_shapelets_dg(
             x, y
         );

@@ -588,8 +588,11 @@ def _rename_linear_fields(
     mapping: dict[str, str] = {}
     for name in arr.dtype.names:
         new = name
-        if is_noise and name.startswith("m"):
-            new = "n" + name[1:]
+        if is_noise:
+            if name.startswith("m"):
+                new = "n" + name[1:]
+            elif name.startswith("v"):
+                new = "u" + name[1:]
         if base_column_name is None:
             mapping[name] = prefix + new
         else:
@@ -599,60 +602,32 @@ def _rename_linear_fields(
 
 def _pack_linear_modes(linear_modes, base_column_name):
     blocks: list[np.ndarray] = [linear_modes["detection"]]
-    if "data" in linear_modes:
-        blocks.append(
-            _rename_linear_fields(
-                linear_modes["data"],
-                prefix="fpfs_",
-                is_noise=False,
-                base_column_name=base_column_name,
+    for tag in ["", "1", "2"]:
+        if f"data{tag}" in linear_modes:
+            blocks.append(
+                _rename_linear_fields(
+                    linear_modes[f"data{tag}"],
+                    prefix=f"fpfs{tag}_",
+                    is_noise=False,
+                    base_column_name=base_column_name,
+                )
             )
-        )
-    if "noise" in linear_modes:
-        blocks.append(
-            _rename_linear_fields(
-                linear_modes["noise"],
-                prefix="fpfs_",
-                is_noise=True,
-                base_column_name=base_column_name,
+        if f"noise{tag}" in linear_modes:
+            if linear_modes[f"noise{tag}"] is None:
+                noise = np.zeros(
+                    len(linear_modes[f"data{tag}"]),
+                    dtype=linear_modes[f"data{tag}"].dtype,
+                )
+            else:
+                noise = linear_modes[f"noise{tag}"]
+            blocks.append(
+                _rename_linear_fields(
+                    noise,
+                    prefix=f"fpfs{tag}_",
+                    is_noise=True,
+                    base_column_name=base_column_name,
+                )
             )
-        )
-    if "data1" in linear_modes:
-        blocks.append(
-            _rename_linear_fields(
-                linear_modes["data1"],
-                prefix="fpfs1_",
-                is_noise=False,
-                base_column_name=base_column_name,
-            )
-        )
-    if "noise1" in linear_modes:
-        blocks.append(
-            _rename_linear_fields(
-                linear_modes["noise1"],
-                prefix="fpfs1_",
-                is_noise=True,
-                base_column_name=base_column_name,
-            )
-        )
-    if "data2" in linear_modes:
-        blocks.append(
-            _rename_linear_fields(
-                linear_modes["data2"],
-                prefix="fpfs2_",
-                is_noise=False,
-                base_column_name=base_column_name,
-            )
-        )
-    if "noise2" in linear_modes:
-        blocks.append(
-            _rename_linear_fields(
-                linear_modes["noise2"],
-                prefix="fpfs2_",
-                is_noise=True,
-                base_column_name=base_column_name,
-            )
-        )
     return rfn.merge_arrays(blocks, flatten=True, usemask=False)
 
 
