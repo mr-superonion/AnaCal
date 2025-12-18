@@ -55,14 +55,14 @@ name_d = [
     "v1",
     "v2",
     "v3",
-    "v0r1",
-    "v1r1",
-    "v2r1",
-    "v3r1",
-    "v0r2",
-    "v1r2",
-    "v2r2",
-    "v3r2",
+    "dv0_dg1",
+    "dv1_dg1",
+    "dv2_dg1",
+    "dv3_dg1",
+    "dv0_dg2",
+    "dv1_dg2",
+    "dv2_dg2",
+    "dv3_dg2",
 ]
 
 
@@ -591,6 +591,8 @@ def _rename_linear_fields(
         if is_noise:
             if name.startswith("m"):
                 new = "n" + name[1:]
+            elif name.startswith("dv"):
+                new = "du" + name[2:]
             elif name.startswith("v"):
                 new = "u" + name[1:]
         if base_column_name is None:
