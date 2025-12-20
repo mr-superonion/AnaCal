@@ -219,6 +219,17 @@ def test_flux_variance():
         rtol=1e-5,
         atol=1e-6,
     )
+    catalog_no_fpfs = det_task.process_image(
+        gal_array,
+        psf_array,
+        variance=noise_std**2.0,
+        block_list=blocks,
+        do_fpfs=False,
+    )
+    np.testing.assert_allclose(
+        catalog_no_fpfs["wsel"],
+        catalog_no_fpfs["wdet"],
+    )
     np.testing.assert_allclose(
         catalog5["flux_gauss2_err"][0],
         np.sqrt(flux_var4),

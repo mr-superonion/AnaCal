@@ -153,8 +153,7 @@ public:
         int num_epochs=3,
         bool force_size=false,
         bool force_center=false,
-        double fpfs_c0=1.0,
-        bool do_fpfs=true
+        double fpfs_c0=1.0
     ) : scale(scale), sigma_arcsec(sigma_arcsec), snr_peak_min(snr_peak_min),
         omega_f(omega_f), v_min(v_min), omega_v(omega_v),
         p_min(p_min), omega_p(omega_p),
@@ -163,7 +162,7 @@ public:
         num_epochs(num_epochs), fitter(
             scale, sigma_arcsec, stamp_size,
             force_size, force_center,
-            fpfs_c0, do_fpfs
+            fpfs_c0
         )
     {
         if (stamp_size % 2 != 0 ) {
@@ -274,7 +273,9 @@ public:
         const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
         const std::optional<py::array_t<double>>& noise_array=std::nullopt,
         const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt,
-        double a_ini=0.2
+        double a_ini=0.2,
+        bool do_measure=true,
+        bool do_fpfs=true
     ) {
 
         double variance_use;
@@ -318,96 +319,100 @@ public:
             }
         }
 
-        auto compute_flux_errors = [&](const py::array_t<double>& psf) {
-            const double flux_gauss0_var = gaussian_flux_variance(
-                psf,
-                0.0,
-                this->sigma_arcsec,
-                this->scale
-            );
-            const double flux_gauss2_var = gaussian_flux_variance(
-                psf,
-                0.2,
-                this->sigma_arcsec,
-                this->scale
-            );
-            const double flux_gauss4_var = gaussian_flux_variance(
-                psf,
-                0.4,
-                this->sigma_arcsec,
-                this->scale
-            );
-            std::array<double, 3> errs{};
-            errs[0] = std::sqrt(std::max(0.0, flux_gauss0_var) * variance_use);
-            errs[1] = std::sqrt(std::max(0.0, flux_gauss2_var) * variance_use);
-            errs[2] = std::sqrt(std::max(0.0, flux_gauss4_var) * variance_use);
-            return errs;
-        };
+        this->fitter.do_fpfs = do_fpfs;
 
-        for (geometry::block & block: block_list) {
-            prepare_indices(
-                catalog,
-                block
-            );
+        if (do_measure) {
+            auto compute_flux_errors = [&](const py::array_t<double>& psf) {
+                const double flux_gauss0_var = gaussian_flux_variance(
+                    psf,
+                    0.0,
+                    this->sigma_arcsec,
+                    this->scale
+                );
+                const double flux_gauss2_var = gaussian_flux_variance(
+                    psf,
+                    0.2,
+                    this->sigma_arcsec,
+                    this->scale
+                );
+                const double flux_gauss4_var = gaussian_flux_variance(
+                    psf,
+                    0.4,
+                    this->sigma_arcsec,
+                    this->scale
+                );
+                std::array<double, 3> errs{};
+                errs[0] = std::sqrt(std::max(0.0, flux_gauss0_var) * variance_use);
+                errs[1] = std::sqrt(std::max(0.0, flux_gauss2_var) * variance_use);
+                errs[2] = std::sqrt(std::max(0.0, flux_gauss4_var) * variance_use);
+                return errs;
+            };
 
-            if (block.indices.empty()) {
-                continue;
+            for (geometry::block & block: block_list) {
+                prepare_indices(
+                    catalog,
+                    block
+                );
+
+                if (block.indices.empty()) {
+                    continue;
+                }
+
+                py::array_t<double> psf;
+                if (
+                    block.psf_array.ndim() == 2 &&
+                    psf_array.shape(0) == this->stamp_size &&
+                    psf_array.shape(1) == this->stamp_size
+                ) {
+                    psf = block.psf_array;
+                } else {
+                    psf = psf_array;
+                }
+                const std::array<double, 3> block_flux_errs = compute_flux_errors(
+                    psf
+                );
+                for (std::size_t idx : block.indices) {
+                    catalog[idx].flux_gauss0_err = block_flux_errs[0];
+                    catalog[idx].flux_gauss2_err = block_flux_errs[1];
+                    catalog[idx].flux_gauss4_err = block_flux_errs[2];
+                }
             }
 
-            py::array_t<double> psf;
-            if (
-                block.psf_array.ndim() == 2 &&
-                psf_array.shape(0) == this->stamp_size &&
-                psf_array.shape(1) == this->stamp_size
-            ) {
-                psf = block.psf_array;
-            } else {
-                psf = psf_array;
+            std::vector<table::galNumber> catalog_model = catalog;
+            for (table::galNumber & src : catalog_model) {
+                src.model.F = src.model.F * src.wdet;
             }
-            const std::array<double, 3> block_flux_errs = compute_flux_errors(
-                psf
-            );
-            for (std::size_t idx : block.indices) {
-                catalog[idx].flux_gauss0_err = block_flux_errs[0];
-                catalog[idx].flux_gauss2_err = block_flux_errs[1];
-                catalog[idx].flux_gauss4_err = block_flux_errs[2];
+            for (const geometry::block & block: block_list) {
+                py::array_t<double> psf;
+                if (
+                    block.psf_array.ndim() == 2 &&
+                    psf_array.shape(0) == this->stamp_size &&
+                    psf_array.shape(1) == this->stamp_size
+                ) {
+                    psf = block.psf_array;
+                } else {
+                    psf = psf_array;
+                }
+                measure_block(
+                    catalog,
+                    catalog_model,
+                    img_array,
+                    psf,
+                    variance_use,
+                    block,
+                    noise_array,
+                    0 // run_id
+                );
             }
-        }
 
-        std::vector<table::galNumber> catalog_model = catalog;
-        for (table::galNumber & src : catalog_model) {
-            src.model.F = src.model.F * src.wdet;
-        }
-        for (const geometry::block & block: block_list) {
-            py::array_t<double> psf;
-            if (
-                block.psf_array.ndim() == 2 &&
-                psf_array.shape(0) == this->stamp_size &&
-                psf_array.shape(1) == this->stamp_size
-            ) {
-                psf = block.psf_array;
-            } else {
-                psf = psf_array;
+            if (mask_array.has_value()) {
+                mask::add_pixel_mask_column(
+                    catalog,
+                    *mask_array,
+                    this->sigma_arcsec_det * 1.5,
+                    scale
+                );
             }
-            measure_block(
-                catalog,
-                catalog_model,
-                img_array,
-                psf,
-                variance_use,
-                block,
-                noise_array,
-                0 // run_id
-            );
-        }
-
-        if (mask_array.has_value()) {
-            mask::add_pixel_mask_column(
-                catalog,
-                *mask_array,
-                this->sigma_arcsec_det * 1.5,
-                scale
-            );
         }
         return table::objlist_to_array(catalog);
     };
