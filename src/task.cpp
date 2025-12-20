@@ -15,7 +15,7 @@ pyExportTask(py::module_& m) {
             double, double, double, double,
             const std::optional<ngmix::modelPrior>,
             int, int, int,
-            bool, bool, double, bool
+            bool, bool, double
             >(),
             py::arg("scale"),
             py::arg("sigma_arcsec"),
@@ -31,8 +31,7 @@ pyExportTask(py::module_& m) {
             py::arg("num_epochs")=3,
             py::arg("force_size")=false,
             py::arg("force_center")=false,
-            py::arg("fpfs_c0")=1.0,
-            py::arg("do_fpfs")=true
+            py::arg("fpfs_c0")=1.0
         )
         .def("process_image", &Task::process_image,
             "process image with PSF array",
@@ -43,7 +42,9 @@ pyExportTask(py::module_& m) {
             py::arg("detection")=py::none(),
             py::arg("noise_array")=py::none(),
             py::arg("mask_array")=py::none(),
-            py::arg("a_ini")=0.2
+            py::arg("a_ini")=0.2,
+            py::arg("do_measure")=true,
+            py::arg("do_fpfs")=true
         );
     task.def(
         "gaussian_flux_variance",
