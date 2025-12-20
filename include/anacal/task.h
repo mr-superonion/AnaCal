@@ -284,33 +284,6 @@ public:
             variance_use = variance;
         }
 
-        const double sigma_smooth = this->sigma_arcsec;
-        auto compute_flux_errors = [&](const py::array_t<double>& psf) {
-            const double flux_gauss0_var = gaussian_flux_variance(
-                psf,
-                0.0,
-                sigma_smooth,
-                this->scale
-            );
-            const double flux_gauss2_var = gaussian_flux_variance(
-                psf,
-                0.2,
-                sigma_smooth,
-                this->scale
-            );
-            const double flux_gauss4_var = gaussian_flux_variance(
-                psf,
-                0.4,
-                sigma_smooth,
-                this->scale
-            );
-            std::array<double, 3> errs{};
-            errs[0] = std::sqrt(std::max(0.0, flux_gauss0_var) * variance_use);
-            errs[1] = std::sqrt(std::max(0.0, flux_gauss2_var) * variance_use);
-            errs[2] = std::sqrt(std::max(0.0, flux_gauss4_var) * variance_use);
-            return errs;
-        };
-
         std::vector<table::galNumber> catalog;
         if (detection.has_value()) {
             catalog = table::array_to_objlist(
@@ -345,6 +318,31 @@ public:
             }
         }
 
+        auto compute_flux_errors = [&](const py::array_t<double>& psf) {
+            const double flux_gauss0_var = gaussian_flux_variance(
+                psf,
+                0.0,
+                this->sigma_arcsec,
+                this->scale
+            );
+            const double flux_gauss2_var = gaussian_flux_variance(
+                psf,
+                0.2,
+                this->sigma_arcsec,
+                this->scale
+            );
+            const double flux_gauss4_var = gaussian_flux_variance(
+                psf,
+                0.4,
+                this->sigma_arcsec,
+                this->scale
+            );
+            std::array<double, 3> errs{};
+            errs[0] = std::sqrt(std::max(0.0, flux_gauss0_var) * variance_use);
+            errs[1] = std::sqrt(std::max(0.0, flux_gauss2_var) * variance_use);
+            errs[2] = std::sqrt(std::max(0.0, flux_gauss4_var) * variance_use);
+            return errs;
+        };
 
         for (geometry::block & block: block_list) {
             prepare_indices(
