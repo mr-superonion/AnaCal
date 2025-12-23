@@ -25,7 +25,6 @@ pyExportFpfsBase(py::module_& fpfs) {
     fpfs.def(
         "shapelets2d",
         &shapelets2d,
-        py::arg("norder"),
         py::arg("npix"),
         py::arg("sigma"),
         py::arg("kmax")

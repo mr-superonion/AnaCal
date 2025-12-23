@@ -113,7 +113,7 @@ namespace anacal {
         ~FpfsImage() = default;
     };
 
-        inline FpfsImage::FpfsImage(
+    inline FpfsImage::FpfsImage(
         int nx,
         int ny,
         double scale,
@@ -147,8 +147,7 @@ namespace anacal {
         this->bound = bound;
     }
 
-        inline py::array_t<double>
-        FpfsImage::smooth_image(
+    inline py::array_t<double> FpfsImage::smooth_image(
         const py::array_t<double>& img_array,
         int xcen,
         int ycen,
@@ -175,8 +174,7 @@ namespace anacal {
         return img_conv;
     }
 
-        inline py::array_t<double>
-        FpfsImage::smooth_image(
+    inline py::array_t<double> FpfsImage::smooth_image(
         const py::array_t<double>& gal_array,
         int xcen,
         int ycen,
@@ -207,8 +205,7 @@ namespace anacal {
         return gal_conv;
     }
 
-        inline void
-        FpfsImage::find_peaks(
+    inline void FpfsImage::find_peaks(
         std::vector<std::tuple<int, int>>& peaks,
         const py::array_t<double>& gal_conv,
         double fthres,
@@ -277,8 +274,7 @@ namespace anacal {
         }
     }
 
-        inline py::array_t<Position>
-        FpfsImage::detect_source(
+    inline py::array_t<Position> FpfsImage::detect_source(
         py::array_t<double>& gal_array,
         double fthres,
         double pthres,
@@ -353,8 +349,7 @@ namespace anacal {
         return detection;
     }
 
-        inline py::array_t<double>
-        FpfsImage::measure_with_filter(
+    inline py::array_t<double> FpfsImage::measure_with_filter(
         const py::array_t<double>& gal_array,
         const py::array_t<std::complex<double>>& filter_fft,
         double y,
@@ -376,8 +371,7 @@ namespace anacal {
         return row;
     }
 
-        inline py::array_t<double>
-        FpfsImage::measure_source(
+    inline py::array_t<double> FpfsImage::measure_source(
         const py::array_t<double>& gal_array,
         const py::array_t<std::complex<double>>& filter_image,
         const py::array_t<double>& psf_array,
@@ -430,8 +424,7 @@ namespace anacal {
         return src;
     }
 
-        inline py::array_t<double>
-        FpfsImage::measure_source_at(
+    inline py::array_t<double> FpfsImage::measure_source_at(
         const py::array_t<double>& gal_array,
         const py::array_t<std::complex<double>>& filter_image,
         const py::array_t<double>& psf_array,

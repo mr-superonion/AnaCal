@@ -31,39 +31,7 @@ npix_patch = 256
 npix_overlap = 64
 
 
-# M_{nm}
-# nm = n*(norder+1)+m
-# This setup is able to derive kappa response and shear response
-# Only uses M00, M20, M22 (real and img), M40, M42(real and img), M60
 norder_shapelets = 6
-name_s = [
-    "m00",
-    "m20",
-    "m22c",
-    "m22s",
-    "m40",
-    "m42c",
-    "m42s",
-    "m44c",
-    "m44s",
-    "m60",
-    "m64c",
-    "m64s",
-]
-name_d = [
-    "v0",
-    "v1",
-    "v2",
-    "v3",
-    "dv0_dg1",
-    "dv1_dg1",
-    "dv2_dg1",
-    "dv3_dg1",
-    "dv0_dg2",
-    "dv1_dg2",
-    "dv2_dg2",
-    "dv3_dg2",
-]
 
 
 def gauss_kernel_rfft(
@@ -87,9 +55,32 @@ def shapelets2d_func(npix: int, norder: int, sigma: float, kmax: float):
 
 def shapelets2d(norder: int, npix: int, sigma: float, kmax: float):
     """Generate real-valued shapelet functions in Fourier space."""
-
-    chi = _shapelets2d(norder, npix, sigma, kmax)
-    return np.array(chi), name_s
+    # M_{nm}
+    # nm = n*(norder+1)+m
+    # This setup is able to derive kappa response and shear response
+    # Only uses M00, M20, M22 (real and img), M40, M42(real and img), M60
+    # M64c, M64s
+    name_s = [
+        "m00",
+        "m20",
+        "m22c",
+        "m22s",
+        "m40",
+        "m42c",
+        "m42s",
+        "m44c",
+        "m44s",
+        "m60",
+        "m64c",
+        "m64s",
+    ]
+    chi = _shapelets2d(npix, sigma, kmax)
+    if norder == 6:
+        return np.array(chi), name_s
+    elif norder == 4:
+        return np.array(chi)[0:9], name_s[0:9]
+    elif norder == 2:
+        return np.array(chi)[0:4], name_s[0:4]
 
 
 def detlets2d(
@@ -98,7 +89,20 @@ def detlets2d(
     kmax: float,
 ):
     """Generate complex detection basis functions in Fourier space."""
-
+    name_d = [
+        "v0",
+        "v1",
+        "v2",
+        "v3",
+        "dv0_dg1",
+        "dv1_dg1",
+        "dv2_dg1",
+        "dv3_dg1",
+        "dv0_dg2",
+        "dv1_dg2",
+        "dv2_dg2",
+        "dv3_dg2",
+    ]
     psi = _detlets2d(npix, sigma, kmax)
     return psi, name_d
 
@@ -109,7 +113,6 @@ def get_kmax(
     kmax_thres: float = 1e-20,
 ) -> float:
     """Estimate the truncation radius ``kmax`` for the Gaussian kernel."""
-
     return _get_kmax(psf_pow, sigma, kmax_thres)
 
 
