@@ -242,4 +242,22 @@ def test_flux_variance():
         rtol=1e-5,
         atol=1e-6,
     )
+    np.testing.assert_allclose(
+        catalog4["flux"],
+        catalog4["flux_gauss2"],
+        rtol=1e-5,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        catalog4["dflux_dg1"],
+        catalog4["dflux_gauss2_dg1"],
+        rtol=1e-5,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        catalog4["dflux_dg2"],
+        catalog4["dflux_gauss2_dg2"],
+        rtol=1e-5,
+        atol=1e-6,
+    )
     return

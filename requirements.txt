@@ -12,6 +12,6 @@ fitsio
 galsim
 numpy
 pydantic
-setuptools>=38
+setuptools>=71.1
 wheel
 pybind11>=2.2
