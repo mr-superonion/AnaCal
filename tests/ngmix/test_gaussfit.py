@@ -80,7 +80,7 @@ def test_ngmix_gaussian_fit_additive(test_g1=True):
         variance=0.1,
     )[0]
     ell1 = cat_1.model.get_shape()[0]
-    assert np.abs(ell1.v / ell1.g1)< 1e-4
+    assert np.abs(ell1.v / ell1.g1) < 1e-4
     return
 
 
@@ -218,8 +218,8 @@ def test_ngmix_gaussian_fit2():
     img_array1 = img_obj.prepare_qnumber_image(
         img_array,
         psf_array,
-        xcen=img_array.shape[1] //2,
-        ycen=img_array.shape[0] //2,
+        xcen=img_array.shape[1] // 2,
+        ycen=img_array.shape[0] // 2,
     )
     img_array2 = cat_2.model.get_image_stamp(nx, ny, scale, sigma_arcsec)
     diff = img_array1[0:3] - img_array2

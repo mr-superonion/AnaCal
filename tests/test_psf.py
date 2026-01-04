@@ -14,6 +14,7 @@ class my_psf(anacal.psf.BasePsf):
 
 def test_pypsf():
     psf_obj = my_psf(a=1)
+    del psf_obj
     return
 
 

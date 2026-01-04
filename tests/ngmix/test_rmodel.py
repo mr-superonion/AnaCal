@@ -29,7 +29,7 @@ def test_ngmix_gaussian():
         [a.v.v, a.v_F.v, a.v_t.v, a.v_a1.v, a.v_a2.v, a.v_x1.v, a.v_x2.v]
     )
     res_target = np.array([
-        2.87789694, 0.0, -0.0810202, -0.06508841, -4.96132116,  4.70115562,
+        2.87789694, 0.0, -0.0810202, -0.06508841, -4.96132116, 4.70115562,
         -4.88568326
     ])
     np.testing.assert_almost_equal(res, res_target)

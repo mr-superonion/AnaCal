@@ -32,7 +32,7 @@ def test_fpfs_init():
     buff = 15
 
     fpfs_config = anacal.fpfs.FpfsConfig(
-        sigma_shapelets=0.52,  # The first measurement scale (also for detection)
+        sigma_shapelets=0.52,  # The first measurement scale (also detection)
         sigma_shapelets2=0.45,  # The second measurement scale
     )
 

@@ -60,9 +60,9 @@ def find_fftw_lib():
         if not os.path.isfile(libpath):
             continue
         try:
-            lib = ctypes.cdll.LoadLibrary(libpath)
+            ctypes.cdll.LoadLibrary(libpath)
             return libpath
-        except OSError as e:
+        except OSError:
             # Some places use lib64 rather than/in addition to lib.
             if dir.endswith("lib") and os.path.isdir(dir + "64"):
                 dir += "64"
@@ -70,7 +70,7 @@ def find_fftw_lib():
                     libpath = os.path.join(dir, name)
                     if not os.path.isfile(libpath):
                         continue
-                    lib = ctypes.cdll.LoadLibrary(libpath)
+                    ctypes.cdll.LoadLibrary(libpath)
                     return libpath
                 except OSError:
                     pass

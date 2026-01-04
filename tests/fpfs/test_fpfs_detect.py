@@ -77,7 +77,7 @@ def test_convolve_noise(seed=2):
 def test_detect():
     std = 0.4
 
-    cov_element = np.ones((ncol, ncol)) * std**2.0
+    # cov_element = np.ones((ncol, ncol)) * std**2.0
     det_task = anacal.fpfs.FpfsImage(
         nx=150,
         ny=200,

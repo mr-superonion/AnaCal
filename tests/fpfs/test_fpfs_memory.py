@@ -23,7 +23,7 @@ psf_array = np.asarray(
 
 def func():
     fpfs_config = anacal.fpfs.FpfsConfig(
-        sigma_shapelets=0.52,  # The first measurement scale (also for detection)
+        sigma_shapelets=0.52,  # The first measurement scale (also detection)
         sigma_shapelets1=0.45,  # The second measurement scale
         sigma_shapelets2=0.60,  # The third measurement scale
     )

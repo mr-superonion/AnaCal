@@ -839,3 +839,10 @@ def process_image(
                 linear_modes,
                 base_column_name=base_column_name,
             )
+
+
+__all__ = [
+    "measure_fpfs_wsel", "measure_fpfs_wdet", "measure_fpfs_shape",
+    "measure_fpfs_wdet0", "measure_shapelets_dg", "fpfs_cut_sigma_ratio",
+    "fpfs_det_sigma2",
+]
