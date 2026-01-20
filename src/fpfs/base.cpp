@@ -49,7 +49,7 @@ pyExportFpfsBase(py::module_& fpfs) {
             &m00_to_flux
         ),
         py::arg("m00"),
-        py::arg("sigma_arcsec"),
+        py::arg("sigma_shapelets"),
         py::arg("pixel_scale")
     );
     fpfs.def(
@@ -58,7 +58,7 @@ pyExportFpfsBase(py::module_& fpfs) {
             &m00_to_flux
         ),
         py::arg("m00"),
-        py::arg("sigma_arcsec"),
+        py::arg("sigma_shapelets"),
         py::arg("pixel_scale")
     );
 }
