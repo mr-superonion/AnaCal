@@ -6,6 +6,30 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "anacal"
+dynamic = ["version"]
+requires-python = ">=3.10"
+readme = "README.md"
+authors = [
+    {name = "Xiangchong Li", email = "mr.superonion@hotmail.com"},
+]
+dependencies = [
+    "numpy",
+    "galsim",
+    "fitsio",
+    "pydantic",
+]
+
+[project.urls]
+Homepage = "https://github.com/mr-superonion/AnaCal/"
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.setuptools.package-data]
+anacal = ["data/*.fits"]
+
 [tool.setuptools_scm]
 version_scheme = "post-release"
 local_scheme = "dirty-tag"

@@ -15,3 +15,4 @@ pydantic
 setuptools>=71.1
 wheel
 pybind11>=2.2
+setuptools_scm>=6.2

@@ -3,7 +3,7 @@ import os
 import sys
 
 import pybind11
-from setuptools import Extension, find_packages, setup
+from setuptools import Extension, setup
 
 conda_prefix = os.environ.get("CONDA_PREFIX")
 include_dirs = ["include/"]
@@ -134,31 +134,4 @@ ext_modules.append(
     )
 )
 
-this_dir = os.path.dirname(os.path.realpath(__file__))
-long_description = open(os.path.join(this_dir, "README.md")).read()
-
-setup(
-    name="anacal",
-    author="Xiangchong Li",
-    author_email="mr.superonion@hotmail.com",
-    python_requires=">=3.10",
-    install_requires=[
-        "pybind11>=2.2",
-        "numpy",
-        "galsim",
-        "fitsio",
-        "pydantic",
-    ],
-    use_scm_version=True,
-    packages=find_packages(where="python"),
-    package_dir={"": "python"},
-    include_package_data=True,
-    zip_safe=False,
-    package_data={
-        "anacal": ["data/*.fits"],
-    },
-    ext_modules=ext_modules,
-    url="https://github.com/mr-superonion/AnaCal/",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-)
+setup(ext_modules=ext_modules)
