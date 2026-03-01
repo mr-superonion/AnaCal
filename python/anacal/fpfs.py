@@ -722,6 +722,7 @@ def process_image(
         if linear_modes is not None:
             linear_modes["detection"] = detection
         else:
+            assert out_list is not None
             out_list.append(detection)
 
         if do_compute_detect_weight:
@@ -736,6 +737,7 @@ def process_image(
                 linear_modes["data"] = src["data"]
                 linear_modes["noise"] = src["noise"]
             else:
+                assert out_list is not None
                 meas = measure_fpfs(
                     C0=fpfs_c0,
                     v_min=v_min,
@@ -750,7 +752,7 @@ def process_image(
                 )
                 map_dict = {name: "fpfs_" + name for name in meas.dtype.names}
                 out_list.append(rfn.rename_fields(meas, map_dict))
-        del src
+            del src
 
     if detection is None and (
         fpfs_config.sigma_shapelets1 > 0 or fpfs_config.sigma_shapelets2 > 0
