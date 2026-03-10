@@ -324,35 +324,53 @@ class FpfsTask:
         )
         return cov_elems
 
-    def _rotate_noise_pf(self, noise_pf: NDArray) -> NDArray:
-        """Rotate noise power spectrum 90 degrees CW to match rotate90.
+    def _rotate_rfft_pow(self, pf: NDArray) -> NDArray:
+        """Rotate a power spectrum in rfft format 90 degrees CW around DC.
+
+        CW 90-degree rotation: ``P_rot[j, i] = P[(N-i)%N, j]``
+        in unshifted FFT format.
 
         Args:
-            noise_pf (NDArray): noise power spectrum in either
-                full fftshifted ``(npix, npix)`` or rfft ``(npix, npix//2+1)``
-                format.
+            pf (NDArray): power spectrum in rfft format ``(npix, npix//2+1)``
 
         Returns:
-            NDArray: rotated noise power spectrum in the same format.
+            NDArray: rotated power spectrum in rfft format.
         """
         n = self.npix
-        if noise_pf.shape == (n, n // 2 + 1):
-            # rfft format: reconstruct full fftshifted, rotate, crop back
-            full = np.empty((n, n), dtype=noise_pf.dtype)
-            full[:, : n // 2 + 1] = noise_pf
-            # rfft stores kx >= 0; reconstruct kx < 0 using symmetry
-            # P(-kx, -ky) = P(kx, ky) for real-valued images
-            full[0, n // 2 + 1 :] = noise_pf[0, n // 2 - 1 : 0 : -1]
-            full[1:, n // 2 + 1 :] = noise_pf[-1:0:-1, n // 2 - 1 : 0 : -1]
-            full_shifted = np.fft.fftshift(full)
-            rotated = np.rot90(full_shifted, k=-1)
-            unshifted = np.fft.ifftshift(rotated)
-            return np.array(unshifted[:, : n // 2 + 1], dtype=np.float64)
+        nhalf = n // 2 + 1
+        # Reconstruct full (n, n) spectrum using Hermitian symmetry
+        full = np.empty((n, n), dtype=np.float64)
+        full[:, :nhalf] = pf
+        full[0, nhalf:] = pf[0, nhalf - 2 : 0 : -1]
+        full[1:, nhalf:] = pf[-1:0:-1, nhalf - 2 : 0 : -1]
+        # CW 90-degree rotation around DC at (0, 0)
+        col_src = (n - np.arange(n)) % n
+        rotated = full[col_src, :].T
+        return rotated[:, :nhalf].astype(np.float64).copy()
+
+    def _rotate_noise_pf(self, noise_pf: NDArray) -> NDArray:
+        """Rotate noise power spectrum 90 degrees CW in Fourier space.
+
+        Accepts noise_pf in either full fftshifted ``(npix, npix)`` or
+        rfft ``(npix, npix//2+1)`` format, converts to rfft, and delegates
+        to :meth:`_rotate_rfft_pow`.
+
+        Args:
+            noise_pf (NDArray): noise power spectrum.
+
+        Returns:
+            NDArray: rotated noise power spectrum in rfft format.
+        """
+        n = self.npix
+        nhalf = n // 2 + 1
+        if noise_pf.shape == (n, nhalf):
+            pf = np.array(noise_pf, dtype=np.float64)
         elif noise_pf.shape == (n, n):
-            # Full fftshifted format: rotate directly
-            return np.rot90(noise_pf, k=-1)
+            pf = np.fft.ifftshift(noise_pf)
+            pf = np.array(pf[:, :nhalf], dtype=np.float64)
         else:
             raise ValueError("noise power not in correct shape")
+        return self._rotate_rfft_pow(pf)
 
     def prepare_covariance(
         self, variance: float, noise_pf: NDArray | None = None
@@ -362,8 +380,8 @@ class FpfsTask:
         The total covariance accounts for noise from both the galaxy image
         measurement and the rotated noise image used for noise bias
         subtraction. It is the sum of :meth:`calculate_covariance` called
-        with the original PSF and with the PSF rotated 90 degrees clockwise
-        around ``(npix // 2, npix // 2)``.
+        with the original PSF and with the PSF rotated 90 degrees CW
+        in Fourier space (matching the C++ ``rotate90_f``).
 
         Args:
             variance (float): noise variance per pixel
@@ -372,8 +390,6 @@ class FpfsTask:
         Returns:
             NDArray: covariance matrix of shape ``(ncol, ncol)``
         """
-        from .utils import rotate90
-
         # Covariance from the galaxy image measurement (original PSF)
         cov_elems = self.calculate_covariance(
             variance=variance,
@@ -381,14 +397,12 @@ class FpfsTask:
             noise_pf=noise_pf,
         )
 
-        # Covariance from the rotated noise image measurement.
-        # The noise image is rotated 90 degrees CW around (npix//2, npix//2)
-        # before measurement, so its effective PSF is the rotated PSF.
-        # The noise power spectrum must also be rotated to match.
-        psf_rot = rotate90(self.psf_array)
-        psf_rot_pow = (np.abs(np.fft.rfft2(psf_rot)) ** 2.0).astype(
-            np.float64
-        )
+        # Covariance from the rotated noise measurement.
+        # The C++ code rotates the PSF in Fourier space (rotate90_f)
+        # before deconvolution. The noise power spectrum is also rotated
+        # (matching xlens's rotate_noise_corr for correlated noise).
+        # Both use CW 90-degree rotation around DC at (0, 0).
+        psf_rot_pow = self._rotate_rfft_pow(self.psf_pow)
         if noise_pf is not None:
             noise_pf_rot = self._rotate_noise_pf(noise_pf)
         else:
