@@ -4,7 +4,7 @@ import numpy as np
 
 # --- Configuration ---
 pixel_scale = 0.2
-noise_std = 0.1
+noise_std = 0.6
 noise_variance = noise_std**2.0
 ngrid = 64
 
@@ -37,6 +37,6 @@ print("Std dev of m00 (ftask.std_m00):", ftask.std_m00)
 print()
 
 # Print the full covariance matrix
-print("Covariance matrix:")
-print(np.array2string(cov_matrix, precision=6, suppress_small=True))
-print()
+# print("Covariance matrix:")
+# print(np.array2string(cov_matrix, precision=6, suppress_small=True))
+# print()

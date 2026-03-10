@@ -265,12 +265,27 @@ class FpfsTask:
         }
         return
 
-    def prepare_covariance(
-        self, variance: float, noise_pf: NDArray | None = None
+    def calculate_covariance(
+        self,
+        variance: float,
+        psf_pow: NDArray,
+        noise_pf: NDArray | None = None,
     ):
-        """Estimate covariance of measurement error."""
+        """Calculate covariance of measurement error for a single PSF.
 
-        variance = variance * 2.0
+        This computes the covariance matrix of FPFS measurement modes
+        due to image noise, for a given PSF power spectrum. Unlike
+        :meth:`prepare_covariance`, this does **not** double the variance.
+
+        Args:
+            variance (float): noise variance per pixel
+            psf_pow (NDArray): PSF power spectrum |FFT(psf)|^2,
+                shape ``(npix, npix // 2 + 1)``
+            noise_pf (NDArray | None): noise power spectrum [default: None]
+
+        Returns:
+            NDArray: covariance matrix of shape ``(ncol, ncol)``
+        """
         if noise_pf is not None:
             if noise_pf.shape == (self.npix, self.npix // 2 + 1):
                 noise_pf = np.array(noise_pf, dtype=np.float64)
@@ -290,13 +305,13 @@ class FpfsTask:
         img_obj = Image(nx=self.npix, ny=self.npix, scale=self.pixel_scale)
         img_obj.set_f(noise_pf)
         img_obj.deconvolve(
-            psf_image=self.psf_pow,
+            psf_image=psf_pow,
             klim=self.kmax / self.pixel_scale,
         )
         noise_pf_deconv = img_obj.draw_f().real
         del img_obj
 
-        _w = np.ones(self.psf_pow.shape) * 2.0
+        _w = np.ones(psf_pow.shape) * 2.0
         _w[:, 0] = 1.0
         _w[:, -1] = 1.0
         cov_elems = (
@@ -307,6 +322,83 @@ class FpfsTask:
             ).real
             / self.pixel_scale**4.0
         )
+        return cov_elems
+
+    def _rotate_noise_pf(self, noise_pf: NDArray) -> NDArray:
+        """Rotate noise power spectrum 90 degrees CW to match rotate90.
+
+        Args:
+            noise_pf (NDArray): noise power spectrum in either
+                full fftshifted ``(npix, npix)`` or rfft ``(npix, npix//2+1)``
+                format.
+
+        Returns:
+            NDArray: rotated noise power spectrum in the same format.
+        """
+        n = self.npix
+        if noise_pf.shape == (n, n // 2 + 1):
+            # rfft format: reconstruct full fftshifted, rotate, crop back
+            full = np.empty((n, n), dtype=noise_pf.dtype)
+            full[:, : n // 2 + 1] = noise_pf
+            # rfft stores kx >= 0; reconstruct kx < 0 using symmetry
+            # P(-kx, -ky) = P(kx, ky) for real-valued images
+            full[0, n // 2 + 1 :] = noise_pf[0, n // 2 - 1 : 0 : -1]
+            full[1:, n // 2 + 1 :] = noise_pf[-1:0:-1, n // 2 - 1 : 0 : -1]
+            full_shifted = np.fft.fftshift(full)
+            rotated = np.rot90(full_shifted, k=-1)
+            unshifted = np.fft.ifftshift(rotated)
+            return np.array(unshifted[:, : n // 2 + 1], dtype=np.float64)
+        elif noise_pf.shape == (n, n):
+            # Full fftshifted format: rotate directly
+            return np.rot90(noise_pf, k=-1)
+        else:
+            raise ValueError("noise power not in correct shape")
+
+    def prepare_covariance(
+        self, variance: float, noise_pf: NDArray | None = None
+    ):
+        """Estimate covariance of measurement error.
+
+        The total covariance accounts for noise from both the galaxy image
+        measurement and the rotated noise image used for noise bias
+        subtraction. It is the sum of :meth:`calculate_covariance` called
+        with the original PSF and with the PSF rotated 90 degrees clockwise
+        around ``(npix // 2, npix // 2)``.
+
+        Args:
+            variance (float): noise variance per pixel
+            noise_pf (NDArray | None): noise power spectrum [default: None]
+
+        Returns:
+            NDArray: covariance matrix of shape ``(ncol, ncol)``
+        """
+        from .utils import rotate90
+
+        # Covariance from the galaxy image measurement (original PSF)
+        cov_elems = self.calculate_covariance(
+            variance=variance,
+            psf_pow=self.psf_pow,
+            noise_pf=noise_pf,
+        )
+
+        # Covariance from the rotated noise image measurement.
+        # The noise image is rotated 90 degrees CW around (npix//2, npix//2)
+        # before measurement, so its effective PSF is the rotated PSF.
+        # The noise power spectrum must also be rotated to match.
+        psf_rot = rotate90(self.psf_array)
+        psf_rot_pow = (np.abs(np.fft.rfft2(psf_rot)) ** 2.0).astype(
+            np.float64
+        )
+        if noise_pf is not None:
+            noise_pf_rot = self._rotate_noise_pf(noise_pf)
+        else:
+            noise_pf_rot = None
+        cov_elems = cov_elems + self.calculate_covariance(
+            variance=variance,
+            psf_pow=psf_rot_pow,
+            noise_pf=noise_pf_rot,
+        )
+
         self.std_modes = np.sqrt(np.diagonal(cov_elems))
         self.std_m00 = self.std_modes[self.di["m00"]]
         return cov_elems
