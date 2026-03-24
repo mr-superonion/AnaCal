@@ -1,3 +1,9 @@
+"""Simulation utilities for generating synthetic galaxy images.
+
+Provides COSMOS-based galaxy generation, isolated and blended image
+simulations, and noise generation routines used for shear calibration
+studies.
+"""
 # FPFS shear estimator
 # Copyright 20210905 Xiangchong Li.
 #
@@ -27,6 +33,7 @@ _data_dir = os.path.join(
 
 
 def _galsim_round_sersic(n, sersic_prec):
+    """Round a Sersic index to the nearest multiple of *sersic_prec*."""
     return float(int(n / sersic_prec + 0.5)) * sersic_prec
 
 
@@ -97,15 +104,20 @@ def coord_rotate(x, y, xref, yref, theta):
 
 
 def generate_cosmos_gal_simple(record, gsparams=None, random_shape=False):
-    """Generates COSMOS galaxies; modified version of
-    https://github.com/GalSim-developers/GalSim/blob/releases/2.3/galsim/scene.py#L626
+    """Generate a simplified COSMOS galaxy (Gaussian profiles only).
+
+    Uses Gaussian approximations for both bulge+disk and single-Sersic
+    fits, which is faster than :func:`generate_cosmos_gal` and suitable
+    for use with :class:`galsim.RandomKnots`.
 
     Args:
-    record (ndarray): one row of the COSMOS galaxy catalog
-    gsparams: an GSParams argument.
+        record (ndarray): One row of the COSMOS galaxy catalogue.
+        gsparams (galsim.GSParams | None): GalSim rendering parameters.
+        random_shape (bool): Whether to apply intrinsic ellipticity
+            from the catalogue fit parameters.
 
     Returns:
-    gal: Galsim galaxy
+        galsim.GSObject: GalSim galaxy object.
     """
 
     bdparams = record["bulgefit"]
@@ -156,16 +168,26 @@ def generate_cosmos_gal_simple(record, gsparams=None, random_shape=False):
 
 
 def generate_cosmos_gal(record, trunc_ratio=5.0, gsparams=None):
-    """Generates COSMOS galaxies; modified version of
-    https://github.com/GalSim-developers/GalSim/blob/releases/2.3/galsim/scene.py#L626
+    """Generate a realistic COSMOS galaxy with Sersic/DeVaucouleurs profiles.
+
+    Builds either a bulge+disk model (DeVaucouleurs bulge + Exponential
+    disk) or a single Sersic profile, applying intrinsic ellipticity from
+    the catalogue fit parameters.  Profiles are optionally truncated at
+    ``trunc_ratio * half_light_radius``.
+
+    Based on the GalSim COSMOS scene implementation.
 
     Args:
-    record (ndarray): one row of the COSMOS galaxy catalog
-    trunc_ratio (float): truncation ratio
-    gsparams: an GSParams argument.
+        record (ndarray): One row of the COSMOS galaxy catalogue,
+            containing ``bulgefit``, ``sersicfit``, ``use_bulgefit``,
+            ``hlr``, and ``flux`` fields.
+        trunc_ratio (float): Truncation radius in units of the
+            half-light radius.  Set to < 1 to disable truncation.
+        gsparams (galsim.GSParams | None): GalSim rendering parameters.
 
     Returns:
-    gal: Galsim galaxy
+        galsim.GSObject: GalSim galaxy object with intrinsic shape
+        applied.
     """
 
     # record columns:
@@ -281,6 +303,7 @@ def generate_cosmos_gal(record, trunc_ratio=5.0, gsparams=None):
 
 
 def _generate_gal_fft(record, mag_zero, rng, gsparams):
+    """Create a COSMOS galaxy with random rescaling and rotation (FFT path)."""
     gal0 = generate_cosmos_gal(record, gsparams=gsparams)
     # E.g., HSC's i-band coadds zero point is 27
     flux = 10 ** ((mag_zero - record["mag_auto"]) / 2.5)
@@ -296,6 +319,7 @@ def _generate_gal_fft(record, mag_zero, rng, gsparams):
 
 
 def _generate_gal_mc(record, mag_zero, rng, gsparams, npoints):
+    """Create a COSMOS galaxy as RandomKnots (Monte-Carlo path)."""
     # need to truncate the profile since we do not want
     # Knots locate at infinity
     galp = generate_cosmos_gal_simple(record)
@@ -337,6 +361,33 @@ def make_exposure_stamp(
     buff=0,
     draw_method="auto",
 ):
+    """Render galaxies on a grid to build exposure stamps.
+
+    Places galaxies on a regular grid, applies shear, convolves with the
+    PSF, and draws images for each field rotation angle.
+
+    Args:
+        sim_method (str): Galaxy rendering method (``"fft"`` or ``"mc"``).
+        rng (galsim.BaseDeviate): GalSim random number generator.
+        mag_zero (float): Magnitude zero-point.
+        psf_obj (galsim.GSObject): PSF object for convolution.
+        scale (float): Pixel scale in arcseconds.
+        cat_input (ndarray): COSMOS galaxy catalogue rows.
+        ngalx (int): Number of galaxies along the x-axis.
+        ngaly (int): Number of galaxies along the y-axis.
+        ngrid (int): Stamp size in pixels per galaxy.
+        rot_field (list[float]): Field rotation angles in radians.
+        g1 (float): First shear component.
+        g2 (float): Second shear component.
+        nrot_per_gal (int): Number of shape-noise-cancelling rotations
+            per galaxy.
+        do_shift (bool): Whether to apply random sub-pixel shifts.
+        buff (int): Zero-padding buffer around the image boundary.
+        draw_method (str): GalSim drawing method.
+
+    Returns:
+        list[NDArray]: List of exposure arrays, one per field rotation.
+    """
     ngal = ngalx * ngaly
     gsparams = galsim.GSParams(maximum_fft_size=10240)
     gal0 = None
@@ -410,12 +461,39 @@ def make_exposure_stamp(
 
 
 def read_cosmos_catalog(filename):
-    # read the input COSMOS galaxy catalog
+    """Read a COSMOS galaxy catalogue from a FITS file.
+
+    Args:
+        filename (str): Path to the FITS catalogue file.
+
+    Returns:
+        ndarray: Structured array of catalogue rows.
+    """
     cat_input = fitsio.read(filename)
     return cat_input
 
 
 class CosmosCatalog(object):
+    """Filtered COSMOS galaxy catalogue for simulation input.
+
+    Reads a COSMOS FITS catalogue and applies magnitude, half-light
+    radius, and morphology-type filters.
+
+    Args:
+        filename (str): Path to the COSMOS FITS catalogue.
+        max_mag (float | None): Upper magnitude cut (exclusive).
+        min_mag (float | None): Lower magnitude cut (inclusive).
+        max_hlr (float | None): Maximum half-light radius in arcseconds.
+        min_hlr (float | None): Minimum half-light radius in arcseconds.
+        gal_type (str): Galaxy morphology filter — ``"mixed"`` (all),
+            ``"sersic"`` (single-component), ``"bulgedisk"``
+            (two-component), or ``"debug"`` (forced exponential).
+
+    Attributes:
+        cat_input (ndarray): Filtered catalogue array.
+        ntrain (int): Number of galaxies after filtering.
+    """
+
     def __init__(
         self,
         filename=None,
@@ -468,6 +546,18 @@ class CosmosCatalog(object):
         return
 
     def make_catalog(self, rng, n):
+        """Draw *n* galaxies at random from the filtered catalogue.
+
+        Args:
+            rng (galsim.BaseDeviate): GalSim random number generator.
+            n (int): Number of galaxies to sample.
+
+        Returns:
+            ndarray: Randomly sampled catalogue rows.
+
+        Raises:
+            ValueError: If the catalogue has fewer than *n* entries.
+        """
         if self.ntrain < n:
             raise ValueError(
                 "There is not enough number of galaxies",
@@ -504,33 +594,49 @@ def make_isolated_sim(
     return_catalog=False,
     verbose=False,
 ):
-    """Makes basic **isolated** galaxy image simulation.
+    """Make an **isolated** galaxy image simulation on a regular grid.
+
+    Galaxies are drawn from a COSMOS catalogue, placed on an
+    ``(ny // ngrid) x (nx // ngrid)`` grid, sheared, convolved with a
+    PSF, and rendered into pixel arrays.
 
     Args:
-    ny (int): number of pixels in y direction
-    nx (int): number of pixels in y direction
-    psf_obj (PSF): input PSF object of galsim
-    gname (str): shear distortion setup
-    seed (int): index of the simulation
-    cat_name (str): input catalog name
-    scale (float): pixel scale
-    mag_zero (float): magnitude zero point [27 for HSC]
-    rot_field (list): additional rotation angle
-    shear_value (float): shear distortion amplitude
-    ngrid (int): stampe size
-    nrot_per_gal (int): number of rotations
-    max_mag (float): maximum magnitude cut
-    min_mag (float): minimum magnitude cut
-    max_hlr (float): maximum half light radius cut [arcsec]
-    min_hlr (float): minimum half light radius cut [arcsec]
-    gal_type (float): galaxy morphology (mixed, sersic, or bulgedisk)
-    do_shift (bool): whether do shfits
-    npoints (int): number of random points when
-    sim_method (str): galaxy tpye ("fft" or "mc")
-    buff (int): buff size (zero padding near boundaries)
-    draw_method (str): method used for drawing image by Galsim
-    return_catalog (bool): whether returning the input catalog
-    verbose (bool): whether show log info
+        ny (int): Number of pixels in the y-direction.
+        nx (int): Number of pixels in the x-direction.
+        psf_obj (galsim.GSObject): PSF object for convolution.
+        gname (str): Shear specification string, e.g. ``"g1-0"`` or
+            ``"g2-1"``.  Format is ``"<component>-<index>"`` where
+            *index* selects from ``[-shear_value, shear_value, 0]``.
+        seed (int): Random seed for the simulation.
+        cat_name (str | None): Path to a COSMOS FITS catalogue.
+            Defaults to the bundled ``src_cosmos.fits``.
+        scale (float): Pixel scale in arcseconds.
+        mag_zero (float): Magnitude zero-point (27 for HSC).
+        rot_field (list[float] | None): Field rotation angles in
+            radians.  Defaults to ``[0.0]``.
+        shear_value (float): Amplitude of the applied shear.
+        ngrid (int): Stamp size in pixels per galaxy.
+        nrot_per_gal (int): Number of shape-noise-cancelling rotations.
+        max_mag (float | None): Upper magnitude cut.
+        min_mag (float | None): Lower magnitude cut.
+        max_hlr (float | None): Maximum half-light radius in arcseconds.
+        min_hlr (float | None): Minimum half-light radius in arcseconds.
+        gal_type (str): Galaxy morphology filter (``"mixed"``,
+            ``"sersic"``, ``"bulgedisk"``, or ``"debug"``).
+        do_shift (bool): Whether to apply random sub-pixel offsets.
+        npoints (int): Number of random knots (``"mc"`` method only).
+        sim_method (str): Galaxy rendering method (``"fft"`` or
+            ``"mc"``).
+        buff (int): Zero-padding buffer in pixels.
+        draw_method (str): GalSim drawing method.
+        return_catalog (bool): If ``True``, also return the input
+            catalogue.
+        verbose (bool): Whether to show log info.
+
+    Returns:
+        list[NDArray] | tuple[list[NDArray], ndarray]: Exposure arrays,
+        one per field rotation.  If *return_catalog* is ``True``, returns
+        ``(exposures, cat_input)``.
     """
 
     if nx % ngrid != 0:
@@ -610,15 +716,19 @@ def make_noise_sim(
     scale=0.168,
     verbose=False,
 ):
-    """Makes pure noise for galaxy image simulation.
+    """Generate a pure COSMOS-correlated noise image.
 
     Args:
-    out_dir (str): output directory
-    ind0 (int): index of the simulation
-    ny (int): number of pixels in y direction
-    nx (int): number of pixels in x direction
-    scale (float): pixel scale
-    verbose (bool): whether show log info
+        out_dir (str): Output directory (currently unused).
+        infname (str): Path to the COSMOS noise correlation file.
+        ind0 (int): Seed index for the random number generator.
+        ny (int): Number of pixels in the y-direction.
+        nx (int): Number of pixels in the x-direction.
+        scale (float): Pixel scale in arcseconds.
+        verbose (bool): Whether to show log info.
+
+    Returns:
+        NDArray: Noise image array of shape ``(ny, nx)``.
     """
     variance = 0.01
     ud = galsim.UniformDeviate(ind0 * 10000 + 1)
@@ -650,24 +760,32 @@ def make_blended_sim(
     rescale_min_max=None,
     verbose=False,
 ):
-    """Makes cosmo-like blended galaxy image simulations.
+    """Make a COSMOS-like **blended** galaxy image simulation.
+
+    Galaxies are randomly distributed within a circular aperture and
+    sheared according to their photometric redshift bin.
 
     Args:
-    out_dir (str): output directory
-    psf_obj (PSF): input PSF object of galsim
-    gname (str): shear distortion setup
-    ind0 (int): index of the simulation
-    cat_name (str): input catalog Name [default: COSMOS 25.2 catalog]
-    ny (int): number of galaxies in y direction [default: 5000]
-    nx (int): number of galaxies in x direction [default: 5000]
-    rfrac(float): fraction of radius to minimum between nx and ny
-    mag_zero (float): magnitude zero point
-    rot_field (float): additional rotational angle [in units of radians]
-    shear_value (float): amplitude of the input shear
-    nrot (int): number of rotation, optional
-    rescale_min_max (list|ndarray): lower and upper bounds of galaxy size
-        rescaling factor, optional
-    verbose (bool): whether show log info
+        out_dir (str): Output directory (used to infer galaxy density).
+        psf_obj (galsim.GSObject): PSF object for convolution.
+        gname (str): Shear specification string.
+        ind0 (int): Random seed index.
+        cat_name (str | None): Path to a COSMOS FITS catalogue.
+        ny (int): Image height in pixels.
+        nx (int): Image width in pixels.
+        rfrac (float): Fraction of ``min(nx, ny)`` used as the
+            circular aperture radius.
+        scale (float): Pixel scale in arcseconds.
+        mag_zero (float): Magnitude zero-point.
+        rot_field (float): Additional field rotation in radians.
+        shear_value (float): Amplitude of the applied shear.
+        nrot (int): Number of shape-noise-cancelling rotations.
+        rescale_min_max (list | NDArray | None): Lower and upper bounds
+            for random galaxy size rescaling.
+        verbose (bool): Whether to show log info.
+
+    Returns:
+        NDArray: Blended galaxy image array of shape ``(ny, nx)``.
     """
 
     np.random.seed(ind0)

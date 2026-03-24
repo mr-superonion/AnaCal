@@ -1,25 +1,33 @@
-.. AnaCal documentation master file, created by
-   sphinx-quickstart on Wed Apr 27 02:50:03 2022.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 AnaCal: Analytic Calibration for Perturbation Estimation
-======================================
+=========================================================
 
+AnaCal is a framework for analytic shear estimation on galaxy images, designed
+for sub-percent accuracy shear inference with minimal computational cost.  It
+bridges various analytic shear estimators that have been developed or are
+anticipated to be created in the future.
 
-This framework is devised to bridge various analytic shear estimators that have
-been developed or are anticipated to be created in the future. We intend to
-develop a suite of analytical shear estimators capable of inferring shear with
-subpercent accuracy, all while maintaining minimal computational time. The
-currently supported analytic shear estimators are:
+Currently supported analytic shear estimators:
 
-* **FPFS**: https://github.com/mr-superonion/FPFS
-* **NGMIX**: https://github.com/esheldon/ngmix — Gaussian model fitting.
+* **FPFS** — Fixed moments method using shapelets
+  (`GitHub <https://github.com/mr-superonion/FPFS>`__)
+* **NGMIX** — Gaussian model fitting
+  (`GitHub <https://github.com/esheldon/ngmix>`__)
 
 .. toctree::
     :maxdepth: 2
+    :caption: Getting Started
 
-    Overview <overview.md>
+    Overview & Installation <overview.md>
+
+.. toctree::
+    :maxdepth: 2
+    :caption: Examples
+
+    examples/index
+
+.. toctree::
+    :maxdepth: 2
+    :caption: API Reference
 
     anacal
 

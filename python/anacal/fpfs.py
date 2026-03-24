@@ -48,18 +48,40 @@ def gauss_kernel_rfft(
 
 
 def shapelets2d_func(npix: int, norder: int, sigma: float, kmax: float):
-    """Generate complex shapelet functions in Fourier space."""
+    """Generate complex shapelet basis functions in Fourier space.
+
+    Args:
+        npix (int): Number of pixels along each axis of the square grid.
+        norder (int): Maximum shapelet order.
+        sigma (float): Gaussian kernel scale in Fourier-space units
+            (``pixel_scale / sigma_arcsec``).
+        kmax (float): Truncation radius in Fourier space.
+
+    Returns:
+        NDArray: Complex shapelet basis array.
+    """
 
     return _shapelets2d_func(npix, norder, sigma, kmax)
 
 
 def shapelets2d(norder: int, npix: int, sigma: float, kmax: float):
-    """Generate real-valued shapelet functions in Fourier space."""
-    # M_{nm}
-    # nm = n*(norder+1)+m
-    # This setup is able to derive kappa response and shear response
-    # Only uses M00, M20, M22 (real and img), M40, M42(real and img), M60
-    # M64c, M64s
+    """Generate real-valued shapelet basis functions in Fourier space.
+
+    The returned basis contains the modes needed to derive convergence and
+    shear responses: M00, M20, M22 (real & imag), M40, M42 (real & imag),
+    M44 (real & imag), M60, M64c, M64s.
+
+    Args:
+        norder (int): Maximum shapelet order.  Must be 2, 4, or 6.
+        npix (int): Number of pixels along each axis of the square grid.
+        sigma (float): Gaussian kernel scale in Fourier-space units.
+        kmax (float): Truncation radius in Fourier space.
+
+    Returns:
+        tuple[NDArray, list[str]]: A tuple of ``(basis_functions, names)``
+        where *basis_functions* has shape ``(nmodes, npix, npix//2+1)``
+        and *names* lists the corresponding mode labels.
+    """
     name_s = [
         "m00",
         "m20",
@@ -88,7 +110,21 @@ def detlets2d(
     sigma: float,
     kmax: float,
 ):
-    """Generate complex detection basis functions in Fourier space."""
+    """Generate detection basis functions (detlets) in Fourier space.
+
+    Detlets are used for peak detection and their shear derivatives.
+
+    Args:
+        npix (int): Number of pixels along each axis of the square grid.
+        sigma (float): Gaussian kernel scale in Fourier-space units.
+        kmax (float): Truncation radius in Fourier space.
+
+    Returns:
+        tuple[NDArray, list[str]]: A tuple of ``(basis_functions, names)``
+        where *basis_functions* has shape ``(12, npix, npix//2+1)``
+        and *names* lists the detection mode labels (v0–v3 and their
+        shear derivatives).
+    """
     name_d = [
         "v0",
         "v1",
@@ -112,7 +148,20 @@ def get_kmax(
     sigma: float,
     kmax_thres: float = 1e-20,
 ) -> float:
-    """Estimate the truncation radius ``kmax`` for the Gaussian kernel."""
+    """Estimate the truncation radius ``kmax`` for the Gaussian kernel.
+
+    Finds the largest wavenumber at which the product of the Gaussian
+    kernel and the PSF power spectrum exceeds *kmax_thres*.
+
+    Args:
+        psf_pow (NDArray): PSF power spectrum ``|FFT(psf)|^2``, shape
+            ``(npix, npix // 2 + 1)``.
+        sigma (float): Gaussian kernel scale in Fourier-space units.
+        kmax_thres (float): Threshold below which the kernel is truncated.
+
+    Returns:
+        float: Truncation wavenumber in grid units.
+    """
     return _get_kmax(psf_pow, sigma, kmax_thres)
 
 
@@ -142,18 +191,27 @@ def m00_to_flux(
 
 
 class FpfsTask:
-    """A base class for measurement
+    """FPFS measurement task for shapelet-based galaxy shape measurement.
+
+    Prepares shapelet and detection basis functions, then measures galaxy
+    shapes at detected positions via PSF-deconvolved Fourier-space filtering.
 
     Args:
-    npix (int): number of pixels in a postage stamp
-    pixel_scale (float): pixel scale in arcsec
-    sigma_shapelets (float): Shapelet kernel size
-    noise_variance (float): variance of image noise
-    kmax (float | None): maximum k
-    psf_array (ndarray): an average PSF image [default: None]
-    kmax_thres (float): the tuncation threshold on Gaussian [default: 1e-20]
-    do_detection (bool): whether compute detection kernels
-    bound (int): minimum distance to boundary [default: 0]
+        npix (int): Number of pixels per side of a postage stamp.
+        pixel_scale (float): Pixel scale in arcseconds.
+        sigma_shapelets (float): Shapelet Gaussian kernel size in arcseconds.
+            Must be less than 3.0.
+        noise_variance (float): Variance of the image noise per pixel.
+            Must be positive when *do_detection* is ``True``.
+        kmax (float | None): Maximum wavenumber for Fourier-space truncation.
+            If ``None``, estimated automatically from the PSF.
+        psf_array (NDArray | None): Average PSF image of shape
+            ``(npix, npix)``.  Defaults to a delta function at centre.
+        kmax_thres (float): Threshold for automatic ``kmax`` estimation.
+        do_detection (bool): Whether to prepare detection kernels and
+            compute noise covariance.
+        bound (int): Minimum distance to the image boundary for source
+            detection.
     """
 
     def __init__(
@@ -428,18 +486,21 @@ class FpfsTask:
         noise_array: NDArray | None = None,
         mask_array: NDArray | None = None,
     ) -> NDArray:
-        """This function detects galaxy from image
+        """Detect galaxies in an image using FPFS detection modes.
 
         Args:
-        gal_array (NDArray): galaxy image data
-        fthres (float): flux threshold
-        pthres (float): peak threshold
-        omega_v (float): smoothness parameter for pixel difference
-        noise_array (NDArray|None): pure noise image
-        mask_array (NDArray|None): mask image
+            gal_array (NDArray): Galaxy image array.
+            fthres (float): Flux signal-to-noise threshold for detection.
+            pthres (float): Peak identification threshold for pooling.
+            omega_v (float): Smoothness parameter for the v-mode cut.
+            v_min (float): Minimum value of the v detection mode.
+            noise_array (NDArray | None): Pure noise image for noise-bias
+                subtraction.
+            mask_array (NDArray | None): Mask image (1 for masked pixels).
 
         Returns:
-        (NDArray): galaxy detection catalog
+            NDArray: Structured array with columns ``('y', 'x')`` giving
+            detected source positions.
         """
         assert self.dtask is not None
         return self.dtask.detect_source(
@@ -461,18 +522,21 @@ class FpfsTask:
         det: NDArray | None = None,
         noise_array: NDArray | None = None,
     ) -> tuple[NDArray, NDArray | None]:
-        """This function measure galaxy shapes at the position of the detection
-        using PSF image data
+        """Measure galaxy shapes using a spatially constant PSF image.
 
         Args:
-        gal_array (NDArray): galaxy image data
-        psf_array (NDArray): psf image data
-        det (list|None): detection catalog
-        noise_array (NDArray | None): noise image data [default: None]
+            gal_array (NDArray): Galaxy image array.
+            psf_array (NDArray): PSF image of shape ``(npix, npix)``.
+            det (NDArray | None): Detection catalog with ``('y', 'x')``
+                columns.
+            noise_array (NDArray | None): Pure noise image for noise-bias
+                subtraction.
 
         Returns:
-        src_g (NDArray): source measurement catalog
-        src_n (NDArray): noise measurement catalog
+            tuple[NDArray, NDArray | None]: ``(src_g, src_n)`` where
+            *src_g* is the source measurement array (noise-bias corrected
+            when *noise_array* is given) and *src_n* is the noise
+            measurement array (or ``None``).
         """
         # self.logger.warning("Input PSF is array")
         src_g = self.mtask.measure_source(
@@ -502,18 +566,21 @@ class FpfsTask:
         det: NDArray,
         noise_array: NDArray | None = None,
     ) -> tuple[NDArray, NDArray | None]:
-        """This function measure galaxy shapes at the position of the detection
-        using PSF image data
+        """Measure galaxy shapes using a spatially varying PSF model.
+
+        Evaluates the PSF at each detected position via *psf_obj.draw()*
+        and measures shapelet modes per object.
 
         Args:
-        gal_array (NDArray): galaxy image data
-        psf_obj (BasePsf): PSF object in python
-        noise_array (NDArray | None): noise image data [default: None]
-        det (list|None): detection catalog
+            gal_array (NDArray): Galaxy image array.
+            psf_obj (BasePsf): Spatially varying PSF model.
+            det (NDArray): Detection catalog with ``('y', 'x')`` columns.
+            noise_array (NDArray | None): Pure noise image for noise-bias
+                subtraction.
 
         Returns:
-        src_g (NDArray): source measurement catalog
-        src_n (NDArray): noise measurement catalog
+            tuple[NDArray, NDArray | None]: ``(src_g, src_n)`` — see
+            :meth:`run_psf_array`.
         """
         # self.logger.warning("Input PSF is python object")
         src_g = []
@@ -556,16 +623,25 @@ class FpfsTask:
         det: NDArray | None = None,
         noise_array: NDArray | None = None,
     ):
-        """This function measure galaxy shapes at the position of the detection
+        """Measure FPFS shapelet modes at detected positions.
+
+        Dispatches to :meth:`run_psf_array` or :meth:`run_psf_python`
+        depending on whether *psf* is an array or a :class:`BasePsf`
+        object.
 
         Args:
-        gal_array (NDArray): galaxy image data
-        det (NDArray): detection catalog
-        psf (BasePsf | NDArray): psf image data or psf model
-        noise_array (NDArray | None): noise image data [default: None]
+            gal_array (NDArray): Galaxy image array.
+            psf (BasePsf | NDArray): PSF image ``(npix, npix)`` or a
+                spatially varying :class:`BasePsf` model.
+            det (NDArray | None): Detection catalog with ``('y', 'x')``
+                columns.  Required when *psf* is a :class:`BasePsf`.
+            noise_array (NDArray | None): Pure noise image for noise-bias
+                subtraction.
 
         Returns:
-        (NDArray): galaxy measurement catalog
+            dict: ``{"data": src_g, "noise": src_n}`` where *src_g* is
+            a structured array of FPFS mode measurements and *src_n* is
+            the corresponding noise measurements (or ``None``).
         """
         if isinstance(psf, np.ndarray):
             src_g, src_n = self.run_psf_array(
@@ -599,6 +675,13 @@ class FpfsTask:
 
 
 class FpfsConfig(BaseModel):
+    """Configuration parameters for the FPFS measurement pipeline.
+
+    All threshold and smoothness parameters are specified in units that
+    assume a magnitude zero-point of 30.  They are rescaled internally
+    by :func:`process_image` to match the actual zero-point.
+    """
+
     npix: int = Field(
         default=64,
         description="""size of the stamp before Fourier Transform
@@ -712,6 +795,16 @@ def _rename_linear_fields(
 
 
 def _pack_linear_modes(linear_modes, base_column_name):
+    """Merge all linear-mode arrays into a single structured array.
+
+    Args:
+        linear_modes (dict): Mapping from mode keys (``"detection"``,
+            ``"data"``, ``"noise"``, ``"data1"``, etc.) to arrays.
+        base_column_name (str | None): Optional prefix for column names.
+
+    Returns:
+        NDArray: Merged structured array.
+    """
     blocks: list[np.ndarray] = []
     if "detection" in linear_modes and linear_modes["detection"] is not None:
         blocks.append(linear_modes["detection"])
@@ -762,28 +855,40 @@ def process_image(
     base_column_name: str | None = None,
     **kwargs,
 ):
-    """Run measurement algorithms on the input exposure, and optionally
-    populate the resulting catalog with extra information.
+    """Run the full FPFS measurement pipeline on an exposure.
+
+    Performs source detection (unless a pre-computed catalogue is
+    provided), measures shapelet and detection modes, applies non-linear
+    shear estimators, and returns a structured catalogue.
 
     Args:
-    fpfs_config (FpfsConfig):  configuration object
-    pixel_scale (float): pixel scale in arcsec
-    noise_variance (float): variance of image noise
-    mag_zero (float): magnitude zero point
-    do_detection (bool): whether compute detection kernel
-    gal_array (NDArray[float64]): galaxy exposure array
-    psf_array (ndarray): an average PSF image
-    noise_array (NDArray | None): pure noise array
-    mask_array (NDArray | None): mask array (1 for masked)
-    detection (NDArray | None): detection catalog
-    psf_object (BasePsf | None): PSF object
-    do_compute_detect_weight (bool): whether to compute detection weight
-    return_only_linear_modes (bool): only return linear modes for detection
-    pack_linear_modes (bool): whether pack linear modes into structured array
-    base_column_name (str | None): base column name
+        fpfs_config (FpfsConfig): Configuration object holding all
+            tuneable FPFS parameters.
+        pixel_scale (float): Pixel scale in arcseconds.
+        noise_variance (float): Variance of image noise per pixel.
+        mag_zero (float): Magnitude zero-point of the exposure.
+        gal_array (NDArray): Galaxy exposure array.
+        psf_array (NDArray): Average PSF image of shape ``(npix, npix)``.
+        noise_array (NDArray | None): Pure noise array for noise-bias
+            subtraction.
+        mask_array (NDArray | None): Mask array (1 for masked pixels).
+        detection (NDArray | None): Pre-computed detection catalogue with
+            ``('y', 'x')`` columns.  If ``None``, detection is run
+            internally.
+        psf_object (BasePsf | None | NDArray): Spatially varying PSF
+            model.  Falls back to *psf_array* when ``None``.
+        do_compute_detect_weight (bool): Whether to measure shapelet
+            modes at the default kernel scale.
+        return_only_linear_modes (bool): If ``True``, return raw linear
+            modes instead of the non-linear shear catalogue.
+        pack_linear_modes (bool): When *return_only_linear_modes* is
+            ``True``, pack results into a single structured array.
+        base_column_name (str | None): Optional prefix prepended to
+            every output column name.
 
     Returns:
-    (NDArray) FPFS catalog
+        NDArray | dict: Structured FPFS catalogue (default), or a dict
+        of linear-mode arrays when *return_only_linear_modes* is ``True``.
     """
     ratio = 1.0 / (10 ** ((30 - mag_zero) / 2.5))
     r2_min = fpfs_config.r2_min * ratio

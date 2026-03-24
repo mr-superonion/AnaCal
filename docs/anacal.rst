@@ -1,5 +1,7 @@
-anacal Package
-==============
+API Reference
+=============
+
+.. currentmodule:: anacal
 
 :mod:`anacal` Package
 ---------------------
@@ -9,34 +11,34 @@ anacal Package
     :undoc-members:
     :show-inheritance:
 
-:mod:`fpfs` Module
-------------------------
+:mod:`anacal.fpfs` Module
+-------------------------
 
 .. automodule:: anacal.fpfs
     :members:
     :undoc-members:
     :show-inheritance:
 
-:mod:`simulation` Module
+:mod:`anacal.psf` Module
 ------------------------
+
+.. automodule:: anacal.psf
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+:mod:`anacal.simulation` Module
+-------------------------------
 
 .. automodule:: anacal.simulation
     :members:
     :undoc-members:
     :show-inheritance:
 
-:mod:`utils` Module
--------------------
+:mod:`anacal.utils` Module
+--------------------------
 
 .. automodule:: anacal.utils
     :members:
     :undoc-members:
     :show-inheritance:
-
-Subpackages
------------
-
-.. toctree::
-
-    anacal.fpfs
-

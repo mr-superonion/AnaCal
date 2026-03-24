@@ -15,14 +15,14 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath("../anacal"))
+sys.path.insert(0, os.path.abspath("../python"))
 
 import anacal
 
 # -- Project information -----------------------------------------------------
 
 project = "AnaCal"
-copyright = "2023, Xiangchong Li"
+copyright = "2023–2026, Xiangchong Li"
 author = "Xiangchong Li"
 
 # The full version, including alpha/beta/rc tags
@@ -102,12 +102,12 @@ nb_merge_streams = True
 html_theme = "sphinx_book_theme"
 html_theme_options = {
     "icon_links": [],
-    "github_url": "https://github.com/executablebooks/myst-nb",
-    "repository_url": "https://github.com/executablebooks/myst-nb",
-    "repository_branch": "master",
+    "github_url": "https://github.com/mr-superonion/AnaCal",
+    "repository_url": "https://github.com/mr-superonion/AnaCal",
+    "repository_branch": "main",
     "home_page_in_toc": True,
     "path_to_docs": "docs",
-    "show_navbar_depth": 1,
+    "show_navbar_depth": 2,
     "use_edit_page_button": True,
     "use_repository_button": True,
     "use_download_button": True,
