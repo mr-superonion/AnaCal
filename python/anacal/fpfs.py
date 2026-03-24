@@ -712,7 +712,9 @@ def _rename_linear_fields(
 
 
 def _pack_linear_modes(linear_modes, base_column_name):
-    blocks: list[np.ndarray] = [linear_modes["detection"]]
+    blocks: list[np.ndarray] = []
+    if "detection" in linear_modes and linear_modes["detection"] is not None:
+        blocks.append(linear_modes["detection"])
     for tag in ["", "1", "2"]:
         if f"data{tag}" in linear_modes:
             blocks.append(
@@ -793,7 +795,7 @@ def process_image(
     if psf_object is None:
         psf_object = psf_array
 
-    linear_modes: dict[str, np.ndarray] | None = {"detection": detection} \
+    linear_modes: dict[str, np.ndarray] | None = {} \
         if return_only_linear_modes else None
     out_list: list[np.ndarray] | None = None if return_only_linear_modes else []
 
