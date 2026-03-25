@@ -17,7 +17,38 @@ import sys
 
 sys.path.insert(0, os.path.abspath("../python"))
 
-import anacal
+# Mock the compiled C extension so anacal can be imported even when
+# _anacal has not been built (e.g. on ReadTheDocs).
+from unittest.mock import MagicMock
+
+
+class _MockModule(MagicMock):
+    """Stand-in for the compiled _anacal extension."""
+
+    @classmethod
+    def __getattr__(cls, name):
+        return MagicMock()
+
+
+_MOCK_MODULES = [
+    "anacal._anacal",
+    "anacal._anacal.detector",
+    "anacal._anacal.fpfs",
+    "anacal._anacal.geometry",
+    "anacal._anacal.image",
+    "anacal._anacal.mask",
+    "anacal._anacal.math",
+    "anacal._anacal.model",
+    "anacal._anacal.ngmix",
+    "anacal._anacal.noise",
+    "anacal._anacal.psf",
+    "anacal._anacal.table",
+    "anacal._anacal.task",
+]
+for _mod in _MOCK_MODULES:
+    sys.modules.setdefault(_mod, _MockModule())
+
+import anacal  # noqa: E402
 
 # -- Project information -----------------------------------------------------
 
@@ -33,6 +64,10 @@ release = anacal.__version__
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
+autodoc_mock_imports = [
+    "anacal._anacal",
+]
+
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.mathjax",
