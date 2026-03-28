@@ -47,8 +47,8 @@ struct block {
         for (int i = 0; i < this->ny; ++i) {
             this->yvs[i] = (i + this->ymin) * this->scale;
         }
-        this->xmsk.resize(this->nx);
-        this->ymsk.resize(this->ny);
+        this->xmsk.assign(this->nx, true);
+        this->ymsk.assign(this->ny, true);
     }
 };
 
