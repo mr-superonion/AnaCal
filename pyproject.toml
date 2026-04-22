@@ -18,7 +18,6 @@ dependencies = [
     "numpy",
     "galsim",
     "fitsio",
-    "pydantic",
 ]
 
 [project.urls]

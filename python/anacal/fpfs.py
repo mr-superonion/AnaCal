@@ -1,7 +1,8 @@
+from dataclasses import dataclass
+
 import numpy as np
 import numpy.lib.recfunctions as rfn
 from numpy.typing import NDArray
-from pydantic import BaseModel, Field
 
 from ._anacal.fpfs import (
     FpfsImage,
@@ -674,7 +675,8 @@ class FpfsTask:
         }
 
 
-class FpfsConfig(BaseModel):
+@dataclass
+class FpfsConfig:
     """Configuration parameters for the FPFS measurement pipeline.
 
     All threshold and smoothness parameters are specified in units that
@@ -682,82 +684,50 @@ class FpfsConfig(BaseModel):
     by :func:`process_image` to match the actual zero-point.
     """
 
-    npix: int = Field(
-        default=64,
-        description="""size of the stamp before Fourier Transform
-        """,
-    )
-    kmax_thres: float = Field(
-        default=1e-12,
-        description="""The threshold used to define the upper limit of k we use
-        in Fourier space.
-        """,
-    )
-    bound: int = Field(
-        default=35,
-        description="""Boundary buffer length, the sources in the buffer reion
-        are not counted.
-        """,
-    )
-    sigma_shapelets: float = Field(
-        default=0.52,
-        description="""Smoothing scale of the shapelet and detection kernel.
-        """,
-    )
-    sigma_shapelets1: float = Field(
-        default=-1,
-        description="""Smoothing scale of the second shapelet kernel.
-        """,
-    )
-    sigma_shapelets2: float = Field(
-        default=-1,
-        description="""Smoothing scale of the third shapelet kernel.
-        """,
-    )
-    pthres: float = Field(
-        default=0.12,
-        description="""Detection threshold (peak identification) for the
-        pooling.
-        """,
-    )
-    fthres: float = Field(
-        default=8.0,
-        description="""Detection threshold (minimum signal-to-noise ratio) for
-        the first pooling.
-        """,
-    )
-    omega_r2: float = Field(
-        default=4.8,
-        description="""
-        smoothness parameter for r2 cut
-        """,
-    )
-    r2_min: float = Field(
-        default=0.1,
-        description="""Minimum trace moment matrix
-        """,
-    )
-    omega_v: float = Field(
-        default=0.9,
-        description="""
-        smoothness parameter for v cut
-        """,
-    )
-    v_min: float = Field(
-        default=0.45,
-        description="""Minimum of v
-        """,
-    )
-    snr_min: float = Field(
-        default=12,
-        description="""Minimum Signal-to-Noise Ratio for detection.
-        """,
-    )
-    c0: float = Field(
-        default=8.4,
-        description="""Weighting parameter for m00 for ellipticity definition.
-        """,
-    )
+    npix: int = 64
+    """size of the stamp before Fourier Transform"""
+
+    kmax_thres: float = 1e-12
+    """The threshold used to define the upper limit of k we use in Fourier
+    space."""
+
+    bound: int = 35
+    """Boundary buffer length, the sources in the buffer reion are not
+    counted."""
+
+    sigma_shapelets: float = 0.52
+    """Smoothing scale of the shapelet and detection kernel."""
+
+    sigma_shapelets1: float = -1
+    """Smoothing scale of the second shapelet kernel."""
+
+    sigma_shapelets2: float = -1
+    """Smoothing scale of the third shapelet kernel."""
+
+    pthres: float = 0.12
+    """Detection threshold (peak identification) for the pooling."""
+
+    fthres: float = 8.0
+    """Detection threshold (minimum signal-to-noise ratio) for the first
+    pooling."""
+
+    omega_r2: float = 4.8
+    """smoothness parameter for r2 cut"""
+
+    r2_min: float = 0.1
+    """Minimum trace moment matrix"""
+
+    omega_v: float = 0.9
+    """smoothness parameter for v cut"""
+
+    v_min: float = 0.45
+    """Minimum of v"""
+
+    snr_min: float = 12
+    """Minimum Signal-to-Noise Ratio for detection."""
+
+    c0: float = 8.4
+    """Weighting parameter for m00 for ellipticity definition."""
 
 
 def _rename_linear_fields(
