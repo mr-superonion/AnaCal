@@ -190,6 +190,37 @@ def m00_to_flux(
     return _m00_to_flux(m00, sigma_shapelets)
 
 
+def _append_flux_gauss(meas, sigma_shapelets, std_m00):
+    """Append Gaussian-aperture flux columns derived from ``m00``.
+
+    Adds four columns to a per-kernel ``measure_fpfs`` output:
+
+      - ``flux``       = m00_to_flux(``m00``)
+      - ``dflux_dg1``  = m00_to_flux(``dm00_dg1``)
+      - ``dflux_dg2``  = m00_to_flux(``dm00_dg2``)
+      - ``flux_err``   = m00_to_flux(``std_m00``)  (per-kernel
+        constant broadcast to N rows)
+
+    The constant 2*pi*sigma_shapelets^2 is the same conversion used in
+    ``m00_to_flux`` and cancels in flux/err ratios.
+    """
+    n = len(meas)
+    m00 = np.ascontiguousarray(meas["m00"], dtype=np.float64)
+    dm00_dg1 = np.ascontiguousarray(meas["dm00_dg1"], dtype=np.float64)
+    dm00_dg2 = np.ascontiguousarray(meas["dm00_dg2"], dtype=np.float64)
+    flux = _m00_to_flux(m00, sigma_shapelets)
+    dflux_dg1 = _m00_to_flux(dm00_dg1, sigma_shapelets)
+    dflux_dg2 = _m00_to_flux(dm00_dg2, sigma_shapelets)
+    flux_err = _m00_to_flux(float(std_m00), sigma_shapelets)
+    return rfn.append_fields(
+        meas,
+        ["flux", "dflux_dg1", "dflux_dg2", "flux_err"],
+        [flux, dflux_dg1, dflux_dg2,
+         np.full(n, flux_err, dtype=np.float64)],
+        usemask=False,
+    )
+
+
 class FpfsTask:
     """FPFS measurement task for shapelet-based galaxy shape measurement.
 
@@ -803,6 +834,20 @@ def _pack_linear_modes(linear_modes, base_column_name):
                     base_column_name=base_column_name,
                 )
             )
+        # Per-band per-kernel m00 standard deviation.  Stored as a
+        # broadcast scalar so the column lines up with all the per-mode
+        # columns above.
+        std_key = "std_m00" if tag == "" else f"std_m00_{tag}"
+        if std_key in linear_modes:
+            n_rows = len(linear_modes[f"data{tag}"])
+            err_name = f"fpfs{tag}_m00_err"
+            if base_column_name is not None:
+                err_name = base_column_name + err_name
+            err_block = np.empty(
+                n_rows, dtype=np.dtype([(err_name, np.float64)]),
+            )
+            err_block[err_name] = linear_modes[std_key]
+            blocks.append(err_block)
     return rfn.merge_arrays(blocks, flatten=True, usemask=False)
 
 
@@ -918,6 +963,7 @@ def process_image(
             if linear_modes is not None:
                 linear_modes["data"] = src["data"]
                 linear_modes["noise"] = src["noise"]
+                linear_modes["std_m00"] = std_m00
             else:
                 assert out_list is not None
                 meas = measure_fpfs(
@@ -931,6 +977,14 @@ def process_image(
                     omega_r2=omega_r2,
                     x_array=src["data"],
                     y_array=src["noise"],
+                )
+                meas = rfn.append_fields(
+                    meas, "m00_err",
+                    np.full(len(meas), std_m00, dtype=np.float64),
+                    usemask=False,
+                )
+                meas = _append_flux_gauss(
+                    meas, fpfs_config.sigma_shapelets, std_m00,
                 )
                 map_dict = {name: "fpfs_" + name for name in meas.dtype.names}
                 out_list.append(rfn.rename_fields(meas, map_dict))
@@ -950,6 +1004,8 @@ def process_image(
             kmax_thres=fpfs_config.kmax_thres,
             do_detection=False,
         )
+        ftask.prepare_covariance(variance=noise_variance)
+        std_m00_1 = ftask.std_m00
         src = ftask.run(
             gal_array=gal_array,
             psf=psf_object,
@@ -960,11 +1016,20 @@ def process_image(
         if linear_modes is not None:
             linear_modes["data1"] = src["data"]
             linear_modes["noise1"] = src["noise"]
+            linear_modes["std_m00_1"] = std_m00_1
         else:
             meas1 = measure_fpfs(
                 C0=fpfs_c0,
                 x_array=src["data"],
                 y_array=src["noise"],
+            )
+            meas1 = rfn.append_fields(
+                meas1, "m00_err",
+                np.full(len(meas1), std_m00_1, dtype=np.float64),
+                usemask=False,
+            )
+            meas1 = _append_flux_gauss(
+                meas1, fpfs_config.sigma_shapelets1, std_m00_1,
             )
             map_dict = {name: "fpfs1_" + name for name in meas1.dtype.names}
             out_list.append(rfn.rename_fields(meas1, map_dict))
@@ -980,6 +1045,8 @@ def process_image(
             kmax_thres=fpfs_config.kmax_thres,
             do_detection=False,
         )
+        ftask.prepare_covariance(variance=noise_variance)
+        std_m00_2 = ftask.std_m00
         src = ftask.run(
             gal_array=gal_array,
             psf=psf_object,
@@ -990,11 +1057,20 @@ def process_image(
         if linear_modes is not None:
             linear_modes["data2"] = src["data"]
             linear_modes["noise2"] = src["noise"]
+            linear_modes["std_m00_2"] = std_m00_2
         else:
             meas2 = measure_fpfs(
                 C0=fpfs_c0,
                 x_array=src["data"],
                 y_array=src["noise"],
+            )
+            meas2 = rfn.append_fields(
+                meas2, "m00_err",
+                np.full(len(meas2), std_m00_2, dtype=np.float64),
+                usemask=False,
+            )
+            meas2 = _append_flux_gauss(
+                meas2, fpfs_config.sigma_shapelets2, std_m00_2,
             )
             map_dict = {name: "fpfs2_" + name for name in meas2.dtype.names}
             out_list.append(rfn.rename_fields(meas2, map_dict))
