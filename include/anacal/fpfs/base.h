@@ -244,26 +244,22 @@ inline py::object gauss_kernel_rfft(
 
 inline double m00_to_flux(
     double m00,
-    double sigma_shapelets,
-    double pixel_scale
+    double sigma_shapelets
 ) {
-    const double sigma_use = sigma_shapelets / std::sqrt(2.0);
-    const double sigma_pix = sigma_use / pixel_scale;
-    const double ff = 4.0 * M_PI * sigma_pix * sigma_pix;
-    return m00 * pixel_scale * pixel_scale * ff;
+    // Derivation: with sigma_use = sigma_shapelets / sqrt(2) and
+    // sigma_pix = sigma_use / pixel_scale, the original formula
+    //   m00 * pixel_scale^2 * 4 * pi * sigma_pix^2
+    // cancels pixel_scale exactly and reduces to
+    //   m00 * 2 * pi * sigma_shapelets^2.
+    return m00 * 2.0 * M_PI * sigma_shapelets * sigma_shapelets;
 }
 
 inline py::array_t<double>
 m00_to_flux(
     const py::array_t<double>& m00,
-    double sigma_shapelets,
-    double pixel_scale
+    double sigma_shapelets
 ) {
-    const double factor = m00_to_flux(
-        1.0,
-        sigma_shapelets,
-        pixel_scale
-    );
+    const double factor = m00_to_flux(1.0, sigma_shapelets);
 
     int nn = m00.shape(0);
     auto in_r = m00.unchecked<1>();

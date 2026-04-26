@@ -123,8 +123,7 @@ def test_flux_variance():
     )
     flux2 = anacal.fpfs.m00_to_flux(
         catalog["fpfs1_m00"],
-        pixel_scale=pixel_scale,
-        sigma_shapelets=sigma_shapelets
+        sigma_shapelets=sigma_shapelets,
     )[0]
     np.testing.assert_allclose(flux, flux2, rtol=0.001, atol=0.01)
 

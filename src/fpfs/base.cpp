@@ -45,21 +45,19 @@ pyExportFpfsBase(py::module_& fpfs) {
     );
     fpfs.def(
         "m00_to_flux",
-        py::overload_cast<double, double, double>(
+        py::overload_cast<double, double>(
             &m00_to_flux
         ),
         py::arg("m00"),
-        py::arg("sigma_shapelets"),
-        py::arg("pixel_scale")
+        py::arg("sigma_shapelets")
     );
     fpfs.def(
         "m00_to_flux",
-        py::overload_cast<const py::array_t<double>&, double, double>(
+        py::overload_cast<const py::array_t<double>&, double>(
             &m00_to_flux
         ),
         py::arg("m00"),
-        py::arg("sigma_shapelets"),
-        py::arg("pixel_scale")
+        py::arg("sigma_shapelets")
     );
 }
 
