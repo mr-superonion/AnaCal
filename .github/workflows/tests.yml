@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,10 +35,15 @@ jobs:
         shell: bash -el {0}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
+      - name: Free disk space (ubuntu-latest)
+        if: runner.os == 'Linux'
+        run: |
+          df -h
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/.ghcup || true
+          sudo apt-get clean
 
       - name: Install system dependencies
         shell: bash
@@ -42,20 +51,32 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential libfftw3-dev
 
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
       - name: Set up conda (Python ${{ matrix.python-version }})
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           python-version: ${{ matrix.python-version }}
+          miniforge-version: latest
           channels: conda-forge
           channel-priority: strict
+          conda-remove-defaults: true
           auto-update-conda: true
           mamba-version: "*"
+          activate-environment: test
 
       - name: Install dependencies
         run: |
-          conda install -y --file requirements.txt
-          conda install -y --file requirements_test.txt
-          python -m pip install --upgrade pip
+          conda config --set always_yes yes
+
+          mamba install --override-channels -c conda-forge --file requirements.txt --file requirements_test.txt
+          conda clean -a -y
+
+          python -m pip install --upgrade pip setuptools
           python -m pip install --no-build-isolation .
 
       - name: Lint with black
