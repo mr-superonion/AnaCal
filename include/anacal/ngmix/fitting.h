@@ -514,11 +514,6 @@ public:
                         data, src, block
                     );
                     src.wsel = src.wdet * math::ssfunc1(
-                        src.fpfs_m0,
-                        5.0 * std_fpfs,
-                        std_fpfs
-                    );
-                    src.wsel = src.wsel * math::ssfunc1(
                         src.fpfs_m2 - 0.05 * src.fpfs_m0,
                         std_fpfs,
                         std_fpfs
