@@ -477,11 +477,6 @@ namespace fpfs {
         double w0l_dg1 = dw0l * x_dg.dm00_dg1;
         double w0l_dg2 = dw0l * x_dg.dm00_dg2;
 
-        double w0u = math::ssfunc2(-x.m00, -500, omega_m00);
-        double dw0u = math::ssfunc2_deriv(-x.m00, -500, omega_m00);
-        double w0u_dg1 = dw0u * -x_dg.dm00_dg1;
-        double w0u_dg2 = dw0u * -x_dg.dm00_dg2;
-
         // Selection on size (lower limit)
         // (M00 + M20) / M00 > r2_min
         double r2l = x.m00 * (1.0 - r2_min) + x.m20;
@@ -495,13 +490,9 @@ namespace fpfs {
         );
 
         // Compute the selection weights
-        double wsel = w0l * w0u * w2l;
-        double wsel_dg1 = (
-            w0l_dg1 * w0u * w2l + w0l * w0u_dg1 * w2l + w0l * w0u * w2l_dg1
-        );
-        double wsel_dg2 = (
-            w0l_dg2 * w0u * w2l + w0l * w0u_dg2 * w2l + w0l * w0u * w2l_dg2
-        );
+        double wsel = w0l * w2l;
+        double wsel_dg1 = w0l_dg1 * w2l + w0l * w2l_dg1;
+        double wsel_dg2 = w0l_dg2 * w2l + w0l * w2l_dg2;
 
         return FpfsWeight{
             wsel, wsel_dg1, wsel_dg2
