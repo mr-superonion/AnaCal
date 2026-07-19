@@ -171,7 +171,7 @@ public:
         if (sigma_arcsec <= 0) {
             throw std::invalid_argument("sigma_arcsec must be positive");
         }
-        this->sigma_arcsec_det = sigma_arcsec * 1.414;
+        this->sigma_arcsec_det = sigma_arcsec * sqrt2;
     };
 
     inline void

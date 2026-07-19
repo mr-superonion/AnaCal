@@ -114,7 +114,7 @@ find_peaks_impl(
     const std::optional<py::array_t<double>>& noise_array=std::nullopt,
     int image_bound=0
 ) {
-    double sigma_arcsec_det = sigma_arcsec * 1.414;
+    double sigma_arcsec_det = sigma_arcsec * sqrt2;
     std::vector<math::qnumber> data = prepare_data_block(
         img_array,
         psf_array,

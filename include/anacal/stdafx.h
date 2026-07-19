@@ -17,6 +17,8 @@
 
 namespace py = pybind11;
 
+// Constant for sqrt(2.0)
+inline constexpr double sqrt2 = 1.4142135623730951;
 // Constatn for 1 / sqrt(2.0)
 inline constexpr double one_over_sqrt2 = 0.7071067811865475;
 

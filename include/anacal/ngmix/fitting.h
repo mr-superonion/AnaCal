@@ -44,7 +44,7 @@ public:
         this->sigma_m2 = 1.0 / this->sigma2;
         this->rfac = -0.5 * this->sigma_m2;
         this->ffac = rfac * (-0.318309886);
-        this->ffac2 = this->ffac * 1.41421356 * this->sigma_m2;
+        this->ffac2 = this->ffac * sqrt2 * this->sigma_m2;
         this->ffac3 = this->ffac * 2.0 * this->sigma_m2;
         this->sigma2_lim = sigma2 * 20;
         this->r2_lim_stamp = std::pow((this->ss2-1) * scale, 2.0);
@@ -496,7 +496,7 @@ public:
             std_fpfs = std::sqrt(
                 get_smoothed_variance(
                     block.scale,
-                    this->sigma_arcsec * 1.41421356,
+                    this->sigma_arcsec * sqrt2,
                     psf_array,
                     variance
                 )
