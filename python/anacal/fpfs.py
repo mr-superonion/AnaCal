@@ -212,11 +212,18 @@ def _append_flux_gauss(meas, sigma_shapelets, std_m00):
     dflux_dg1 = _m00_to_flux(dm00_dg1, sigma_shapelets)
     dflux_dg2 = _m00_to_flux(dm00_dg2, sigma_shapelets)
     flux_err = _m00_to_flux(float(std_m00), sigma_shapelets)
+    # signal-to-noise and its shear response (flux_err is a shear-independent
+    # per-kernel noise constant, so ds2n_dg = dflux_dg / flux_err)
+    s2n = flux / flux_err
+    ds2n_dg1 = dflux_dg1 / flux_err
+    ds2n_dg2 = dflux_dg2 / flux_err
     return rfn.append_fields(
         meas,
-        ["flux", "dflux_dg1", "dflux_dg2", "flux_err"],
+        ["flux", "dflux_dg1", "dflux_dg2", "flux_err",
+         "s2n", "ds2n_dg1", "ds2n_dg2"],
         [flux, dflux_dg1, dflux_dg2,
-         np.full(n, flux_err, dtype=np.float64)],
+         np.full(n, flux_err, dtype=np.float64),
+         s2n, ds2n_dg1, ds2n_dg2],
         usemask=False,
     )
 
