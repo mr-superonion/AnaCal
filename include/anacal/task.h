@@ -126,6 +126,9 @@ gaussian_flux_variance(
 
 class Task {
 public:
+    // Reference zeropoint at which the base flux-scale thresholds
+    // (omega_f/v_min/omega_v/fpfs_c0) are defined.
+    static constexpr double THRESHOLD_REF_MAG_ZERO = 30.0;
     // stamp dimension
     double scale;
     double sigma_arcsec;
@@ -153,7 +156,8 @@ public:
         int num_epochs=3,
         bool force_size=false,
         bool force_center=false,
-        double fpfs_c0=1.0
+        double fpfs_c0=1.0,
+        double mag_zero=THRESHOLD_REF_MAG_ZERO
     ) : scale(scale), sigma_arcsec(sigma_arcsec), snr_peak_min(snr_peak_min),
         omega_f(omega_f), v_min(v_min), omega_v(omega_v),
         p_min(p_min), omega_p(omega_p),
@@ -162,7 +166,9 @@ public:
         num_epochs(num_epochs), fitter(
             scale, sigma_arcsec, stamp_size,
             force_size, force_center,
-            fpfs_c0
+            fpfs_c0 * std::pow(
+                10.0, (mag_zero - THRESHOLD_REF_MAG_ZERO) / 2.5
+            )
         )
     {
         if (stamp_size % 2 != 0 ) {
@@ -172,6 +178,17 @@ public:
             throw std::invalid_argument("sigma_arcsec must be positive");
         }
         this->sigma_arcsec_det = sigma_arcsec * sqrt2;
+
+        // Own the mag_zero-dependent THRESHOLD scaling here (previously duplicated
+        // in every caller). omega_f/v_min/omega_v/fpfs_c0 are BASE thresholds
+        // defined at THRESHOLD_REF_MAG_ZERO; scale them to the image's ``mag_zero``.
+        // The image itself is normalized upstream (anacal.fpfs.rescale_image_to_
+        // zeropoint), so no image rescale happens here.
+        const double thr_ratio =
+            std::pow(10.0, (mag_zero - THRESHOLD_REF_MAG_ZERO) / 2.5);
+        this->omega_f *= thr_ratio;
+        this->v_min   *= thr_ratio;
+        this->omega_v *= thr_ratio;
     };
 
     inline void

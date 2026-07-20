@@ -7,6 +7,35 @@ from numpy.typing import NDArray
 from ._anacal import math
 
 
+def rescale_image_to_zeropoint(
+    gal_array,
+    noise_array,
+    noise_variance,
+    mag_zero,
+    mag_zero_out,
+):
+    """Rescale image + noise + variance from ``mag_zero`` onto ``mag_zero_out``.
+
+    Multiplies by ``r = 10**((mag_zero_out - mag_zero) / 2.5)`` so the measured
+    FPFS moments/fluxes (from either ``task.Task`` or ``fpfs.process_image``) come
+    out on ``mag_zero_out``; pass ``mag_zero_out`` as the ``mag_zero`` to the
+    measurement so its thresholds match the normalized image.
+
+    Out of place (does NOT mutate the inputs): returns
+    ``(gal_array, noise_array, noise_variance)`` on the new zeropoint. It is a
+    no-op that returns the inputs unchanged (no allocation) when
+    ``mag_zero == mag_zero_out`` (e.g. a native-31.4 nJy coadd).
+    """
+    r = 10.0 ** ((mag_zero_out - mag_zero) / 2.5)
+    if r == 1.0:
+        return gal_array, noise_array, noise_variance
+    gal_array = gal_array * r
+    if noise_array is not None:
+        noise_array = noise_array * r
+    noise_variance = noise_variance * r * r
+    return gal_array, noise_array, noise_variance
+
+
 def resize_array(array: NDArray[Any], target_shape: tuple[int, int] = (64, 64)):
     """Resize a 2D array to a target shape.
 

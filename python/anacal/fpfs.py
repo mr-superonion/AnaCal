@@ -190,19 +190,27 @@ def m00_to_flux(
     return _m00_to_flux(m00, sigma_shapelets)
 
 
-def _append_flux_gauss(meas, sigma_shapelets, std_m00):
-    """Append Gaussian-aperture flux columns derived from ``m00``.
+def _append_flux_gauss(meas, sigma_shapelets, std_m00, kernel):
+    """Append Gaussian-aperture flux columns and finalize per-kernel names.
 
-    Adds four columns to a per-kernel ``measure_fpfs`` output:
+    Adds seven columns to a per-kernel ``measure_fpfs`` output:
 
       - ``flux``       = m00_to_flux(``m00``)
       - ``dflux_dg1``  = m00_to_flux(``dm00_dg1``)
       - ``dflux_dg2``  = m00_to_flux(``dm00_dg2``)
       - ``flux_err``   = m00_to_flux(``std_m00``)  (per-kernel
         constant broadcast to N rows)
+      - ``s2n``        = ``flux`` / ``flux_err``
+      - ``ds2n_dg1``   = ``dflux_dg1`` / ``flux_err``
+      - ``ds2n_dg2``   = ``dflux_dg2`` / ``flux_err``
 
     The constant 2*pi*sigma_shapelets^2 is the same conversion used in
     ``m00_to_flux`` and cancels in flux/err ratios.
+
+    Then names every column for ``kernel`` via :func:`_kernel_rename_map`
+    (flux family in photoz token order ``flux_{kernel}`` etc.; shapelet
+    moments keep the ``{kernel}_`` prefix), so the caller needs no further
+    rename.
     """
     n = len(meas)
     m00 = np.ascontiguousarray(meas["m00"], dtype=np.float64)
@@ -217,7 +225,7 @@ def _append_flux_gauss(meas, sigma_shapelets, std_m00):
     s2n = flux / flux_err
     ds2n_dg1 = dflux_dg1 / flux_err
     ds2n_dg2 = dflux_dg2 / flux_err
-    return rfn.append_fields(
+    meas = rfn.append_fields(
         meas,
         ["flux", "dflux_dg1", "dflux_dg2", "flux_err",
          "s2n", "ds2n_dg1", "ds2n_dg2"],
@@ -226,6 +234,36 @@ def _append_flux_gauss(meas, sigma_shapelets, std_m00):
          s2n, ds2n_dg1, ds2n_dg2],
         usemask=False,
     )
+    return rfn.rename_fields(meas, _kernel_rename_map(meas.dtype.names, kernel))
+
+
+# Flux-family columns (appended by _append_flux_gauss) carry the kernel token
+# AFTER the observable — the "photoz" order consumed by photoZPipe and the
+# xlens merge (flux_{k}, dflux_{k}_dg1, flux_{k}_err, s2n_{k}, ...). Every other
+# column (the shapelet moments) keeps the {kernel}_{name} prefix.
+_FLUX_PHOTOZ_TEMPLATE = {
+    "flux": "flux_{k}",
+    "flux_err": "flux_{k}_err",
+    "dflux_dg1": "dflux_{k}_dg1",
+    "dflux_dg2": "dflux_{k}_dg2",
+    "s2n": "s2n_{k}",
+    "ds2n_dg1": "ds2n_{k}_dg1",
+    "ds2n_dg2": "ds2n_{k}_dg2",
+}
+
+
+def _kernel_rename_map(names, kernel):
+    """Build the per-kernel field-rename map.
+
+    Flux-family columns take the photoz token order (``flux_{kernel}``,
+    ``dflux_{kernel}_dg1``, ``flux_{kernel}_err``, ``s2n_{kernel}``, ...); every
+    other column keeps the ``{kernel}_{name}`` prefix.
+    """
+    out = {}
+    for name in names:
+        tmpl = _FLUX_PHOTOZ_TEMPLATE.get(name)
+        out[name] = tmpl.format(k=kernel) if tmpl else f"{kernel}_{name}"
+    return out
 
 
 class FpfsTask:
@@ -990,11 +1028,9 @@ def process_image(
                     np.full(len(meas), std_m00, dtype=np.float64),
                     usemask=False,
                 )
-                meas = _append_flux_gauss(
-                    meas, fpfs_config.sigma_shapelets, std_m00,
-                )
-                map_dict = {name: "fpfs_" + name for name in meas.dtype.names}
-                out_list.append(rfn.rename_fields(meas, map_dict))
+                out_list.append(_append_flux_gauss(
+                    meas, fpfs_config.sigma_shapelets, std_m00, "fpfs",
+                ))
             del src
 
     if detection is None and (
@@ -1035,11 +1071,9 @@ def process_image(
                 np.full(len(meas1), std_m00_1, dtype=np.float64),
                 usemask=False,
             )
-            meas1 = _append_flux_gauss(
-                meas1, fpfs_config.sigma_shapelets1, std_m00_1,
-            )
-            map_dict = {name: "fpfs1_" + name for name in meas1.dtype.names}
-            out_list.append(rfn.rename_fields(meas1, map_dict))
+            out_list.append(_append_flux_gauss(
+                meas1, fpfs_config.sigma_shapelets1, std_m00_1, "fpfs1",
+            ))
             del meas1
         del src
 
@@ -1076,11 +1110,9 @@ def process_image(
                 np.full(len(meas2), std_m00_2, dtype=np.float64),
                 usemask=False,
             )
-            meas2 = _append_flux_gauss(
-                meas2, fpfs_config.sigma_shapelets2, std_m00_2,
-            )
-            map_dict = {name: "fpfs2_" + name for name in meas2.dtype.names}
-            out_list.append(rfn.rename_fields(meas2, map_dict))
+            out_list.append(_append_flux_gauss(
+                meas2, fpfs_config.sigma_shapelets2, std_m00_2, "fpfs2",
+            ))
             del meas2
         del src
 
