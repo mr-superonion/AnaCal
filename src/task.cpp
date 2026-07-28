@@ -12,7 +12,7 @@ pyExportTask(py::module_& m) {
     py::class_<Task>(task, "Task")
         .def(py::init<
             double, double, double, double,
-            double, double, double, double,
+            double,
             const std::optional<ngmix::modelPrior>,
             int, int, int,
             bool, bool, double,
@@ -22,18 +22,15 @@ pyExportTask(py::module_& m) {
             py::arg("sigma_arcsec"),
             py::arg("snr_peak_min"),
             py::arg("omega_f"),
-            py::arg("v_min"),
             py::arg("omega_v"),
-            py::arg("p_min"),
-            py::arg("omega_p"),
             py::arg("prior")=py::none(),
-            py::arg("stamp_size")=32,
+            py::arg("stamp_size")=64,
             py::arg("image_bound")=0,
             py::arg("num_epochs")=3,
             py::arg("force_size")=false,
             py::arg("force_center")=false,
             py::arg("fpfs_c0")=1.0,
-            py::arg("mag_zero")=30.0
+            py::arg("mag_zero")=Task::THRESHOLD_REF_MAG_ZERO
         )
         .def("process_image", &Task::process_image,
             "process image with PSF array",
@@ -48,6 +45,10 @@ pyExportTask(py::module_& m) {
             py::arg("do_measure")=true,
             py::arg("do_fpfs")=true
         );
+    // Single source of truth for the zeropoint at which the flux-scale
+    // thresholds are defined; the Python FPFS path reads it from here rather
+    // than duplicating the literal.
+    task.attr("THRESHOLD_REF_MAG_ZERO") = Task::THRESHOLD_REF_MAG_ZERO;
     task.def(
         "gaussian_flux_variance",
         &gaussian_flux_variance,

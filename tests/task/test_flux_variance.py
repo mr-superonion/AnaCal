@@ -130,10 +130,7 @@ def test_flux_variance():
 
     kwargs = {
         "omega_f": 0.8,
-        "v_min": 0.020,
         "omega_v": 0.04,
-        "p_min": 0.15,
-        "omega_p": 0.05,
     }
     prior = anacal.ngmix.modelPrior()
     det_task = anacal.task.Task(

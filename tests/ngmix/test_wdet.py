@@ -7,13 +7,14 @@ kwargs = {
     "snr_min": 10,
     "variance": 1.75e-2,
     "omega_f": 0.1,
-    "v_min": 0.015,
-    "omega_v": 0.020,
-    "p_min": 0.015,
-    "omega_p": 0.05,
+    "omega_v": 0.010892341643103026,
 }
 
 
+# The magnitudes below sit inside the wdet transition, where dwdet/dg is
+# non-zero.  That transition moved brighter (was ~27.5-27.9) when the second
+# detection layer -- ssfunc1(wdet, p_min, omega_p) -- was removed, since the
+# raw neighbour-difference product is no longer re-sharpened.
 def test_shear_estimate_w_det():
     nx = 64
     ny = 64
@@ -50,7 +51,7 @@ def test_shear_estimate_w_det():
         scale,
     )[0]
 
-    def make_sim(g1, g2, angle=0.0, mag=27.5):
+    def make_sim(g1, g2, angle=0.0, mag=26.8):
         obj = obj0.rotate(angle * galsim.degrees).shear(g1=g1, g2=g2)
         obj = obj.shift(0.5 * scale, 0.5 * scale)
         flux = 10 ** ((30.0 - mag) / 2.5)
@@ -85,7 +86,7 @@ def test_shear_estimate_w_det():
     assert cats[0].model.x2.v / scale == ny // 2
 
     # Test shear response calculation (no multiplicative bias)
-    for mag in np.arange(27.5, 27.9, 0.1):
+    for mag in np.arange(26.7, 27.1, 0.1):
         cat_1 = anacal.detector.find_peaks(
             img_array=make_sim(g1=-0.02, g2=0.0, mag=mag),
             psf_array=psf_array,

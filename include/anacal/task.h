@@ -127,12 +127,17 @@ gaussian_flux_variance(
 class Task {
 public:
     // Reference zeropoint at which the base flux-scale thresholds
-    // (omega_f/v_min/omega_v/fpfs_c0) are defined.
-    static constexpr double THRESHOLD_REF_MAG_ZERO = 30.0;
+    // (omega_f/omega_v/fpfs_c0) are defined.  This is the fixed AB
+    // nanojansky zeropoint that the measurement normalizes every image onto
+    // (xlens MAG_ZERO_AB), so for that path thr_ratio below is exactly 1.0
+    // and no rescaling happens.  Callers that feed an image on its native
+    // zeropoint (e.g. Euclid VIS MAGZERO = 24.6) still get the correct
+    // conversion.
+    static constexpr double THRESHOLD_REF_MAG_ZERO = 31.4;
     // stamp dimension
     double scale;
     double sigma_arcsec;
-    double snr_peak_min, omega_f, v_min, omega_v, p_min, omega_p;
+    double snr_peak_min, omega_f, omega_v;
     const ngmix::modelPrior prior;
     int stamp_size, ss2;
     int image_bound;
@@ -146,10 +151,7 @@ public:
         double sigma_arcsec,
         double snr_peak_min,
         double omega_f,
-        double v_min,
         double omega_v,
-        double p_min,
-        double omega_p,
         const std::optional<ngmix::modelPrior>& prior=std::nullopt,
         int stamp_size=64,
         int image_bound=0,
@@ -159,8 +161,7 @@ public:
         double fpfs_c0=1.0,
         double mag_zero=THRESHOLD_REF_MAG_ZERO
     ) : scale(scale), sigma_arcsec(sigma_arcsec), snr_peak_min(snr_peak_min),
-        omega_f(omega_f), v_min(v_min), omega_v(omega_v),
-        p_min(p_min), omega_p(omega_p),
+        omega_f(omega_f), omega_v(omega_v),
         prior(prior ? *prior : ngmix::modelPrior()),
         stamp_size(stamp_size), image_bound(image_bound),
         num_epochs(num_epochs), fitter(
@@ -180,14 +181,13 @@ public:
         this->sigma_arcsec_det = sigma_arcsec * sqrt2;
 
         // Own the mag_zero-dependent THRESHOLD scaling here (previously duplicated
-        // in every caller). omega_f/v_min/omega_v/fpfs_c0 are BASE thresholds
+        // in every caller). omega_f/omega_v/fpfs_c0 are BASE thresholds
         // defined at THRESHOLD_REF_MAG_ZERO; scale them to the image's ``mag_zero``.
         // The image itself is normalized upstream (anacal.fpfs.rescale_image_to_
         // zeropoint), so no image rescale happens here.
         const double thr_ratio =
             std::pow(10.0, (mag_zero - THRESHOLD_REF_MAG_ZERO) / 2.5);
         this->omega_f *= thr_ratio;
-        this->v_min   *= thr_ratio;
         this->omega_v *= thr_ratio;
     };
 
@@ -232,10 +232,7 @@ public:
             this->snr_peak_min,
             variance,
             this->omega_f,
-            this->v_min,
             this->omega_v,
-            this->p_min,
-            this->omega_p,
             block,
             noise_array,
             this->image_bound

@@ -58,10 +58,7 @@ def test_task_detection():
     img_array = np.tile(full_image.array, (ngal, ngal))
     kwargs = {
         "omega_f": 0.8,
-        "v_min": 0.020,
         "omega_v": 0.04,
-        "p_min": 0.15,
-        "omega_p": 0.05,
     }
     noise_variance = 0.10
     prior = anacal.ngmix.modelPrior()

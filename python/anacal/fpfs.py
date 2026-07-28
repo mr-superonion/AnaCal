@@ -26,10 +26,16 @@ from ._anacal.fpfs import (
 from ._anacal.fpfs import shapelets2d as _shapelets2d
 from ._anacal.fpfs import shapelets2d_func as _shapelets2d_func
 from ._anacal.image import Image
+from ._anacal.task import THRESHOLD_REF_MAG_ZERO
 from .psf import BasePsf
 
 npix_patch = 256
 npix_overlap = 64
+
+# Lower bound on the per-kernel flux uncertainty.  A noiseless image gives
+# std_m00 == 0, which would make s2n and its shear response infinite; this
+# floor keeps those columns finite without affecting any real measurement.
+FLUX_ERR_MIN = 1e-8
 
 
 norder_shapelets = 6
@@ -198,8 +204,8 @@ def _append_flux_gauss(meas, sigma_shapelets, std_m00, kernel):
       - ``flux``       = m00_to_flux(``m00``)
       - ``dflux_dg1``  = m00_to_flux(``dm00_dg1``)
       - ``dflux_dg2``  = m00_to_flux(``dm00_dg2``)
-      - ``flux_err``   = m00_to_flux(``std_m00``)  (per-kernel
-        constant broadcast to N rows)
+      - ``flux_err``   = m00_to_flux(``std_m00``), floored at
+        :data:`FLUX_ERR_MIN` (per-kernel constant broadcast to N rows)
       - ``s2n``        = ``flux`` / ``flux_err``
       - ``ds2n_dg1``   = ``dflux_dg1`` / ``flux_err``
       - ``ds2n_dg2``   = ``dflux_dg2`` / ``flux_err``
@@ -219,7 +225,9 @@ def _append_flux_gauss(meas, sigma_shapelets, std_m00, kernel):
     flux = _m00_to_flux(m00, sigma_shapelets)
     dflux_dg1 = _m00_to_flux(dm00_dg1, sigma_shapelets)
     dflux_dg2 = _m00_to_flux(dm00_dg2, sigma_shapelets)
-    flux_err = _m00_to_flux(float(std_m00), sigma_shapelets)
+    # Floor the noise so a noiseless image (std_m00 == 0) cannot produce
+    # infinities in s2n and its shear response.
+    flux_err = max(_m00_to_flux(float(std_m00), sigma_shapelets), FLUX_ERR_MIN)
     # signal-to-noise and its shear response (flux_err is a shear-independent
     # per-kernel noise constant, so ds2n_dg = dflux_dg / flux_err)
     s2n = flux / flux_err
@@ -754,9 +762,14 @@ class FpfsTask:
 class FpfsConfig:
     """Configuration parameters for the FPFS measurement pipeline.
 
-    All threshold and smoothness parameters are specified in units that
-    assume a magnitude zero-point of 30.  They are rescaled internally
-    by :func:`process_image` to match the actual zero-point.
+    Flux-scale threshold and smoothness parameters (``omega_r2``, ``omega_v``,
+    ``v_min``, ``c0``) are specified in units that assume a magnitude
+    zero-point of ``THRESHOLD_REF_MAG_ZERO`` (the fixed AB nanojansky
+    zeropoint that the measurement normalizes every image onto).  They are
+    rescaled internally by :func:`process_image` to match the actual
+    zero-point, which is a no-op on that path.
+
+    ``r2_min`` is dimensionless (a size ratio) and is NOT rescaled.
     """
 
     npix: int = 64
@@ -786,23 +799,29 @@ class FpfsConfig:
     """Detection threshold (minimum signal-to-noise ratio) for the first
     pooling."""
 
-    omega_r2: float = 4.8
-    """smoothness parameter for r2 cut"""
+    omega_r2: float = 17.42774662896484
+    """smoothness parameter for r2 cut (flux scale, at
+    THRESHOLD_REF_MAG_ZERO)"""
 
-    r2_min: float = 0.1
-    """Minimum trace moment matrix"""
+    r2_min: float = 0.05
+    """Minimum of the size ratio ``(m00 + m20) / m00``.  Dimensionless --
+    NOT zeropoint-scaled.  Matches the same cut hardcoded in the ngmix/Task
+    path (``ngmix/fitting.h``: ``fpfs_m2 - 0.05 * fpfs_m0``) and
+    ``trace_min`` in ``xlens.catalog.base``."""
 
-    omega_v: float = 0.9
-    """smoothness parameter for v cut"""
+    omega_v: float = 3.2677024929309075
+    """smoothness parameter for v cut (flux scale, at
+    THRESHOLD_REF_MAG_ZERO)"""
 
-    v_min: float = 0.45
-    """Minimum of v"""
+    v_min: float = 1.6338512464654538
+    """Minimum of v (flux scale, at THRESHOLD_REF_MAG_ZERO)"""
 
     snr_min: float = 12
     """Minimum Signal-to-Noise Ratio for detection."""
 
-    c0: float = 8.4
-    """Weighting parameter for m00 for ellipticity definition."""
+    c0: float = 30.0
+    """Weighting parameter for m00 for ellipticity definition (flux scale,
+    at THRESHOLD_REF_MAG_ZERO)."""
 
 
 def _rename_linear_fields(
@@ -949,8 +968,15 @@ def process_image(
         NDArray | dict: Structured FPFS catalogue (default), or a dict
         of linear-mode arrays when *return_only_linear_modes* is ``True``.
     """
-    ratio = 1.0 / (10 ** ((30 - mag_zero) / 2.5))
-    r2_min = fpfs_config.r2_min * ratio
+    # Flux-scale thresholds are defined at THRESHOLD_REF_MAG_ZERO -- the fixed
+    # AB nanojansky zeropoint that the measurement normalizes every image onto
+    # -- so this ratio is exactly 1.0 on that path.  It only bites for callers
+    # feeding an image on its native zeropoint (e.g. Euclid VIS MAGZERO=24.6).
+    ratio = 10 ** ((mag_zero - THRESHOLD_REF_MAG_ZERO) / 2.5)
+    # r2_min is deliberately NOT scaled: it is dimensionless, multiplying the
+    # flux-valued m00 in ``r2l = m00 * (1 - r2_min) + m20`` (fpfs/catalog.h).
+    # Scaling it would silently move the size cut.
+    r2_min = fpfs_config.r2_min
     omega_r2 = fpfs_config.omega_r2 * ratio
     v_min = fpfs_config.v_min * ratio
     omega_v = fpfs_config.omega_v * ratio

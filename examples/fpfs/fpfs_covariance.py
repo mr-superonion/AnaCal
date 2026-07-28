@@ -1,6 +1,5 @@
 import anacal
 import galsim
-import numpy as np
 
 # --- Configuration ---
 pixel_scale = 0.2

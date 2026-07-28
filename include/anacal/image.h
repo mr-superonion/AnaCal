@@ -423,7 +423,8 @@ prepare_data_block(
         block.ny,
         block.scale,
         sigma_arcsec,
-        3.0 / block.scale,      // klim = 3.0 / scale
+        3.1 / block.scale,      // klim = 3.1 / scale (matches
+                                // gaussian_flux_variance in task.h)
         true                    // us estimate in FFTW
     );
     return img_obj.prepare_qnumber_vector(
@@ -540,7 +541,7 @@ inline double get_smoothed_variance(
             img_obj.set_f(pf);
         }
         // Deconvolve the PSF
-        img_obj.deconvolve(parr, 3.0 / scale);
+        img_obj.deconvolve(parr, 3.1 / scale);
     }
     {
         // Convolve Gaussian

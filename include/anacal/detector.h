@@ -18,10 +18,7 @@ void measure_pixel(
     const geometry::block & block,
     double f_min,
     double omega_f,
-    double v_min,
     double omega_v,
-    double p_min,
-    double omega_p,
     int drmax_flux,
     int drmax2_flux,
     int drmax_bg,
@@ -32,7 +29,11 @@ void measure_pixel(
     int j = y - block.ymin;
     int i = x - block.xmin;
     int index = j * block.nx + i;
-    double wdet_cut = p_min - omega_p;
+    // ssfunc1(v, omega_v, omega_v) is identically zero for v <= 0, so the
+    // product below vanishes unless the centre strictly exceeds every
+    // neighbour.  The gate therefore sits exactly on the zero-weight locus:
+    // it is a pure short-circuit, never an uncorrected hard cut.
+    const double wdet_cut = 0.0;
     // pixel value greater than threshold
     math::qnumber wdet = math::qnumber(1.0);
     for (int dj = -drmax; dj <= drmax; dj++) {
@@ -43,7 +44,7 @@ void measure_pixel(
                 int index2 = (j + dj) * block.nx + (i + di);
                 wdet = wdet * math::ssfunc1(
                     data[index] - data[index2],
-                    v_min,
+                    omega_v,
                     omega_v
                 );
             }
@@ -81,11 +82,10 @@ void measure_pixel(
         math::qnumber bkg = fluxbg / nbg;
 
         src.block_id = block.index;
-        src.wdet = math::ssfunc1(
-            wdet,
-            p_min,
-            omega_p
-        ) * math::ssfunc1(
+        // The neighbour-difference product is used directly as the weight.
+        // It is already bounded in [0, 1] (every factor is an ssfunc1), so it
+        // needs no re-sharpening or renormalisation.
+        src.wdet = wdet * math::ssfunc1(
             data[index],
             f_min,
             omega_f
@@ -106,10 +106,7 @@ find_peaks_impl(
     double snr_min,
     double variance,
     double omega_f,
-    double v_min,
     double omega_v,
-    double p_min,
-    double omega_p,
     const geometry::block & block,
     const std::optional<py::array_t<double>>& noise_array=std::nullopt,
     int image_bound=0
@@ -134,7 +131,9 @@ find_peaks_impl(
     // Secondary peak cut
     double f_min = std_noise * snr_min;
     double f_cut = f_min - omega_f;
-    double v_cut = v_min - omega_v;
+    // ssfunc1(v, omega_v, omega_v) vanishes for v <= 0, so this cheap
+    // pre-filter sits exactly where the weight is already zero.
+    const double v_cut = 0.0;
 
     int image_ny = img_array.shape(0);
     int image_nx = img_array.shape(1);
@@ -184,10 +183,7 @@ find_peaks_impl(
                     block,
                     f_min,
                     omega_f,
-                    v_min,
                     omega_v,
-                    p_min,
-                    omega_p,
                     drmax_flux,
                     drmax2_flux,
                     drmax_bg,
@@ -210,10 +206,7 @@ find_peaks(
     double snr_min,
     double variance,
     double omega_f,
-    double v_min,
     double omega_v,
-    double p_min,
-    double omega_p,
     const geometry::block & block,
     const std::optional<py::array_t<double>>& noise_array=std::nullopt,
     int image_bound=0
@@ -225,10 +218,7 @@ find_peaks(
         snr_min,
         variance,
         omega_f,
-        v_min,
         omega_v,
-        p_min,
-        omega_p,
         block,
         noise_array,
         image_bound

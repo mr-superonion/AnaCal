@@ -16,10 +16,11 @@ def rescale_image_to_zeropoint(
 ):
     """Rescale image + noise + variance from ``mag_zero`` onto ``mag_zero_out``.
 
-    Multiplies by ``r = 10**((mag_zero_out - mag_zero) / 2.5)`` so the measured
-    FPFS moments/fluxes (from either ``task.Task`` or ``fpfs.process_image``) come
-    out on ``mag_zero_out``; pass ``mag_zero_out`` as the ``mag_zero`` to the
-    measurement so its thresholds match the normalized image.
+    Multiplies by ``r = 10**((mag_zero_out - mag_zero) / 2.5)`` so the
+    measured FPFS moments/fluxes (from either ``task.Task`` or
+    ``fpfs.process_image``) come out on ``mag_zero_out``; pass
+    ``mag_zero_out`` as the ``mag_zero`` to the measurement so its
+    thresholds match the normalized image.
 
     Out of place (does NOT mutate the inputs): returns
     ``(gal_array, noise_array, noise_variance)`` on the new zeropoint. It is a

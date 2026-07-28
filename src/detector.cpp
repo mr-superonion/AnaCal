@@ -15,10 +15,7 @@ pyExportDetector(py::module_& m) {
         py::arg("snr_min"),
         py::arg("variance"),
         py::arg("omega_f"),
-        py::arg("v_min"),
         py::arg("omega_v"),
-        py::arg("p_min"),
-        py::arg("omega_p"),
         py::arg("block"),
         py::arg("noise_array")=py::none(),
         py::arg("image_bound")=0
