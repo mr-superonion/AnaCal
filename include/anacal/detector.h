@@ -34,7 +34,9 @@ void measure_pixel(
     // neighbour.  The gate therefore sits exactly on the zero-weight locus:
     // it is a pure short-circuit, never an uncorrected hard cut.
     const double wdet_cut = 0.0;
-    // pixel value greater than threshold
+    // Radius-5 disk: di^2 + dj^2 <= 25 inclusive, excluding the centre, so
+    // 80 neighbour differences.  The disk is invariant under a 90 degree
+    // rotation, which is what keeps the weight free of additive shear bias.
     math::qnumber wdet = math::qnumber(1.0);
     for (int dj = -drmax; dj <= drmax; dj++) {
         int dj2 = dj * dj;
@@ -51,21 +53,11 @@ void measure_pixel(
         }
     }
     if (wdet.v > wdet_cut) {
-        int id1 = j * block.nx + (i + 1);
-        int id2 = j * block.nx + (i - 1);
-        int id3 = (j + 1) * block.nx + i;
-        int id4 = (j - 1) * block.nx + i;
         table::galNumber src;
         src.x1_det = x * block.scale;
         src.x2_det = y * block.scale;
         src.model.x1.v = src.x1_det;
         src.model.x2.v = src.x2_det;
-        src.is_peak = (
-            (data[index].v > data[id1].v) &&
-            (data[index].v > data[id2].v) &&
-            (data[index].v > data[id3].v) &&
-            (data[index].v > data[id4].v)
-        );
 
         math::qnumber fluxbg;
         for (int dj = -drmax_flux; dj <= drmax_flux; dj++) {
@@ -94,7 +86,7 @@ void measure_pixel(
             3.0 * std_noise,
             omega_f
         );
-        if (src.wdet.v > 1e-8) catalog.push_back(src);
+        if (src.wdet.v > 1e-6) catalog.push_back(src);
     }
 };
 
@@ -224,44 +216,73 @@ find_peaks(
         image_bound
     );
 
-    std::vector<math::qnumber> data(block.nx * block.ny);
-    for (const table::galNumber & src: cat){
-        const ngmix::NgmixGaussian & model = src.model;
-        int i = static_cast<int>(
-            std::round(model.x1.v / block.scale)
-        ) - block.xmin;
-        int j = static_cast<int>(
-            std::round(model.x2.v / block.scale)
-        ) - block.ymin;
-        data[j * block.nx + i] = src.wdet;
-    }
+    // --------------------------------------------------------------------
+    // DISABLED: neighbour-competition ("deblend") re-weighting.
+    //
+    // ``ss`` averaged the wdet of *other* detected peaks inside r^2 < 8
+    // (r < 2.83 pix).  Step 1 makes that region provably empty: if a pixel
+    // is detected then it strictly exceeds every neighbour inside the
+    // radius-``drmax`` stencil, and because the stencil is symmetric each of
+    // those neighbours picks up an ssfunc1 with a negative argument and so
+    // gets wdet = 0.  Detected peaks are therefore always more than
+    // ``drmax`` pixels apart, which exceeds the 2.83 pix footprint for any
+    // drmax >= 3, so ``ss`` is identically zero for every source.  Measured
+    // directly on a dense field: minimum peak separation was 5.0 pix at
+    // drmax = 4, with zero pairs inside the footprint.
+    //
+    // With ss == 0 the factor below degenerates into ssfunc1(wdet, 0.4,
+    // 0.399): a pure re-sharpening of wdet, the same construction as the
+    // p_min/omega_p layer that was removed, but wider (zero below wdet =
+    // 0.001, one above 0.799).  It performs no deblending, and because its
+    // thresholds are fixed while wdet's scale depends on the stencil size,
+    // it silently couples the two.  Kept here for reference only.
+    //
+    // std::vector<math::qnumber> data(block.nx * block.ny);
+    // for (const table::galNumber & src: cat){
+    //     const ngmix::NgmixGaussian & model = src.model;
+    //     int i = static_cast<int>(
+    //         std::round(model.x1.v / block.scale)
+    //     ) - block.xmin;
+    //     int j = static_cast<int>(
+    //         std::round(model.x2.v / block.scale)
+    //     ) - block.ymin;
+    //     data[j * block.nx + i] = src.wdet;
+    // }
+    // for (table::galNumber & src: cat){
+    //     const ngmix::NgmixGaussian & model = src.model;
+    //     int i = static_cast<int>(
+    //         std::round(model.x1.v / block.scale)
+    //     ) - block.xmin;
+    //     int j = static_cast<int>(
+    //         std::round(model.x2.v / block.scale)
+    //     ) - block.ymin;
+    //     math::qnumber ss;
+    //     int nss = 0;
+    //     for (int jj = j - 3; jj <= j + 3; ++jj) {
+    //         int dy = jj - j;
+    //         for (int ii = i - 3; ii <= i + 3; ++ii) {
+    //             int dx = ii -i;
+    //             // radius
+    //             int r2 = dx * dx + dy * dy;
+    //             if ((r2 < 8) && (r2!=0)) {
+    //                 ss = ss + data[jj * block.nx + ii];
+    //                 nss = nss + 1;
+    //             }
+    //         }
+    //     }
+    //     // average over the footprint rather than the bare sum
+    //     if (nss > 0) ss = ss / static_cast<double>(nss);
+    //     src.wdet = math::ssfunc1(
+    //         src.wdet - ss,
+    //         0.4,
+    //         0.399
+    //     );
+    // }
+    // --------------------------------------------------------------------
+
     std::vector<table::galNumber> catalog;
-    catalog.reserve(static_cast<std::size_t>(cat.size() / 10));
+    catalog.reserve(cat.size());
     for (table::galNumber & src: cat){
-        const ngmix::NgmixGaussian & model = src.model;
-        int i = static_cast<int>(
-            std::round(model.x1.v / block.scale)
-        ) - block.xmin;
-        int j = static_cast<int>(
-            std::round(model.x2.v / block.scale)
-        ) - block.ymin;
-        math::qnumber ss;
-        for (int jj = j - 3; jj <= j + 3; ++jj) {
-            int dy = jj - j;
-            for (int ii = i - 3; ii <= i + 3; ++ii) {
-                int dx = ii -i;
-                // radius
-                int r2 = dx * dx + dy * dy;
-                if ((r2 < 8) && (r2!=0)) {
-                    ss = ss + data[jj * block.nx + ii];
-                }
-            }
-        }
-        src.wdet = math::ssfunc1(
-            src.wdet - ss,
-            0.4,
-            0.399
-        );
         if (src.wdet.v > 1e-8) catalog.push_back(src);
     }
     return catalog;

@@ -64,7 +64,6 @@ struct galRow{
     double dwsel_dj1;
     double dwsel_dj2;
     int mask_value;
-    bool is_peak;
     bool is_primary;
     double flux_gauss0;
     double dflux_gauss0_dg1;
@@ -109,7 +108,6 @@ struct galNumber {
     math::qnumber wdet = math::qnumber(1.0);
     math::qnumber wsel = math::qnumber(1.0);
     int mask_value=0;
-    bool is_peak=false;
     bool is_primary=true;
     bool initialized=false;
     math::lossNumber loss;
@@ -132,10 +130,9 @@ struct galNumber {
         ngmix::NgmixGaussian model,
         math::qnumber wdet,
         int mask_value,
-        bool is_peak,
         math::lossNumber loss
     ) : model(model), wdet(wdet),
-        mask_value(mask_value), is_peak(is_peak), loss(loss) {}
+        mask_value(mask_value), loss(loss) {}
 
     inline galNumber
     decentralize(const geometry::block & block) const {
@@ -230,7 +227,6 @@ struct galNumber {
             wsel.x1,
             wsel.x2,
             mask_value,
-            is_peak,
             is_primary,
             flux_gauss0.v,
             flux_gauss0.g1,
@@ -316,7 +312,6 @@ struct galNumber {
             row.dwsel_dj1, row.dwsel_dj2
         );
         mask_value = row.mask_value;
-        is_peak = row.is_peak;
         is_primary = row.is_primary;
         flux_gauss0 = math::qnumber(
             row.flux_gauss0,
