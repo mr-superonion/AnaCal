@@ -158,10 +158,8 @@ public:
     ) const {
         const double sigma0_2 = this->sigma2 + 0 * 0;
         const double sigma2_2 = this->sigma2 + 0.2 * 0.2;
-        const double sigma4_2 = this->sigma2 + 0.4 * 0.4;
         src.flux_gauss0 = measure_flux(sigma0_2, block, data, src.model);
         src.flux_gauss2 = measure_flux(sigma2_2, block, data, src.model);
-        src.flux_gauss4 = measure_flux(sigma4_2, block, data, src.model);
         return;
     };
 

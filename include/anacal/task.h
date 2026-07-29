@@ -349,16 +349,9 @@ public:
                     this->sigma_arcsec,
                     this->scale
                 );
-                const double flux_gauss4_var = gaussian_flux_variance(
-                    psf,
-                    0.4,
-                    this->sigma_arcsec,
-                    this->scale
-                );
-                std::array<double, 3> errs{};
+                std::array<double, 2> errs{};
                 errs[0] = std::sqrt(std::max(0.0, flux_gauss0_var) * variance_use);
                 errs[1] = std::sqrt(std::max(0.0, flux_gauss2_var) * variance_use);
-                errs[2] = std::sqrt(std::max(0.0, flux_gauss4_var) * variance_use);
                 return errs;
             };
 
@@ -382,13 +375,12 @@ public:
                 } else {
                     psf = psf_array;
                 }
-                const std::array<double, 3> block_flux_errs = compute_flux_errors(
+                const std::array<double, 2> block_flux_errs = compute_flux_errors(
                     psf
                 );
                 for (std::size_t idx : block.indices) {
                     catalog[idx].flux_gauss0_err = block_flux_errs[0];
                     catalog[idx].flux_gauss2_err = block_flux_errs[1];
-                    catalog[idx].flux_gauss4_err = block_flux_errs[2];
                 }
             }
 
