@@ -145,12 +145,16 @@ def test_flux_variance():
         force_center=True,
         **kwargs,
     )
+    # block_overlap must be at least twice the background kernel reach
+    # (2 * (3 arcsec / scale + 1) = 32 pixels here) so the local background is
+    # never estimated from pixels outside the block.  120 - 32 = 88 still
+    # exceeds the 64-pixel image, so this remains a single block.
     blocks = anacal.geometry.get_block_list(
         gal_array.shape[0],
         gal_array.shape[1],
         120,
         120,
-        0,
+        32,
         pixel_scale,
     )
     assert len(blocks) == 1

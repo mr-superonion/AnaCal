@@ -42,12 +42,17 @@ def test_shear_estimate_w_det():
     obj0 = galsim.Exponential(half_light_radius=0.25)
     obj0 = obj0.shear(e1=0.1, e2=-0.15).shift(0.05 * scale, 0.1 * scale)
 
+    # block_overlap must be at least twice the background kernel reach
+    # (2 * (3 arcsec / scale + 1) = 32 pixels here), otherwise the local
+    # background would be estimated from pixels outside the block.  Sizing the
+    # block as img + overlap keeps npatch = 1, so this is still a single block
+    # whose inner region is exactly the image.
     block = anacal.geometry.get_block_list(
         nx,
         ny,
-        nx,
-        ny,
-        0,
+        nx + 32,
+        ny + 32,
+        32,
         scale,
     )[0]
 

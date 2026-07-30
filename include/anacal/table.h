@@ -58,6 +58,14 @@ struct galRow{
     double dwdet_dg2;
     double dwdet_dj1;
     double dwdet_dj2;
+    // Local background level under the source, as estimated by the detector's
+    // ring cascade (detector.h).  Same units as the smoothed image, i.e. on the
+    // catalog's mag_zero.
+    double bkg;
+    double dbkg_dg1;
+    double dbkg_dg2;
+    double dbkg_dj1;
+    double dbkg_dj2;
     double wsel;
     double dwsel_dg1;
     double dwsel_dg2;
@@ -106,6 +114,8 @@ struct galNumber {
     // value with derivatives to Gaussian model parameters
     ngmix::NgmixGaussian model;
     math::qnumber wdet = math::qnumber(1.0);
+    // local background under the source; set by detector::measure_pixel
+    math::qnumber bkg = math::qnumber(0.0);
     math::qnumber wsel = math::qnumber(1.0);
     int mask_value=0;
     bool is_primary=true;
@@ -141,6 +151,7 @@ struct galNumber {
         // (dx1, dx2) is the position of the source wrt center of block
         galNumber result= *this;
         result.wdet = this->wdet.decentralize(dx1, dx2);
+        result.bkg = this->bkg.decentralize(dx1, dx2);
         result.wsel = this->wsel.decentralize(dx1, dx2);
         result.model = this->model.decentralize(dx1, dx2);
         result.fpfs_e1 = this->fpfs_e1.decentralize(dx1, dx2);
@@ -159,6 +170,7 @@ struct galNumber {
         // (dx1, dx2) is the position of the source wrt center of block
         galNumber result= *this;
         result.wdet = this->wdet.centralize(dx1, dx2);
+        result.bkg = this->bkg.centralize(dx1, dx2);
         result.wsel = this->wsel.centralize(dx1, dx2);
         result.model = this->model.centralize(dx1, dx2);
         result.fpfs_e1 = this->fpfs_e1.centralize(dx1, dx2);
@@ -221,6 +233,11 @@ struct galNumber {
             wdet.g2,
             wdet.x1,
             wdet.x2,
+            bkg.v,
+            bkg.g1,
+            bkg.g2,
+            bkg.x1,
+            bkg.x2,
             wsel.v,
             wsel.g1,
             wsel.g2,
@@ -300,6 +317,11 @@ struct galNumber {
             row.x2,
             row.dx2_dg1, row.dx2_dg2,
             row.dx2_dj1, row.dx2_dj2
+        );
+        bkg = math::qnumber(
+            row.bkg,
+            row.dbkg_dg1, row.dbkg_dg2,
+            row.dbkg_dj1, row.dbkg_dj2
         );
         wdet = math::qnumber(
             row.wdet,

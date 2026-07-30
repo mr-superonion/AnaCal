@@ -16,6 +16,7 @@ pyExportTable(py::module_& m) {
         x1, dx1_dg1, dx1_dg2, dx1_dj1, dx1_dj2,
         x2, dx2_dg1, dx2_dg2, dx2_dj1, dx2_dj2,
         wdet, dwdet_dg1, dwdet_dg2, dwdet_dj1, dwdet_dj2,
+        bkg, dbkg_dg1, dbkg_dg2, dbkg_dj1, dbkg_dj2,
         wsel, dwsel_dg1, dwsel_dg2, dwsel_dj1, dwsel_dj2,
         mask_value, is_primary,
         flux_gauss0, dflux_gauss0_dg1, dflux_gauss0_dg2,
@@ -52,6 +53,7 @@ pyExportTable(py::module_& m) {
         .def_readwrite("x1_det", &galNumber::x1_det)
         .def_readwrite("x2_det", &galNumber::x2_det)
         .def_readonly("wdet", &galNumber::wdet)
+        .def_readonly("bkg", &galNumber::bkg)
         .def_readonly("wsel", &galNumber::wsel)
         .def_readonly("mask_value", &galNumber::mask_value)
         .def_readonly("loss", &galNumber::loss)
