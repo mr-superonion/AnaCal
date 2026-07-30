@@ -375,13 +375,13 @@ public:
     process_block_impl(
         std::vector<table::galNumber>& catalog,
         const std::vector<table::galNumber> & catalog_model,
-        const py::array_t<double>& img_array,
+        const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         const modelPrior & prior,
         int num_epochs,
         double variance,
         geometry::block block,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         std::optional<int> run_id=std::nullopt
     ) {
         int irun;
@@ -527,10 +527,10 @@ public:
     inline std::vector<table::galNumber>
     process_block(
         const std::vector<table::galNumber>& catalog,
-        const py::array_t<double>& img_array,
+        const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         const modelPrior & prior,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         int num_epochs = 5,
         double variance = 1.0,
         std::optional<geometry::block> block=std::nullopt

@@ -22,7 +22,7 @@ namespace anacal {
 
         py::array_t<double>
         measure_with_filter(
-            const py::array_t<double>& gal_array,
+            const py::array_t<pixel_t>& gal_array,
             const py::array_t<std::complex<double>>& filter_fft,
             double y,
             double x
@@ -49,7 +49,7 @@ namespace anacal {
 
         py::array_t<double>
         smooth_image(
-            const py::array_t<double>& gal_array,
+            const py::array_t<pixel_t>& gal_array,
             int xcen,
             int ycen,
             bool do_rotate
@@ -57,10 +57,10 @@ namespace anacal {
 
         py::array_t<double>
         smooth_image(
-            const py::array_t<double>& gal_array,
+            const py::array_t<pixel_t>& gal_array,
             int xcen,
             int ycen,
-            const std::optional<py::array_t<double>>& noise_array
+            const std::optional<py::array_t<pixel_t>>& noise_array
         );
 
         void
@@ -78,19 +78,19 @@ namespace anacal {
 
         py::array_t<Position>
         detect_source(
-            py::array_t<double>& gal_array,
+            const py::array_t<pixel_t>& gal_array,
             double fthres,
             double pthres,
             double std_m00,
             double v_min,
             double omega_v,
-            const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+            const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
             const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt
         );
 
         py::array_t<double>
         measure_source(
-            const py::array_t<double>& gal_array,
+            const py::array_t<pixel_t>& gal_array,
             const py::array_t<std::complex<double>>& filter_image,
             const py::array_t<double>& psf_array,
             const std::optional<py::array_t<Position>>& det=std::nullopt,
@@ -99,7 +99,7 @@ namespace anacal {
 
         py::array_t<double>
         measure_source_at(
-            const py::array_t<double>& gal_array,
+            const py::array_t<pixel_t>& gal_array,
             const py::array_t<std::complex<double>>& filter_image,
             const py::array_t<double>& psf_array,
             double y,
@@ -148,7 +148,7 @@ namespace anacal {
     }
 
     inline py::array_t<double> FpfsImage::smooth_image(
-        const py::array_t<double>& img_array,
+        const py::array_t<pixel_t>& img_array,
         int xcen,
         int ycen,
         bool do_rotate
@@ -175,10 +175,10 @@ namespace anacal {
     }
 
     inline py::array_t<double> FpfsImage::smooth_image(
-        const py::array_t<double>& gal_array,
+        const py::array_t<pixel_t>& gal_array,
         int xcen,
         int ycen,
-        const std::optional<py::array_t<double>>& noise_array
+        const std::optional<py::array_t<pixel_t>>& noise_array
     ) {
         //TODO: use different PSF here
         py::array_t<double> gal_conv = this->smooth_image(
@@ -275,13 +275,13 @@ namespace anacal {
     }
 
     inline py::array_t<Position> FpfsImage::detect_source(
-        py::array_t<double>& gal_array,
+        const py::array_t<pixel_t>& gal_array,
         double fthres,
         double pthres,
         double std_m00,
         double v_min,
         double omega_v,
-        const std::optional<py::array_t<double>>& noise_array,
+        const std::optional<py::array_t<pixel_t>>& noise_array,
         const std::optional<py::array_t<int16_t>>& mask_array
     ) {
 
@@ -350,7 +350,7 @@ namespace anacal {
     }
 
     inline py::array_t<double> FpfsImage::measure_with_filter(
-        const py::array_t<double>& gal_array,
+        const py::array_t<pixel_t>& gal_array,
         const py::array_t<std::complex<double>>& filter_fft,
         double y,
         double x
@@ -372,7 +372,7 @@ namespace anacal {
     }
 
     inline py::array_t<double> FpfsImage::measure_source(
-        const py::array_t<double>& gal_array,
+        const py::array_t<pixel_t>& gal_array,
         const py::array_t<std::complex<double>>& filter_image,
         const py::array_t<double>& psf_array,
         const std::optional<py::array_t<Position>>& det,
@@ -425,7 +425,7 @@ namespace anacal {
     }
 
     inline py::array_t<double> FpfsImage::measure_source_at(
-        const py::array_t<double>& gal_array,
+        const py::array_t<pixel_t>& gal_array,
         const py::array_t<std::complex<double>>& filter_image,
         const py::array_t<double>& psf_array,
         double y,

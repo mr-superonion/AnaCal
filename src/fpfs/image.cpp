@@ -22,7 +22,7 @@ pyExportFpfsImage(py::module_& fpfs) {
         )
         .def("smooth_image",
             py::overload_cast<
-                const py::array_t<double>&,
+                const py::array_t<pixel_t>&,
                 int,
                 int,
                 bool
@@ -35,10 +35,10 @@ pyExportFpfsImage(py::module_& fpfs) {
         )
         .def("smooth_image",
             py::overload_cast<
-                const py::array_t<double>&,
+                const py::array_t<pixel_t>&,
                 int,
                 int,
-                const std::optional<py::array_t<double>>&
+                const std::optional<py::array_t<pixel_t>>&
             >(&FpfsImage::smooth_image),
             "Smooths the image after PSF deconvolution",
             py::arg("gal_array"),

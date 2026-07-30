@@ -26,13 +26,19 @@ def rescale_image_to_zeropoint(
     ``(gal_array, noise_array, noise_variance)`` on the new zeropoint. It is a
     no-op that returns the inputs unchanged (no allocation) when
     ``mag_zero == mag_zero_out`` (e.g. a native-31.4 nJy coadd).
+
+    The image and noise planes keep the dtype they came in with. ``r`` is a
+    Python float, and multiplying a float32 array by one would widen the
+    result to float64 under some NumPy promotion rules, quietly undoing the
+    single-precision image that the caller went to the trouble of building --
+    so the dtype is pinned explicitly.
     """
     r = 10.0 ** ((mag_zero_out - mag_zero) / 2.5)
     if r == 1.0:
         return gal_array, noise_array, noise_variance
-    gal_array = gal_array * r
+    gal_array = np.asarray(gal_array * r, dtype=gal_array.dtype)
     if noise_array is not None:
-        noise_array = noise_array * r
+        noise_array = np.asarray(noise_array * r, dtype=noise_array.dtype)
     noise_variance = noise_variance * r * r
     return gal_array, noise_array, noise_variance
 

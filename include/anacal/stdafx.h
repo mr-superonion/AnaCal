@@ -17,6 +17,28 @@
 
 namespace py = pybind11;
 
+// Pixel type of the science and noise planes as they enter AnaCal.
+//
+// Survey coadds are stored at single precision (LSST ``ExposureF``, Euclid
+// VIS), so AnaCal reads those two planes in that type instead of asking the
+// caller for a float64 copy of the whole image.  The widening to double
+// happens once, in ``Image::set_r``, where the pixels are copied into the FFT
+// buffer: every float32 value is exactly representable as a double, so nothing
+// is lost, and the FFT, PSF deconvolution, Gaussian smoothing and the derived
+// qnumber all run at double precision exactly as before.
+//
+// The PSF stays double: it is a small computed stamp, not measured pixels.
+using pixel_t = float;
+
+// Same pixel type, but for arguments that are written back in place.
+//
+// The default ``py::array_t<T>`` lets pybind convert whatever it is handed,
+// and a converted array is a temporary copy -- so an in-place function given
+// the wrong dtype would edit the copy and leave the caller's pixels untouched,
+// silently doing nothing.  Leaving ``forcecast`` off makes a wrong dtype a
+// loud TypeError instead.
+using pixel_array_inplace = py::array_t<pixel_t, py::array::c_style>;
+
 // Constant for sqrt(2.0)
 inline constexpr double sqrt2 = 1.4142135623730951;
 // Constatn for 1 / sqrt(2.0)

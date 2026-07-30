@@ -105,11 +105,28 @@ namespace mask {
 
     void
     inline mask_galaxy_image(
-        py::array_t<double>& gal_array,
+        py::array& gal_array_in,
         py::array_t<int16_t>& mask_array,
         bool do_extend_mask,
         const std::optional<py::array_t<BrightStar>>& star_array
     ) {
+        // This one is written in place, so the dtype has to be checked by hand
+        // before pybind is allowed anywhere near it.  Declaring the argument as
+        // ``py::array_t<pixel_t>`` would let pybind accept any dtype and pass
+        // us a converted *copy*: the pixels would be zeroed in the copy and the
+        // caller's array would come back unchanged, with no error raised.
+        // Taking an untyped ``py::array`` skips that conversion entirely.
+        if (!gal_array_in.dtype().is(py::dtype::of<pixel_t>())) {
+            throw std::invalid_argument(
+                "mask_galaxy_image Error: gal_array is modified in place and "
+                "must already be float32; got dtype '" +
+                py::str(gal_array_in.dtype()).cast<std::string>() + "'"
+            );
+        }
+        auto gal_array = py::reinterpret_borrow<py::array_t<pixel_t>>(
+            gal_array_in
+        );
+
         if (do_extend_mask) {
             extend_mask_image(mask_array);
         }
@@ -128,7 +145,7 @@ namespace mask {
         for (int j = 0; j < ny; ++j) {
             for (int i = 0; i < nx; ++i) {
                 if (mask_r(j, i) > 0) {
-                    img_r(j, i) = 0.0;
+                    img_r(j, i) = static_cast<pixel_t>(0.0);
                 }
             }
         }

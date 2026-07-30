@@ -9,6 +9,9 @@ namespace detector {
 inline constexpr int drmax = 5;
 inline constexpr int drmax2 = drmax * drmax;
 
+// Smallest detection weight worth keeping a row for.
+inline constexpr double wdet_min = 1e-5;
+
 // Local-background estimate for the detection weight.
 //
 // A cascade of concentric rings is walked outward from 1 to 3 arcsec in 0.5
@@ -175,13 +178,13 @@ void measure_pixel(
             bkg_nsigma * std_noise,
             omega_f
         );
-        if (src.wdet.v > 1e-6) catalog.push_back(src);
+        if (src.wdet.v > wdet_min) catalog.push_back(src);
     }
 };
 
 inline std::vector<table::galNumber>
 find_peaks_impl(
-    const py::array_t<double>& img_array,
+    const py::array_t<pixel_t>& img_array,
     const py::array_t<double>& psf_array,
     double sigma_arcsec,
     double snr_min,
@@ -189,7 +192,7 @@ find_peaks_impl(
     double omega_f,
     double omega_v,
     const geometry::block & block,
-    const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+    const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
     int image_bound=0
 ) {
     double sigma_arcsec_det = sigma_arcsec * sqrt2;
@@ -284,7 +287,7 @@ find_peaks_impl(
 
 inline std::vector<table::galNumber>
 find_peaks(
-    const py::array_t<double>& img_array,
+    const py::array_t<pixel_t>& img_array,
     const py::array_t<double>& psf_array,
     double sigma_arcsec,
     double snr_min,
@@ -292,7 +295,7 @@ find_peaks(
     double omega_f,
     double omega_v,
     const geometry::block & block,
-    const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+    const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
     int image_bound=0
 ) {
     std::vector<table::galNumber> cat = find_peaks_impl(
@@ -375,7 +378,7 @@ find_peaks(
     std::vector<table::galNumber> catalog;
     catalog.reserve(cat.size());
     for (table::galNumber & src: cat){
-        if (src.wdet.v > 1e-8) catalog.push_back(src);
+        if (src.wdet.v > wdet_min) catalog.push_back(src);
     }
     return catalog;
 };

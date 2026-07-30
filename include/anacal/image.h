@@ -47,14 +47,20 @@ public:
         unsigned int mode=3
     );
 
+    // Templated on the input pixel type so that a float32 science or noise
+    // plane can be read without first making a float64 copy of it.  This is
+    // the single point where the pixel type widens: everything downstream of
+    // ``data_r`` is double.  Instantiated for float and double in image.cpp.
+    template <typename T>
     void set_r(
-        const py::array_t<double>&,
+        const py::array_t<T>&,
         int xcen, int,
         bool ishift=false
     );
 
+    template <typename T>
     void set_r(
-        const py::array_t<double>&,
+        const py::array_t<T>&,
         bool ishift=false
     );
 
@@ -223,11 +229,11 @@ public:
 
     std::vector<math::qnumber>
     prepare_qnumber_vector(
-        const py::array_t<double>& img_array,
+        const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         int xcen,
         int ycen,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
     ) {
         const py::array_t<std::complex<double>> karr = img_obj.get_lens_kernel(
             psf_array,
@@ -353,11 +359,11 @@ public:
 
     math::qtensor
     prepare_qtensor(
-        const py::array_t<double>& img_array,
+        const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         int xcen,
         int ycen,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
     ) {
         auto data = prepare_qnumber_vector(
             img_array,
@@ -375,11 +381,11 @@ public:
 
     py::array_t<double>
     prepare_qnumber_image(
-        const py::array_t<double>& img_array,
+        const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         int xcen,
         int ycen,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
     ) {
         auto result = py::array_t<double>({5, ny, nx});
         auto r = result.mutable_unchecked<3>();
@@ -412,11 +418,11 @@ public:
 
 inline std::vector<math::qnumber>
 prepare_data_block(
-    const py::array_t<double>& img_array,
+    const py::array_t<pixel_t>& img_array,
     const py::array_t<double>& psf_array,
     double sigma_arcsec,
     const geometry::block & block,
-    const std::optional<py::array_t<double>>& noise_array=std::nullopt
+    const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
 ){
     ImageQ img_obj(
         block.nx,
@@ -438,11 +444,11 @@ prepare_data_block(
 
 inline py::array_t<double>
 prepare_data_block_image(
-    const py::array_t<double>& img_array,
+    const py::array_t<pixel_t>& img_array,
     const py::array_t<double>& psf_array,
     double sigma_arcsec,
     const geometry::block & block,
-    const std::optional<py::array_t<double>>& noise_array=std::nullopt
+    const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
 ) {
     auto result = py::array_t<double>({5, block.ny, block.nx});
     auto r = result.mutable_unchecked<3>();

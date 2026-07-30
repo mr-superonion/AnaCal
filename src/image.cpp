@@ -53,15 +53,17 @@ Image::Image(
 }
 
 
+template <typename T>
 void
 Image::set_r (
-    const py::array_t<double>& input,
+    const py::array_t<T>& input,
     int xcen,
     int ycen,
     bool ishift
 ) {
     assert_mode(this->mode & 1);
-    auto r = input.unchecked<2>();
+    // ``template`` disambiguator: ``input``'s type depends on T here.
+    auto r = input.template unchecked<2>();
     int arr_ny = r.shape(0);
     int arr_nx = r.shape(1);
     int ybeg = ycen - this->ny2;
@@ -100,13 +102,14 @@ Image::set_r (
     return;
 }
 
+template <typename T>
 void
 Image::set_r (
-    const py::array_t<double>& input,
+    const py::array_t<T>& input,
     bool ishift
 ) {
     assert_mode(this->mode & 1);
-    auto r = input.unchecked<2>();
+    auto r = input.template unchecked<2>();
     int arr_ny = r.shape(0);
     int arr_nx = r.shape(1);
     int xcen = arr_nx / 2;
@@ -119,6 +122,18 @@ Image::set_r (
     );
     return;
 }
+
+// The only two pixel types AnaCal reads: float32 for the science and noise
+// planes as the surveys store them, double for the PSF stamp and for callers
+// that already hold a float64 image.
+template void Image::set_r<float>(
+    const py::array_t<float>&, int, int, bool
+);
+template void Image::set_r<double>(
+    const py::array_t<double>&, int, int, bool
+);
+template void Image::set_r<float>(const py::array_t<float>&, bool);
+template void Image::set_r<double>(const py::array_t<double>&, bool);
 
 
 
@@ -845,7 +860,10 @@ pyExportImage(py::module& m) {
                 int,
                 bool
             >
-            (&Image::set_r),
+            // Only the float64 form is exposed to Python: this is a low-level
+            // utility and its callers already hold float64 arrays.  The float32
+            // instantiation is used from C++, on the science and noise planes.
+            (&Image::set_r<double>),
             "Sets up the image in configuration space",
             py::arg("input"),
             py::arg("xcen"),
@@ -857,7 +875,7 @@ pyExportImage(py::module& m) {
                 const py::array_t<double>&,
                 bool
             >
-            (&Image::set_r),
+            (&Image::set_r<double>),
             "Sets up the image in configuration space (force center)",
             py::arg("input"),
             py::arg("ishift")=false

@@ -219,11 +219,11 @@ public:
 
     inline std::vector<table::galNumber>
     detect_block(
-        const py::array_t<double>& img_array,
+        const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         double variance,
         const geometry::block & block,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
     ) {
         std::vector<table::galNumber> catalog = detector::find_peaks(
             img_array,
@@ -247,11 +247,11 @@ public:
     measure_block(
         std::vector<table::galNumber>& catalog,
         std::vector<table::galNumber>& catalog_model,
-        const py::array_t<double>& img_array,
+        const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         double variance,
         const geometry::block & block,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         int run_id=0
     ) {
         if (block.indices.empty()) return;
@@ -280,12 +280,12 @@ public:
 
     inline py::array_t<table::galRow>
     process_image(
-        const py::array_t<double>& img_array,
+        const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         double variance,
         std::vector<geometry::block>& block_list,
         const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
-        const std::optional<py::array_t<double>>& noise_array=std::nullopt,
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt,
         double a_ini=0.2,
         bool do_measure=true,
