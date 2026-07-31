@@ -33,7 +33,12 @@ pyExportTask(py::module_& m) {
             py::arg("mag_zero")=Task::THRESHOLD_REF_MAG_ZERO
         )
         .def("process_image", &Task::process_image,
-            "process image with PSF array",
+            "Detect and measure sources.\n\n"
+            "img_array, psf_array and noise_array are either single images -- "
+            "(ny, nx) and (npsf, npsf) -- or (nband, ...) stacks.  With a "
+            "stack, variance takes one value per band and the bands are "
+            "combined, after each band's PSF has been removed, into one "
+            "inverse-variance weighted detection image.",
             py::arg("img_array"),
             py::arg("psf_array"),
             py::arg("variance"),

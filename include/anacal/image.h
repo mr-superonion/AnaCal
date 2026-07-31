@@ -416,6 +416,113 @@ public:
     ~ImageQ() = default;
 };
 
+// ---------------------------------------------------------------------------
+// Multi-band inputs
+//
+// Detection may be run on several bands at once.  An image, PSF or noise
+// argument is then a stack: (nband, ny, nx) instead of (ny, nx).  A plain 2-D
+// array is simply the nband = 1 case, so there is one code path, not two.
+// ---------------------------------------------------------------------------
+
+// Noise variance as a caller may give it: one number for a plain image, or one
+// number per band for a stack.  Normalised to a vector on the way in, so the
+// rest of the code only ever sees the vector form.
+using varianceArg = std::variant<double, std::vector<double>>;
+
+inline std::vector<double>
+to_variance_vector(const varianceArg& variance) {
+    if (std::holds_alternative<double>(variance)) {
+        return std::vector<double>{std::get<double>(variance)};
+    }
+    return std::get<std::vector<double>>(variance);
+};
+
+// Number of bands an argument carries: 1 for a 2-D array, shape(0) for a 3-D
+// stack.
+template <typename T>
+inline ssize_t
+nband_of(const py::array_t<T>& arr) {
+    if (arr.ndim() == 2) return 1;
+    if (arr.ndim() == 3) return arr.shape(0);
+    throw std::runtime_error(
+        "anacal Error: expected a 2-D image or a 3-D (nband, ny, nx) stack, "
+        "got " + std::to_string(arr.ndim()) + " dimensions"
+    );
+};
+
+// One 2-D view onto band ``b``.  No pixels are copied: the stack is handed in
+// as the base object so it stays alive, and the view keeps the stack's strides,
+// which ``Image::set_r`` honours because it reads through ``unchecked<2>()``.
+template <typename T>
+inline py::array_t<T>
+band_view(const py::array_t<T>& stack, ssize_t b) {
+    if (stack.ndim() == 2) {
+        if (b != 0) {
+            throw std::runtime_error(
+                "anacal Error: band index out of range for a 2-D image"
+            );
+        }
+        return stack;
+    }
+    if (b < 0 || b >= stack.shape(0)) {
+        throw std::runtime_error("anacal Error: band index out of range");
+    }
+    const T* ptr = reinterpret_cast<const T*>(
+        reinterpret_cast<const char*>(stack.data()) + b * stack.strides(0)
+    );
+    return py::array_t<T>(
+        {stack.shape(1), stack.shape(2)},
+        {stack.strides(1), stack.strides(2)},
+        ptr,
+        stack
+    );
+};
+
+// Check that image, PSF, noise and variance all describe the same set of
+// bands, and return how many there are.  A band whose variance is not a
+// positive finite number is an error rather than something to drop silently:
+// dropping it would quietly change the depth of the coadd.
+inline ssize_t
+check_band_stack(
+    const py::array_t<pixel_t>& img_stack,
+    const py::array_t<double>& psf_stack,
+    const std::vector<double>& variance,
+    const std::optional<py::array_t<pixel_t>>& noise_stack=std::nullopt
+) {
+    const ssize_t nband = nband_of(img_stack);
+    if (nband_of(psf_stack) != nband) {
+        throw std::runtime_error(
+            "anacal Error: image has " + std::to_string(nband) +
+            " band(s) but the PSF has " +
+            std::to_string(nband_of(psf_stack))
+        );
+    }
+    if (static_cast<ssize_t>(variance.size()) != nband) {
+        throw std::runtime_error(
+            "anacal Error: image has " + std::to_string(nband) +
+            " band(s) but " + std::to_string(variance.size()) +
+            " variance value(s) were given"
+        );
+    }
+    if (noise_stack.has_value() && (nband_of(*noise_stack) != nband)) {
+        throw std::runtime_error(
+            "anacal Error: image has " + std::to_string(nband) +
+            " band(s) but the noise image has " +
+            std::to_string(nband_of(*noise_stack))
+        );
+    }
+    for (ssize_t b = 0; b < nband; ++b) {
+        const double v = variance[b];
+        if (!std::isfinite(v) || (v <= 0.0)) {
+            throw std::runtime_error(
+                "anacal Error: variance of band " + std::to_string(b) +
+                " is " + std::to_string(v) + "; it must be positive and finite"
+            );
+        }
+    }
+    return nband;
+};
+
 inline std::vector<math::qnumber>
 prepare_data_block(
     const py::array_t<pixel_t>& img_array,
@@ -564,6 +671,135 @@ inline double get_smoothed_variance(
         }
     }
     return variance_sm;
+};
+
+
+// ---------------------------------------------------------------------------
+// Combining bands
+//
+// ``prepare_qnumber_vector`` deconvolves each band's own PSF and reconvolves
+// with a Gaussian of width ``sigma_arcsec``, so every band's qimage carries the
+// SAME effective PSF.  That is what makes a cross-band average meaningful --
+// averaging the raw pixels would not be, because the PSFs differ.
+//
+// With per-band qimage variance V_b(sigma) and weights w_b summing to one,
+//
+//     data(sigma)   = sum_b w_b * data_b(sigma)
+//     V_coadd(sigma) = sum_b w_b^2 * V_b(sigma)
+//
+// The weights are chosen ONCE, at the detection smoothing scale, and the same
+// set is reused for the measurement.  Detection and measurement then see the
+// same coadd; re-deriving the weights per scale would weight the bands -- and
+// so the effective colour of every object -- slightly differently at the two
+// stages.
+//
+// For a single band w = {1}: the average is the band itself and V_coadd = V_1,
+// bit for bit, so nothing about the one-band results changes.
+// ---------------------------------------------------------------------------
+
+// Normalised inverse-variance weights at the given smoothing scale.
+inline std::vector<double>
+band_weights(
+    double scale,
+    double sigma_arcsec,
+    const py::array_t<double>& psf_stack,
+    const std::vector<double>& variance
+) {
+    const std::size_t nband = variance.size();
+    if (nband == 0) {
+        throw std::runtime_error("anacal Error: no bands given");
+    }
+    std::vector<double> w(nband);
+    double total = 0.0;
+    for (std::size_t b = 0; b < nband; ++b) {
+        const double v = get_smoothed_variance(
+            scale,
+            sigma_arcsec,
+            band_view(psf_stack, static_cast<ssize_t>(b)),
+            variance[b]
+        );
+        if (!std::isfinite(v) || (v <= 0.0)) {
+            throw std::runtime_error(
+                "anacal Error: smoothed variance of band " +
+                std::to_string(b) + " is " + std::to_string(v) +
+                "; check the PSF stamp and the noise variance"
+            );
+        }
+        w[b] = 1.0 / v;
+        total += w[b];
+    }
+    for (double& x : w) {
+        x = x / total;
+    }
+    return w;
+};
+
+// Variance of the coadd at ``sigma_arcsec`` for a fixed set of weights.
+inline double
+coadd_smoothed_variance(
+    double scale,
+    double sigma_arcsec,
+    const py::array_t<double>& psf_stack,
+    const std::vector<double>& variance,
+    const std::vector<double>& w
+) {
+    double out = 0.0;
+    for (std::size_t b = 0; b < w.size(); ++b) {
+        out = out + w[b] * w[b] * get_smoothed_variance(
+            scale,
+            sigma_arcsec,
+            band_view(psf_stack, static_cast<ssize_t>(b)),
+            variance[b]
+        );
+    }
+    return out;
+};
+
+// The coadded qimage for one block.  Bands are accumulated one at a time, so
+// only two qimages are ever held at once (about 5 MB for a 250 x 250 block)
+// rather than one per band.
+inline std::vector<math::qnumber>
+prepare_data_block_coadd(
+    const py::array_t<pixel_t>& img_stack,
+    const py::array_t<double>& psf_stack,
+    double sigma_arcsec,
+    const geometry::block & block,
+    const std::vector<double>& w,
+    const std::optional<py::array_t<pixel_t>>& noise_stack=std::nullopt
+) {
+    const std::size_t nband = w.size();
+    std::vector<math::qnumber> out;
+    for (std::size_t b = 0; b < nband; ++b) {
+        const ssize_t ib = static_cast<ssize_t>(b);
+        std::optional<py::array_t<pixel_t>> noise_b = std::nullopt;
+        if (noise_stack.has_value()) {
+            noise_b = band_view(*noise_stack, ib);
+        }
+        std::vector<math::qnumber> data = prepare_data_block(
+            band_view(img_stack, ib),
+            band_view(psf_stack, ib),
+            sigma_arcsec,
+            block,
+            noise_b
+        );
+        if (nband == 1) {
+            // One band: return it untouched rather than multiplying by a
+            // weight that is exactly 1.0, so the result is bit-identical to
+            // the single-band call.
+            return data;
+        }
+        if (b == 0) {
+            out = std::move(data);
+            for (math::qnumber& q : out) {
+                q = q * w[0];
+            }
+        } else {
+            for (std::size_t i = 0; i < out.size(); ++i) {
+                out[i] = out[i] + data[i] * w[b];
+            }
+        }
+    }
+    return out;
 };
 
 

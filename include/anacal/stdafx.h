@@ -14,6 +14,8 @@
 #include <array>
 #include <limits>
 #include <optional>
+#include <variant>
+#include <vector>
 
 namespace py = pybind11;
 

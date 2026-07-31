@@ -379,11 +379,33 @@ public:
         const py::array_t<double>& psf_array,
         const modelPrior & prior,
         int num_epochs,
-        double variance,
+        const std::vector<double>& variance,
         geometry::block block,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
-        std::optional<int> run_id=std::nullopt
+        std::optional<int> run_id=std::nullopt,
+        const std::optional<std::vector<double>>& weights=std::nullopt
     ) {
+        check_band_stack(img_array, psf_array, variance, noise_array);
+        // The bands must be combined here exactly as they were for detection,
+        // so the weights come from the caller.  Only when this is used
+        // stand-alone (process_block below) are they derived here, and then at
+        // the DETECTION scale, sigma * sqrt2, to match.
+        std::vector<double> w;
+        if (weights.has_value()) {
+            if (weights->size() != variance.size()) {
+                throw std::runtime_error(
+                    "ngmix Error: got " + std::to_string(weights->size()) +
+                    " band weights for " + std::to_string(variance.size()) +
+                    " band(s)"
+                );
+            }
+            w = *weights;
+        } else {
+            w = band_weights(
+                block.scale, this->sigma_arcsec * sqrt2, psf_array, variance
+            );
+        }
+
         int irun;
         if (run_id.has_value()) {
             irun = *run_id;
@@ -402,11 +424,12 @@ public:
             }
         }
 
-        std::vector<math::qnumber> data = prepare_data_block(
+        std::vector<math::qnumber> data = prepare_data_block_coadd(
             img_array,
             psf_array,
             this->sigma_arcsec,
             block,
+            w,
             noise_array
         );
 
@@ -451,11 +474,12 @@ public:
             }
         }
 
-        double variance_meas = get_smoothed_variance(
+        double variance_meas = coadd_smoothed_variance(
             block.scale,
             this->sigma_arcsec,
             psf_array,
-            variance
+            variance,
+            w
         );
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
             /* std::cout<<"epoch: "<<epoch<<std::endl; */
@@ -492,11 +516,12 @@ public:
         double std_fpfs = 0.0;
         if (this->do_fpfs) {
             std_fpfs = std::sqrt(
-                get_smoothed_variance(
+                coadd_smoothed_variance(
                     block.scale,
                     this->sigma_arcsec * sqrt2,
                     psf_array,
-                    variance
+                    variance,
+                    w
                 )
             );
         }
@@ -532,11 +557,12 @@ public:
         const modelPrior & prior,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         int num_epochs = 5,
-        double variance = 1.0,
+        const varianceArg& variance = 1.0,
         std::optional<geometry::block> block=std::nullopt
     ) {
-        int image_ny = img_array.shape(0);
-        int image_nx = img_array.shape(1);
+        const ssize_t nd = img_array.ndim();
+        int image_ny = static_cast<int>(img_array.shape(nd - 2));
+        int image_nx = static_cast<int>(img_array.shape(nd - 1));
         geometry::block bb = block ? *block : geometry::get_block_list(
             image_nx, image_ny, image_nx, image_ny, 0, this->scale
         )[0];
@@ -549,7 +575,7 @@ public:
             psf_array,
             prior,
             num_epochs,
-            variance,
+            to_variance_vector(variance),
             bb,
             noise_array
         );

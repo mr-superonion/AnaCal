@@ -217,13 +217,35 @@ public:
         return;
     };
 
+    // Which PSF to use for a block: the block's own stamp when it has one of
+    // the right rank and size, otherwise the image-wide one.  Written once
+    // here because the same choice is made at three points in process_image.
+    // For a 2-D PSF this is the condition that was in place before multi-band
+    // support, so single-band behaviour is unchanged.
+    inline const py::array_t<double>&
+    choose_psf(
+        const geometry::block & block,
+        const py::array_t<double>& psf_array
+    ) const {
+        const ssize_t nd = psf_array.ndim();
+        const bool shape_ok = (
+            (psf_array.shape(nd - 2) == this->stamp_size) &&
+            (psf_array.shape(nd - 1) == this->stamp_size)
+        );
+        if ((block.psf_array.ndim() == nd) && shape_ok) {
+            return block.psf_array;
+        }
+        return psf_array;
+    };
+
     inline std::vector<table::galNumber>
     detect_block(
         const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
-        double variance,
+        const std::vector<double>& variance,
         const geometry::block & block,
-        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+        const std::optional<std::vector<double>>& weights=std::nullopt
     ) {
         std::vector<table::galNumber> catalog = detector::find_peaks(
             img_array,
@@ -235,7 +257,8 @@ public:
             this->omega_v,
             block,
             noise_array,
-            this->image_bound
+            this->image_bound,
+            weights
         );
         for (table::galNumber& src : catalog) {
             src = src.decentralize(block);
@@ -249,10 +272,11 @@ public:
         std::vector<table::galNumber>& catalog_model,
         const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
-        double variance,
+        const std::vector<double>& variance,
         const geometry::block & block,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
-        int run_id=0
+        int run_id=0,
+        const std::optional<std::vector<double>>& weights=std::nullopt
     ) {
         if (block.indices.empty()) return;
         for (std::size_t idx : block.indices) {
@@ -269,7 +293,8 @@ public:
             variance,
             block,
             noise_array,
-            run_id
+            run_id,
+            weights
         );
         for (std::size_t idx : block.indices) {
             catalog[idx] = catalog[idx].decentralize(block);
@@ -282,7 +307,7 @@ public:
     process_image(
         const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
-        double variance,
+        const varianceArg& variance,
         std::vector<geometry::block>& block_list,
         const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
@@ -291,13 +316,31 @@ public:
         bool do_measure=true,
         bool do_fpfs=true
     ) {
+        // ``img_array`` may be a plain (ny, nx) image or an
+        // (nband, ny, nx) stack; ``psf_array`` and ``noise_array`` follow it,
+        // and ``variance`` carries one value per band.  Several bands are
+        // combined into one qimage after each band's PSF has been removed --
+        // see prepare_data_block_coadd in image.h.
+        const std::vector<double> variance_in = to_variance_vector(variance);
+        check_band_stack(img_array, psf_array, variance_in, noise_array);
 
-        double variance_use;
+        std::vector<double> variance_use = variance_in;
         if (noise_array.has_value()) {
-            variance_use = variance * 2.0;
-        } else {
-            variance_use = variance;
+            for (double& v : variance_use) {
+                v = v * 2.0;
+            }
         }
+
+        // Band weights depend on the PSF, which varies from block to block, so
+        // they are worked out per block and handed to BOTH the detection and
+        // the measurement.  Passing them explicitly is what guarantees the two
+        // stages see the same coadd.
+        auto block_weights = [&](const py::array_t<double>& psf,
+                                 const geometry::block & block) {
+            return band_weights(
+                block.scale, this->sigma_arcsec_det, psf, variance_use
+            );
+        };
 
         std::vector<table::galNumber> catalog;
         if (detection.has_value()) {
@@ -306,22 +349,14 @@ public:
             );
         } else {
             for (const geometry::block & block: block_list) {
-                py::array_t<double> psf;
-                if (
-                    block.psf_array.ndim() == 2 &&
-                    psf_array.shape(0) == this->stamp_size &&
-                    psf_array.shape(1) == this->stamp_size
-                ) {
-                    psf = block.psf_array;
-                } else {
-                    psf = psf_array;
-                }
+                const py::array_t<double>& psf = choose_psf(block, psf_array);
                 std::vector<table::galNumber> det = detect_block(
                     img_array,
                     psf,
                     variance_use,
                     block,
-                    noise_array
+                    noise_array,
+                    block_weights(psf, block)
                 );
                 catalog.reserve(catalog.size() + det.size());
                 for (const table::galNumber& det_src : det) {
@@ -336,22 +371,28 @@ public:
         this->fitter.do_fpfs = do_fpfs;
 
         if (do_measure) {
-            auto compute_flux_errors = [&](const py::array_t<double>& psf) {
-                const double flux_gauss0_var = gaussian_flux_variance(
-                    psf,
-                    0.0,
-                    this->sigma_arcsec,
-                    this->scale
-                );
-                const double flux_gauss2_var = gaussian_flux_variance(
-                    psf,
-                    0.2,
-                    this->sigma_arcsec,
-                    this->scale
-                );
+            // Flux error of the coadd: each band contributes its own Gaussian
+            // flux variance, combined with the same w_b^2 weighting used for
+            // the image itself.  One band reduces to the previous expression.
+            auto compute_flux_errors = [&](const py::array_t<double>& psf,
+                                           const std::vector<double>& w) {
+                double var0 = 0.0;
+                double var2 = 0.0;
+                for (std::size_t b = 0; b < w.size(); ++b) {
+                    const py::array_t<double> psf_b = band_view(
+                        psf, static_cast<ssize_t>(b)
+                    );
+                    const double ww = w[b] * w[b] * variance_use[b];
+                    var0 = var0 + ww * std::max(0.0, gaussian_flux_variance(
+                        psf_b, 0.0, this->sigma_arcsec, this->scale
+                    ));
+                    var2 = var2 + ww * std::max(0.0, gaussian_flux_variance(
+                        psf_b, 0.2, this->sigma_arcsec, this->scale
+                    ));
+                }
                 std::array<double, 2> errs{};
-                errs[0] = std::sqrt(std::max(0.0, flux_gauss0_var) * variance_use);
-                errs[1] = std::sqrt(std::max(0.0, flux_gauss2_var) * variance_use);
+                errs[0] = std::sqrt(var0);
+                errs[1] = std::sqrt(var2);
                 return errs;
             };
 
@@ -365,18 +406,9 @@ public:
                     continue;
                 }
 
-                py::array_t<double> psf;
-                if (
-                    block.psf_array.ndim() == 2 &&
-                    psf_array.shape(0) == this->stamp_size &&
-                    psf_array.shape(1) == this->stamp_size
-                ) {
-                    psf = block.psf_array;
-                } else {
-                    psf = psf_array;
-                }
+                const py::array_t<double>& psf = choose_psf(block, psf_array);
                 const std::array<double, 2> block_flux_errs = compute_flux_errors(
-                    psf
+                    psf, block_weights(psf, block)
                 );
                 for (std::size_t idx : block.indices) {
                     catalog[idx].flux_gauss0_err = block_flux_errs[0];
@@ -389,16 +421,10 @@ public:
                 src.model.F = src.model.F * src.wdet;
             }
             for (const geometry::block & block: block_list) {
-                py::array_t<double> psf;
-                if (
-                    block.psf_array.ndim() == 2 &&
-                    psf_array.shape(0) == this->stamp_size &&
-                    psf_array.shape(1) == this->stamp_size
-                ) {
-                    psf = block.psf_array;
-                } else {
-                    psf = psf_array;
+                if (block.indices.empty()) {
+                    continue;
                 }
+                const py::array_t<double>& psf = choose_psf(block, psf_array);
                 measure_block(
                     catalog,
                     catalog_model,
@@ -407,7 +433,8 @@ public:
                     variance_use,
                     block,
                     noise_array,
-                    0 // run_id
+                    0, // run_id
+                    block_weights(psf, block)
                 );
             }
 

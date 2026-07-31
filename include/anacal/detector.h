@@ -182,45 +182,26 @@ void measure_pixel(
     }
 };
 
+// Scan a block for peaks.  Takes the qimage and its noise level already built,
+// so that a single-band image and a multi-band coadd share this code exactly.
 inline std::vector<table::galNumber>
-find_peaks_impl(
-    const py::array_t<pixel_t>& img_array,
-    const py::array_t<double>& psf_array,
-    double sigma_arcsec,
+find_peaks_from_data(
+    const std::vector<math::qnumber>& data,
+    double std_noise,
     double snr_min,
-    double variance,
     double omega_f,
     double omega_v,
     const geometry::block & block,
-    const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+    int image_ny,
+    int image_nx,
     int image_bound=0
 ) {
-    double sigma_arcsec_det = sigma_arcsec * sqrt2;
-    std::vector<math::qnumber> data = prepare_data_block(
-        img_array,
-        psf_array,
-        sigma_arcsec_det,
-        block,
-        noise_array
-    );
-
-    double std_noise = std::pow(
-        get_smoothed_variance(
-            block.scale,
-            sigma_arcsec_det,
-            psf_array,
-            variance
-        ), 0.5
-    );
     // Secondary peak cut
     double f_min = std_noise * snr_min;
     double f_cut = f_min - omega_f;
     // ssfunc1(v, omega_v, omega_v) vanishes for v <= 0, so this cheap
     // pre-filter sits exactly where the weight is already zero.
     const double v_cut = 0.0;
-
-    int image_ny = img_array.shape(0);
-    int image_nx = img_array.shape(1);
 
     // Local-background weights: built once here, reused by every candidate.
     const bkgKernel bk = make_bkg_kernel(block.scale);
@@ -285,30 +266,106 @@ find_peaks_impl(
     return catalog;
 };
 
+// Build the detection qimage -- a single band, or the inverse-variance
+// weighted average of several -- and scan it.
+//
+// ``img_array``, ``psf_array`` and ``noise_array`` are either 2-D or
+// (nband, ...) stacks, and ``variance`` carries one value per band.  When the
+// caller has already worked out the band weights it passes them in, so that the
+// detection and the measurement combine the bands identically; otherwise they
+// are derived here at the detection smoothing scale.
+inline std::vector<table::galNumber>
+find_peaks_impl(
+    const py::array_t<pixel_t>& img_array,
+    const py::array_t<double>& psf_array,
+    double sigma_arcsec,
+    double snr_min,
+    const std::vector<double>& variance,
+    double omega_f,
+    double omega_v,
+    const geometry::block & block,
+    const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+    int image_bound=0,
+    const std::optional<std::vector<double>>& weights=std::nullopt
+) {
+    check_band_stack(img_array, psf_array, variance, noise_array);
+    double sigma_arcsec_det = sigma_arcsec * sqrt2;
+
+    std::vector<double> w;
+    if (weights.has_value()) {
+        if (weights->size() != variance.size()) {
+            throw std::runtime_error(
+                "detector Error: got " + std::to_string(weights->size()) +
+                " band weights for " + std::to_string(variance.size()) +
+                " band(s)"
+            );
+        }
+        w = *weights;
+    } else {
+        w = band_weights(
+            block.scale, sigma_arcsec_det, psf_array, variance
+        );
+    }
+
+    std::vector<math::qnumber> data = prepare_data_block_coadd(
+        img_array,
+        psf_array,
+        sigma_arcsec_det,
+        block,
+        w,
+        noise_array
+    );
+
+    double std_noise = std::pow(
+        coadd_smoothed_variance(
+            block.scale,
+            sigma_arcsec_det,
+            psf_array,
+            variance,
+            w
+        ), 0.5
+    );
+
+    const ssize_t nd = img_array.ndim();
+    return find_peaks_from_data(
+        data,
+        std_noise,
+        snr_min,
+        omega_f,
+        omega_v,
+        block,
+        static_cast<int>(img_array.shape(nd - 2)),
+        static_cast<int>(img_array.shape(nd - 1)),
+        image_bound
+    );
+};
+
 inline std::vector<table::galNumber>
 find_peaks(
     const py::array_t<pixel_t>& img_array,
     const py::array_t<double>& psf_array,
     double sigma_arcsec,
     double snr_min,
-    double variance,
+    const varianceArg& variance,
     double omega_f,
     double omega_v,
     const geometry::block & block,
     const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
-    int image_bound=0
+    int image_bound=0,
+    const std::optional<std::vector<double>>& weights=std::nullopt
 ) {
     std::vector<table::galNumber> cat = find_peaks_impl(
         img_array,
         psf_array,
         sigma_arcsec,
         snr_min,
-        variance,
+        to_variance_vector(variance),
         omega_f,
         omega_v,
         block,
         noise_array,
-        image_bound
+        image_bound,
+        weights
     );
 
     // --------------------------------------------------------------------
