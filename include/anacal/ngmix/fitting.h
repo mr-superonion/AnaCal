@@ -10,8 +10,9 @@ namespace anacal {
 namespace ngmix {
 
 
-// model fitting upper scale 3.5 arcsec
-// deblending upper scale 7 arcsec
+// Radius of the model-fitting window about each source, in arcsec
+// (the deblending upper scale is twice this, 7 arcsec).
+inline constexpr double fit_radius_arcsec = 3.5;
 
 class GaussFit {
 public:
@@ -59,7 +60,7 @@ public:
     ) const {
         math::qnumber m0, norm;
         ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
+        const StampBounds bb = model.get_stamp_bounds(block, fit_radius_arcsec / block.scale);
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
@@ -92,7 +93,7 @@ public:
     ) const {
         src.loss.reset();
         ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
+        const StampBounds bb = model.get_stamp_bounds(block, fit_radius_arcsec / block.scale);
 
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
@@ -125,7 +126,7 @@ public:
     ) const {
         src.loss.reset();
         NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
+        const StampBounds bb = model.get_stamp_bounds(block, fit_radius_arcsec / block.scale);
 
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
@@ -293,7 +294,7 @@ public:
         math::qnumber mxx, myy, mxy;
         double dd = 1.0 / this->sigma2;
 
-        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
+        const StampBounds bb = model.get_stamp_bounds(block, fit_radius_arcsec / block.scale);
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
@@ -328,7 +329,7 @@ public:
         math::qnumber m0, norm;
         double dd = 1.0 / sigma_meas2;
 
-        const StampBounds bb = model.get_stamp_bounds(block, 3.5 / block.scale);
+        const StampBounds bb = model.get_stamp_bounds(block, fit_radius_arcsec / block.scale);
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
@@ -402,7 +403,8 @@ public:
             w = *weights;
         } else {
             w = band_weights(
-                block.scale, this->sigma_arcsec * sqrt2, psf_array, variance
+                block.scale, detection_sigma(this->sigma_arcsec),
+                psf_array, variance
             );
         }
 
@@ -518,7 +520,7 @@ public:
             std_fpfs = std::sqrt(
                 coadd_smoothed_variance(
                     block.scale,
-                    this->sigma_arcsec * sqrt2,
+                    detection_sigma(this->sigma_arcsec),
                     psf_array,
                     variance,
                     w

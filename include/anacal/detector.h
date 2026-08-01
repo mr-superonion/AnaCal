@@ -291,7 +291,7 @@ find_peaks_impl(
     const std::optional<std::vector<double>>& weights=std::nullopt
 ) {
     check_band_stack(img_array, psf_array, variance, noise_array);
-    double sigma_arcsec_det = sigma_arcsec * sqrt2;
+    double sigma_arcsec_det = detection_sigma(sigma_arcsec);
 
     std::vector<double> w;
     if (weights.has_value()) {

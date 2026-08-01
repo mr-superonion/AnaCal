@@ -178,7 +178,7 @@ public:
         if (sigma_arcsec <= 0) {
             throw std::invalid_argument("sigma_arcsec must be positive");
         }
-        this->sigma_arcsec_det = sigma_arcsec * sqrt2;
+        this->sigma_arcsec_det = detection_sigma(sigma_arcsec);
 
         // Own the mag_zero-dependent THRESHOLD scaling here (previously duplicated
         // in every caller). omega_f/omega_v/fpfs_c0 are BASE thresholds

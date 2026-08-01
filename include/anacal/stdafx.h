@@ -46,6 +46,14 @@ inline constexpr double sqrt2 = 1.4142135623730951;
 // Constatn for 1 / sqrt(2.0)
 inline constexpr double one_over_sqrt2 = 0.7071067811865475;
 
+// The detection image is smoothed wider than the measurement scale by exactly
+// sqrt(2).  Detection (detector.h, task.h), the stand-alone band weights and
+// the FPFS noise level (ngmix/fitting.h) must all use the SAME widened scale;
+// computing it in one place makes that invariant structural.
+inline constexpr double detection_sigma(double sigma_arcsec) {
+    return sigma_arcsec * sqrt2;
+}
+
 struct BrightStar {
     float x;
     float y;
