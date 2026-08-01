@@ -298,11 +298,14 @@ public:
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
-            math::qnumber ys = block.yvs[j] - model.x2.v;
+            // Full qnumber subtraction: the aperture follows the fitted
+            // centroid, so the centroid's shear response must propagate
+            // (the initial centre is a grid point with zero response).
+            math::qnumber ys = block.yvs[j] - model.x2;
             math::qnumber y2 = math::pow(ys, 2);
             for (int i = bb.i_min; (i < bb.i_max); ++i) {
                 if (!block.xmsk[i]) continue;
-                math::qnumber xs = block.xvs[i] - model.x1.v;
+                math::qnumber xs = block.xvs[i] - model.x1;
                 math::qnumber x2 = math::pow(xs, 2);
                 math::qnumber xy = xs * ys;
                 math::qnumber r2 = (x2 + y2) * dd;
@@ -333,11 +336,14 @@ public:
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
-            math::qnumber ys = block.yvs[j] - model.x2.v;
+            // Same as initialize_angle: full qnumber subtraction keeps the
+            // centroid's shear response in the aperture weight, matching
+            // get_fpfs_moments (rmodel.h).
+            math::qnumber ys = block.yvs[j] - model.x2;
             math::qnumber y2 = math::pow(ys, 2);
             for (int i = bb.i_min; (i < bb.i_max); ++i) {
                 if (!block.xmsk[i]) continue;
-                math::qnumber xs = block.xvs[i] - model.x1.v;
+                math::qnumber xs = block.xvs[i] - model.x1;
                 math::qnumber x2 = math::pow(xs, 2);
                 math::qnumber r2 = (x2 + y2) * dd;
                 if (bb.has_point(i, j)) {
