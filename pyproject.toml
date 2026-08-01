@@ -1,7 +1,8 @@
 [build-system]
 requires = [
     "setuptools>=62",
-    "pybind11>=2.2",
+    # std::variant argument casters (varianceArg etc.) need >= 2.6
+    "pybind11>=2.6",
     "setuptools_scm>=6.2",
 ]
 build-backend = "setuptools.build_meta"
@@ -15,9 +16,32 @@ authors = [
     {name = "Xiangchong Li", email = "mr.superonion@hotmail.com"},
 ]
 dependencies = [
-    "numpy",
+    "numpy>=1.23",
     "galsim",
     "fitsio",
+]
+
+# docs/overview.md advertises `pip install -e ".[dev]"`; keep these in sync
+# with requirements_test.txt (the conda path used by CI).
+[project.optional-dependencies]
+test = [
+    "pytest>=3.4",
+    "pytest-xdist>=1.19",
+    "pytest-timeout>=1.2",
+    "nbval",
+    "matplotlib",
+    "memory_profiler",
+]
+dev = [
+    "pytest>=3.4",
+    "pytest-xdist>=1.19",
+    "pytest-timeout>=1.2",
+    "nbval",
+    "matplotlib",
+    "memory_profiler",
+    "black",
+    "flake8",
+    "flake8-pyproject",
 ]
 
 [project.urls]

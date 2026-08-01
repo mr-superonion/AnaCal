@@ -1,4 +1,5 @@
 import ctypes
+import glob
 import os
 import sys
 
@@ -119,6 +120,12 @@ ext_modules.append(
             "src/task.cpp",
         ],
         include_dirs=include_dirs,
+        # Almost all of the implementation lives in these headers; listing
+        # them makes setuptools rebuild when a header changes, instead of
+        # silently keeping a stale extension.
+        depends=sorted(
+            glob.glob("include/anacal/**/*.h", recursive=True)
+        ),
         libraries=["fftw3"],
         language="c++",
         extra_compile_args=[
@@ -126,11 +133,10 @@ ext_modules.append(
             "-Wextra",
             "-Wdeprecated-declarations",
             "-std=c++17",
-            "-fopenmp",
             "-O3",
             "-fvisibility=hidden",
         ],
-        extra_link_args=["-flto", "-fopenmp"],
+        extra_link_args=["-flto"],
     )
 )
 
