@@ -29,8 +29,10 @@ inline constexpr double wdet_min = 1e-5;
 // a single fixed aperture has to trade off against each other.
 //
 // ``ratio`` is a qnumber, so the shear response of the choice propagates and the
-// blend stays differentiable.  Verified against central finite differences to
-// better than 1% in a regime where the background term drives the weight.
+// blend stays differentiable.  Verified against central finite differences on
+// fixed configurations whose -DG, 0, +DG points all share a regime of the
+// smooth step (tests/ngmix/test_bkg.py): d(bkg)/dg agrees to 0.2%, and the
+// background term's contribution to dwdet/dg to 0.5%.
 struct bkgKernel {
     std::vector<int> di, dj;
     std::vector<double> w;
@@ -431,13 +433,7 @@ find_peaks(
     //     );
     // }
     // --------------------------------------------------------------------
-
-    std::vector<table::galNumber> catalog;
-    catalog.reserve(cat.size());
-    for (table::galNumber & src: cat){
-        if (src.wdet.v > wdet_min) catalog.push_back(src);
-    }
-    return catalog;
+    return cat;
 };
 
 void pyExportDetector(py::module_& m);

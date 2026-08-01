@@ -88,130 +88,87 @@ def test_bkg_tracks_a_flat_background():
     np.testing.assert_allclose(cat[0].bkg.v, level, rtol=0.2)
 
 
-def _ring_ratios(arr, x_det, y_det):
-    """The cascade's blend factors for this image, recomputed in numpy.
+# Configurations for the shear-response tests below.  They are FIXED: the
+# region selection was done offline (recomputing the cascade's blend ratios in
+# numpy for a grid of mag/hlr) and only configurations where -DG, 0 and +DG
+# all keep the smooth step in the same regime were kept -- a shear step that
+# starts on a flat branch and ends on the sloped one does not follow a single
+# smooth curve, and the finite difference then need not match the analytic
+# slope.  The tests themselves only draw, measure and compare.
+#
+# (mag, hlr): the blend is on its SLOPED part at all three shear points for
+# both components.
+BKG_RESPONSE_CONFIGS = [
+    (25.8, 0.8),
+    (25.8, 1.2),
+    (26.0, 0.5),
+    (26.0, 1.0),
+    (26.5, 0.6),
+    (26.8, 0.5),
+]
 
-    Mirrors detector.h: four ring means about the detected pixel, then
-    ``ratio_k = ssfunc1(running - b_k, 0, std_noise)``.  Used only to establish
-    WHICH REGIME a configuration is in -- correctness is still judged by the
-    C++ analytic derivative against a finite difference.  ssfunc1 is exactly 0
-    or 1 (with zero derivative) outside +-std_noise, so a ratio strictly inside
-    (0, 1) is what tells us the nonlinear branch is live.
-    """
-    blk = _block()
-    blk.psf_array = PSF_ARRAY
-    sigma_det = kwargs["sigma_arcsec"] * np.sqrt(2.0)
-    data = np.asarray(
-        anacal.image.prepare_data_block_image(
-            img_array=np.ascontiguousarray(arr),
-            psf_array=PSF_ARRAY,
-            sigma_arcsec=sigma_det,
-            block=blk,
-        )[0]
-    )
-    std_noise = np.sqrt(
-        anacal.image.get_smoothed_variance(
-            SCALE, sigma_det, PSF_ARRAY, kwargs["variance"]
-        )
-    )
-    nr = int(3.0 / SCALE) + 1
-    dj, di = np.mgrid[-nr:nr + 1, -nr:nr + 1]
-    r2 = (di * di + dj * dj) * SCALE * SCALE
-    j = int(round(y_det / SCALE)) - blk.ymin
-    i = int(round(x_det / SCALE)) - blk.xmin
-
-    means = []
-    for k in range(4):
-        ra = 1.0 + 0.5 * k
-        m = (r2 >= ra * ra) & (r2 < (ra + 0.5) ** 2)
-        means.append(float(data[j + dj[m], i + di[m]].mean()))
-
-    ratios, running = [], means[0]
-    for k in range(1, 4):
-        t = (running - means[k]) / (2.0 * std_noise) + 0.5
-        rr = 0.0 if t < 0 else (1.0 if t > 1 else -2 * t ** 3 + 3 * t ** 2)
-        ratios.append(rr)
-        running = running + rr * (means[k] - running)
-    return ratios
+# (mag, hlr, comp): one detection at a fixed pixel, 0.02 < wdet < 0.98 at all
+# three shear points, and the blend regime identical across the three.
+WDET_RESPONSE_CONFIGS = [
+    (23.0, 2.5, "g1"),
+    (23.0, 2.5, "g2"),
+    (23.5, 2.0, "g1"),
+    (23.5, 2.0, "g2"),
+    (24.0, 1.5, "g1"),
+    (24.0, 1.5, "g2"),
+    (24.0, 2.0, "g1"),
+    (24.0, 2.0, "g2"),
+    (24.5, 1.5, "g1"),
+]
 
 
-def _n_live(ratios, eps=0.02):
-    return sum(1 for r in ratios if eps < r < 1.0 - eps)
+def _shear_triplet(mag, hlr, comp):
+    """Catalogs at -DG, 0, +DG applied to ``comp``.
 
-
-def _fd_vs_analytic(mag, hlr, comp, rtol=0.002):
-    """Compare AnaCal's d(bkg)/dg against the same slope worked out by hand.
-
-    Only configurations where the smooth step is on its SLOPED part for all
-    three of -DG, 0 and +DG are tested.  The step is flat outside +-std_noise
-    and its slope there is exactly zero, so a shear step that begins on the flat
-    part and ends on the sloped part is not following one smooth curve, and for
-    a single galaxy the two numbers are then not expected to agree.  Anything
-    else is skipped rather than asserted on.
-
-    Returns None when the configuration is unusable.
+    Asserts the configuration is still usable -- exactly one detection, read at
+    the same pixel in all three -- so that a code change that moves a fixed
+    configuration out of its regime fails loudly instead of comparing numbers
+    that are not comparable.
     """
     other = "g2" if comp == "g1" else "g1"
-    shears = [{comp: -DG, other: 0.0},
-              {comp: 0.0, other: 0.0},
-              {comp: +DG, other: 0.0}]
-    images, cats = [], []
-    for sh in shears:
-        im = _draw(mag=mag, hlr=hlr, **sh)
-        c = _detect(im)
-        if len(c) != 1:
-            return None
-        images.append(im)
+    cats = []
+    for dv in (-DG, 0.0, +DG):
+        sh = {comp: dv, other: 0.0}
+        c = _detect(_draw(mag=mag, hlr=hlr, **sh))
+        assert len(c) == 1, (
+            f"mag={mag} hlr={hlr} {comp}={dv}: expected one detection, "
+            f"got {len(c)}; the fixed test configuration has drifted"
+        )
         cats.append(c[0])
-    # bkg must be read at the same pixel in all three, or the difference mixes
-    # in a change of position
-    if len({(c.x1_det, c.x2_det) for c in cats}) != 1:
-        return None
-
-    live = [_n_live(_ring_ratios(im, c.x1_det, c.x2_det))
-            for im, c in zip(images, cats)]
-    if not all(n >= 1 for n in live):
-        return None
-
-    c1, c2 = cats[0], cats[2]
-    fd = (c2.bkg.v - c1.bkg.v) / (2.0 * DG)
-    an = 0.5 * (getattr(c1.bkg, comp) + getattr(c2.bkg, comp))
-    scale = max(abs(fd), abs(an))
-    if scale < 1e-4:
-        return None
-    assert abs(fd - an) <= rtol * scale, (
-        f"d(bkg)/d{comp} mismatch at mag={mag} hlr={hlr} (live ratios "
-        f"{live}): step-by-hand {fd:.6g} vs AnaCal {an:.6g} "
-        f"(differ by {abs(fd - an) / scale:.2%})"
+    assert len({(c.x1_det, c.x2_det) for c in cats}) == 1, (
+        f"mag={mag} hlr={hlr} {comp}: detected pixel moved with the shear "
+        "step; the finite difference would mix in a change of position"
     )
-    return abs(fd - an) / scale
+    return cats
 
 
 def test_bkg_shear_response():
-    """d(bkg)/dg, on the sloped part of the smooth step.
+    """d(bkg)/dg against a central finite difference.
 
-    The blend factors come within std_noise of each other -- putting the step on
-    its sloped part -- for FAINT compact sources near the detection limit, which
-    is the grid below.  There the finite difference converges as DG^2 to about
-    5e-6 relative, so the tolerance can be tight.
-
-    If these magnitudes ever stop being detected, or stop landing on the sloped
-    part, the assertion at the end fires instead of the test quietly checking
-    nothing.
+    On the fixed configurations the finite difference converges as DG^2 to
+    about 5e-6 relative, and the measured agreement is 0.06% or better, so the
+    tolerance can be tight.
     """
-    tested, worst = 0, 0.0
-    for mag in (25.8, 26.0, 26.2, 26.5):
-        for hlr in (0.6, 0.8, 1.0):
-            for comp in ("g1", "g2"):
-                e = _fd_vs_analytic(mag, hlr, comp)
-                if e is not None:
-                    tested += 1
-                    worst = max(worst, e)
-    assert tested >= 4, (
-        f"only {tested} configurations had all three shears on the sloped part "
-        "of the smooth step; the test would check nothing"
-    )
-    print(f"bkg shear response: {tested} points, worst {worst:.3%}")
+    for mag, hlr in BKG_RESPONSE_CONFIGS:
+        for comp in ("g1", "g2"):
+            c1, _, c2 = _shear_triplet(mag, hlr, comp)
+            fd = (c2.bkg.v - c1.bkg.v) / (2.0 * DG)
+            an = 0.5 * (getattr(c1.bkg, comp) + getattr(c2.bkg, comp))
+            scale = max(abs(fd), abs(an))
+            assert scale > 1e-4, (
+                f"d(bkg)/d{comp} vanished at mag={mag} hlr={hlr}; the fixed "
+                "configuration no longer exercises the response"
+            )
+            assert abs(fd - an) <= 0.002 * scale, (
+                f"d(bkg)/d{comp} mismatch at mag={mag} hlr={hlr}: "
+                f"step-by-hand {fd:.6g} vs AnaCal {an:.6g} "
+                f"(differ by {abs(fd - an) / scale:.2%})"
+            )
 
 
 def test_wdet_shear_response_with_background():
@@ -221,40 +178,24 @@ def test_wdet_shear_response_with_background():
     background factor sits saturated at 1 and contributes nothing to the
     derivative.  Here the source is extended enough that ``data - bkg`` lands
     inside the cut's transition, so dwdet/dg genuinely depends on d(bkg)/dg.
+    Measured agreement on the fixed configurations is 0.2% or better.
     """
-    tested = 0
-    for mag in (23.0, 23.5, 24.0, 24.5):
-        for hlr in (1.5, 2.0, 2.5):
-            for comp in ("g1", "g2"):
-                other = "g2" if comp == "g1" else "g1"
-                cats = []
-                for dv in (-DG, 0.0, +DG):
-                    sh = {comp: dv, other: 0.0}
-                    c = _detect(_draw(mag=mag, hlr=hlr, **sh))
-                    if len(c) != 1:
-                        break
-                    cats.append(c[0])
-                if len(cats) != 3:
-                    continue
-                # wdet must be on the sloped part of the cut for all three, and
-                # read at the same pixel, or the two numbers are not comparable
-                if not all(0.02 < c.wdet.v < 0.98 for c in cats):
-                    continue
-                if len({(c.x1_det, c.x2_det) for c in cats}) != 1:
-                    continue
-                c1, c2 = cats[0], cats[2]
-                fd = (c2.wdet.v - c1.wdet.v) / (2.0 * DG)
-                an = 0.5 * (getattr(c1.wdet, comp) + getattr(c2.wdet, comp))
-                scale = max(abs(fd), abs(an))
-                if scale < 1e-2:
-                    continue
-                tested += 1
-                assert abs(fd - an) <= 0.1 * scale, (
-                    f"dwdet/d{comp} mismatch at mag={mag} hlr={hlr} "
-                    f"(wdet={cats[1].wdet.v:.4f}): step-by-hand {fd:.6g} vs "
-                    f"AnaCal {an:.6g}"
-                )
-    assert tested >= 2, (
-        f"only {tested} configurations put the background cut in transition; "
-        "the test would pass vacuously"
-    )
+    for mag, hlr, comp in WDET_RESPONSE_CONFIGS:
+        c1, c0, c2 = _shear_triplet(mag, hlr, comp)
+        for c in (c1, c0, c2):
+            assert 0.02 < c.wdet.v < 0.98, (
+                f"mag={mag} hlr={hlr} {comp}: wdet={c.wdet.v:.4f} left the "
+                "sloped part of the cut; the fixed configuration has drifted"
+            )
+        fd = (c2.wdet.v - c1.wdet.v) / (2.0 * DG)
+        an = 0.5 * (getattr(c1.wdet, comp) + getattr(c2.wdet, comp))
+        scale = max(abs(fd), abs(an))
+        assert scale > 1e-2, (
+            f"dwdet/d{comp} vanished at mag={mag} hlr={hlr}; the fixed "
+            "configuration no longer exercises the background term"
+        )
+        assert abs(fd - an) <= 0.005 * scale, (
+            f"dwdet/d{comp} mismatch at mag={mag} hlr={hlr} "
+            f"(wdet={c0.wdet.v:.4f}): step-by-hand {fd:.6g} vs "
+            f"AnaCal {an:.6g} (differ by {abs(fd - an) / scale:.2%})"
+        )

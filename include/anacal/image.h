@@ -110,30 +110,6 @@ public:
 
     ~Image();
 
-    inline void truncate(double xlim, bool ishift) {
-        int off_x = ishift ? this->nx2 : 0;
-        int off_y = ishift ? this->ny2 : 0;
-        double xlim2 = xlim * xlim;
-
-        for (int j = 0; j < this->ny; ++j) {
-            int jj = ((j + off_y) % this->ny - this->ny2);
-            double y = jj * this->scale;
-
-            for (int i = 0; i < this->nx; ++i) {
-                int ii = ((i + off_x) % this->nx - this->nx2);
-                double x = ii * this->scale;
-
-                double r2 = x * x + y * y;
-                int index = j * this->nx + i;
-
-                if (r2 > xlim2) {
-                    this->data_r[index] = 0.0;
-                }
-            }
-        }
-        return;
-    };
-
     inline py::array_t<std::complex<double>>
     get_lens_kernel(
         const py::array_t<double>& psf_array,
@@ -150,10 +126,6 @@ public:
         this->filter(gauss_model);
         // Deconvolve the PSF
         this->deconvolve(parr, klim);
-        /* this->ifft(); */
-        /* // We truncate the deconvolved Gaussian kernel */
-        /* this->truncate(xlim, true); */
-        /* this->fft(); */
         return this->draw_f();
     };
 
