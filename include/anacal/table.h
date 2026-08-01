@@ -182,105 +182,57 @@ struct galNumber {
         return result;
     };
 
+// One qnumber spans five catalog columns (value, _dg1, _dg2, _dj1, _dj2).
+// The derivative stem is a separate macro argument because the column naming
+// is not uniform (flux -> dflux_dg1, but fpfs_e1 -> fpfs_de1_dg1).  By-name
+// assignment makes a wrong or misplaced name a compile error -- unlike the
+// positional aggregate this replaces, where one misplaced entry silently
+// shifted every later column.  tests/test_table.py round-trips every column
+// through from_row/to_row.
+#define ANACAL_ROW_PUT_Q(val_name, d_stem, qn) \
+    row.val_name = (qn).v; \
+    row.d_stem##_dg1 = (qn).g1; \
+    row.d_stem##_dg2 = (qn).g2; \
+    row.d_stem##_dj1 = (qn).x1; \
+    row.d_stem##_dj2 = (qn).x2
+
+#define ANACAL_ROW_GET_Q(val_name, d_stem, target) \
+    target = math::qnumber( \
+        row.val_name, \
+        row.d_stem##_dg1, row.d_stem##_dg2, \
+        row.d_stem##_dj1, row.d_stem##_dj2 \
+    )
+
     inline galRow
     to_row() const {
         std::array<math::qnumber, 2> shape = model.get_shape();
-        galRow row = {
-            ra,
-            dec,
-            model.F.v,
-            model.F.g1,
-            model.F.g2,
-            model.F.x1,
-            model.F.x2,
-            model.t.v,
-            model.t.g1,
-            model.t.g2,
-            model.t.x1,
-            model.t.x2,
-            model.a1.v,
-            model.a1.g1,
-            model.a1.g2,
-            model.a1.x1,
-            model.a1.x2,
-            model.a2.v,
-            model.a2.g1,
-            model.a2.g2,
-            model.a2.x1,
-            model.a2.x2,
-            shape[0].v,
-            shape[0].g1,
-            shape[0].g2,
-            shape[0].x1,
-            shape[0].x2,
-            shape[1].v,
-            shape[1].g1,
-            shape[1].g2,
-            shape[1].x1,
-            shape[1].x2,
-            model.x1.v,
-            model.x1.g1,
-            model.x1.g2,
-            model.x1.x1,
-            model.x1.x2,
-            model.x2.v,
-            model.x2.g1,
-            model.x2.g2,
-            model.x2.x1,
-            model.x2.x2,
-            wdet.v,
-            wdet.g1,
-            wdet.g2,
-            wdet.x1,
-            wdet.x2,
-            bkg.v,
-            bkg.g1,
-            bkg.g2,
-            bkg.x1,
-            bkg.x2,
-            wsel.v,
-            wsel.g1,
-            wsel.g2,
-            wsel.x1,
-            wsel.x2,
-            mask_value,
-            is_primary,
-            flux_gauss0.v,
-            flux_gauss0.g1,
-            flux_gauss0.g2,
-            flux_gauss0.x1,
-            flux_gauss0.x2,
-            flux_gauss2.v,
-            flux_gauss2.g1,
-            flux_gauss2.g2,
-            flux_gauss2.x1,
-            flux_gauss2.x2,
-            flux_gauss0_err,
-            flux_gauss2_err,
-            fpfs_e1.v,
-            fpfs_e1.g1,
-            fpfs_e1.g2,
-            fpfs_e1.x1,
-            fpfs_e1.x2,
-            fpfs_e2.v,
-            fpfs_e2.g1,
-            fpfs_e2.g2,
-            fpfs_e2.x1,
-            fpfs_e2.x2,
-            fpfs_m0.v,
-            fpfs_m0.g1,
-            fpfs_m0.g2,
-            fpfs_m0.x1,
-            fpfs_m0.x2,
-            fpfs_m2.v,
-            fpfs_m2.g1,
-            fpfs_m2.g2,
-            fpfs_m2.x1,
-            fpfs_m2.x2,
-            x1_det,
-            x2_det,
-            block_id
-        };
+        galRow row{};
+        row.ra = ra;
+        row.dec = dec;
+        ANACAL_ROW_PUT_Q(flux, dflux, model.F);
+        ANACAL_ROW_PUT_Q(t, dt, model.t);
+        ANACAL_ROW_PUT_Q(a1, da1, model.a1);
+        ANACAL_ROW_PUT_Q(a2, da2, model.a2);
+        ANACAL_ROW_PUT_Q(e1, de1, shape[0]);
+        ANACAL_ROW_PUT_Q(e2, de2, shape[1]);
+        ANACAL_ROW_PUT_Q(x1, dx1, model.x1);
+        ANACAL_ROW_PUT_Q(x2, dx2, model.x2);
+        ANACAL_ROW_PUT_Q(wdet, dwdet, wdet);
+        ANACAL_ROW_PUT_Q(bkg, dbkg, bkg);
+        ANACAL_ROW_PUT_Q(wsel, dwsel, wsel);
+        row.mask_value = mask_value;
+        row.is_primary = is_primary;
+        ANACAL_ROW_PUT_Q(flux_gauss0, dflux_gauss0, flux_gauss0);
+        ANACAL_ROW_PUT_Q(flux_gauss2, dflux_gauss2, flux_gauss2);
+        row.flux_gauss0_err = flux_gauss0_err;
+        row.flux_gauss2_err = flux_gauss2_err;
+        ANACAL_ROW_PUT_Q(fpfs_e1, fpfs_de1, fpfs_e1);
+        ANACAL_ROW_PUT_Q(fpfs_e2, fpfs_de2, fpfs_e2);
+        ANACAL_ROW_PUT_Q(fpfs_m0, fpfs_dm0, fpfs_m0);
+        ANACAL_ROW_PUT_Q(fpfs_m2, fpfs_dm2, fpfs_m2);
+        row.x1_det = x1_det;
+        row.x2_det = x2_det;
+        row.block_id = block_id;
         return row;
     };
 
@@ -288,89 +240,34 @@ struct galNumber {
     from_row(const galRow & row) {
         ra = row.ra;
         dec = row.dec;
-        model.F = math::qnumber(
-            row.flux,
-            row.dflux_dg1, row.dflux_dg2,
-            row.dflux_dj1, row.dflux_dj2
-        );
-        model.t = math::qnumber(
-            row.t,
-            row.dt_dg1, row.dt_dg2,
-            row.dt_dj1, row.dt_dj2
-        );
-        model.a1 = math::qnumber(
-            row.a1,
-            row.da1_dg1, row.da1_dg2,
-            row.da1_dj1, row.da1_dj2
-        );
-        model.a2 = math::qnumber(
-            row.a2,
-            row.da2_dg1, row.da2_dg2,
-            row.da2_dj1, row.da2_dj2
-        );
-        model.x1 = math::qnumber(
-            row.x1,
-            row.dx1_dg1, row.dx1_dg2,
-            row.dx1_dj1, row.dx1_dj2
-        );
-        model.x2= math::qnumber(
-            row.x2,
-            row.dx2_dg1, row.dx2_dg2,
-            row.dx2_dj1, row.dx2_dj2
-        );
-        bkg = math::qnumber(
-            row.bkg,
-            row.dbkg_dg1, row.dbkg_dg2,
-            row.dbkg_dj1, row.dbkg_dj2
-        );
-        wdet = math::qnumber(
-            row.wdet,
-            row.dwdet_dg1, row.dwdet_dg2,
-            row.dwdet_dj1, row.dwdet_dj2
-        );
-        wsel = math::qnumber(
-            row.wsel,
-            row.dwsel_dg1, row.dwsel_dg2,
-            row.dwsel_dj1, row.dwsel_dj2
-        );
+        ANACAL_ROW_GET_Q(flux, dflux, model.F);
+        ANACAL_ROW_GET_Q(t, dt, model.t);
+        ANACAL_ROW_GET_Q(a1, da1, model.a1);
+        ANACAL_ROW_GET_Q(a2, da2, model.a2);
+        // e1/e2 are DERIVED columns: to_row computes them from a1/a2/t via
+        // model.get_shape(), so there is nothing to restore for them here.
+        ANACAL_ROW_GET_Q(x1, dx1, model.x1);
+        ANACAL_ROW_GET_Q(x2, dx2, model.x2);
+        ANACAL_ROW_GET_Q(wdet, dwdet, wdet);
+        ANACAL_ROW_GET_Q(bkg, dbkg, bkg);
+        ANACAL_ROW_GET_Q(wsel, dwsel, wsel);
         mask_value = row.mask_value;
         is_primary = row.is_primary;
-        flux_gauss0 = math::qnumber(
-            row.flux_gauss0,
-            row.dflux_gauss0_dg1, row.dflux_gauss0_dg2,
-            row.dflux_gauss0_dj1, row.dflux_gauss0_dj2
-        );
-        flux_gauss2 = math::qnumber(
-            row.flux_gauss2,
-            row.dflux_gauss2_dg1, row.dflux_gauss2_dg2,
-            row.dflux_gauss2_dj1, row.dflux_gauss2_dj2
-        );
+        ANACAL_ROW_GET_Q(flux_gauss0, dflux_gauss0, flux_gauss0);
+        ANACAL_ROW_GET_Q(flux_gauss2, dflux_gauss2, flux_gauss2);
         flux_gauss0_err = row.flux_gauss0_err;
         flux_gauss2_err = row.flux_gauss2_err;
-        fpfs_e1 = math::qnumber(
-            row.fpfs_e1,
-            row.fpfs_de1_dg1, row.fpfs_de1_dg2,
-            row.fpfs_de1_dj1, row.fpfs_de1_dj2
-        );
-        fpfs_e2 = math::qnumber(
-            row.fpfs_e2,
-            row.fpfs_de2_dg1, row.fpfs_de2_dg2,
-            row.fpfs_de2_dj1, row.fpfs_de2_dj2
-        );
-        fpfs_m0 = math::qnumber(
-            row.fpfs_m0,
-            row.fpfs_dm0_dg1, row.fpfs_dm0_dg2,
-            row.fpfs_dm0_dj1, row.fpfs_dm0_dj2
-        );
-        fpfs_m2 = math::qnumber(
-            row.fpfs_m2,
-            row.fpfs_dm2_dg1, row.fpfs_dm2_dg2,
-            row.fpfs_dm2_dj1, row.fpfs_dm2_dj2
-        );
+        ANACAL_ROW_GET_Q(fpfs_e1, fpfs_de1, fpfs_e1);
+        ANACAL_ROW_GET_Q(fpfs_e2, fpfs_de2, fpfs_e2);
+        ANACAL_ROW_GET_Q(fpfs_m0, fpfs_dm0, fpfs_m0);
+        ANACAL_ROW_GET_Q(fpfs_m2, fpfs_dm2, fpfs_m2);
         x1_det = row.x1_det;
         x2_det = row.x2_det;
         block_id = row.block_id;
     };
+
+#undef ANACAL_ROW_PUT_Q
+#undef ANACAL_ROW_GET_Q
 };
 
 inline py::array_t<galRow>

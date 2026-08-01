@@ -80,6 +80,23 @@ pyExportTable(py::module_& m) {
         py::arg("x2")
     );
     table.def(
+        "catalog_roundtrip",
+        [](const py::array_t<galRow>& records) {
+            auto r = records.unchecked<1>();
+            py::array_t<galRow> out(r.shape(0));
+            auto o = out.mutable_unchecked<1>();
+            for (ssize_t i = 0; i < r.shape(0); ++i) {
+                galNumber obj;
+                obj.from_row(r(i));
+                o(i) = obj.to_row();
+            }
+            return out;
+        },
+        "from_row -> to_row round trip of a structured catalog; every stored "
+        "column must survive (guards the field mapping in table.h)",
+        py::arg("catalog")
+    );
+    table.def(
         "column_names",
         []() {
             py::dtype dtype = py::dtype::of<galRow>();
