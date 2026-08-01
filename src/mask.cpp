@@ -43,8 +43,20 @@ namespace mask {
             py::arg("scale")
         );
         mask.def(
-            "add_pixel_mask_column", &add_pixel_mask_column,
-            "Update the detection catalog with the pixel mask value",
+            "add_pixel_mask_column",
+            // The C++ function updates the catalog in place, but pybind11
+            // hands it a COPY of the Python list, so the update would be
+            // lost.  Return the updated catalog instead.
+            [](
+                std::vector<table::galNumber> catalog,
+                const py::array_t<int16_t>& mask_array,
+                double sigma,
+                double scale
+            ) {
+                add_pixel_mask_column(catalog, mask_array, sigma, scale);
+                return catalog;
+            },
+            "Return the detection catalog with the pixel mask value updated",
             py::arg("catalog"),
             py::arg("mask_array"),
             py::arg("sigma"),

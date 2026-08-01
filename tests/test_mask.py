@@ -17,15 +17,22 @@ def test_mask():
     np.testing.assert_almost_equal(np.sum(b), 1, decimal=1)
     assert b[ngrid // 2 + 10, ngrid // 2 - 20] == np.max(b)
 
-    # src = np.array(
-    #     [(ngrid // 2 + 10, ngrid // 2 - 20)],
-    #     dtype=[
-    #         ("y", np.int32),
-    #         ("x", np.int32),
-    #     ],
-    # )
-    # src = anacal.mask.add_pixel_mask_column(src, mask, sigma_arcsec, scale)
-    # assert src["mask_value"][0] == 23
+    # add_pixel_mask_column returns the updated catalog (the input list is a
+    # copy at the pybind boundary, so in-place mutation would be lost).
+    on_mask = anacal.table.galNumber()
+    on_mask.model.x1 = anacal.math.qnumber((ngrid // 2 - 20) * scale)
+    on_mask.model.x2 = anacal.math.qnumber((ngrid // 2 + 10) * scale)
+    off_mask = anacal.table.galNumber()
+    off_mask.model.x1 = anacal.math.qnumber(5 * scale)
+    off_mask.model.x2 = anacal.math.qnumber(5 * scale)
+    out = anacal.mask.add_pixel_mask_column(
+        [on_mask, off_mask], mask, sigma_arcsec, scale
+    )
+    assert out[0].mask_value == int(
+        b[ngrid // 2 + 10, ngrid // 2 - 20] * 1000
+    )
+    assert out[0].mask_value > 0
+    assert out[1].mask_value == 0
     star_array = np.array(
         [
             (10.0, 3.0, 20.0),

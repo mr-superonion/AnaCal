@@ -196,8 +196,14 @@ namespace mask {
                             if ((x + i < 0) || (x + i >= nx)) {
                                 continue;
                             }
-                            conv_r(y + j, x + i) += (
-                                mask_r(y, x) * kernel_r(j + ngrid2, i + ngrid2)
+                            // Convolution of the 0/1 mask with the kernel.
+                            // The pixel value is not used as a factor: if the
+                            // input were ever a raw bitmask (SAT=2, CR=8 ...)
+                            // each pixel would be weighted by its bit value,
+                            // which has no meaning.  Any pixel that passes the
+                            // mask_r > 0 gate counts as exactly one.
+                            conv_r(y + j, x + i) += kernel_r(
+                                j + ngrid2, i + ngrid2
                             );
                         }
                     }

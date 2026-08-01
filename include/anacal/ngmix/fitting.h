@@ -171,27 +171,28 @@ public:
     ) const {
         ngmix::NgmixGaussian & model = src.model;
         int r = static_cast<int>(this->sigma_arcsec * 8 / block.scale);
-        int i_min = std::max(
-            static_cast<int>(
-                std::round(model.x1.v / this->scale)
-            ) - block.xmin - r,
-            0
-        );
-        int i_max = std::min(i_min + 2 * r + 1, block.nx);
-        int j_min = std::max(
-            static_cast<int>(
-                std::round(model.x2.v / this->scale)
-            ) - block.ymin - r,
-            0
-        );
-        int j_max = std::min(j_min + 2 * r + 1, block.ny);
+        // Clip the window about the source centre; clamping i_max against
+        // i_min (instead of i_cen) would shift the whole window inward at a
+        // block edge, making the aperture asymmetric about the source.
+        int i_cen = static_cast<int>(
+            std::round(model.x1.v / this->scale)
+        ) - block.xmin;
+        int i_min = std::max(i_cen - r, 0);
+        int i_max = std::min(i_cen + r + 1, block.nx);
+        int j_cen = static_cast<int>(
+            std::round(model.x2.v / this->scale)
+        ) - block.ymin;
+        int j_min = std::max(j_cen - r, 0);
+        int j_max = std::min(j_cen + r + 1, block.ny);
 
         math::qnumber m0, mxx, myy, mxy;
         for (int j = j_min; j < j_max; ++j) {
+            if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
             double ys = block.yvs[j] - model.x2.v;
             double y2 = ys * ys;
             for (int i = i_min; i < i_max; ++i) {
+                if (!block.xmsk[i]) continue;
                 double xs = block.xvs[i] - model.x1.v;
                 double x2 = xs * xs;
                 if ((x2 + y2) < this->sigma2_lim) {
@@ -230,27 +231,26 @@ public:
 
         ngmix::NgmixGaussian & model = src.model;
         int r = static_cast<int>(this->sigma_arcsec * 8 / block.scale);
-        int i_min = std::max(
-            static_cast<int>(
-                std::round(model.x1.v / this->scale)
-            ) - block.xmin - r,
-            0
-        );
-        int i_max = std::min(i_min + 2 * r + 1, block.nx);
-        int j_min = std::max(
-            static_cast<int>(
-                std::round(model.x2.v / this->scale)
-            ) - block.ymin - r,
-            0
-        );
-        int j_max = std::min(j_min + 2 * r + 1, block.ny);
+        // Same centre-based clipping and validity masks as the overload above.
+        int i_cen = static_cast<int>(
+            std::round(model.x1.v / this->scale)
+        ) - block.xmin;
+        int i_min = std::max(i_cen - r, 0);
+        int i_max = std::min(i_cen + r + 1, block.nx);
+        int j_cen = static_cast<int>(
+            std::round(model.x2.v / this->scale)
+        ) - block.ymin;
+        int j_min = std::max(j_cen - r, 0);
+        int j_max = std::min(j_cen + r + 1, block.ny);
 
         math::qnumber m0, mxx, myy, mxy;
         for (int j = j_min; j < j_max; ++j) {
+            if (!block.ymsk[j]) continue;
             int jj = j * block.nx;
             double ys = block.yvs[j] - model.x2.v;
             double y2 = ys * ys;
             for (int i = i_min; i < i_max; ++i) {
+                if (!block.xmsk[i]) continue;
                 double xs = block.xvs[i] - model.x1.v;
                 double x2 = xs * xs;
                 if ((x2 + y2) < this->sigma2_lim) {

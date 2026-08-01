@@ -140,11 +140,13 @@ public:
             )
         );
 
+        // Clip about the centre; clamping i_max against i_min would shift the
+        // window inward (not clip it) when the source sits near a block edge.
         int i_min = std::max(i_cen - rr, 0);
-        int i_max = std::min(i_min + 2 * rr + 1, block.nx);
+        int i_max = std::min(i_cen + rr + 1, block.nx);
 
         int j_min = std::max(j_cen - rr, 0);
-        int j_max = std::min(j_min + 2 * rr + 1, block.ny);
+        int j_max = std::min(j_cen + rr + 1, block.ny);
 
         return {i_min, i_max, j_min, j_max, i_cen, j_cen, rr};
     };
@@ -161,11 +163,12 @@ public:
         ) - block.ymin;
         int rr = r;
 
+        // Same centre-based clipping as the overload above.
         int i_min = std::max(i_cen - rr, 0);
-        int i_max = std::min(i_min + 2 * rr + 1, block.nx);
+        int i_max = std::min(i_cen + rr + 1, block.nx);
 
         int j_min = std::max(j_cen - rr, 0);
-        int j_max = std::min(j_min + 2 * rr + 1, block.ny);
+        int j_max = std::min(j_cen + rr + 1, block.ny);
 
         return {i_min, i_max, j_min, j_max, i_cen, j_cen, rr};
     };

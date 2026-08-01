@@ -118,21 +118,17 @@ inline std::vector<block> get_block_list(
                 index
             );
             block & bb = result[index];
+            // The image-pixel index of column i is i + xmin by construction
+            // (xvs[i] = (i + xmin) * scale).  Recovering it as xvs[i] / scale
+            // truncates toward zero, so index -1 comes back as -0.999... -> 0
+            // and one column of padding outside the image is marked valid.
             for (int i = 0; i < bb.nx; ++i) {
-                int ii = bb.xvs[i] / bb.scale;
-                if ((ii >= 0) && (ii < img_nx)){
-                    bb.xmsk[i] = true;
-                } else {
-                    bb.xmsk[i] = false;
-                }
+                int ii = i + bb.xmin;
+                bb.xmsk[i] = (ii >= 0) && (ii < img_nx);
             }
             for (int i = 0; i < bb.ny; ++i) {
-                int ii = bb.yvs[i] / bb.scale;
-                if ((ii >= 0) && (ii < img_ny)){
-                    bb.ymsk[i] = true;
-                } else {
-                    bb.ymsk[i] = false;
-                }
+                int ii = i + bb.ymin;
+                bb.ymsk[i] = (ii >= 0) && (ii < img_ny);
             }
 
         }
