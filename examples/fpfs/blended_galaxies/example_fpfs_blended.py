@@ -58,14 +58,12 @@ out = anacal.fpfs.process_image(
     detection=detection,
 )
 
-# Response ratios per measurement kernel (no selection weight here: the
-# detection/selection weight lives in the AnaCal detector path).
-# kernel 1
-e1 = out["fpfs1_e1"]
-e1g1 = out["fpfs1_de1_dg1"]
-print(np.sum(e1) / np.sum(e1g1))
-
-# kernel 2
-e1 = out["fpfs2_e1"]
-e1g1 = out["fpfs2_de1_dg1"]
-print(np.sum(e1) / np.sum(e1g1))
+# Response ratios per measurement kernel, weighted by the detector's
+# differentiable detection weight so the selection response is included:
+# sum(w e) / sum(dw/dg e + w de/dg).
+wdet = det_cat["wdet"]
+dwdet_dg1 = det_cat["dwdet_dg1"]
+for kernel in ("fpfs1", "fpfs2"):
+    e1 = out[f"{kernel}_e1"]
+    e1g1 = out[f"{kernel}_de1_dg1"]
+    print(np.sum(wdet * e1) / np.sum(dwdet_dg1 * e1 + wdet * e1g1))
