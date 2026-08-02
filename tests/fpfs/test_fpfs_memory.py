@@ -35,12 +35,12 @@ def make_detection(pixel_scale, noise_variance):
         mag_zero=30.0,
     )
     blocks = anacal.geometry.get_block_list(
-        gal_array.shape[0],
-        gal_array.shape[1],
-        250,
-        250,
-        80,
-        pixel_scale,
+        img_nx=gal_array.shape[1],
+        img_ny=gal_array.shape[0],
+        block_nx=250,
+        block_ny=250,
+        block_overlap=80,
+        scale=pixel_scale,
     )
     cat = det_task.process_image(
         np.asarray(gal_array, dtype=np.float32),

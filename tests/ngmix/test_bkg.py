@@ -8,7 +8,7 @@ kwargs = {
     "snr_min": 10,
     "variance": 1.75e-2,
     "omega_f": 0.1,
-    "omega_v": 0.010892341643103026,
+    "omega_v": 0.011,
 }
 
 NX = NY = 64

@@ -29,12 +29,12 @@ det_task = anacal.task.Task(
     mag_zero=mag_zero,
 )
 blocks = anacal.geometry.get_block_list(
-    gal_array.shape[0],
-    gal_array.shape[1],
-    250,
-    250,
-    80,
-    pixel_scale,
+    img_nx=gal_array.shape[1],
+    img_ny=gal_array.shape[0],
+    block_nx=250,
+    block_ny=250,
+    block_overlap=80,
+    scale=pixel_scale,
 )
 det_cat = det_task.process_image(
     np.asarray(gal_array, dtype=np.float32),
