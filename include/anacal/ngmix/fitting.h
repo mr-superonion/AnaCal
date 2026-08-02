@@ -576,6 +576,16 @@ public:
         )[0];
         std::vector<table::galNumber> result = catalog;
         std::vector<table::galNumber> catalog_model = catalog;
+        // The caller hands this function the catalog FOR this block, so the
+        // block owns every source in it.  block_id is internal derived
+        // state (not an input column), so it must be stamped here or the
+        // ownership guard in process_block_impl would reject everything.
+        for (table::galNumber & src : result) {
+            src.block_id = bb.index;
+        }
+        for (table::galNumber & src : catalog_model) {
+            src.block_id = bb.index;
+        }
         process_block_impl(
             result,
             catalog_model,

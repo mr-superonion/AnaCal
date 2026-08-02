@@ -180,6 +180,11 @@ void measure_pixel(
             bkg_nsigma * std_noise,
             omega_f
         );
+        // At detection the detection weight IS the selection weight; the
+        // measurement stage refines it (wdet * FPFS size cut).  Forced
+        // catalogs never pass through here and must carry an explicit
+        // wdet instead (e.g. catalog["wdet"] = 1.0).
+        src.wsel = src.wdet;
         if (src.wdet.v > wdet_min) catalog.push_back(src);
     }
 };

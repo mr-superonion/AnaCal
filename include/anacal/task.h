@@ -7,7 +7,6 @@
 namespace anacal {
 namespace task {
 
-
 inline double
 gaussian_flux_variance(
     const py::array_t<double>& psf_array,
@@ -217,6 +216,50 @@ public:
         return;
     };
 
+    // Recompute every source's block_id from its position.  The blocks'
+    // INNER regions tile the image without overlap, so each position has
+    // exactly one owner; a source outside all inner regions (padding or the
+    // image_bound margin -- possible for forced positions) is given the
+    // nearest block.  This is what makes the ``block_id == block.index``
+    // guard in the measurement stage trustworthy for ANY input catalog:
+    // block_id is not an input column, and a stale or foreign value can no
+    // longer leave a source silently unmeasured.
+    inline void
+    assign_block_ids(
+        std::vector<table::galNumber>& catalog,
+        const std::vector<geometry::block>& block_list
+    ) const {
+        if (block_list.empty()) return;
+        for (table::galNumber & src : catalog) {
+            int best = block_list.front().index;
+            double best_d2 = std::numeric_limits<double>::infinity();
+            for (const geometry::block & b : block_list) {
+                double x0 = b.xmin_in * b.scale;
+                double x1 = b.xmax_in * b.scale;
+                double y0 = b.ymin_in * b.scale;
+                double y1 = b.ymax_in * b.scale;
+                // Half-open [x0, x1): a source on a shared inner edge
+                // belongs to the block on its right/top, matching the
+                // detection scan bounds.  (A distance-only test would tie
+                // at 0 for both neighbours and pick the wrong one.)
+                if ((src.x1_det >= x0) && (src.x1_det < x1) &&
+                    (src.x2_det >= y0) && (src.x2_det < y1)) {
+                    best = b.index;
+                    break;
+                }
+                double dx = std::max({x0 - src.x1_det, 0.0, src.x1_det - x1});
+                double dy = std::max({y0 - src.x2_det, 0.0, src.x2_det - y1});
+                double d2 = dx * dx + dy * dy;
+                if (d2 < best_d2) {
+                    best_d2 = d2;
+                    best = b.index;
+                }
+            }
+            src.block_id = best;
+        }
+        return;
+    };
+
     // Which PSF to use for a block: the block's own stamp when it has one of
     // the right rank and size, otherwise the image-wide one.  Written once
     // here because the same choice is made at three points in process_image.
@@ -367,6 +410,11 @@ public:
                 }
             }
         }
+        // block_id is derived state, never trusted from the input: recompute
+        // it from the detected positions for both the detection path (where
+        // it reproduces measure_pixel's assignment) and external catalogs
+        // (where a stale or default value would leave sources unmeasured).
+        assign_block_ids(catalog, block_list);
 
         this->fitter.do_fpfs = do_fpfs;
 

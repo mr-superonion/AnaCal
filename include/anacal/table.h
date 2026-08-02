@@ -107,16 +107,23 @@ struct galRow{
     double fpfs_dm2_dj2;
     double x1_det;
     double x2_det;
-    int block_id;
 };
 
 struct galNumber {
     // value with derivatives to Gaussian model parameters
     ngmix::NgmixGaussian model;
-    math::qnumber wdet = math::qnumber(1.0);
+    // Fail-closed: both weights start at zero and are only given real
+    // values by detection (wdet, wsel) and measurement (wsel), so a source
+    // that never passes through those stages stays inert in every weighted
+    // sum instead of counting as selected.  Detection catalogs passed into
+    // the measurement are expected to come from AnaCal detection, whose
+    // sources all carry wdet > wdet_min; the measurement computes
+    // wsel = wdet * (FPFS cut), so a source entering with wdet = 0 simply
+    // stays at zero weight.
+    math::qnumber wdet = math::qnumber(0.0);
     // local background under the source; set by detector::measure_pixel
     math::qnumber bkg = math::qnumber(0.0);
-    math::qnumber wsel = math::qnumber(1.0);
+    math::qnumber wsel = math::qnumber(0.0);
     int mask_value=0;
     bool is_primary=true;
     bool initialized=false;
@@ -132,7 +139,10 @@ struct galNumber {
     double ra = 0.0;
     double dec = 0.0;
     double x1_det, x2_det;
-    int block_id;
+    // Which block owns this source.  INTERNAL: assigned from x1_det/x2_det
+    // by Task::assign_block_ids (or detector::measure_pixel at detection);
+    // not an output column.
+    int block_id = -1;
 
     galNumber() = default;
 
@@ -232,7 +242,6 @@ struct galNumber {
         ANACAL_ROW_PUT_Q(fpfs_m2, fpfs_dm2, fpfs_m2);
         row.x1_det = x1_det;
         row.x2_det = x2_det;
-        row.block_id = block_id;
         return row;
     };
 
@@ -263,7 +272,6 @@ struct galNumber {
         ANACAL_ROW_GET_Q(fpfs_m2, fpfs_dm2, fpfs_m2);
         x1_det = row.x1_det;
         x2_det = row.x2_det;
-        block_id = row.block_id;
     };
 
 #undef ANACAL_ROW_PUT_Q
@@ -309,8 +317,12 @@ make_catalog_empty(
         row.x2 = x2_view(i);
         row.x1_det = x1_view(i);
         row.x2_det = x2_view(i);
-        row.wdet = 1.0;
-        row.wsel = 1.0;
+        // Weights stay 0 at initialization (galRow{} zero-fills them): an
+        // unmeasured table carries no weight.  To use this catalog as a
+        // forced ``detection`` input the caller must set wdet explicitly
+        // (e.g. catalog["wdet"] = 1.0); the measurement computes
+        // wsel = wdet * (FPFS cut), so sources left at wdet = 0 come back
+        // with zero selection weight.
         row.is_primary = true;
         catalog_view(i) = row;
     }
