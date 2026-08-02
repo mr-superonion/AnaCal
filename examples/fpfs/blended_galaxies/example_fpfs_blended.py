@@ -7,7 +7,7 @@ import numpy as np
 data_dir = os.path.dirname(os.path.abspath(__file__))
 
 fpfs_config = anacal.fpfs.FpfsConfig(
-    sigma_shapelets1=0.56,  # The first measurement scale
+    sigma_shapelets1=0.52,  # The first measurement scale
     sigma_shapelets2=0.60,  # The second measurement scale
 )
 gal_array = fitsio.read(os.path.join(data_dir, "image-00000_g1-0_rot0_i.fits"))
@@ -22,7 +22,7 @@ noise_array = None
 # ('y', 'x') pixel catalogue FPFS measures at.
 det_task = anacal.task.Task(
     scale=pixel_scale,
-    sigma_arcsec=fpfs_config.sigma_shapelets1,
+    sigma_arcsec=0.5,
     snr_peak_min=12.0,
     omega_f=0.8,
     omega_v=0.04,

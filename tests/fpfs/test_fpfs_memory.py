@@ -28,7 +28,7 @@ def make_detection(pixel_scale, noise_variance):
     """
     det_task = anacal.task.Task(
         scale=pixel_scale,
-        sigma_arcsec=0.52,
+        sigma_arcsec=0.5,
         snr_peak_min=12.0,
         omega_f=0.8,
         omega_v=0.04,
@@ -61,7 +61,7 @@ def make_detection(pixel_scale, noise_variance):
 
 def func():
     fpfs_config = anacal.fpfs.FpfsConfig(
-        sigma_shapelets1=0.45,  # The first measurement scale
+        sigma_shapelets1=0.52,  # The first measurement scale
         sigma_shapelets2=0.60,  # The second measurement scale
     )
     mag_zero = 30.0
