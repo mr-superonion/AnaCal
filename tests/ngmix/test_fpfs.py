@@ -73,17 +73,12 @@ def test_ngmix_fpfs():
     m22s = cat.fpfs_e2.v * cat.fpfs_m0.v
 
     sigma_shapelets_fpfs = sigma_shapelets * np.sqrt(2.0)
-    bound = 35
-    std = 0.2
 
     ftask = anacal.fpfs.FpfsTask(
         npix=64,
         pixel_scale=scale,
         sigma_shapelets=sigma_shapelets_fpfs,
         psf_array=psf_array,
-        do_detection=True,
-        noise_variance=std**2.0,
-        bound=bound,
     )
 
     coords = np.array(

@@ -11,8 +11,6 @@
 namespace anacal {
 namespace fpfs {
 
-inline constexpr double fpfs_det_sigma2 = 0.04;
-inline constexpr double fpfs_cut_sigma_ratio = 1.6;
 namespace detail {
     inline std::vector<double>
     make_rfftfreq(int n) {
@@ -335,87 +333,6 @@ shapelets2d(int npix, double sigma, double kmax) {
     return chi;
 }
 
-inline py::array_t<std::complex<double>>
-detlets2d(int npix, double sigma, double kmax) {
-    const int ny = npix;
-    const int nx = npix / 2 + 1;
-    const int det_nrot = 4;
-    const int nmode = 3 * det_nrot;
-
-    py::array_t<std::complex<double>> psi({nmode, ny, nx});
-    auto out = psi.mutable_unchecked<3>();
-
-    std::vector<double> xfreq = detail::make_rfftfreq(npix);
-    std::vector<double> yfreq = detail::make_fftfreq(npix);
-
-    std::vector<double> gauss(static_cast<size_t>(ny) * nx, 0.0);
-    std::vector<double> k1grid(static_cast<size_t>(ny) * nx, 0.0);
-    std::vector<double> k2grid(static_cast<size_t>(ny) * nx, 0.0);
-
-    const double kmax2 = kmax * kmax;
-    const double sigma2 = sigma * sigma;
-
-    for (int j = 0; j < ny; ++j) {
-        const double ky = yfreq[j];
-        for (int i = 0; i < nx; ++i) {
-            const double kx = xfreq[i];
-            const double r2 = kx * kx + ky * ky;
-            const size_t idx = static_cast<size_t>(j) * nx + static_cast<size_t>(i);
-            if (r2 <= kmax2) {
-                gauss[idx] = std::exp(-r2 / (2.0 * sigma2));
-            } else {
-                gauss[idx] = 0.0;
-            }
-            k1grid[idx] = kx;
-            k2grid[idx] = ky;
-        }
-    }
-
-    const double norm = static_cast<double>(npix) * static_cast<double>(npix);
-    std::vector<double> q1(static_cast<size_t>(ny) * nx, 0.0);
-    std::vector<double> q2(static_cast<size_t>(ny) * nx, 0.0);
-    std::vector<std::complex<double>> d1(static_cast<size_t>(ny) * nx);
-    std::vector<std::complex<double>> d2(static_cast<size_t>(ny) * nx);
-
-    for (int j = 0; j < ny; ++j) {
-        for (int i = 0; i < nx; ++i) {
-            const size_t idx = static_cast<size_t>(j) * nx + static_cast<size_t>(i);
-            const double gaussian = gauss[idx] / norm;
-            const double k1 = k1grid[idx];
-            const double k2 = k2grid[idx];
-            q1[idx] = ((k1 * k1) - (k2 * k2)) / sigma2 * gaussian;
-            q2[idx] = (2.0 * k1 * k2) / sigma2 * gaussian;
-            d1[idx] = std::complex<double>(0.0, -k1) * gaussian;
-            d2[idx] = std::complex<double>(0.0, -k2) * gaussian;
-            gauss[idx] = gaussian;
-        }
-    }
-
-    for (int irot = 0; irot < det_nrot; ++irot) {
-        const double angle = 2.0 * M_PI * static_cast<double>(irot) / det_nrot;
-        const double cx = std::cos(angle);
-        const double cy = std::sin(angle);
-        for (int j = 0; j < ny; ++j) {
-            for (int i = 0; i < nx; ++i) {
-                const size_t idx = static_cast<size_t>(j) * nx + static_cast<size_t>(i);
-                const double k1 = k1grid[idx];
-                const double k2 = k2grid[idx];
-                const double phase = k1 * cx + k2 * cy;
-                const std::complex<double> foub = std::polar(1.0, phase);
-
-                const std::complex<double> psi0 = gauss[idx] * (1.0 - foub);
-                const std::complex<double> term1 = q1[idx] + cx * d1[idx] - cy * d2[idx];
-                const std::complex<double> term2 = q2[idx] + cy * d1[idx] + cx * d2[idx];
-
-                out(0 * det_nrot + irot, j, i) = psi0;
-                out(1 * det_nrot + irot, j, i) = q1[idx] - term1 * foub;
-                out(2 * det_nrot + irot, j, i) = q2[idx] - term2 * foub;
-            }
-        }
-    }
-
-    return psi;
-}
 
 inline double
 get_kmax(

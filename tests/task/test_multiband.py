@@ -143,7 +143,8 @@ def test_three_identical_bands_reproduce_one_band():
 
 def test_band_order_does_not_matter():
     psf_objs, psfs, imgs, variances = [], [], [], []
-    for fwhm, mag, var in ((0.7, 23.5, 0.10), (0.9, 24.0, 0.25), (0.6, 24.5, 0.40)):
+    band_specs = ((0.7, 23.5, 0.10), (0.9, 24.0, 0.25), (0.6, 24.5, 0.40))
+    for fwhm, mag, var in band_specs:
         obj, psf = make_psf(fwhm)
         psf_objs.append(obj)
         psfs.append(psf)

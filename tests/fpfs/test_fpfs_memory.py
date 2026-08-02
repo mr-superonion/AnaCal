@@ -21,17 +21,52 @@ psf_array = np.asarray(
 )
 
 
+def make_detection(pixel_scale, noise_variance):
+    """Detect with the AnaCal detector (detector.h) and convert the
+    positions to the ('y', 'x') pixel catalogue FPFS measures at --
+    FPFS itself no longer detects.
+    """
+    det_task = anacal.task.Task(
+        scale=pixel_scale,
+        sigma_arcsec=0.52,
+        snr_peak_min=12.0,
+        omega_f=0.8,
+        omega_v=0.04,
+        mag_zero=30.0,
+    )
+    blocks = anacal.geometry.get_block_list(
+        gal_array.shape[0],
+        gal_array.shape[1],
+        250,
+        250,
+        80,
+        pixel_scale,
+    )
+    cat = det_task.process_image(
+        np.asarray(gal_array, dtype=np.float32),
+        psf_array,
+        variance=noise_variance,
+        block_list=blocks,
+        do_measure=False,
+    )
+    detection = np.zeros(
+        len(cat), dtype=[("y", np.float64), ("x", np.float64)]
+    )
+    detection["y"] = cat["x2_det"] / pixel_scale
+    detection["x"] = cat["x1_det"] / pixel_scale
+    return detection
+
+
 def func():
     fpfs_config = anacal.fpfs.FpfsConfig(
-        sigma_shapelets=0.52,  # The first measurement scale (also detection)
-        sigma_shapelets1=0.45,  # The second measurement scale
-        sigma_shapelets2=0.60,  # The third measurement scale
+        sigma_shapelets1=0.45,  # The first measurement scale
+        sigma_shapelets2=0.60,  # The second measurement scale
     )
     mag_zero = 30.0
     pixel_scale = 0.2
     noise_variance = 0.23**2.0
     noise_array = None
-    detection = None
+    detection = make_detection(pixel_scale, noise_variance)
     out = anacal.fpfs.process_image(
         fpfs_config=fpfs_config,
         mag_zero=mag_zero,
@@ -43,25 +78,14 @@ def func():
         detection=detection,
     )
 
-    e1 = out["fpfs_w"] * out["fpfs_e1"]
-    e1g1 = (
-        out["fpfs_dw_dg1"] * out["fpfs_e1"]
-        + out["fpfs_w"] * out["fpfs_de1_dg1"]
-    )
+    # Response ratios per measurement kernel (no selection weight: the
+    # detection/selection weight lives in the AnaCal detector path).
+    e1 = out["fpfs1_e1"]
+    e1g1 = out["fpfs1_de1_dg1"]
     print(np.sum(e1) / np.sum(e1g1))
 
-    e1 = out["fpfs_w"] * out["fpfs1_e1"]
-    e1g1 = (
-        out["fpfs_dw_dg1"] * out["fpfs1_e1"]
-        + out["fpfs_w"] * out["fpfs1_de1_dg1"]
-    )
-    print(np.sum(e1) / np.sum(e1g1))
-
-    e1 = out["fpfs_w"] * out["fpfs2_e1"]
-    e1g1 = (
-        out["fpfs_dw_dg1"] * out["fpfs2_e1"]
-        + out["fpfs_w"] * out["fpfs2_de1_dg1"]
-    )
+    e1 = out["fpfs2_e1"]
+    e1g1 = out["fpfs2_de1_dg1"]
     print(np.sum(e1) / np.sum(e1g1))
     del out, fpfs_config
     return

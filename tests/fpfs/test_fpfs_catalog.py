@@ -9,15 +9,9 @@ q1 = 0.12069805
 q1_g1 = -1.06407001
 q2 = 0.14146077
 q2_g2 = -0.2025206
-w = 0.00526255
-w_g1 = 2.81036601
-w_g2 = 3.30901692
-flux = 34.75230547
 
 
 std_m00 = 1.0834360726086465
-std_r2 = 2.5048658664072154
-std_v = 1.251018909728324
 
 
 dtype = [
@@ -33,18 +27,6 @@ dtype = [
     ("m60", "<f8"),
     ("m64c", "<f8"),
     ("m64s", "<f8"),
-    ("v0", "<f8"),
-    ("v1", "<f8"),
-    ("v2", "<f8"),
-    ("v3", "<f8"),
-    ("dv0_dg1", "<f8"),
-    ("dv1_dg1", "<f8"),
-    ("dv2_dg1", "<f8"),
-    ("dv3_dg1", "<f8"),
-    ("dv0_dg2", "<f8"),
-    ("dv1_dg2", "<f8"),
-    ("dv2_dg2", "<f8"),
-    ("dv3_dg2", "<f8"),
 ]
 
 mm_st = np.array(
@@ -62,18 +44,6 @@ mm_st = np.array(
             4.04315886,
             5.54036462,
             15.0743539,
-            0.0942872,
-            1.47942416,
-            3.84008247,
-            2.29085822,
-            3.64885571,
-            6.36896711,
-            8.43807404,
-            0.93694728,
-            0.3926889,
-            11.1870979,
-            14.63340806,
-            17.81840394,
         )
     ],
     dtype=dtype,
@@ -93,123 +63,33 @@ nn_st = np.array(
             0.22930153,
             1.11395431,
             2.06584609,
-            2.83092276,
-            -6.01609028,
-            -1.18313861,
-            -1.15826497,
-            -3.14368109,
-            4.77983001,
-            -2.06366764,
-            1.86790905,
-            -0.75719894,
-            -7.11824815,
-            -3.9632181,
-            -1.77036605,
         )
     ],
     dtype=dtype,
 )
 
-snr_min = 8
-r2_min = 0.1
 c0 = 5.0
-sigma_shapelets = 0.52
-pixel_scale = 0.2
-pthres = 0.12
 
 
 def test_catalog():
     dm_dg = anacal.fpfs.measure_shapelets_dg(mm_st, nn_st)
     ell = anacal.fpfs.measure_fpfs_shape(c0 * std_m00, mm_st, dm_dg)
+    # measure_fpfs is the ellipticity path measure_shapelets_dg +
+    # measure_fpfs_shape in one call; both must agree with the stored
+    # fixed-point values.
     cat = anacal.fpfs.measure_fpfs(
         C0=c0 * std_m00,
-        v_min=std_v * 0.8,
-        omega_v=std_v * 1.6,
-        pthres=pthres,
-        m00_min=snr_min * std_m00,
-        std_m00=std_m00,
-        r2_min=r2_min,
-        omega_r2=std_r2 * 1.6,
         x_array=mm_st,
         y_array=nn_st,
     )
 
-    np.testing.assert_array_almost_equal(
-        ell["e1"],
-        e1,
-    )
-    np.testing.assert_array_almost_equal(
-        ell["de1_dg1"],
-        e1_g1,
-    )
-    np.testing.assert_array_almost_equal(
-        ell["e2"],
-        e2,
-    )
-    np.testing.assert_array_almost_equal(
-        ell["de2_dg2"],
-        e2_g2,
-    )
-    np.testing.assert_array_almost_equal(
-        ell["q1"],
-        q1,
-    )
-    np.testing.assert_array_almost_equal(
-        ell["dq1_dg1"],
-        q1_g1,
-    )
-    np.testing.assert_array_almost_equal(
-        ell["q2"],
-        q2,
-    )
-    np.testing.assert_array_almost_equal(
-        ell["dq2_dg2"],
-        q2_g2,
-    )
-
-    np.testing.assert_array_almost_equal(
-        cat["e1"],
-        e1,
-    )
-    np.testing.assert_array_almost_equal(
-        cat["de1_dg1"],
-        e1_g1,
-    )
-    np.testing.assert_array_almost_equal(
-        cat["e2"],
-        e2,
-    )
-    np.testing.assert_array_almost_equal(
-        cat["de2_dg2"],
-        e2_g2,
-    )
-    np.testing.assert_array_almost_equal(
-        cat["q1"],
-        q1,
-    )
-    np.testing.assert_array_almost_equal(
-        cat["dq1_dg1"],
-        q1_g1,
-    )
-    np.testing.assert_array_almost_equal(
-        cat["q2"],
-        q2,
-    )
-    np.testing.assert_array_almost_equal(
-        cat["dq2_dg2"],
-        q2_g2,
-    )
-
-    np.testing.assert_array_almost_equal(
-        cat["w"],
-        w,
-    )
-    np.testing.assert_array_almost_equal(
-        cat["dw_dg1"],
-        w_g1,
-    )
-    np.testing.assert_array_almost_equal(
-        cat["dw_dg2"],
-        w_g2,
-    )
+    for out in (ell, cat):
+        np.testing.assert_array_almost_equal(out["e1"], e1)
+        np.testing.assert_array_almost_equal(out["de1_dg1"], e1_g1)
+        np.testing.assert_array_almost_equal(out["e2"], e2)
+        np.testing.assert_array_almost_equal(out["de2_dg2"], e2_g2)
+        np.testing.assert_array_almost_equal(out["q1"], q1)
+        np.testing.assert_array_almost_equal(out["dq1_dg1"], q1_g1)
+        np.testing.assert_array_almost_equal(out["q2"], q2)
+        np.testing.assert_array_almost_equal(out["dq2_dg2"], q2_g2)
     return

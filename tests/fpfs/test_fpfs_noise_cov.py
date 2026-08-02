@@ -30,9 +30,7 @@ def test_noise_covariance():
         psf_array=psf_array,
         pixel_scale=pixel_scale,
         sigma_shapelets=sigma_as,
-        do_detection=True,
         kmax_thres=1e-20,
-        noise_variance=variance / 2.0,
     )
     cov_elem2 = ftask.calculate_covariance(
         variance=variance,
@@ -68,8 +66,6 @@ def test_covariance_from_simulation():
         psf_array=psf_array,
         pixel_scale=pixel_scale,
         sigma_shapelets=sigma_shapelets,
-        do_detection=True,
-        noise_variance=noise_variance,
     )
 
     # --- Analytical covariance ---

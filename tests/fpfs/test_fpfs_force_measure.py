@@ -50,7 +50,6 @@ def do_test(scale, shift_x, shift_y):
         pixel_scale=scale,
         sigma_shapelets=sigma_shapelets,
         psf_array=psf_array,
-        do_detection=False,
     )
 
     src = ftask.run(

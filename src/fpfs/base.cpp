@@ -30,13 +30,6 @@ pyExportFpfsBase(py::module_& fpfs) {
         py::arg("kmax")
     );
     fpfs.def(
-        "detlets2d",
-        &detlets2d,
-        py::arg("npix"),
-        py::arg("sigma"),
-        py::arg("kmax")
-    );
-    fpfs.def(
         "get_kmax",
         &get_kmax,
         py::arg("psf_pow"),

@@ -119,7 +119,6 @@ def test_flux_variance():
         noise_array=None,
         detection=det,
         psf_object=None,
-        do_compute_detect_weight=False,
     )
     flux2 = anacal.fpfs.m00_to_flux(
         catalog["fpfs1_m00"],

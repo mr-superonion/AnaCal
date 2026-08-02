@@ -16,7 +16,6 @@ noise_variance = noise_std**2.0
 # to False, but keep the noise variance to the realistic one as the input
 # of the measurement
 do_add_noise = False  # Add image noise or not
-do_force_detect = True  # Force to have a detection at the center
 
 rcut = 32  # cutout radius
 test_component = 1  # which shear component to test
@@ -24,33 +23,31 @@ nrot_per_gal = 4  # number of rotation for each galaxy
 
 # Simulation
 ngrid = rcut * 2
-if not do_force_detect:
-    detection = None
-    buff = 15
-else:
-    #
-    # Force to have a detection at the center
-    #
-    indx = np.arange(ngrid // 2, ngrid * nstamp, ngrid)
-    indy = np.arange(ngrid // 2, ngrid * nstamp, ngrid)
-    ns = len(indx) * len(indy)
-    inds = np.meshgrid(indy, indx, indexing="ij")
-    yx = np.vstack([np.ravel(_) for _ in inds])
-    buff = 0
-    dtype = np.dtype(
-        [
-            ("y", np.int32),
-            ("x", np.int32),
-        ]
-    )
-    detection = np.empty(ns, dtype=dtype)
-    detection["y"] = yx[0]
-    detection["x"] = yx[1]
+#
+# FPFS no longer detects internally: detection is done with the AnaCal
+# detector (anacal.task.Task / detector.h) on real data.  Here the
+# galaxies sit at the stamp centres, so the detection catalogue is
+# simply the stamp-centre grid.
+#
+indx = np.arange(ngrid // 2, ngrid * nstamp, ngrid)
+indy = np.arange(ngrid // 2, ngrid * nstamp, ngrid)
+ns = len(indx) * len(indy)
+inds = np.meshgrid(indy, indx, indexing="ij")
+yx = np.vstack([np.ravel(_) for _ in inds])
+buff = 0
+dtype = np.dtype(
+    [
+        ("y", np.int32),
+        ("x", np.int32),
+    ]
+)
+detection = np.empty(ns, dtype=dtype)
+detection["y"] = yx[0]
+detection["x"] = yx[1]
 
 fpfs_config = anacal.fpfs.FpfsConfig(
-    sigma_shapelets=0.52,  # base measurement kernel (also for detection)
-    sigma_shapelets1=0.45,  # kernel 1
-    sigma_shapelets2=0.55,  # kernel 2
+    sigma_shapelets1=0.52,  # kernel 1 (required)
+    sigma_shapelets2=0.55,  # kernel 2 (optional)
 )
 
 
@@ -108,69 +105,27 @@ for gname in ["g%d-1" % test_component, "g%d-0" % test_component]:
         )
     )
 
-# Printing the results
+# Printing the results.  Every galaxy is force-measured at its stamp
+# centre, so no selection weight is needed (the detection/selection
+# weight lives in the AnaCal detector path on real data).
 print("Testing for shear component: %d" % test_component)
-print("Measurement with sigma_shapelets=%.2f:" % fpfs_config.sigma_shapelets)
 
-wname = "fpfs_w"
-wgname = "fpfs_dw_dg%d" % test_component
-
-ename = "fpfs_e%d" % test_component
-egname = "fpfs_de%d_dg%d" % (test_component, test_component)
-e1_0 = out[0][wname] * out[0][ename]
-e1_1 = out[1][wname] * out[1][ename]
-e1g1_0 = out[0][wgname] * out[0][ename] + out[0][wname] * out[0][egname]
-e1g1_1 = out[1][wgname] * out[1][ename] + out[1][wname] * out[1][egname]
-
-mbias = (np.sum(e1_0) - np.sum(e1_1)) / (
-    np.sum(e1g1_0) + np.sum(e1g1_1)
-) / 0.02 - 1  # 0.02 is the input shear
-print("    Multiplicative bias is %.3f e-3" % (mbias * 1e3))
-cbias = (np.sum(e1_0) + np.sum(e1_1)) / (np.sum(e1g1_0) + np.sum(e1g1_1))
-print("    Additive bias is %.3f e-5" % (cbias * 1e5))
-assert mbias < 2e-3
-if do_force_detect:
-    print("Test for no weigtht")
+for prefix, sigma in [
+    ("fpfs1", fpfs_config.sigma_shapelets1),
+    ("fpfs2", fpfs_config.sigma_shapelets2),
+]:
+    print("Measurement with sigma_shapelets=%.2f:" % sigma)
+    ename = "%s_e%d" % (prefix, test_component)
+    egname = "%s_de%d_dg%d" % (prefix, test_component, test_component)
     e1_0 = out[0][ename]
     e1_1 = out[1][ename]
     e1g1_0 = out[0][egname]
     e1g1_1 = out[1][egname]
+
     mbias = (np.sum(e1_0) - np.sum(e1_1)) / (
         np.sum(e1g1_0) + np.sum(e1g1_1)
     ) / 0.02 - 1  # 0.02 is the input shear
     print("    Multiplicative bias is %.3f e-3" % (mbias * 1e3))
     cbias = (np.sum(e1_0) + np.sum(e1_1)) / (np.sum(e1g1_0) + np.sum(e1g1_1))
     print("    Additive bias is %.3f e-5" % (cbias * 1e5))
-
-
-print("Measurement with sigma_shapelets=%.2f:" % fpfs_config.sigma_shapelets1)
-ename = "fpfs1_e%d" % test_component
-egname = "fpfs1_de%d_dg%d" % (test_component, test_component)
-e1_0 = out[0][wname] * out[0][ename]
-e1_1 = out[1][wname] * out[1][ename]
-e1g1_0 = out[0][wgname] * out[0][ename] + out[0][wname] * out[0][egname]
-e1g1_1 = out[1][wgname] * out[1][ename] + out[1][wname] * out[1][egname]
-
-mbias = (np.sum(e1_0) - np.sum(e1_1)) / (
-    np.sum(e1g1_0) + np.sum(e1g1_1)
-) / 0.02 - 1  # 0.02 is the input shear
-print("    Multiplicative bias is %.3f e-3" % (mbias * 1e3))
-cbias = (np.sum(e1_0) + np.sum(e1_1)) / (np.sum(e1g1_0) + np.sum(e1g1_1))
-print("    Additive bias is %.3f e-5" % (cbias * 1e5))
-assert mbias < 2e-3
-
-print("Measurement with sigma_shapelets=%.2f:" % fpfs_config.sigma_shapelets2)
-ename = "fpfs2_e%d" % test_component
-egname = "fpfs2_de%d_dg%d" % (test_component, test_component)
-e1_0 = out[0][wname] * out[0][ename]
-e1_1 = out[1][wname] * out[1][ename]
-e1g1_0 = out[0][wgname] * out[0][ename] + out[0][wname] * out[0][egname]
-e1g1_1 = out[1][wgname] * out[1][ename] + out[1][wname] * out[1][egname]
-
-mbias = (np.sum(e1_0) - np.sum(e1_1)) / (
-    np.sum(e1g1_0) + np.sum(e1g1_1)
-) / 0.02 - 1  # 0.02 is the input shear
-print("    Multiplicative bias is %.3f e-3" % (mbias * 1e3))
-cbias = (np.sum(e1_0) + np.sum(e1_1)) / (np.sum(e1g1_0) + np.sum(e1g1_1))
-print("    Additive bias is %.3f e-5" % (cbias * 1e5))
-assert mbias < 2e-3
+    assert mbias < 2e-3

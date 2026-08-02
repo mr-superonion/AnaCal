@@ -31,13 +31,46 @@ bi_fname = os.path.join(
 )
 
 
+def make_detection(gal_array, psf_array, scale, noise_variance):
+    """Detect with the AnaCal detector (detector.h) and convert to the
+    ('y', 'x') pixel catalogue FPFS measures at -- FPFS itself no longer
+    detects.
+    """
+    det_task = anacal.task.Task(
+        scale=scale,
+        sigma_arcsec=0.53,
+        snr_peak_min=10.0,
+        omega_f=0.8,
+        omega_v=0.04,
+        mag_zero=30.0,
+    )
+    blocks = anacal.geometry.get_block_list(
+        gal_array.shape[0],
+        gal_array.shape[1],
+        250,
+        250,
+        80,
+        scale,
+    )
+    cat = det_task.process_image(
+        np.asarray(gal_array, dtype=np.float32),
+        psf_array,
+        variance=noise_variance,
+        block_list=blocks,
+        do_measure=False,
+    )
+    det = np.zeros(len(cat), dtype=[("y", "f8"), ("x", "f8")])
+    det["y"] = cat["x2_det"] / scale
+    det["x"] = cat["x1_det"] / scale
+    return det
+
+
 def test_fpfs_measure():
     scale = 0.2
     ngrid2 = 64
     psf_array = fitsio.read(psf_fname)
     gal_array = fitsio.read(gal_fname)
     sigma_shapelets = 0.53
-    bound = 35
     std = 0.2
 
     ftask = anacal.fpfs.FpfsTask(
@@ -45,20 +78,9 @@ def test_fpfs_measure():
         pixel_scale=scale,
         sigma_shapelets=sigma_shapelets,
         psf_array=psf_array,
-        do_detection=True,
-        noise_variance=std**2.0,
-        bound=bound,
     )
 
-    det1 = ftask.detect(
-        gal_array=gal_array,
-        fthres=10.0,
-        pthres=anacal.fpfs.fpfs_det_sigma2 + 0.02,
-        omega_v=0.5114518266655768,
-        v_min=0.2557259133327884,
-        noise_array=None,
-    )
-
+    det1 = make_detection(gal_array, psf_array, scale, std**2.0)
     det1 = det1[np.lexsort((det1["y"], det1["x"]))]
     src = ftask.run(
         gal_array=gal_array,

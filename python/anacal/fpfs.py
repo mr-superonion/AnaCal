@@ -7,20 +7,12 @@ from numpy.typing import NDArray
 from ._anacal.fpfs import (
     FpfsImage,
 )
-from ._anacal.fpfs import detlets2d as _detlets2d
-from ._anacal.fpfs import (
-    fpfs_cut_sigma_ratio,
-    fpfs_det_sigma2,
-)
 from ._anacal.fpfs import gauss_kernel_rfft as _gauss_kernel_rfft
 from ._anacal.fpfs import get_kmax as _get_kmax
 from ._anacal.fpfs import m00_to_flux as _m00_to_flux
 from ._anacal.fpfs import (
     measure_fpfs,
     measure_fpfs_shape,
-    measure_fpfs_wdet,
-    measure_fpfs_wdet0,
-    measure_fpfs_wsel,
     measure_shapelets_dg,
 )
 from ._anacal.fpfs import shapelets2d as _shapelets2d
@@ -28,9 +20,6 @@ from ._anacal.fpfs import shapelets2d_func as _shapelets2d_func
 from ._anacal.image import Image
 from ._anacal.task import THRESHOLD_REF_MAG_ZERO
 from .psf import BasePsf
-
-npix_patch = 256
-npix_overlap = 64
 
 # Lower bound on the per-kernel flux uncertainty.  A noiseless image gives
 # std_m00 == 0, which would make s2n and its shear response infinite; this
@@ -110,44 +99,6 @@ def shapelets2d(norder: int, npix: int, sigma: float, kmax: float):
         return np.array(chi)[0:9], name_s[0:9]
     elif norder == 2:
         return np.array(chi)[0:4], name_s[0:4]
-
-
-def detlets2d(
-    npix: int,
-    sigma: float,
-    kmax: float,
-):
-    """Generate detection basis functions (detlets) in Fourier space.
-
-    Detlets are used for peak detection and their shear derivatives.
-
-    Args:
-        npix (int): Number of pixels along each axis of the square grid.
-        sigma (float): Gaussian kernel scale in Fourier-space units.
-        kmax (float): Truncation radius in Fourier space.
-
-    Returns:
-        tuple[NDArray, list[str]]: A tuple of ``(basis_functions, names)``
-        where *basis_functions* has shape ``(12, npix, npix//2+1)``
-        and *names* lists the detection mode labels (v0–v3 and their
-        shear derivatives).
-    """
-    name_d = [
-        "v0",
-        "v1",
-        "v2",
-        "v3",
-        "dv0_dg1",
-        "dv1_dg1",
-        "dv2_dg1",
-        "dv3_dg1",
-        "dv0_dg2",
-        "dv1_dg2",
-        "dv2_dg2",
-        "dv3_dg2",
-    ]
-    psi = _detlets2d(npix, sigma, kmax)
-    return psi, name_d
 
 
 def get_kmax(
@@ -277,25 +228,23 @@ def _kernel_rename_map(names, kernel):
 class FpfsTask:
     """FPFS measurement task for shapelet-based galaxy shape measurement.
 
-    Prepares shapelet and detection basis functions, then measures galaxy
-    shapes at detected positions via PSF-deconvolved Fourier-space filtering.
+    Prepares the shapelet basis functions, then measures galaxy shapes at
+    detected positions via PSF-deconvolved Fourier-space filtering.
+    Source DETECTION is not done here: all detection goes through the
+    AnaCal detector (``anacal.task.Task`` / ``detector.h``), and the
+    resulting catalog is passed in as ``det``.  Call
+    :meth:`prepare_covariance` before reading ``std_m00`` / ``std_modes``.
 
     Args:
         npix (int): Number of pixels per side of a postage stamp.
         pixel_scale (float): Pixel scale in arcseconds.
         sigma_shapelets (float): Shapelet Gaussian kernel size in arcseconds.
             Must be less than 3.0.
-        noise_variance (float): Variance of the image noise per pixel.
-            Must be positive when *do_detection* is ``True``.
         kmax (float | None): Maximum wavenumber for Fourier-space truncation.
             If ``None``, estimated automatically from the PSF.
         psf_array (NDArray | None): Average PSF image of shape
             ``(npix, npix)``.  Defaults to a delta function at centre.
         kmax_thres (float): Threshold for automatic ``kmax`` estimation.
-        do_detection (bool): Whether to prepare detection kernels and
-            compute noise covariance.
-        bound (int): Minimum distance to the image boundary for source
-            detection.
     """
 
     def __init__(
@@ -304,15 +253,11 @@ class FpfsTask:
         npix: int,
         pixel_scale: float,
         sigma_shapelets: float,
-        noise_variance: float = -1,
         kmax: float | None = None,
         psf_array: NDArray | None = None,
         kmax_thres: float = 1e-20,
-        do_detection: bool = True,
-        bound: int = 0,
     ) -> None:
         self.npix = npix
-        self.do_detection = do_detection
 
         self.sigma_shapelets = sigma_shapelets
         if self.sigma_shapelets > 3.0:
@@ -357,28 +302,10 @@ class FpfsTask:
             use_estimate=True,
         )
 
-        if self.do_detection:
-            self.dtask = FpfsImage(
-                nx=npix_patch,
-                ny=npix_patch,
-                scale=self.pixel_scale,
-                sigma_arcsec=self.sigma_shapelets,
-                klim=klim,
-                psf_array=self.psf_array,
-                use_estimate=True,
-                npix_overlap=npix_overlap,
-                bound=bound,
-            )
-            if not noise_variance > 0:
-                raise ValueError("Noise variance should be positive")
-            self.prepare_covariance(variance=noise_variance)
-        else:
-            self.dtask = None
-
         return
 
     def prepare_fpfs_bases(self):
-        """Prepare the FPFS bases (shapelets and detectlets)."""
+        """Prepare the FPFS shapelet bases."""
 
         bfunc = []
         self.colnames = []
@@ -390,14 +317,6 @@ class FpfsTask:
         )
         bfunc.append(sfunc)
         self.colnames = self.colnames + snames
-        if self.do_detection:
-            dfunc, dnames = detlets2d(
-                npix=self.npix,
-                sigma=self.sigmaf,
-                kmax=self.kmax,
-            )
-            bfunc.append(dfunc)
-            self.colnames = self.colnames + dnames
         self.bfunc = np.vstack(bfunc)
         self.ncol = len(self.colnames)
         self.dtype = [(name, "f8") for name in self.colnames]
@@ -558,45 +477,6 @@ class FpfsTask:
         self.std_modes = np.sqrt(np.diagonal(cov_elems))
         self.std_m00 = self.std_modes[self.di["m00"]]
         return cov_elems
-
-    def detect(
-        self,
-        *,
-        gal_array: NDArray,
-        fthres: float,
-        pthres: float,
-        omega_v: float,
-        v_min: float,
-        noise_array: NDArray | None = None,
-        mask_array: NDArray | None = None,
-    ) -> NDArray:
-        """Detect galaxies in an image using FPFS detection modes.
-
-        Args:
-            gal_array (NDArray): Galaxy image array.
-            fthres (float): Flux signal-to-noise threshold for detection.
-            pthres (float): Peak identification threshold for pooling.
-            omega_v (float): Smoothness parameter for the v-mode cut.
-            v_min (float): Minimum value of the v detection mode.
-            noise_array (NDArray | None): Pure noise image for noise-bias
-                subtraction.
-            mask_array (NDArray | None): Mask image (1 for masked pixels).
-
-        Returns:
-            NDArray: Structured array with columns ``('y', 'x')`` giving
-            detected source positions.
-        """
-        assert self.dtask is not None
-        return self.dtask.detect_source(
-            gal_array=gal_array,
-            fthres=fthres,
-            pthres=pthres,
-            std_m00=self.std_m00 * self.pixel_scale**2.0,
-            omega_v=omega_v * self.pixel_scale**2.0,
-            v_min=v_min * self.pixel_scale**2.0,
-            noise_array=noise_array,
-            mask_array=mask_array,
-        )
 
     def run_psf_array(
         self,
@@ -762,14 +642,15 @@ class FpfsTask:
 class FpfsConfig:
     """Configuration parameters for the FPFS measurement pipeline.
 
-    Flux-scale threshold and smoothness parameters (``omega_r2``, ``omega_v``,
-    ``v_min``, ``c0``) are specified in units that assume a magnitude
-    zero-point of ``THRESHOLD_REF_MAG_ZERO`` (the fixed AB nanojansky
-    zeropoint that the measurement normalizes every image onto).  They are
-    rescaled internally by :func:`process_image` to match the actual
-    zero-point, which is a no-op on that path.
+    FPFS only MEASURES here: detection (and the detection/selection
+    weight) lives in the AnaCal detector (``anacal.task.Task`` /
+    ``detector.h``), so this config carries no detection thresholds.
 
-    ``r2_min`` is dimensionless (a size ratio) and is NOT rescaled.
+    ``c0`` is specified in units that assume a magnitude zero-point of
+    ``THRESHOLD_REF_MAG_ZERO`` (the fixed AB nanojansky zeropoint that the
+    measurement normalizes every image onto).  It is rescaled internally
+    by :func:`process_image` to match the actual zero-point, which is a
+    no-op on that path.
     """
 
     npix: int = 64
@@ -779,45 +660,13 @@ class FpfsConfig:
     """The threshold used to define the upper limit of k we use in Fourier
     space."""
 
-    bound: int = 35
-    """Boundary buffer length, the sources in the buffer reion are not
-    counted."""
-
-    sigma_shapelets: float = 0.52
-    """Smoothing scale of the shapelet and detection kernel."""
-
     sigma_shapelets1: float = -1
-    """Smoothing scale of the second shapelet kernel."""
+    """Smoothing scale of the first shapelet kernel.  REQUIRED (> 0) for
+    shear estimation."""
 
     sigma_shapelets2: float = -1
-    """Smoothing scale of the third shapelet kernel."""
-
-    pthres: float = 0.12
-    """Detection threshold (peak identification) for the pooling."""
-
-    fthres: float = 8.0
-    """Detection threshold (minimum signal-to-noise ratio) for the first
-    pooling."""
-
-    omega_r2: float = 17.42774662896484
-    """smoothness parameter for r2 cut (flux scale, at
-    THRESHOLD_REF_MAG_ZERO)"""
-
-    r2_min: float = 0.05
-    """Minimum of the size ratio ``(m00 + m20) / m00``.  Dimensionless --
-    NOT zeropoint-scaled.  Matches the same cut hardcoded in the ngmix/Task
-    path (``ngmix/fitting.h``: ``fpfs_m2 - 0.05 * fpfs_m0``) and
-    ``trace_min`` in ``xlens.catalog.base``."""
-
-    omega_v: float = 3.2677024929309075
-    """smoothness parameter for v cut (flux scale, at
-    THRESHOLD_REF_MAG_ZERO)"""
-
-    v_min: float = 1.6338512464654538
-    """Minimum of v (flux scale, at THRESHOLD_REF_MAG_ZERO)"""
-
-    snr_min: float = 12
-    """Minimum Signal-to-Noise Ratio for detection."""
+    """Smoothing scale of the second shapelet kernel (optional; <= 0
+    disables it)."""
 
     c0: float = 30.0
     """Weighting parameter for m00 for ellipticity definition (flux scale,
@@ -927,7 +776,6 @@ def process_image(
     mask_array: NDArray | None = None,
     detection: NDArray | None = None,
     psf_object: BasePsf | None | NDArray = None,
-    do_compute_detect_weight: bool = True,
     return_only_linear_modes: bool = False,
     pack_linear_modes: bool = False,
     base_column_name: str | None = None,
@@ -935,9 +783,13 @@ def process_image(
 ):
     """Run the full FPFS measurement pipeline on an exposure.
 
-    Performs source detection (unless a pre-computed catalogue is
-    provided), measures shapelet and detection modes, applies non-linear
-    shear estimators, and returns a structured catalogue.
+    Measures shapelet modes at the given detected positions with the
+    ``sigma_shapelets1`` kernel (required) and, when set, the
+    ``sigma_shapelets2`` kernel, applies the non-linear shear estimators,
+    and returns a structured catalogue.  Detection is NOT done here: all
+    detection goes through the AnaCal detector (``anacal.task.Task`` /
+    ``detector.h``), and its catalogue must be supplied via
+    ``detection``.
 
     Args:
         fpfs_config (FpfsConfig): Configuration object holding all
@@ -950,13 +802,12 @@ def process_image(
         noise_array (NDArray | None): Pure noise array for noise-bias
             subtraction.
         mask_array (NDArray | None): Mask array (1 for masked pixels).
-        detection (NDArray | None): Pre-computed detection catalogue with
-            ``('y', 'x')`` columns.  If ``None``, detection is run
-            internally.
+        detection (NDArray): Pre-computed detection catalogue with
+            ``('y', 'x')`` columns (pixel positions), e.g. converted from
+            the ``x1_det``/``x2_det`` columns of an ``anacal.task.Task``
+            detection.  Required.
         psf_object (BasePsf | None | NDArray): Spatially varying PSF
             model.  Falls back to *psf_array* when ``None``.
-        do_compute_detect_weight (bool): Whether to measure shapelet
-            modes at the default kernel scale.
         return_only_linear_modes (bool): If ``True``, return raw linear
             modes instead of the non-linear shear catalogue.
         pack_linear_modes (bool): When *return_only_linear_modes* is
@@ -968,140 +819,73 @@ def process_image(
         NDArray | dict: Structured FPFS catalogue (default), or a dict
         of linear-mode arrays when *return_only_linear_modes* is ``True``.
     """
-    # Flux-scale thresholds are defined at THRESHOLD_REF_MAG_ZERO -- the fixed
-    # AB nanojansky zeropoint that the measurement normalizes every image onto
-    # -- so this ratio is exactly 1.0 on that path.  It only bites for callers
-    # feeding an image on its native zeropoint (e.g. Euclid VIS MAGZERO=24.6).
+    # The flux-scale ellipticity weight c0 is defined at
+    # THRESHOLD_REF_MAG_ZERO -- the fixed AB nanojansky zeropoint that the
+    # measurement normalizes every image onto -- so this ratio is exactly
+    # 1.0 on that path.  It only bites for callers feeding an image on its
+    # native zeropoint (e.g. Euclid VIS MAGZERO=24.6).
     ratio = 10 ** ((mag_zero - THRESHOLD_REF_MAG_ZERO) / 2.5)
-    # r2_min is deliberately NOT scaled: it is dimensionless, multiplying the
-    # flux-valued m00 in ``r2l = m00 * (1 - r2_min) + m20`` (fpfs/catalog.h).
-    # Scaling it would silently move the size cut.
-    r2_min = fpfs_config.r2_min
-    omega_r2 = fpfs_config.omega_r2 * ratio
-    v_min = fpfs_config.v_min * ratio
-    omega_v = fpfs_config.omega_v * ratio
     fpfs_c0 = fpfs_config.c0 * ratio
 
     if psf_object is None:
         psf_object = psf_array
 
+    if detection is None:
+        raise ValueError(
+            "process_image requires a detection catalogue: run detection "
+            "with the AnaCal detector (anacal.task.Task / detector.h) and "
+            "pass its positions as a structured array with ('y', 'x') "
+            "columns."
+        )
+    if detection.dtype.names != ("y", "x"):
+        raise ValueError("detection has wrong column names")
+    if not fpfs_config.sigma_shapelets1 > 0:
+        raise ValueError(
+            "sigma_shapelets1 must be set (> 0): it is the measurement "
+            "kernel required for shear estimation."
+        )
+
     linear_modes: dict[str, np.ndarray] | None = {} \
         if return_only_linear_modes else None
     out_list: list[np.ndarray] | None = None if return_only_linear_modes else []
 
-    if do_compute_detect_weight or (detection is None):
-        ftask = FpfsTask(
-            npix=fpfs_config.npix,
-            pixel_scale=pixel_scale,
-            sigma_shapelets=fpfs_config.sigma_shapelets,
-            noise_variance=noise_variance,
-            psf_array=psf_array,
-            kmax_thres=fpfs_config.kmax_thres,
-            do_detection=True,
-            bound=fpfs_config.bound,
+    ftask = FpfsTask(
+        npix=fpfs_config.npix,
+        pixel_scale=pixel_scale,
+        sigma_shapelets=fpfs_config.sigma_shapelets1,
+        psf_array=psf_array,
+        kmax_thres=fpfs_config.kmax_thres,
+    )
+    ftask.prepare_covariance(variance=noise_variance)
+    std_m00_1 = ftask.std_m00
+    src = ftask.run(
+        gal_array=gal_array,
+        psf=psf_object,
+        det=detection,
+        noise_array=noise_array,
+    )
+    del ftask
+    if linear_modes is not None:
+        linear_modes["data1"] = src["data"]
+        linear_modes["noise1"] = src["noise"]
+        linear_modes["std_m00_1"] = std_m00_1
+    else:
+        assert out_list is not None
+        meas1 = measure_fpfs(
+            C0=fpfs_c0,
+            x_array=src["data"],
+            y_array=src["noise"],
         )
-        std_m00 = ftask.std_m00
-        m00_min = fpfs_config.snr_min * std_m00
-        if detection is None:
-            detection = ftask.detect(
-                gal_array=gal_array,
-                fthres=fpfs_config.fthres,
-                pthres=fpfs_config.pthres,
-                noise_array=noise_array,
-                v_min=v_min,
-                omega_v=omega_v,
-                mask_array=mask_array,
-            )
-        else:
-            colnames = ("y", "x")
-            if detection.dtype.names != colnames:
-                raise ValueError("detection has wrong column names")
-
-        if linear_modes is not None:
-            linear_modes["detection"] = detection
-        else:
-            assert out_list is not None
-            out_list.append(detection)
-
-        if do_compute_detect_weight:
-            src = ftask.run(
-                gal_array=gal_array,
-                psf=psf_object,
-                det=detection,
-                noise_array=noise_array,
-            )
-            del ftask
-            if linear_modes is not None:
-                linear_modes["data"] = src["data"]
-                linear_modes["noise"] = src["noise"]
-                linear_modes["std_m00"] = std_m00
-            else:
-                assert out_list is not None
-                meas = measure_fpfs(
-                    C0=fpfs_c0,
-                    v_min=v_min,
-                    omega_v=omega_v,
-                    pthres=fpfs_config.pthres,
-                    m00_min=m00_min,
-                    std_m00=std_m00,
-                    r2_min=r2_min,
-                    omega_r2=omega_r2,
-                    x_array=src["data"],
-                    y_array=src["noise"],
-                )
-                meas = rfn.append_fields(
-                    meas, "m00_err",
-                    np.full(len(meas), std_m00, dtype=np.float64),
-                    usemask=False,
-                )
-                out_list.append(_append_flux_gauss(
-                    meas, fpfs_config.sigma_shapelets, std_m00, "fpfs",
-                ))
-            del src
-
-    if detection is None and (
-        fpfs_config.sigma_shapelets1 > 0 or fpfs_config.sigma_shapelets2 > 0
-    ):
-        raise RuntimeError("Do not have detection array")
-
-    if fpfs_config.sigma_shapelets1 > 0:
-        ftask = FpfsTask(
-            npix=fpfs_config.npix,
-            pixel_scale=pixel_scale,
-            sigma_shapelets=fpfs_config.sigma_shapelets1,
-            psf_array=psf_array,
-            kmax_thres=fpfs_config.kmax_thres,
-            do_detection=False,
+        meas1 = rfn.append_fields(
+            meas1, "m00_err",
+            np.full(len(meas1), std_m00_1, dtype=np.float64),
+            usemask=False,
         )
-        ftask.prepare_covariance(variance=noise_variance)
-        std_m00_1 = ftask.std_m00
-        src = ftask.run(
-            gal_array=gal_array,
-            psf=psf_object,
-            det=detection,
-            noise_array=noise_array,
-        )
-        del ftask
-        if linear_modes is not None:
-            linear_modes["data1"] = src["data"]
-            linear_modes["noise1"] = src["noise"]
-            linear_modes["std_m00_1"] = std_m00_1
-        else:
-            meas1 = measure_fpfs(
-                C0=fpfs_c0,
-                x_array=src["data"],
-                y_array=src["noise"],
-            )
-            meas1 = rfn.append_fields(
-                meas1, "m00_err",
-                np.full(len(meas1), std_m00_1, dtype=np.float64),
-                usemask=False,
-            )
-            out_list.append(_append_flux_gauss(
-                meas1, fpfs_config.sigma_shapelets1, std_m00_1, "fpfs1",
-            ))
-            del meas1
-        del src
+        out_list.append(_append_flux_gauss(
+            meas1, fpfs_config.sigma_shapelets1, std_m00_1, "fpfs1",
+        ))
+        del meas1
+    del src
 
     if fpfs_config.sigma_shapelets2 > 0:
         ftask = FpfsTask(
@@ -1110,7 +894,6 @@ def process_image(
             sigma_shapelets=fpfs_config.sigma_shapelets2,
             psf_array=psf_array,
             kmax_thres=fpfs_config.kmax_thres,
-            do_detection=False,
         )
         ftask.prepare_covariance(variance=noise_variance)
         std_m00_2 = ftask.std_m00
@@ -1167,7 +950,5 @@ def process_image(
 
 
 __all__ = [
-    "measure_fpfs_wsel", "measure_fpfs_wdet", "measure_fpfs_shape",
-    "measure_fpfs_wdet0", "measure_shapelets_dg", "fpfs_cut_sigma_ratio",
-    "fpfs_det_sigma2",
+    "measure_fpfs", "measure_fpfs_shape", "measure_shapelets_dg",
 ]

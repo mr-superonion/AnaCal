@@ -32,7 +32,7 @@ def test_fpfs_init():
     buff = 15
 
     fpfs_config = anacal.fpfs.FpfsConfig(
-        sigma_shapelets=0.52,  # The first measurement scale (also detection)
+        sigma_shapelets1=0.52,  # The first measurement scale
         sigma_shapelets2=0.45,  # The second measurement scale
     )
 
@@ -72,6 +72,16 @@ def test_fpfs_init():
         scale=noise_std,
         size=gal_array.shape,
     )
+    # Detection is external now (the AnaCal detector owns detection); the
+    # simulation puts one galaxy at the centre of each ngrid x ngrid stamp,
+    # so the detection catalogue is simply the stamp-centre grid.
+    centers = np.arange(nstamp) * ngrid + ngrid // 2
+    yy, xx = np.meshgrid(centers, centers, indexing="ij")
+    detection = np.zeros(
+        nstamp * nstamp, dtype=[("y", np.float64), ("x", np.float64)]
+    )
+    detection["y"] = yy.ravel()
+    detection["x"] = xx.ravel()
     out1 = anacal.fpfs.process_image(
         fpfs_config=fpfs_config,
         mag_zero=30.0,
@@ -80,6 +90,7 @@ def test_fpfs_init():
         pixel_scale=pixel_scale,
         noise_variance=max(noise_variance, 0.23),
         noise_array=noise_array,
+        detection=detection,
     )
     psf_object = MyPsf(psf_array=psf_array)
     t0 = time.time()
@@ -91,6 +102,7 @@ def test_fpfs_init():
         pixel_scale=pixel_scale,
         noise_variance=max(noise_variance, 0.23),
         noise_array=noise_array,
+        detection=detection,
     )
     t1 = time.time()
     print("C++ Time: ", t1 - t0)
@@ -102,6 +114,7 @@ def test_fpfs_init():
         pixel_scale=pixel_scale,
         noise_variance=max(noise_variance, 0.23),
         noise_array=noise_array,
+        detection=detection,
         psf_object=psf_object,
     )
     t2 = time.time()

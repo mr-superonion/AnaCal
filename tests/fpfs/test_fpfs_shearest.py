@@ -66,7 +66,6 @@ def do_test(scale, seed, rcut, gcomp):
         pixel_scale=scale,
         sigma_shapelets=sigma_shapelets,
         psf_array=psf_array,
-        do_detection=False,
     )
 
     src = ftask.run(
