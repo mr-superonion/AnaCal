@@ -209,19 +209,25 @@ namespace fpfs {
         int nn = x_array.shape(0);
         py::array_t<FpfsShapeletsResponse> out(nn);
         auto out_r = out.template mutable_unchecked<1>();
-        if (y_array.has_value()) {
-            auto y_r = y_array->template unchecked<1>();
-            for (ssize_t i = 0; i < nn; ++i) {
-                out_r(i) = measure_shapelets_dg<T>(
-                    x_r(i),
-                    y_r(i)
-                );
-            }
-        } else {
-            for (ssize_t i = 0; i < nn; ++i) {
-                out_r(i) = measure_shapelets_dg<T>(
-                    x_r(i)
-                );
+        // Pure struct arithmetic over pre-created accessors: release the
+        // GIL for the loop (braced so it ends before the return touches
+        // the py object).
+        {
+            ScopedGilRelease release;
+            if (y_array.has_value()) {
+                auto y_r = y_array->template unchecked<1>();
+                for (ssize_t i = 0; i < nn; ++i) {
+                    out_r(i) = measure_shapelets_dg<T>(
+                        x_r(i),
+                        y_r(i)
+                    );
+                }
+            } else {
+                for (ssize_t i = 0; i < nn; ++i) {
+                    out_r(i) = measure_shapelets_dg<T>(
+                        x_r(i)
+                    );
+                }
             }
         }
         return out;
@@ -288,12 +294,15 @@ namespace fpfs {
         py::array_t<FpfsShape> out(nn);
         auto out_r = out.mutable_unchecked<1>();
         auto xdg_r =  x_dg_array.unchecked<1>();
-        for (ssize_t i = 0; i < nn; ++i) {
-            out_r(i) = measure_fpfs_shape(
-                C0,
-                x_r(i),
-                xdg_r(i)
-            );
+        {
+            ScopedGilRelease release;
+            for (ssize_t i = 0; i < nn; ++i) {
+                out_r(i) = measure_fpfs_shape(
+                    C0,
+                    x_r(i),
+                    xdg_r(i)
+                );
+            }
         }
         return out;
     };
@@ -321,14 +330,17 @@ namespace fpfs {
         int nn = x_array.shape(0);
         py::array_t<FpfsShape> out(nn);
         auto out_r = out.mutable_unchecked<1>();
-        if (y_array.has_value()) {
-            auto y_r = y_array->unchecked<1>();
-            for (ssize_t i = 0; i < nn; ++i) {
-                out_r(i) = measure_fpfs(C0, x_r(i), y_r(i));
-            }
-        } else {
-            for (ssize_t i = 0; i < nn; ++i) {
-                out_r(i) = measure_fpfs(C0, x_r(i));
+        {
+            ScopedGilRelease release;
+            if (y_array.has_value()) {
+                auto y_r = y_array->unchecked<1>();
+                for (ssize_t i = 0; i < nn; ++i) {
+                    out_r(i) = measure_fpfs(C0, x_r(i), y_r(i));
+                }
+            } else {
+                for (ssize_t i = 0; i < nn; ++i) {
+                    out_r(i) = measure_fpfs(C0, x_r(i));
+                }
             }
         }
         return out;

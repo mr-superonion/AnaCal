@@ -53,9 +53,19 @@ where = ["python"]
 [tool.setuptools.package-data]
 anacal = ["data/*.fits"]
 
+# Never package in-tree extension builds (from `build_ext --inplace`) as
+# package data: they would overwrite the freshly compiled extension in
+# the wheel with a stale binary.  setup.py also deletes them defensively.
+[tool.setuptools.exclude-package-data]
+anacal = ["*.so", "*.pyd", "*.dylib"]
+
 [tool.setuptools_scm]
 version_scheme = "post-release"
-local_scheme = "dirty-tag"
+# node-and-date (not dirty-tag): a bare "+dirty" version is identical for
+# EVERY uncommitted state, so pip's wheel cache can serve an arbitrarily
+# old build under the same version.  Including the commit hash and date
+# narrows that trap; use `pip install . --no-cache-dir` for dev installs.
+local_scheme = "node-and-date"
 write_to = "python/anacal/__version__.py"
 
 [tool.flake8]

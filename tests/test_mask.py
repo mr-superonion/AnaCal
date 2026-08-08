@@ -19,12 +19,16 @@ def test_mask():
 
     # add_pixel_mask_column returns the updated catalog (the input list is a
     # copy at the pybind boundary, so in-place mutation would be lost).
+    # It must reproduce sampling the convolve_mask_gauss image exactly,
+    # while only READING the mask (the smoothed value is evaluated at each
+    # source position; no smoothed copy of the whole image is built).
     on_mask = anacal.table.galNumber()
     on_mask.model.x1 = anacal.math.qnumber((ngrid // 2 - 20) * scale)
     on_mask.model.x2 = anacal.math.qnumber((ngrid // 2 + 10) * scale)
     off_mask = anacal.table.galNumber()
     off_mask.model.x1 = anacal.math.qnumber(5 * scale)
     off_mask.model.x2 = anacal.math.qnumber(5 * scale)
+    mask_before = mask.copy()
     out = anacal.mask.add_pixel_mask_column(
         [on_mask, off_mask], mask, sigma_arcsec, scale
     )
@@ -33,6 +37,7 @@ def test_mask():
     )
     assert out[0].mask_value > 0
     assert out[1].mask_value == 0
+    np.testing.assert_array_equal(mask, mask_before)
     star_array = np.array(
         [
             (10.0, 3.0, 20.0),

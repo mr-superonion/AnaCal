@@ -146,16 +146,31 @@ namespace anacal {
         ssize_t nrow = det_use.shape()[0];
         py::array_t<double> src({nrow, ncol});
         auto src_r = src.mutable_unchecked<2>();
-        for (ssize_t j = 0; j < nrow; ++j) {
-            py::array_t<double> row = this->measure_with_filter(
-                gal_array,
-                fimg,
-                det_r(j).y,
-                det_r(j).x
-            );
-            auto row_r = row.unchecked<1>();
-            for (ssize_t i = 0; i < ncol; ++i) {
-                src_r(j, i) = row_r(i);
+
+        // Everything above allocates numpy arrays (psf FFT, the
+        // deconvolved filter, the output) and so needs the GIL; the
+        // per-source loop below only reads the inputs through unchecked
+        // accessors and writes into the output buffer, so the GIL is
+        // released for its whole duration -- this is what lets callers
+        // thread over blocks of sources.  The braced scope ends the
+        // release BEFORE the return statement touches src's refcount.
+        {
+            ScopedGilRelease release;
+            for (ssize_t j = 0; j < nrow; ++j) {
+                double y = det_r(j).y;
+                double x = det_r(j).x;
+                int y_index = static_cast<int>(std::round(y));
+                int x_index = static_cast<int>(std::round(x));
+                double dy = y - y_index;
+                double dx = x - x_index;
+
+                img_obj.set_r(gal_array, x_index, y_index, false);
+                img_obj.fft();
+                double* out = &src_r(j, 0);
+                img_obj.measure_into(fimg, dy, dx, out);
+                for (ssize_t i = 0; i < ncol; ++i) {
+                    out[i] *= fft_ratio;
+                }
             }
         }
         return src;

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 import numpy.lib.recfunctions as rfn
@@ -7,6 +8,8 @@ from numpy.typing import NDArray
 from ._anacal.fpfs import (
     FpfsImage,
 )
+from ._anacal.fpfs import ForceTask as _ForceTask
+from ._anacal.fpfs import catalog_columns as _catalog_columns
 from ._anacal.fpfs import gauss_kernel_rfft as _gauss_kernel_rfft
 from ._anacal.fpfs import get_kmax as _get_kmax
 from ._anacal.fpfs import m00_to_flux as _m00_to_flux
@@ -28,6 +31,29 @@ FLUX_ERR_MIN = 1e-8
 
 
 norder_shapelets = 6
+
+
+@lru_cache(maxsize=16)
+def _fpfs_bases(norder: int, npix: int, sigma: float, kmax: float):
+    """Shapelet basis for :class:`FpfsTask`, cached across constructions.
+
+    The basis is a pure function of these four arguments, but callers
+    (e.g. xlens) construct an ``FpfsTask`` per band per block, so without
+    the cache the 49 Laguerre modes are recomputed thousands of times per
+    patch.  The returned arrays are shared between instances and only ever
+    read, which the writeable=False flag enforces.
+    """
+    sfunc, snames = shapelets2d(
+        norder=norder, npix=npix, sigma=sigma, kmax=kmax
+    )
+    bfunc = np.vstack([sfunc])
+    # C-contiguous copy: measure_source reads this filter once per source
+    # per k-pixel, and the contiguous layout lets the C++ side walk it
+    # with a flat pointer instead of strided access.
+    bfunc_use = np.ascontiguousarray(np.transpose(bfunc, (1, 2, 0)))
+    bfunc.setflags(write=False)
+    bfunc_use.setflags(write=False)
+    return bfunc, bfunc_use, tuple(snames)
 
 
 def gauss_kernel_rfft(
@@ -211,6 +237,108 @@ _FLUX_PHOTOZ_TEMPLATE = {
 }
 
 
+@lru_cache(maxsize=64)
+def _catalog_dtype(kernel: str, base_column_name: str | None):
+    """FINAL output dtype for one kernel's forced catalog.
+
+    Built once per (kernel, band prefix) from the canonical C++ field
+    order (``catalog_columns``), with the kernel token and band prefix
+    already applied -- ForceTask writes straight into it, so the catalog
+    is born with the right column names.
+    """
+    mapping = _kernel_rename_map(_catalog_columns, kernel)
+    prefix = base_column_name or ""
+    return np.dtype(
+        [(prefix + mapping[name], "<f8") for name in _catalog_columns]
+    )
+
+
+def _measure_kernel_catalog(
+    *,
+    fpfs_config,
+    pixel_scale,
+    gal_array,
+    noise_array,
+    detection,
+    psf_object,
+    psf_array,
+    noise_variance,
+    fpfs_c0,
+    sigma_shapelets,
+    kernel,
+    base_column_name,
+):
+    """One kernel's finished forced catalog via the C++ ``ForceTask``.
+
+    Mirrors ``task.Task.process_image``: setup under the GIL (the cached
+    shapelet basis, the covariance scalar ``std_m00`` and -- for a
+    spatially varying PSF model -- the per-source PSF stamps), then a
+    single C++ pass over the sources with the GIL released, writing
+    finished rows straight into the final dtype.  Row values are
+    bit-identical to the original numpy assembly.
+    """
+    ftask = FpfsTask(
+        npix=fpfs_config.npix,
+        pixel_scale=pixel_scale,
+        sigma_shapelets=sigma_shapelets,
+        psf_array=psf_array,
+        kmax_thres=fpfs_config.kmax_thres,
+    )
+    ftask.prepare_covariance(variance=noise_variance)
+    klim = 1e10 if ftask.kmax is None else (ftask.kmax / pixel_scale)
+    force = _ForceTask(
+        fpfs_config.npix,
+        pixel_scale,
+        sigma_shapelets,
+        klim,
+        fpfs_c0,
+    )
+    if isinstance(psf_object, np.ndarray):
+        psf_use = psf_object
+    elif len(detection) == 0:
+        # np.stack rejects an empty list; a (0, npix, npix) stack keeps
+        # the C++ per-source branch a no-op returning an empty catalog.
+        psf_use = np.zeros(
+            (0, fpfs_config.npix, fpfs_config.npix), dtype=np.float64
+        )
+    else:
+        # Spatially varying PSF (grid or LSST model): drawing the stamps
+        # is the only GIL-bound part of this path; the per-source
+        # deconvolution and measurement then run in C++.
+        psf_use = np.ascontiguousarray(np.stack([
+            psf_object.draw(x=float(dd["x"]), y=float(dd["y"]))
+            for dd in detection
+        ]).astype(np.float64, copy=False))
+    return force.process_image(
+        gal_array=gal_array,
+        psf_array=psf_use,
+        filter_image=ftask.bfunc_use,
+        det=detection,
+        std_m00=float(ftask.std_m00),
+        out_dtype=_catalog_dtype(kernel, base_column_name),
+        noise_array=noise_array,
+    )
+
+
+def _rename_columns(arr, mapping):
+    """Rename structured-array columns, zero-copy when possible.
+
+    For a packed all-float64 record (the C++ ``FpfsCatRow`` output and
+    everything derived from it) the rename is a dtype VIEW -- no data is
+    copied.  Any other layout falls back to
+    :func:`numpy.lib.recfunctions.rename_fields`.
+    """
+    names = list(arr.dtype.names)
+    new_names = [mapping.get(n, n) for n in names]
+    packed_f8 = (
+        arr.dtype.itemsize == 8 * len(names)
+        and all(arr.dtype.fields[n][0] == np.dtype("<f8") for n in names)
+    )
+    if packed_f8:
+        return arr.view(np.dtype([(n, "<f8") for n in new_names]))
+    return rfn.rename_fields(arr, mapping)
+
+
 def _kernel_rename_map(names, kernel):
     """Build the per-kernel field-rename map.
 
@@ -305,22 +433,17 @@ class FpfsTask:
         return
 
     def prepare_fpfs_bases(self):
-        """Prepare the FPFS shapelet bases."""
+        """Prepare the FPFS shapelet bases (cached, see _fpfs_bases)."""
 
-        bfunc = []
-        self.colnames = []
-        sfunc, snames = shapelets2d(
-            norder=norder_shapelets,
-            npix=self.npix,
-            sigma=self.sigmaf,
-            kmax=self.kmax,
+        self.bfunc, self.bfunc_use, snames = _fpfs_bases(
+            norder_shapelets,
+            self.npix,
+            float(self.sigmaf),
+            float(self.kmax),
         )
-        bfunc.append(sfunc)
-        self.colnames = self.colnames + snames
-        self.bfunc = np.vstack(bfunc)
+        self.colnames = list(snames)
         self.ncol = len(self.colnames)
         self.dtype = [(name, "f8") for name in self.colnames]
-        self.bfunc_use = np.transpose(self.bfunc, (1, 2, 0))
         self.di = {
             element: index for index, element in enumerate(self.colnames)
         }
@@ -849,54 +972,40 @@ def process_image(
         if return_only_linear_modes else None
     out_list: list[np.ndarray] | None = None if return_only_linear_modes else []
 
-    ftask = FpfsTask(
-        npix=fpfs_config.npix,
-        pixel_scale=pixel_scale,
-        sigma_shapelets=fpfs_config.sigma_shapelets1,
-        psf_array=psf_array,
-        kmax_thres=fpfs_config.kmax_thres,
-    )
-    ftask.prepare_covariance(variance=noise_variance)
-    std_m00_1 = ftask.std_m00
-    src = ftask.run(
-        gal_array=gal_array,
-        psf=psf_object,
-        det=detection,
-        noise_array=noise_array,
-    )
-    del ftask
-    if linear_modes is not None:
-        linear_modes["data1"] = src["data"]
-        linear_modes["noise1"] = src["noise"]
-        linear_modes["std_m00_1"] = std_m00_1
-    else:
-        assert out_list is not None
-        meas1 = measure_fpfs(
-            C0=fpfs_c0,
-            x_array=src["data"],
-            y_array=src["noise"],
-        )
-        meas1 = rfn.append_fields(
-            meas1, "m00_err",
-            np.full(len(meas1), std_m00_1, dtype=np.float64),
-            usemask=False,
-        )
-        out_list.append(_append_flux_gauss(
-            meas1, fpfs_config.sigma_shapelets1, std_m00_1, "fpfs1",
-        ))
-        del meas1
-    del src
+    # The catalog path runs entirely in C++ (fpfs.ForceTask, structured
+    # like task.Task): one GIL-released pass per kernel writes finished
+    # rows straight into the final column names, so none of the numpy
+    # column surgery below is needed.  A spatially varying PSF model
+    # only pre-draws its per-source stamps under the GIL.  The
+    # linear-modes path keeps the original route.
+    use_cpp_task = linear_modes is None
 
-    if fpfs_config.sigma_shapelets2 > 0:
+    if use_cpp_task:
+        assert out_list is not None
+        out_list.append(_measure_kernel_catalog(
+            fpfs_config=fpfs_config,
+            pixel_scale=pixel_scale,
+            gal_array=gal_array,
+            noise_array=noise_array,
+            detection=detection,
+            psf_object=psf_object,
+            psf_array=psf_array,
+            noise_variance=noise_variance,
+            fpfs_c0=fpfs_c0,
+            sigma_shapelets=fpfs_config.sigma_shapelets1,
+            kernel="fpfs1",
+            base_column_name=base_column_name,
+        ))
+    else:
         ftask = FpfsTask(
             npix=fpfs_config.npix,
             pixel_scale=pixel_scale,
-            sigma_shapelets=fpfs_config.sigma_shapelets2,
+            sigma_shapelets=fpfs_config.sigma_shapelets1,
             psf_array=psf_array,
             kmax_thres=fpfs_config.kmax_thres,
         )
         ftask.prepare_covariance(variance=noise_variance)
-        std_m00_2 = ftask.std_m00
+        std_m00_1 = ftask.std_m00
         src = ftask.run(
             gal_array=gal_array,
             psf=psf_object,
@@ -905,38 +1014,100 @@ def process_image(
         )
         del ftask
         if linear_modes is not None:
-            linear_modes["data2"] = src["data"]
-            linear_modes["noise2"] = src["noise"]
-            linear_modes["std_m00_2"] = std_m00_2
+            linear_modes["data1"] = src["data"]
+            linear_modes["noise1"] = src["noise"]
+            linear_modes["std_m00_1"] = std_m00_1
         else:
-            meas2 = measure_fpfs(
+            assert out_list is not None
+            meas1 = measure_fpfs(
                 C0=fpfs_c0,
                 x_array=src["data"],
                 y_array=src["noise"],
             )
-            meas2 = rfn.append_fields(
-                meas2, "m00_err",
-                np.full(len(meas2), std_m00_2, dtype=np.float64),
+            meas1 = rfn.append_fields(
+                meas1, "m00_err",
+                np.full(len(meas1), std_m00_1, dtype=np.float64),
                 usemask=False,
             )
             out_list.append(_append_flux_gauss(
-                meas2, fpfs_config.sigma_shapelets2, std_m00_2, "fpfs2",
+                meas1, fpfs_config.sigma_shapelets1, std_m00_1, "fpfs1",
             ))
-            del meas2
+            del meas1
         del src
 
+    if fpfs_config.sigma_shapelets2 > 0:
+        if use_cpp_task:
+            assert out_list is not None
+            out_list.append(_measure_kernel_catalog(
+                fpfs_config=fpfs_config,
+                pixel_scale=pixel_scale,
+                gal_array=gal_array,
+                noise_array=noise_array,
+                detection=detection,
+                psf_object=psf_object,
+                psf_array=psf_array,
+                noise_variance=noise_variance,
+                fpfs_c0=fpfs_c0,
+                sigma_shapelets=fpfs_config.sigma_shapelets2,
+                kernel="fpfs2",
+                base_column_name=base_column_name,
+            ))
+        else:
+            ftask = FpfsTask(
+                npix=fpfs_config.npix,
+                pixel_scale=pixel_scale,
+                sigma_shapelets=fpfs_config.sigma_shapelets2,
+                psf_array=psf_array,
+                kmax_thres=fpfs_config.kmax_thres,
+            )
+            ftask.prepare_covariance(variance=noise_variance)
+            std_m00_2 = ftask.std_m00
+            src = ftask.run(
+                gal_array=gal_array,
+                psf=psf_object,
+                det=detection,
+                noise_array=noise_array,
+            )
+            del ftask
+            if linear_modes is not None:
+                linear_modes["data2"] = src["data"]
+                linear_modes["noise2"] = src["noise"]
+                linear_modes["std_m00_2"] = std_m00_2
+            else:
+                meas2 = measure_fpfs(
+                    C0=fpfs_c0,
+                    x_array=src["data"],
+                    y_array=src["noise"],
+                )
+                meas2 = rfn.append_fields(
+                    meas2, "m00_err",
+                    np.full(len(meas2), std_m00_2, dtype=np.float64),
+                    usemask=False,
+                )
+                out_list.append(_append_flux_gauss(
+                    meas2, fpfs_config.sigma_shapelets2, std_m00_2, "fpfs2",
+                ))
+                del meas2
+            del src
+
     if out_list is not None:
-        result = rfn.merge_arrays(
-            out_list,
-            flatten=True,
-            usemask=False,
-        )
-        if base_column_name is not None:
+        # A single kernel needs no merge; two kernels keep the original
+        # rfn merge (values and column order are unchanged either way).
+        if len(out_list) == 1:
+            result = out_list[0]
+        else:
+            result = rfn.merge_arrays(
+                out_list,
+                flatten=True,
+                usemask=False,
+            )
+        # The C++ path already wrote the band prefix into the dtype.
+        if (base_column_name is not None) and (not use_cpp_task):
             assert result.dtype.names is not None
             map_dict = {
                 name: base_column_name + name for name in result.dtype.names
             }
-            result = rfn.rename_fields(result, map_dict)
+            result = _rename_columns(result, map_dict)
         return result
     else:
         if not pack_linear_modes:

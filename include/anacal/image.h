@@ -5,6 +5,7 @@
 #include "model.h"
 #include "math/tensor.h"
 #include <fftw3.h>
+#include <map>
 #include <utility>
 
 namespace anacal {
@@ -20,6 +21,10 @@ private:
     double norm_factor;
     double* data_r = nullptr;
     fftw_complex* data_f = nullptr;
+    // Persistent scratch for _rotate90_f, so the per-call
+    // fftw_malloc + copy + free (504 KB at block size) happens once per
+    // Image instead of once per rotation.
+    std::vector<std::complex<double>> rot_scratch_;
 
     // Preventing copy (implement these if you need copy semantics)
     Image(const Image&) = delete;
@@ -76,6 +81,14 @@ public:
 
     void ifft();
 
+    // Backward transform WITHOUT the 1/(nx*ny) normalization pass over
+    // data_r; callers fold norm() into their consumer loop instead (see
+    // ImageQ::prepare_qnumber_vector_band).  Element-wise the product is
+    // the same, so results are bit-identical to ifft().
+    void ifft_raw();
+
+    double norm() const { return norm_factor; }
+
     void add_image_f(const py::array_t<std::complex<double>>&);
 
     void subtract_image_f(const py::array_t<std::complex<double>>&);
@@ -88,6 +101,27 @@ public:
         const py::array_t<std::complex<double>>&,
         double dy=0.0,
         double dx=0.0
+    ) const;
+
+    // measure() into a caller-provided buffer of length
+    // filter_image.shape(2); allocation-free so it can run with the GIL
+    // released.
+    void measure_into(
+        const py::array_t<std::complex<double>>&,
+        double dy,
+        double dx,
+        double* out
+    ) const;
+
+    // Same computation for a raw CONTIGUOUS (ky_length, kx_length, ncol)
+    // filter buffer -- used when the filter lives in a std::vector (the
+    // fpfs ForceTask per-source deconvolution) instead of a numpy array.
+    void measure_into_raw(
+        const std::complex<double>* filter,
+        int ncol,
+        double dy,
+        double dx,
+        double* out
     ) const;
 
     void deconvolve(
@@ -105,31 +139,134 @@ public:
 
     py::array_t<double> draw_r(bool ishift=false) const;
 
+    // ------------------------------------------------------------------
+    // GIL-free variants.  The py::array methods above ALLOCATE numpy
+    // arrays, which requires the GIL; the measurement hot path (see
+    // ScopedGilRelease in stdafx.h) instead moves data through the
+    // std::vector/raw accessors below.  Reading an EXISTING py::array
+    // through unchecked<> is GIL-safe, so the set_r/set_f/filter/
+    // deconvolve readers above stay usable either way.
+    // ------------------------------------------------------------------
+
+    // Band-sliced set_r: reads band ``b`` of a (nband, ny, nx) stack (or
+    // a plain 2-D image with b == 0) without constructing a numpy view.
+    template <typename T>
+    void set_r_band(
+        const py::array_t<T>&, ssize_t band,
+        int xcen, int ycen,
+        bool ishift=false
+    );
+
+    template <typename T>
+    void set_r_band(
+        const py::array_t<T>&, ssize_t band,
+        bool ishift=false
+    );
+
+    void set_f(const std::vector<std::complex<double>>&);
+
+    void filter(const std::vector<std::complex<double>>&);
+
+    void deconvolve(const std::vector<std::complex<double>>&, double);
+
+    std::vector<std::complex<double>> draw_f_vec() const;
+
+    // Read-only views of the internal buffers (row-major, data_f is
+    // (ky_length, kx_length) half-plane; data_r is the ishift=false
+    // layout of draw_r).
+    const double* view_r() const {
+        assert_mode(this->mode & 1);
+        return data_r;
+    }
+
+    const fftw_complex* view_f() const {
+        assert_mode(this->mode & 2);
+        return data_f;
+    }
+
+    inline std::vector<std::complex<double>>
+    get_lens_kernel_vec(
+        const py::array_t<double>& psf_stack,
+        ssize_t band,
+        const Gaussian & gauss_model,
+        double klim
+    ) {
+        // PSF -> Fourier, then a delta filtered by the Gaussian model and
+        // deconvolved by the PSF; free of numpy allocations.
+        this->set_r_band(psf_stack, band, true);
+        this->fft();
+        const std::vector<std::complex<double>> parr = this->draw_f_vec();
+        this->set_delta_f();
+        this->filter(gauss_model);
+        this->deconvolve(parr, klim);
+        return this->draw_f_vec();
+    };
+
     Image(Image&& other) noexcept;
     Image& operator=(Image&& other) noexcept;
 
     ~Image();
 
-    inline py::array_t<std::complex<double>>
-    get_lens_kernel(
-        const py::array_t<double>& psf_array,
-        const Gaussian & gauss_model,
-        double klim
-    ) {
-        // Prepare PSF
-        this->set_r(psf_array, true);
-        this->fft();
-        const py::array_t<std::complex<double>> parr = this->draw_f();
-        // Delta
-        this->set_delta_f();
-        // Convolve Gaussian
-        this->filter(gauss_model);
-        // Deconvolve the PSF
-        this->deconvolve(parr, klim);
-        return this->draw_f();
+    // Restore the state a fresh Image(nx, ny, scale, ...) would have,
+    // WITHOUT reallocating the FFTW buffers or re-planning (both need the
+    // global planner mutex).  Buffer contents are NOT touched: like a
+    // fresh image they are undefined until a setter runs, and every
+    // setter fully overwrites or re-zeroes before anything reads.  Only
+    // full mode-3 images are pooled.  Used by ImageLease below.
+    void reset_for_reuse(double scale_new) {
+        assert_mode(this->mode == 3);
+        this->scale = scale_new;
+        this->dkx = 2.0 * M_PI / nx / scale_new;
+        this->dky = 2.0 * M_PI / ny / scale_new;
+        return;
     };
 
+};
 
+// ---------------------------------------------------------------------------
+// Thread-local workspace pools
+//
+// Constructing an Image costs two fftw_mallocs plus two planner calls under
+// the GLOBAL planner mutex; the block loops construct several per block per
+// band, and with threads that mutex becomes a scalability ceiling.  The hot
+// paths therefore LEASE a workspace from a per-thread pool: the lease
+// resets the scale-dependent state (reset_for_reuse), so a leased Image
+// behaves exactly like a freshly constructed one -- buffer contents are
+// undefined either way until a setter runs -- but its buffers and plans are
+// reused.  Thread-local storage means no locking, and the pool dies with
+// its thread.
+// ---------------------------------------------------------------------------
+class ImageLease {
+public:
+    ImageLease(int nx, int ny, double scale, bool use_estimate=true)
+        : nx_(nx), ny_(ny), use_estimate_(use_estimate)
+    {
+        auto& slot = pool()[Key(nx, ny, use_estimate)];
+        if (slot.empty()) {
+            img_ = std::make_unique<Image>(nx, ny, scale, use_estimate);
+        } else {
+            img_ = std::move(slot.back());
+            slot.pop_back();
+            img_->reset_for_reuse(scale);
+        }
+    };
+    ~ImageLease() {
+        pool()[Key(nx_, ny_, use_estimate_)].push_back(std::move(img_));
+    };
+    Image& get() { return *img_; };
+    ImageLease(const ImageLease&) = delete;
+    ImageLease& operator=(const ImageLease&) = delete;
+private:
+    using Key = std::tuple<int, int, bool>;
+    static std::map<Key, std::vector<std::unique_ptr<Image>>>& pool() {
+        static thread_local std::map<
+            Key, std::vector<std::unique_ptr<Image>>
+        > p;
+        return p;
+    };
+    std::unique_ptr<Image> img_;
+    int nx_, ny_;
+    bool use_estimate_;
 };
 
 py::array_t<std::complex<double>>
@@ -199,69 +336,72 @@ public:
         return;
     };
 
+    // Band-sliced qnumber preparation, free of numpy allocations so it can
+    // run with the GIL released (the input stacks are only READ, through
+    // unchecked accessors).  ``band`` selects one band of the (possibly
+    // 3-D) input stacks; a plain 2-D image uses band == 0.
     std::vector<math::qnumber>
-    prepare_qnumber_vector(
-        const py::array_t<pixel_t>& img_array,
-        const py::array_t<double>& psf_array,
+    prepare_qnumber_vector_band(
+        const py::array_t<pixel_t>& img_stack,
+        const py::array_t<double>& psf_stack,
+        ssize_t band,
         int xcen,
         int ycen,
-        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
+        const std::optional<py::array_t<pixel_t>>& noise_stack=std::nullopt
     ) {
-        const py::array_t<std::complex<double>> karr = img_obj.get_lens_kernel(
-            psf_array,
-            gauss_model,
-            klim
-        );
+        const std::vector<std::complex<double>> karr =
+            img_obj.get_lens_kernel_vec(
+                psf_stack,
+                band,
+                gauss_model,
+                klim
+            );
         // signal
-        img_obj.set_r(img_array, xcen, ycen, false);
+        img_obj.set_r_band(img_stack, band, xcen, ycen, false);
         img_obj.fft();
         img_obj.filter(karr);
-        py::array_t<std::complex<double>> imgcov_f = img_obj.draw_f();
+        std::vector<std::complex<double>> imgcov_f = img_obj.draw_f_vec();
 
         // image is derived from image + noise
-        py::array_t<std::complex<double>> imgcov_f_n;
-        bool has_noise = noise_array.has_value();
+        std::vector<std::complex<double>> imgcov_f_n;
+        bool has_noise = noise_stack.has_value();
         if (has_noise) {
             img_obj.set_f(karr);
             img_obj.rotate90_f();
-            const py::array_t<std::complex<double>> karr_n = img_obj.draw_f();
+            const std::vector<std::complex<double>> karr_n =
+                img_obj.draw_f_vec();
 
-            // signal
-            img_obj.set_r(*noise_array, xcen, ycen, false);
+            // noise
+            img_obj.set_r_band(*noise_stack, band, xcen, ycen, false);
             img_obj.fft();
             img_obj.filter(karr_n);         // Filtering
-            imgcov_f_n = img_obj.draw_f();
+            imgcov_f_n = img_obj.draw_f_vec();
 
-            auto r = imgcov_f.mutable_unchecked<2>();
-            auto r_n = imgcov_f_n.unchecked<2>();
-            for (int j = 0; j < this->ky_length ; ++j) {
-                for (int i = 0; i < this->kx_length ; ++i) {
-                    r(j, i) = r(j, i) + r_n(j, i);
-                }
+            for (std::size_t idx = 0; idx < imgcov_f.size(); ++idx) {
+                imgcov_f[idx] = imgcov_f[idx] + imgcov_f_n[idx];
             }
         }
 
-        std::vector<math::qnumber> result(this->ny * this->nx);
+        const ssize_t npix = static_cast<ssize_t>(this->ny) * this->nx;
+        std::vector<math::qnumber> result(npix);
+        // The 1/(nx*ny) FFT normalization is folded into each consumer
+        // loop below (ifft_raw + nf) instead of ifft() making its own
+        // pass over data_r; the per-element product is the same.
+        const double nf = img_obj.norm();
         // v
         {
             img_obj.set_f(imgcov_f);
-            img_obj.ifft();
-            auto tmp_r = img_obj.draw_r().unchecked<2>();
-            for (ssize_t j = 0, idx = 0; j < this->ny; ++j) {
-                for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
-                    result[idx].v = tmp_r(j, i);
-                }
+            img_obj.ifft_raw();
+            const double* tmp_r = img_obj.view_r();
+            for (ssize_t idx = 0; idx < npix; ++idx) {
+                result[idx].v = tmp_r[idx] * nf;
             }
         }
 
         // shear response from image - noise
         if (has_noise) {
-            auto r = imgcov_f.mutable_unchecked<2>();
-            auto r_n = imgcov_f_n.unchecked<2>();
-            for (int j = 0; j < this->ky_length ; ++j) {
-                for (int i = 0; i < this->kx_length ; ++i) {
-                    r(j, i) = r(j, i) - 2.0 * r_n(j, i);
-                }
+            for (std::size_t idx = 0; idx < imgcov_f.size(); ++idx) {
+                imgcov_f[idx] = imgcov_f[idx] - 2.0 * imgcov_f_n[idx];
             }
         }
 
@@ -269,12 +409,10 @@ public:
         {
             img_obj.set_f(imgcov_f);
             img_obj.filter(gauss_g1_model);
-            img_obj.ifft();
-            auto tmp_r = img_obj.draw_r().unchecked<2>();
-            for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
-                for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
-                    result[idx].g1 = tmp_r(j, i);
-                }
+            img_obj.ifft_raw();
+            const double* tmp_r = img_obj.view_r();
+            for (ssize_t idx = 0; idx < npix; ++idx) {
+                result[idx].g1 = tmp_r[idx] * nf;
             }
         }
 
@@ -282,12 +420,10 @@ public:
         {
             img_obj.set_f(imgcov_f);
             img_obj.filter(gauss_g2_model);
-            img_obj.ifft();
-            auto tmp_r = img_obj.draw_r().unchecked<2>();
-            for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
-                for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
-                    result[idx].g2 = tmp_r(j, i);
-                }
+            img_obj.ifft_raw();
+            const double* tmp_r = img_obj.view_r();
+            for (ssize_t idx = 0; idx < npix; ++idx) {
+                result[idx].g2 = tmp_r[idx] * nf;
             }
         }
 
@@ -295,16 +431,16 @@ public:
         {
             img_obj.set_f(imgcov_f);
             img_obj.filter(gauss_x1_model);
-            img_obj.ifft();
-            py::array_t<double> tmp = img_obj.draw_r();
-            auto tmp_r = tmp.unchecked<2>();
+            img_obj.ifft_raw();
+            const double* tmp_r = img_obj.view_r();
             for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
                 double y = (j - this->ny2) * this->scale;
                 for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
                     double x = (i - this->nx2) * this->scale;
-                    result[idx].g1 = result[idx].g1 + x * tmp_r(j, i);
-                    result[idx].g2 = result[idx].g2 + y * tmp_r(j, i);
-                    result[idx].x1 = tmp_r(j, i);
+                    const double t = tmp_r[idx] * nf;
+                    result[idx].g1 = result[idx].g1 + x * t;
+                    result[idx].g2 = result[idx].g2 + y * t;
+                    result[idx].x1 = t;
                 }
             }
         }
@@ -313,20 +449,33 @@ public:
         {
             img_obj.set_f(imgcov_f);
             img_obj.filter(gauss_x2_model);
-            img_obj.ifft();
-            py::array_t<double> tmp = img_obj.draw_r();
-            auto tmp_r = tmp.unchecked<2>();
+            img_obj.ifft_raw();
+            const double* tmp_r = img_obj.view_r();
             for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
                 double y = (j - this->ny2) * this->scale;
                 for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
                     double x = (i - this->nx2) * this->scale;
-                    result[idx].g1 = result[idx].g1 - y * tmp_r(j, i);
-                    result[idx].g2 = result[idx].g2 + x * tmp_r(j, i);
-                    result[idx].x2 = tmp_r(j, i);
+                    const double t = tmp_r[idx] * nf;
+                    result[idx].g1 = result[idx].g1 - y * t;
+                    result[idx].g2 = result[idx].g2 + x * t;
+                    result[idx].x2 = t;
                 }
             }
         }
         return result;
+    };
+
+    std::vector<math::qnumber>
+    prepare_qnumber_vector(
+        const py::array_t<pixel_t>& img_array,
+        const py::array_t<double>& psf_array,
+        int xcen,
+        int ycen,
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
+    ) {
+        return this->prepare_qnumber_vector_band(
+            img_array, psf_array, 0, xcen, ycen, noise_array
+        );
     };
 
     math::qtensor
@@ -386,6 +535,57 @@ public:
     ImageQ& operator=(ImageQ&& other) noexcept = default;
 
     ~ImageQ() = default;
+
+    // See Image::reset_for_reuse / ImageQLease.  Every other member is a
+    // pure function of the constructor arguments, which are the pool key,
+    // so only the workspace image needs resetting.
+    void reset_for_reuse() {
+        img_obj.reset_for_reuse(this->scale);
+        return;
+    };
+};
+
+// Lease of a fully-configured ImageQ; same idea as ImageLease, with the
+// constructor arguments as the pool key so the Gaussian filter models are
+// reused along with the FFTW workspace.
+class ImageQLease {
+public:
+    ImageQLease(
+        int nx,
+        int ny,
+        double scale,
+        double sigma_arcsec,
+        double klim,
+        bool use_estimate=true
+    ) : key_(nx, ny, scale, sigma_arcsec, klim, use_estimate)
+    {
+        auto& slot = pool()[key_];
+        if (slot.empty()) {
+            obj_ = std::make_unique<ImageQ>(
+                nx, ny, scale, sigma_arcsec, klim, use_estimate
+            );
+        } else {
+            obj_ = std::move(slot.back());
+            slot.pop_back();
+            obj_->reset_for_reuse();
+        }
+    };
+    ~ImageQLease() {
+        pool()[key_].push_back(std::move(obj_));
+    };
+    ImageQ& get() { return *obj_; };
+    ImageQLease(const ImageQLease&) = delete;
+    ImageQLease& operator=(const ImageQLease&) = delete;
+private:
+    using Key = std::tuple<int, int, double, double, double, bool>;
+    static std::map<Key, std::vector<std::unique_ptr<ImageQ>>>& pool() {
+        static thread_local std::map<
+            Key, std::vector<std::unique_ptr<ImageQ>>
+        > p;
+        return p;
+    };
+    std::unique_ptr<ImageQ> obj_;
+    Key key_;
 };
 
 // ---------------------------------------------------------------------------
@@ -501,9 +701,10 @@ prepare_data_block(
     const py::array_t<double>& psf_array,
     double sigma_arcsec,
     const geometry::block & block,
-    const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
+    const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+    ssize_t band=0
 ){
-    ImageQ img_obj(
+    ImageQLease lease(
         block.nx,
         block.ny,
         block.scale,
@@ -512,9 +713,11 @@ prepare_data_block(
                                 // gaussian_flux_variance in task.h)
         true                    // us estimate in FFTW
     );
-    return img_obj.prepare_qnumber_vector(
+    ImageQ& img_obj = lease.get();
+    return img_obj.prepare_qnumber_vector_band(
         img_array,
         psf_array,
+        band,
         block.xcen,
         block.ycen,
         noise_array
@@ -594,34 +797,38 @@ prepare_model_block_image(
 };
 
 
+// Band-sliced variant, free of numpy allocations so it can run with the
+// GIL released (``psf_stack`` is only read through unchecked accessors).
 inline double get_smoothed_variance(
     double scale,
     double sigma_arcsec,
-    const py::array_t<double>& psf_array,
+    const py::array_t<double>& psf_stack,
+    ssize_t band,
     double variance
 ) {
     double variance_sm = 0.0;
     // number of pixels in x and y used to estimated noise variance
     // result is independent on this
     int npix = 64;
-    Image img_obj(npix, npix, scale, true);
+    const int kx_len = npix / 2 + 1;
+    ImageLease lease(npix, npix, scale, true);
+    Image& img_obj = lease.get();
     {
         // Prepare PSF
-        img_obj.set_r(psf_array, true);
+        img_obj.set_r_band(psf_stack, band, true);
         img_obj.fft();
-        const py::array_t<std::complex<double>> parr = img_obj.draw_f();
+        const std::vector<std::complex<double>> parr = img_obj.draw_f_vec();
         {
             // white noise
-            auto pf = py::array_t<std::complex<double>>({npix, npix / 2 + 1});
-            auto pf_r = pf.mutable_unchecked<2>();
+            std::vector<std::complex<double>> pf(npix * kx_len);
             std::complex<double> vv(std::sqrt(variance) / npix, 0.0);
             std::complex<double> sqrt2vv = std::sqrt(2.0) * vv;
-            for (ssize_t j = 0; j < npix; ++j) {
-                for (ssize_t i = 1; i < npix / 2; ++i) {
-                    pf_r(j, i) = sqrt2vv;
+            for (int j = 0; j < npix; ++j) {
+                for (int i = 1; i < npix / 2; ++i) {
+                    pf[j * kx_len + i] = sqrt2vv;
                 }
-                pf_r(j, 0) = vv;
-                pf_r(j, npix / 2) = vv;
+                pf[j * kx_len + 0] = vv;
+                pf[j * kx_len + npix / 2] = vv;
             }
             img_obj.set_f(pf);
         }
@@ -634,15 +841,26 @@ inline double get_smoothed_variance(
         img_obj.filter(gauss_model);
     }
     {
-        const py::array_t<std::complex<double>> pf_dec = img_obj.draw_f();
-        auto pfd_r = pf_dec.unchecked<2>();
-        for (ssize_t j = 0; j < npix; ++j) {
-            for (ssize_t i = 0; i < npix / 2 + 1; ++i) {
-                variance_sm += std::norm(pfd_r(j, i));
+        const fftw_complex* pfd = img_obj.view_f();
+        for (int j = 0; j < npix; ++j) {
+            for (int i = 0; i < kx_len; ++i) {
+                const int index = j * kx_len + i;
+                variance_sm += std::norm(
+                    std::complex<double>(pfd[index][0], pfd[index][1])
+                );
             }
         }
     }
     return variance_sm;
+};
+
+inline double get_smoothed_variance(
+    double scale,
+    double sigma_arcsec,
+    const py::array_t<double>& psf_array,
+    double variance
+) {
+    return get_smoothed_variance(scale, sigma_arcsec, psf_array, 0, variance);
 };
 
 
@@ -687,7 +905,8 @@ band_weights(
         const double v = get_smoothed_variance(
             scale,
             sigma_arcsec,
-            band_view(psf_stack, static_cast<ssize_t>(b)),
+            psf_stack,
+            static_cast<ssize_t>(b),
             variance[b]
         );
         if (!std::isfinite(v) || (v <= 0.0)) {
@@ -720,7 +939,8 @@ coadd_smoothed_variance(
         out = out + w[b] * w[b] * get_smoothed_variance(
             scale,
             sigma_arcsec,
-            band_view(psf_stack, static_cast<ssize_t>(b)),
+            psf_stack,
+            static_cast<ssize_t>(b),
             variance[b]
         );
     }
@@ -743,16 +963,13 @@ prepare_data_block_coadd(
     std::vector<math::qnumber> out;
     for (std::size_t b = 0; b < nband; ++b) {
         const ssize_t ib = static_cast<ssize_t>(b);
-        std::optional<py::array_t<pixel_t>> noise_b = std::nullopt;
-        if (noise_stack.has_value()) {
-            noise_b = band_view(*noise_stack, ib);
-        }
         std::vector<math::qnumber> data = prepare_data_block(
-            band_view(img_stack, ib),
-            band_view(psf_stack, ib),
+            img_stack,
+            psf_stack,
             sigma_arcsec,
             block,
-            noise_b
+            noise_stack,
+            ib
         );
         if (nband == 1) {
             // One band: return it untouched rather than multiplying by a

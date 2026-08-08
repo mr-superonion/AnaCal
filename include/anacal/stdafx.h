@@ -14,10 +14,31 @@
 #include <array>
 #include <limits>
 #include <optional>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
 namespace py = pybind11;
+
+// Releases the GIL for the enclosing scope, but only when this thread
+// actually holds it.  The measurement entry points (Task::process_image,
+// detector::find_peaks, GaussFit::process_block) all release the GIL
+// around their compute, and they also call each other -- the conditional
+// makes the nested release a no-op instead of a fatal double release.
+// The compute they guard must not touch the Python C API beyond reading
+// existing arrays through unchecked accessors (allocations, copies and
+// destructions of Python objects all need the GIL).
+class ScopedGilRelease {
+public:
+    ScopedGilRelease() {
+        if (PyGILState_Check()) {
+            release_.emplace();
+        }
+    }
+
+private:
+    std::optional<py::gil_scoped_release> release_;
+};
 
 // Pixel type of the science and noise planes as they enter AnaCal.
 //

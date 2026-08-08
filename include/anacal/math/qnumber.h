@@ -197,20 +197,28 @@ struct qnumber {
         return result;
     };
 
-    qnumber decentralize(double dx1, double dx2) const {
-        // (dx1, dx2) is the position of the source wrt center of block
-        qnumber result = *this;
-        result.g1 = this->g1 - dx1 * this->x1 + dx2 * this->x2;
-        result.g2 = this->g2 - dx1 * this->x2 - dx2 * this->x1;
-        return result;
+    // In-place: only g1/g2 change, and they are computed from x1/x2 (not
+    // from each other), so the write order is alias-free.
+    // One signed reference shift: the shear responses g1/g2 pick up
+    // position-coupling terms when the reference point of the
+    // coordinates moves by (dx1, dx2).  Both wrappers below call this
+    // with opposite signs; (dx1, dx2) is always the source position wrt
+    // the block center.
+    void shift_reference(double dx1, double dx2) {
+        this->g1 = this->g1 + dx1 * this->x1 - dx2 * this->x2;
+        this->g2 = this->g2 + dx1 * this->x2 + dx2 * this->x1;
     };
 
-    qnumber centralize(double dx1, double dx2) const {
-        // (dx1, dx2) is the position of the source wrt center of block
-        qnumber result = *this;
-        result.g1 = this->g1 + dx1 * this->x1 - dx2 * this->x2;
-        result.g2 = this->g2 + dx1 * this->x2 + dx2 * this->x1;
-        return result;
+    // Positive sign: shifts the reference point to the BLOCK CENTER
+    // (applied before per-block fitting).
+    void centralize(double dx1, double dx2) {
+        this->shift_reference(dx1, dx2);
+    };
+
+    // Opposite sign: shifts the reference point back to the DETECTION
+    // PEAK (applied after per-block fitting).
+    void decentralize(double dx1, double dx2) {
+        this->shift_reference(-dx1, -dx2);
     };
 
     // Stream insertion operator for printing

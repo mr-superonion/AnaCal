@@ -11,6 +11,15 @@ include_dirs = ["include/"]
 if conda_prefix:
     include_dirs.append(os.path.join(conda_prefix, "include"))
 
+# In-tree extension builds (e.g. `python setup.py build_ext --inplace`)
+# leave _anacal.cpython-*.so inside the package directory.  Those stale
+# binaries would be packaged into the wheel as package data and silently
+# OVERWRITE the freshly compiled extension, so remove them before every
+# build.
+for _stray in glob.glob("python/anacal/*.so"):
+    print(f"removing stale in-tree extension: {_stray}")
+    os.remove(_stray)
+
 
 include_dirs.append(pybind11.get_include())
 
@@ -110,6 +119,7 @@ ext_modules.append(
             "src/fpfs/base.cpp",
             "src/fpfs/image.cpp",
             "src/fpfs/catalog.cpp",
+            "src/fpfs/force.cpp",
             "src/noise.cpp",
             "src/mask.cpp",
             "src/math.cpp",

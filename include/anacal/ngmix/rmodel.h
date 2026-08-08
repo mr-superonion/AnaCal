@@ -49,29 +49,18 @@ struct modelKernelD {
     double scale;
 
     modelKernelD() = default;
-
-    inline modelKernelB
-    to_kernelB() const {
-        modelKernelB res;
-        res.v_p0 = this->v_p0;
-        res.v_p1 = this->v_p1;
-        res.v_p2 = this->v_p2;
-        res.f = this->f;
-        res.scale = this->scale;
-        return res;
-    };
 };
 
 struct frDeriv {
-    // f(r) and its derivatives
-    math::qnumber fr, dfr, ddfr;
+    // f(r) and its first derivative
+    math::qnumber fr, dfr;
 
     frDeriv() = default;
 
     frDeriv(
-        math::qnumber fr, math::qnumber dfr, math::qnumber ddfr
+        math::qnumber fr, math::qnumber dfr
     )
-        : fr(fr), dfr(dfr), ddfr(ddfr) {}
+        : fr(fr), dfr(dfr) {}
 };
 
 
@@ -98,9 +87,7 @@ private:
     ) const {
         math::qnumber fr = math::exp(r2 * (-0.5));
         math::qnumber dfr = fr * (-0.5);
-        /* math::qnumber ddfr = dfr * (-0.5); */
-        math::qnumber ddfr;
-        return frDeriv(fr, dfr, ddfr);
+        return frDeriv(fr, dfr);
     };
 public:
     bool force_size, force_center;
@@ -119,7 +106,8 @@ public:
         force_center(force_center){};
 
     inline StampBounds get_stamp_bounds(
-        const geometry::block& block
+        const geometry::block& block,
+        int rr
     ) const {
         int i_cen = static_cast<int>(
             std::round(this->x1.v / block.scale)
@@ -127,18 +115,6 @@ public:
         int j_cen = static_cast<int>(
             std::round(this->x2.v / block.scale)
         ) - block.ymin;
-        int rr = static_cast<int>(
-            std::max(
-                std::min(
-                    std::max(
-                        std::abs(this->a1.v),
-                        std::abs(this->a2.v)
-                    ) / block.scale * 6 + 12,
-                    60.0
-                ),
-                24.0
-            )
-        );
 
         // Clip about the centre; clamping i_max against i_min would shift the
         // window inward (not clip it) when the source sits near a block edge.
@@ -151,26 +127,24 @@ public:
         return {i_min, i_max, j_min, j_max, i_cen, j_cen, rr};
     };
 
+    // Adaptive-radius variant: 6 sigma of the model size plus margin,
+    // clamped to [24, 60] pixels.
     inline StampBounds get_stamp_bounds(
-        const geometry::block& block,
-        int r
+        const geometry::block& block
     ) const {
-        int i_cen = static_cast<int>(
-            std::round(this->x1.v / block.scale)
-        ) - block.xmin ;
-        int j_cen = static_cast<int>(
-            std::round(this->x2.v / block.scale)
-        ) - block.ymin;
-        int rr = r;
-
-        // Same centre-based clipping as the overload above.
-        int i_min = std::max(i_cen - rr, 0);
-        int i_max = std::min(i_cen + rr + 1, block.nx);
-
-        int j_min = std::max(j_cen - rr, 0);
-        int j_max = std::min(j_cen + rr + 1, block.ny);
-
-        return {i_min, i_max, j_min, j_max, i_cen, j_cen, rr};
+        int rr = static_cast<int>(
+            std::max(
+                std::min(
+                    std::max(
+                        std::abs(this->a1.v),
+                        std::abs(this->a2.v)
+                    ) / block.scale * 6 + 12,
+                    60.0
+                ),
+                24.0
+            )
+        );
+        return this->get_stamp_bounds(block, rr);
     };
 
     inline modelKernelB
@@ -261,9 +235,10 @@ public:
         math::qnumber xs = x - this->x1;
         math::qnumber ys = y - this->x2;
 
-        math::lossNumber result;
-        math::qnumber q0 = xs * xs + ys * ys;
-        math::qnumber q1 = xs * xs - ys * ys;
+        math::qnumber xx = xs * xs;
+        math::qnumber yy = ys * ys;
+        math::qnumber q0 = xx + yy;
+        math::qnumber q1 = xx - yy;
         math::qnumber q2 = 2.0 * xs * ys;
         return c.v_p0 * q0 + c.v_p1 * q1 + c.v_p2 * q2;
     };
@@ -278,8 +253,10 @@ public:
         math::qnumber ys = y - this->x2;
 
         math::lossNumber result;
-        math::qnumber q0 = xs * xs + ys * ys;
-        math::qnumber q1 = xs * xs - ys * ys;
+        math::qnumber xx = xs * xs;
+        math::qnumber yy = ys * ys;
+        math::qnumber q0 = xx + yy;
+        math::qnumber q1 = xx - yy;
         math::qnumber q2 = 2.0 * xs * ys;
 
         result.v = c.v_p0 * q0 + c.v_p1 * q1 + c.v_p2 * q2;
@@ -294,22 +271,6 @@ public:
             result.v_x2 = c.x2_p1 * xs + c.x2_p2 * ys;
         }
         return result;
-    };
-
-    inline math::qnumber get_func_from_r2(
-        const math::qnumber& r2,
-        const modelKernelB& c
-    ) const {
-        frDeriv fr = this->get_fr(r2);
-        return fr.fr * c.f;
-    };
-
-    inline math::qnumber get_func_from_r2(
-        const math::lossNumber& r2,
-        const modelKernelD& c
-    ) const {
-        frDeriv fr = this->get_fr(r2.v);
-        return fr.fr * c.f;
     };
 
     inline math::qnumber get_model_from_r2(
@@ -381,52 +342,6 @@ public:
 
         res.v = math::pow(residual, 2.0) / variance_val;
         double mul = 2.0 / variance_val;
-
-        math::qnumber tmp = -1.0 * residual * mul;
-        res.v_F =  tmp * theory_val.v_F ;
-        res.v_FF = (
-            math::pow(theory_val.v_F, 2.0) * mul
-        );
-        if (!this->force_size) {
-            res.v_t = tmp * theory_val.v_t;
-            res.v_a1 = tmp * theory_val.v_a1;
-            res.v_a2 = tmp * theory_val.v_a2;
-            res.v_tt = (
-                math::pow(theory_val.v_t, 2.0) * mul
-            );
-            res.v_a1a1 = (
-                math::pow(theory_val.v_a1, 2.0) * mul
-            );
-            res.v_a2a2 = (
-                math::pow(theory_val.v_a2, 2.0) * mul
-            );
-        }
-        if (!this->force_center) {
-            res.v_x1 = tmp * theory_val.v_x1;
-            res.v_x2 = tmp * theory_val.v_x2;
-            res.v_x1x1 = (
-                math::pow(theory_val.v_x1, 2.0) * mul
-            );
-            res.v_x2x2 = (
-                math::pow(theory_val.v_x2, 2.0) * mul
-            );
-        }
-        return res;
-    };
-
-    inline math::lossNumber get_loss_with_p(
-        const math::qnumber img_val,
-        double variance_val,
-        const math::lossNumber& r2,
-        const modelKernelD & c,
-        const math::qnumber p
-    ) const {
-        math::lossNumber res;
-        math::lossNumber theory_val = this->get_model_from_r2(r2, c);
-        math::qnumber residual = img_val - p - theory_val.v;
-
-        res.v = math::pow(residual, 2.0) / variance_val;
-        math::qnumber mul = 2.0 / variance_val;
 
         math::qnumber tmp = -1.0 * residual * mul;
         res.v_F =  tmp * theory_val.v_F ;
@@ -610,33 +525,35 @@ public:
         return result;
     }
 
-    inline NgmixGaussian
-    decentralize(double dx1, double dx2) const {
-        // (dx1, dx2) is the position of the source wrt center of block
-        NgmixGaussian result= *this;
-        result.F = this->F.decentralize(dx1, dx2);
-        result.t = this->t.decentralize(dx1, dx2);
-        result.a1 = this->a1.decentralize(dx1, dx2);
-        result.a2 = this->a2.decentralize(dx1, dx2);
-        result.x1 = this->x1.decentralize(dx1, dx2);
-        result.x2 = this->x2.decentralize(dx1, dx2);
-        return result;
+    inline void
+    shift_reference(double dx1, double dx2) {
+        // Signed reference shift of every fitted quantity; sign
+        // conventions as in math::qnumber::shift_reference (positive =
+        // reference to the block center, i.e. centralize; negative =
+        // back to the detection peak, i.e. decentralize).
+        this->F.shift_reference(dx1, dx2);
+        this->t.shift_reference(dx1, dx2);
+        this->a1.shift_reference(dx1, dx2);
+        this->a2.shift_reference(dx1, dx2);
+        this->x1.shift_reference(dx1, dx2);
+        this->x2.shift_reference(dx1, dx2);
     };
 
-    inline NgmixGaussian
-    centralize(double dx1, double dx2) const {
-        // (dx1, dx2) is the position of the source wrt center of block
-        NgmixGaussian result= *this;
-        result.F = this->F.centralize(dx1, dx2);
-        result.t = this->t.centralize(dx1, dx2);
-        result.a1 = this->a1.centralize(dx1, dx2);
-        result.a2 = this->a2.centralize(dx1, dx2);
-        result.x1 = this->x1.centralize(dx1, dx2);
-        result.x2 = this->x2.centralize(dx1, dx2);
-        return result;
+    inline void
+    centralize(double dx1, double dx2) {
+        this->shift_reference(dx1, dx2);
     };
 
-    virtual ~NgmixGaussian() = default;
+    inline void
+    decentralize(double dx1, double dx2) {
+        this->shift_reference(-dx1, -dx2);
+    };
+
+    // NOT virtual: nothing derives from NgmixGaussian, and a virtual
+    // destructor would add a vptr and make galNumber (which embeds this
+    // class) non-trivially-copyable -- every catalog copy would then be a
+    // member-wise copy instead of a memcpy.
+    ~NgmixGaussian() = default;
 };
 
 

@@ -55,6 +55,28 @@ pyExportTask(py::module_& m) {
     // than duplicating the literal.
     task.attr("THRESHOLD_REF_MAG_ZERO") = Task::THRESHOLD_REF_MAG_ZERO;
     task.def(
+        "assign_block_ids",
+        [](const py::array_t<table::galRow>& detection,
+           const std::vector<geometry::block>& block_list) {
+            std::vector<table::galNumber> cat =
+                table::array_to_objlist(detection);
+            assign_block_ids(cat, block_list);
+            py::array_t<int> out(static_cast<ssize_t>(cat.size()));
+            auto r = out.mutable_unchecked<1>();
+            for (ssize_t i = 0;
+                 i < static_cast<ssize_t>(cat.size()); ++i) {
+                r(i) = cat[i].block_id;
+            }
+            return out;
+        },
+        "Owner block index for each detection position -- the same rule "
+        "process_image applies internally: half-open inner regions "
+        "(a source on a shared edge belongs to the right/top block), "
+        "nearest block for positions outside every inner region.",
+        py::arg("detection"),
+        py::arg("block_list")
+    );
+    task.def(
         "gaussian_flux_variance",
         &gaussian_flux_variance,
         "Compute Gaussian-weighted flux variance for a PSF",

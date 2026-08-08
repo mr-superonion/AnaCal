@@ -24,7 +24,8 @@ pyExportDetector(py::module_& m) {
         py::arg("block"),
         py::arg("noise_array")=py::none(),
         py::arg("image_bound")=0,
-        py::arg("weights")=py::none()
+        py::arg("weights")=py::none(),
+        py::arg("multiband_coadd_variance")=py::none()
     );
     detector.def("band_weights", &band_weights,
         "Normalised inverse-variance weights per band at a smoothing scale",

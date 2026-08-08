@@ -256,6 +256,15 @@ namespace mask {
         return mask_conv;
     };
 
+    // Stamp the per-source mask value: the Gaussian-smoothed mask
+    // (convolve_mask_gauss) sampled at the source centre, times 1000 --
+    // the same values the old convolve-then-sample pair produced, bit for
+    // bit (same kernel, and masked pixels are accumulated in the same
+    // raster order).  The smoothed value is evaluated AT each source
+    // position instead of over the whole image, so the caller's mask is
+    // only read (never modified), no Python object is created -- safe
+    // under a released GIL -- and the cost is O(sources * kernel^2), not
+    // O(image) per call.
     void
     inline add_pixel_mask_column(
         std::vector<table::galNumber>& catalog,
@@ -263,24 +272,56 @@ namespace mask {
         double sigma,
         double scale
     ) {
-        py::array_t<float> mask_conv = convolve_mask_gauss(
-            mask_array, sigma, scale
+        // Kernel exactly as in convolve_mask_gauss.
+        const int ngrid = int(sigma / scale) * 6 + 1;
+        const int ngrid2 = int((ngrid - 1) / 2);
+        std::vector<float> kernel(
+            static_cast<std::size_t>(ngrid) * ngrid
         );
+        const float A = float(scale * scale / (2.0 * M_PI * sigma * sigma));
+        const float sigma2 = -1.0 / (2 * float(sigma * sigma));
+        for (int y = 0; y < ngrid; ++y) {
+            for (int x = 0; x < ngrid; ++x) {
+                float dx = (x - ngrid2) * scale;
+                float dy = (y - ngrid2) * scale;
+                float r2 = dx * dx + dy * dy;
+                kernel[y * ngrid + x] = A * std::exp(r2 * sigma2);
+            }
+        }
 
-        auto conv_r = mask_conv.unchecked<2>();
-        int ny = conv_r.shape(0);
-        int nx = conv_r.shape(1);
+        auto mask_r = mask_array.unchecked<2>();
+        const int ny = static_cast<int>(mask_r.shape(0));
+        const int nx = static_cast<int>(mask_r.shape(1));
 
         for (table::galNumber & src : catalog) {
-            int y = static_cast<int>(
+            const int y = static_cast<int>(
                 std::round(src.model.x2.v / scale)
             );
-            int x = static_cast<int>(
+            const int x = static_cast<int>(
                 std::round(src.model.x1.v / scale)
             );
-            if (y>=0 && y< ny && x>=0 && x<nx) {
-                src.mask_value = static_cast<int>(conv_r(y, x) * 1000);
+            if (y < 0 || y >= ny || x < 0 || x >= nx) {
+                continue;
             }
+            // conv(y, x) = sum over masked pixels (my, mx) within the
+            // kernel reach of kernel(y - my, x - mx); accumulated in
+            // float and in raster order of (my, mx) to reproduce the
+            // full-image convolution exactly.
+            float conv = 0.0f;
+            const int j0 = std::max(y - ngrid2, 0);
+            const int j1 = std::min(y + ngrid2, ny - 1);
+            const int i0 = std::max(x - ngrid2, 0);
+            const int i1 = std::min(x + ngrid2, nx - 1);
+            for (int my = j0; my <= j1; ++my) {
+                for (int mx = i0; mx <= i1; ++mx) {
+                    if (mask_r(my, mx) > 0) {
+                        conv += kernel[
+                            (y - my + ngrid2) * ngrid + (x - mx + ngrid2)
+                        ];
+                    }
+                }
+            }
+            src.mask_value = static_cast<int>(conv * 1000);
         }
         return;
     };

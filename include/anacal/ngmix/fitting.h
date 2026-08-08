@@ -10,8 +10,7 @@ namespace anacal {
 namespace ngmix {
 
 
-// Radius of the model-fitting window about each source, in arcsec
-// (the deblending upper scale is twice this, 7 arcsec).
+// Radius of the model-fitting window about each source, in arcsec.
 inline constexpr double fit_radius_arcsec = 3.5;
 
 class GaussFit {
@@ -52,38 +51,6 @@ public:
     };
 
     inline void
-    measure_flux(
-        const std::vector<math::qnumber> & data,
-        table::galNumber & src,
-        const geometry::block & block,
-        const modelKernelD & kernel
-    ) const {
-        math::qnumber m0, norm;
-        ngmix::NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, fit_radius_arcsec / block.scale);
-        for (int j = bb.j_min; (j < bb.j_max); ++j) {
-            if (!block.ymsk[j]) continue;
-            int jj = j * block.nx;
-            for (int i = bb.i_min; (i < bb.i_max); ++i) {
-                if (!block.xmsk[i]) continue;
-                if (bb.has_point(i, j)) {
-                    math::lossNumber r2 = model.get_r2(
-                        block.xvs[i], block.yvs[j], kernel
-                    );
-                    math::qnumber w = src.model.get_func_from_r2(
-                        r2,
-                        kernel
-                    );
-                    norm = norm + w * w;
-                    m0 = m0 + w * data[jj + i];
-                }
-            }
-        }
-        src.model.F = m0 / norm;
-        return;
-    };
-
-    inline void
     measure_loss(
         const std::vector<math::qnumber> & data,
         double variance,
@@ -106,44 +73,6 @@ public:
                     );
                     src.loss = src.loss + model.get_loss(
                         data[jj + i], variance, r2, kernel
-                    );
-                }
-            }
-        }
-        return;
-    };
-
-    inline void
-    measure_loss2(
-        const std::vector<math::qnumber> & data,
-        const std::vector<math::qnumber> & data_m,
-        double variance,
-        table::galNumber & src,
-        const modelKernelD & kernel,
-        const NgmixGaussian & mmod,
-        const modelKernelB & mkernel,
-        const geometry::block & block
-    ) const {
-        src.loss.reset();
-        NgmixGaussian & model = src.model;
-        const StampBounds bb = model.get_stamp_bounds(block, fit_radius_arcsec / block.scale);
-
-        for (int j = bb.j_min; (j < bb.j_max); ++j) {
-            if (!block.ymsk[j]) continue;
-            int jj = j * block.nx;
-            for (int i = bb.i_min; (i < bb.i_max); ++i) {
-                if (!block.xmsk[i]) continue;
-                if (bb.has_point(i, j)) {
-                    math::qnumber p = data_m[jj+i];
-                    const math::qnumber mr2 = mmod.get_r2(
-                        block.xvs[i], block.yvs[j], mkernel
-                    );
-                    p = p - mmod.get_model_from_r2(mr2, mkernel);
-                    const math::lossNumber r2 = model.get_r2(
-                        block.xvs[i], block.yvs[j], kernel
-                    );
-                    src.loss = src.loss + model.get_loss_with_p(
-                        data[jj + i], variance, r2, kernel, p
                     );
                 }
             }
@@ -199,71 +128,6 @@ public:
                 if ((x2 + y2) < this->sigma2_lim) {
                     std::array<math::qnumber, 4> mm = src.model.get_fpfs_moments(
                         data[jj + i],
-                        block.xvs[i],
-                        block.yvs[j],
-                        this->rfac
-                    );
-                    m0 = m0 + mm[0];
-                    mxx = mxx + mm[1];
-                    myy = myy + mm[2];
-                    mxy = mxy + mm[3];
-                }
-            }
-        }
-        src.fpfs_m0 = m0 * this->ffac;
-        src.fpfs_m2 = (mxx + myy - m0 * this->sigma2) * this->ffac3;
-        {
-            math::qnumber denom = (src.fpfs_m0 + this->fpfs_c0);
-            src.fpfs_e1 = (mxx - myy) * this->ffac2 / denom;
-            src.fpfs_e2 = 2.0 * mxy * this->ffac2 / denom;
-        }
-        return;
-    };
-
-    inline void
-    measure_fpfs(
-        const std::vector<math::qnumber> & data,
-        const std::vector<math::qnumber> & data_m,
-        table::galNumber & src,
-        const geometry::block & block,
-        const NgmixGaussian & mmod,
-        const modelKernelB & mkernel
-    ) const {
-
-        ngmix::NgmixGaussian & model = src.model;
-        int r = static_cast<int>(this->sigma_arcsec * 8 / block.scale);
-        // Same centre-based clipping and validity masks as the overload above.
-        int i_cen = static_cast<int>(
-            std::round(model.x1.v / this->scale)
-        ) - block.xmin;
-        int i_min = std::max(i_cen - r, 0);
-        int i_max = std::min(i_cen + r + 1, block.nx);
-        int j_cen = static_cast<int>(
-            std::round(model.x2.v / this->scale)
-        ) - block.ymin;
-        int j_min = std::max(j_cen - r, 0);
-        int j_max = std::min(j_cen + r + 1, block.ny);
-
-        math::qnumber m0, mxx, myy, mxy;
-        for (int j = j_min; j < j_max; ++j) {
-            if (!block.ymsk[j]) continue;
-            int jj = j * block.nx;
-            double ys = block.yvs[j] - model.x2.v;
-            double y2 = ys * ys;
-            for (int i = i_min; i < i_max; ++i) {
-                if (!block.xmsk[i]) continue;
-                double xs = block.xvs[i] - model.x1.v;
-                double x2 = xs * xs;
-                if ((x2 + y2) < this->sigma2_lim) {
-                    const math::qnumber mr2 = mmod.get_r2(
-                        block.xvs[i], block.yvs[j], mkernel
-                    );
-                    math::qnumber p = (
-                        data_m[jj+i]
-                        - mmod.get_model_from_r2(mr2, mkernel) * src.wdet
-                    );
-                    std::array<math::qnumber, 4> mm = src.model.get_fpfs_moments(
-                        data[jj + i]-p,
                         block.xvs[i],
                         block.yvs[j],
                         this->rfac
@@ -381,18 +245,24 @@ public:
     inline void
     process_block_impl(
         std::vector<table::galNumber>& catalog,
-        const std::vector<table::galNumber> & catalog_model,
         const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         const modelPrior & prior,
         int num_epochs,
         const std::vector<double>& variance,
-        geometry::block block,
+        const geometry::block & block,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
-        std::optional<int> run_id=std::nullopt,
-        const std::optional<std::vector<double>>& weights=std::nullopt
+        const std::optional<std::vector<double>>& weights=std::nullopt,
+        const std::optional<double>& variance_meas_opt=std::nullopt,
+        const std::optional<double>& variance_det_opt=std::nullopt
     ) {
-        check_band_stack(img_array, psf_array, variance, noise_array);
+        // PRECONDITION: the band stacks were validated by the caller
+        // (Task::process_image or process_block below) -- validating once
+        // per public entry point instead of once per layer.
+        // PRECONDITION: ``catalog`` holds exactly the sources this block
+        // measures (Task::process_image hands each block its OWN sources
+        // only; process_block below hands over the caller's whole catalog).
+        // Every row is processed -- there is no ownership guard here.
         // The bands must be combined here exactly as they were for detection,
         // so the weights come from the caller.  Only when this is used
         // stand-alone (process_block below) are they derived here, and then at
@@ -414,24 +284,6 @@ public:
             );
         }
 
-        int irun;
-        if (run_id.has_value()) {
-            irun = *run_id;
-        } else {
-            irun = 0;
-        }
-
-        std::vector<std::size_t> inds;
-        if (! block.indices.empty()) {
-            inds = block.indices;
-        } else {
-            std::size_t ns = catalog.size();
-            inds.reserve(ns);
-            for (std::size_t i = 0; i < ns; ++i) {
-                inds.push_back(i);
-            }
-        }
-
         std::vector<math::qnumber> data = prepare_data_block_coadd(
             img_array,
             psf_array,
@@ -441,90 +293,25 @@ public:
             noise_array
         );
 
-        std::vector<modelKernelB> kernels_model;
-        std::size_t ng = inds.size();
-        std::vector<math::qnumber> data_model;
-        std::size_t n_pix = data.size();
+        const std::size_t ng = catalog.size();
 
-        if (irun == 0) {
-            // initialize the sources
-            for (const std::size_t ind : inds) {
-                table::galNumber & src = catalog[ind];
-                src.model.force_size=this->force_size;
-                src.model.force_center=this->force_center;
-                if (
-                    (!src.initialized) &&
-                    (src.block_id == block.index)
-                ) {
-                    if (!this->force_size) {
-                        initialize_angle(data, src.model, block);
-                    }
-                    initialize_flux(data, src.model, block);
-                    src.initialized = true;
-                }
-            }
-        } else {
-            for (const std::size_t ind : inds) {
-                table::galNumber & src = catalog[ind];
-                src.model.force_size=this->force_size;
-                src.model.force_center=true;
-            }
-            kernels_model.reserve(ng);
-            data_model.resize(n_pix);
-            for (std::size_t i=0; i<ng; ++i) {
-                const table::galNumber & mrc = catalog_model[inds[i]];
-                const modelKernelB kernel = mrc.model.prepare_modelB(
-                    this->scale,
-                    this->sigma_arcsec
-                );
-                kernels_model.push_back(kernel);
-                mrc.model.add_to_block(data_model, block, kernel);
-            }
-        }
-
-        double variance_meas = coadd_smoothed_variance(
-            block.scale,
-            this->sigma_arcsec,
-            psf_array,
-            variance,
-            w
-        );
-        for (int epoch = 0; epoch < num_epochs; ++epoch) {
-            /* std::cout<<"epoch: "<<epoch<<std::endl; */
-            for (std::size_t i=0; i<ng; ++i) {
-                table::galNumber & src = catalog[inds[i]];
-                const NgmixGaussian & mmod = catalog_model[inds[i]].model;
-                if (src.block_id == block.index) {
-                    const modelKernelD kernel = src.model.prepare_modelD(
-                        this->scale,
-                        this->sigma_arcsec
-                    );
-                    if (irun == 0) {
-                        this->measure_loss(
-                            data, variance_meas, src, block, kernel
-                        );
-                    } else {
-                        const modelKernelB & mkernel = kernels_model[i];
-                        this->measure_loss2(
-                            data, data_model,
-                            variance_meas,
-                            src, kernel,
-                            mmod, mkernel,
-                            block
-                        );
-                    }
-                    src.model.update_model_params(
-                        src.loss, prior, src.x1_det, src.x2_det, variance_meas
-                    );
-                }
-            }
-        }
-
-        // finally get FPFS measurement
+        // Task::process_image precomputes both coadd variances once per
+        // block; the stand-alone process_block below derives them here.
+        double variance_meas = variance_meas_opt.has_value()
+            ? *variance_meas_opt
+            : coadd_smoothed_variance(
+                block.scale,
+                this->sigma_arcsec,
+                psf_array,
+                variance,
+                w
+            );
         double std_fpfs = 0.0;
         if (this->do_fpfs) {
             std_fpfs = std::sqrt(
-                coadd_smoothed_variance(
+                variance_det_opt.has_value()
+                ? *variance_det_opt
+                : coadd_smoothed_variance(
                     block.scale,
                     detection_sigma(this->sigma_arcsec),
                     psf_array,
@@ -534,24 +321,52 @@ public:
             );
         }
 
+        // initialize the sources
+        for (std::size_t i = 0; i < ng; ++i) {
+            table::galNumber & src = catalog[i];
+            src.model.force_size=this->force_size;
+            src.model.force_center=this->force_center;
+            if (!src.initialized) {
+                if (!this->force_size) {
+                    initialize_angle(data, src.model, block);
+                }
+                initialize_flux(data, src.model, block);
+                src.initialized = true;
+            }
+        }
+
+        for (int epoch = 0; epoch < num_epochs; ++epoch) {
+            for (std::size_t i=0; i<ng; ++i) {
+                table::galNumber & src = catalog[i];
+                const modelKernelD kernel = src.model.prepare_modelD(
+                    this->scale,
+                    this->sigma_arcsec
+                );
+                this->measure_loss(
+                    data, variance_meas, src, block, kernel
+                );
+                src.model.update_model_params(
+                    src.loss, prior, src.x1_det, src.x2_det, variance_meas
+                );
+            }
+        }
+
         for (std::size_t i=0; i<ng; ++i) {
-            table::galNumber & src = catalog[inds[i]];
-            if (src.block_id == block.index) {
-                this->measure_gaussian_fluxes(
+            table::galNumber & src = catalog[i];
+            this->measure_gaussian_fluxes(
+                data, src, block
+            );
+            if (this->do_fpfs) {
+                this->measure_fpfs(
                     data, src, block
                 );
-                if (this->do_fpfs) {
-                    this->measure_fpfs(
-                        data, src, block
-                    );
-                    src.wsel = src.wdet * math::ssfunc1(
-                        src.fpfs_m2 - 0.05 * src.fpfs_m0,
-                        std_fpfs,
-                        std_fpfs
-                    );
-                } else {
-                    src.wsel = src.wdet;
-                }
+                src.wsel = src.wdet * math::ssfunc1(
+                    src.fpfs_m2 - 0.05 * src.fpfs_m0,
+                    std_fpfs,
+                    std_fpfs
+                );
+            } else {
+                src.wsel = src.wdet;
             }
         }
         return;
@@ -574,26 +389,29 @@ public:
         geometry::block bb = block ? *block : geometry::get_block_list(
             image_nx, image_ny, image_nx, image_ny, 0, this->scale
         )[0];
+        // The whole measurement is allocation-free (inputs are only read
+        // through unchecked accessors; the catalog copy, block_id stamping
+        // and variance/band validation below are pure C++), so drop the
+        // GIL unless a caller higher up already did.  Placed after the
+        // ``bb`` copy above, whose ``psf_array`` refcount needs the GIL.
+        ScopedGilRelease release;
         std::vector<table::galNumber> result = catalog;
-        std::vector<table::galNumber> catalog_model = catalog;
         // The caller hands this function the catalog FOR this block, so the
-        // block owns every source in it.  block_id is internal derived
-        // state (not an input column), so it must be stamped here or the
-        // ownership guard in process_block_impl would reject everything.
+        // block measures every source in it.  block_id is derived state
+        // (not a trusted input column): stamp it so the OUTPUT records
+        // which block did the measuring.
         for (table::galNumber & src : result) {
             src.block_id = bb.index;
         }
-        for (table::galNumber & src : catalog_model) {
-            src.block_id = bb.index;
-        }
+        const std::vector<double> variance_vec = to_variance_vector(variance);
+        check_band_stack(img_array, psf_array, variance_vec, noise_array);
         process_block_impl(
             result,
-            catalog_model,
             img_array,
             psf_array,
             prior,
             num_epochs,
-            to_variance_vector(variance),
+            variance_vec,
             bb,
             noise_array
         );

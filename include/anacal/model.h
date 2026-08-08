@@ -143,8 +143,6 @@ public:
 
 /// Gaussian's x1 multiplier Function
 class GaussianX1 : public BaseModel {
-private:
-    double sigma;
 public:
     GaussianX1() {};
 
@@ -158,8 +156,6 @@ public:
 
 /// Gaussian's x2 multiplier Function
 class GaussianX2 : public BaseModel {
-private:
-    double sigma;
 public:
     GaussianX2() {};
 

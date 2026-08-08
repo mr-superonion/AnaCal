@@ -8,6 +8,7 @@ pyExportFpfs(py::module_& m) {
     );
     fpfs::pyExportFpfsBase(fpfs);
     fpfs::pyExportFpfsCatalog(fpfs);
+    fpfs::pyExportFpfsForce(fpfs);
     fpfs::pyExportFpfsImage(fpfs);
 }
 }

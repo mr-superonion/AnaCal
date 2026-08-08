@@ -3,6 +3,7 @@
 
 #include "fpfs/base.h"
 #include "fpfs/catalog.h"
+#include "fpfs/force.h"
 #include "fpfs/image.h"
 
 namespace anacal {

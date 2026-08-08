@@ -57,7 +57,6 @@ inline constexpr int cascade_nring = 4;
 // light by construction.  At 0.6 the leftover 40% of a bright galaxy's surface
 // brightness is itself far above the threshold out to ~100 arcsec, which left
 // the cut inert exactly where it was needed.
-inline constexpr double bkg_coeff = 1.0;
 
 // Significance required ABOVE the local background.  The other flux cut,
 // ssfunc1(data, snr_peak_min * std_noise, ...), is applied to the RAW smoothed
@@ -121,7 +120,6 @@ void measure_pixel(
     // product below vanishes unless the centre strictly exceeds every
     // neighbour.  The gate therefore sits exactly on the zero-weight locus:
     // it is a pure short-circuit, never an uncorrected hard cut.
-    const double wdet_cut = 0.0;
     // Radius-5 disk: di^2 + dj^2 <= 25 inclusive, excluding the centre, so
     // 80 neighbour differences.  The disk is invariant under a 90 degree
     // rotation, which is what keeps the weight free of additive shear bias.
@@ -140,7 +138,7 @@ void measure_pixel(
             }
         }
     }
-    if (wdet.v > wdet_cut) {
+    if (wdet.v > 0.0) {
         table::galNumber src;
         src.x1_det = x * block.scale;
         src.x2_det = y * block.scale;
@@ -176,7 +174,7 @@ void measure_pixel(
             f_min,
             omega_f
         ) * math::ssfunc1(
-            data[index] - bkg * bkg_coeff,
+            data[index] - bkg,
             bkg_nsigma * std_noise,
             omega_f
         );
@@ -206,9 +204,9 @@ find_peaks_from_data(
     // Secondary peak cut
     double f_min = std_noise * snr_min;
     double f_cut = f_min - omega_f;
-    // ssfunc1(v, omega_v, omega_v) vanishes for v <= 0, so this cheap
-    // pre-filter sits exactly where the weight is already zero.
-    const double v_cut = 0.0;
+    // The strict > 0 neighbour tests below are a cheap pre-filter:
+    // ssfunc1(v, omega_v, omega_v) vanishes for v <= 0, so they sit
+    // exactly where the weight is already zero.
 
     // Local-background weights: built once here, reused by every candidate.
     const bkgKernel bk = make_bkg_kernel(block.scale);
@@ -249,10 +247,10 @@ find_peaks_from_data(
             int index = j * block.nx + i;
             if (
                 (data[index].v > f_cut) &&
-                (data[index].v - data[j * block.nx + (i + 1)].v > v_cut) &&
-                (data[index].v - data[j * block.nx + (i - 1)].v > v_cut) &&
-                (data[index].v - data[(j + 1) * block.nx + i].v > v_cut) &&
-                (data[index].v - data[(j - 1) * block.nx + i].v > v_cut)
+                (data[index].v - data[j * block.nx + (i + 1)].v > 0.0) &&
+                (data[index].v - data[j * block.nx + (i - 1)].v > 0.0) &&
+                (data[index].v - data[(j + 1) * block.nx + i].v > 0.0) &&
+                (data[index].v - data[(j - 1) * block.nx + i].v > 0.0)
             ) {
                 measure_pixel(
                     catalog,
@@ -293,9 +291,12 @@ find_peaks_impl(
     const geometry::block & block,
     const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
     int image_bound=0,
-    const std::optional<std::vector<double>>& weights=std::nullopt
+    const std::optional<std::vector<double>>& weights=std::nullopt,
+    const std::optional<double>& multiband_coadd_variance=std::nullopt
 ) {
-    check_band_stack(img_array, psf_array, variance, noise_array);
+    // PRECONDITION: the band stacks were validated by the caller
+    // (find_peaks below, or Task::process_image) -- validating once per
+    // public entry point instead of once per layer.
     double sigma_arcsec_det = detection_sigma(sigma_arcsec);
 
     std::vector<double> w;
@@ -323,7 +324,10 @@ find_peaks_impl(
         noise_array
     );
 
+    // The caller (Task::process_image) precomputes the detection-scale
+    // coadd variance once per block; standalone callers derive it here.
     double std_noise = std::pow(
+        multiband_coadd_variance.has_value() ? *multiband_coadd_variance :
         coadd_smoothed_variance(
             block.scale,
             sigma_arcsec_det,
@@ -359,85 +363,35 @@ find_peaks(
     const geometry::block & block,
     const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
     int image_bound=0,
-    const std::optional<std::vector<double>>& weights=std::nullopt
+    const std::optional<std::vector<double>>& weights=std::nullopt,
+    const std::optional<double>& multiband_coadd_variance=std::nullopt
 ) {
+    // Whole detection is allocation-free (inputs are only read through
+    // unchecked accessors, and the variance/band validation below is pure
+    // C++ plus GIL-free ndim/shape struct reads), so drop the GIL for the
+    // whole call unless a caller higher up -- Task::process_image --
+    // already did.  Validation errors unwind safely through the release.
+    ScopedGilRelease release;
+    const std::vector<double> variance_vec = to_variance_vector(variance);
+    check_band_stack(img_array, psf_array, variance_vec, noise_array);
     std::vector<table::galNumber> cat = find_peaks_impl(
         img_array,
         psf_array,
         sigma_arcsec,
         snr_min,
-        to_variance_vector(variance),
+        variance_vec,
         omega_f,
         omega_v,
         block,
         noise_array,
         image_bound,
-        weights
+        weights,
+        multiband_coadd_variance
     );
 
-    // --------------------------------------------------------------------
-    // DISABLED: neighbour-competition ("deblend") re-weighting.
-    //
-    // ``ss`` averaged the wdet of *other* detected peaks inside r^2 < 8
-    // (r < 2.83 pix).  Step 1 makes that region provably empty: if a pixel
-    // is detected then it strictly exceeds every neighbour inside the
-    // radius-``drmax`` stencil, and because the stencil is symmetric each of
-    // those neighbours picks up an ssfunc1 with a negative argument and so
-    // gets wdet = 0.  Detected peaks are therefore always more than
-    // ``drmax`` pixels apart, which exceeds the 2.83 pix footprint for any
-    // drmax >= 3, so ``ss`` is identically zero for every source.  Measured
-    // directly on a dense field: minimum peak separation was 5.0 pix at
-    // drmax = 4, with zero pairs inside the footprint.
-    //
-    // With ss == 0 the factor below degenerates into ssfunc1(wdet, 0.4,
-    // 0.399): a pure re-sharpening of wdet, the same construction as the
-    // p_min/omega_p layer that was removed, but wider (zero below wdet =
-    // 0.001, one above 0.799).  It performs no deblending, and because its
-    // thresholds are fixed while wdet's scale depends on the stencil size,
-    // it silently couples the two.  Kept here for reference only.
-    //
-    // std::vector<math::qnumber> data(block.nx * block.ny);
-    // for (const table::galNumber & src: cat){
-    //     const ngmix::NgmixGaussian & model = src.model;
-    //     int i = static_cast<int>(
-    //         std::round(model.x1.v / block.scale)
-    //     ) - block.xmin;
-    //     int j = static_cast<int>(
-    //         std::round(model.x2.v / block.scale)
-    //     ) - block.ymin;
-    //     data[j * block.nx + i] = src.wdet;
-    // }
-    // for (table::galNumber & src: cat){
-    //     const ngmix::NgmixGaussian & model = src.model;
-    //     int i = static_cast<int>(
-    //         std::round(model.x1.v / block.scale)
-    //     ) - block.xmin;
-    //     int j = static_cast<int>(
-    //         std::round(model.x2.v / block.scale)
-    //     ) - block.ymin;
-    //     math::qnumber ss;
-    //     int nss = 0;
-    //     for (int jj = j - 3; jj <= j + 3; ++jj) {
-    //         int dy = jj - j;
-    //         for (int ii = i - 3; ii <= i + 3; ++ii) {
-    //             int dx = ii -i;
-    //             // radius
-    //             int r2 = dx * dx + dy * dy;
-    //             if ((r2 < 8) && (r2!=0)) {
-    //                 ss = ss + data[jj * block.nx + ii];
-    //                 nss = nss + 1;
-    //             }
-    //         }
-    //     }
-    //     // average over the footprint rather than the bare sum
-    //     if (nss > 0) ss = ss / static_cast<double>(nss);
-    //     src.wdet = math::ssfunc1(
-    //         src.wdet - ss,
-    //         0.4,
-    //         0.399
-    //     );
-    // }
-    // --------------------------------------------------------------------
+    // Deblending (neighbour-competition re-weighting) was removed here;
+    // the record and future-work notes live in deblend_plan.txt at the
+    // workspace root.
     return cat;
 };
 

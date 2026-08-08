@@ -38,7 +38,6 @@ pyExportGeometry(py::module_& m) {
         .def_readwrite("yvs", &block::yvs)
         .def_readwrite("xmsk", &block::xmsk)
         .def_readwrite("ymsk", &block::ymsk)
-        .def_readwrite("scale", &block::scale)
         .def_readwrite("psf_array", &block::psf_array)
         .def_readwrite("index", &block::index);
 

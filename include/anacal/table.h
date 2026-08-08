@@ -154,42 +154,39 @@ struct galNumber {
     ) : model(model), wdet(wdet),
         mask_value(mask_value), loss(loss) {}
 
-    inline galNumber
-    decentralize(const geometry::block & block) const {
-        double dx1 = this->x1_det - block.xcen * block.scale;
-        double dx2 = this->x2_det - block.ycen * block.scale;
-        // (dx1, dx2) is the position of the source wrt center of block
-        galNumber result= *this;
-        result.wdet = this->wdet.decentralize(dx1, dx2);
-        result.bkg = this->bkg.decentralize(dx1, dx2);
-        result.wsel = this->wsel.decentralize(dx1, dx2);
-        result.model = this->model.decentralize(dx1, dx2);
-        result.fpfs_e1 = this->fpfs_e1.decentralize(dx1, dx2);
-        result.fpfs_e2 = this->fpfs_e2.decentralize(dx1, dx2);
-        result.fpfs_m0 = this->fpfs_m0.decentralize(dx1, dx2);
-        result.fpfs_m2 = this->fpfs_m2.decentralize(dx1, dx2);
-        result.flux_gauss0 = this->flux_gauss0.decentralize(dx1, dx2);
-        result.flux_gauss2 = this->flux_gauss2.decentralize(dx1, dx2);
-        return result;
+    // In-place: a galNumber is 1.2 kB but only the g1/g2 slots of ten
+    // qnumbers actually change, so mutating beats copying the struct.
+    // One signed implementation: a POSITIVE (dx1, dx2) -- the source
+    // position wrt the block center -- shifts the reference point to
+    // the BLOCK CENTER (centralize, before per-block fitting); the
+    // NEGATED shift moves it back to the DETECTION PEAK (decentralize,
+    // after fitting).
+    inline void
+    shift_reference(double dx1, double dx2) {
+        this->wdet.shift_reference(dx1, dx2);
+        this->bkg.shift_reference(dx1, dx2);
+        this->wsel.shift_reference(dx1, dx2);
+        this->model.shift_reference(dx1, dx2);
+        this->fpfs_e1.shift_reference(dx1, dx2);
+        this->fpfs_e2.shift_reference(dx1, dx2);
+        this->fpfs_m0.shift_reference(dx1, dx2);
+        this->fpfs_m2.shift_reference(dx1, dx2);
+        this->flux_gauss0.shift_reference(dx1, dx2);
+        this->flux_gauss2.shift_reference(dx1, dx2);
     };
 
-    inline galNumber
-    centralize(const geometry::block & block) const {
+    inline void
+    centralize(const geometry::block & block) {
         double dx1 = this->x1_det - block.xcen * block.scale;
         double dx2 = this->x2_det - block.ycen * block.scale;
-        // (dx1, dx2) is the position of the source wrt center of block
-        galNumber result= *this;
-        result.wdet = this->wdet.centralize(dx1, dx2);
-        result.bkg = this->bkg.centralize(dx1, dx2);
-        result.wsel = this->wsel.centralize(dx1, dx2);
-        result.model = this->model.centralize(dx1, dx2);
-        result.fpfs_e1 = this->fpfs_e1.centralize(dx1, dx2);
-        result.fpfs_e2 = this->fpfs_e2.centralize(dx1, dx2);
-        result.fpfs_m0 = this->fpfs_m0.centralize(dx1, dx2);
-        result.fpfs_m2 = this->fpfs_m2.centralize(dx1, dx2);
-        result.flux_gauss0 = this->flux_gauss0.centralize(dx1, dx2);
-        result.flux_gauss2 = this->flux_gauss2.centralize(dx1, dx2);
-        return result;
+        this->shift_reference(dx1, dx2);
+    };
+
+    inline void
+    decentralize(const geometry::block & block) {
+        double dx1 = this->x1_det - block.xcen * block.scale;
+        double dx2 = this->x2_det - block.ycen * block.scale;
+        this->shift_reference(-dx1, -dx2);
     };
 
 // One qnumber spans five catalog columns (value, _dg1, _dg2, _dj1, _dj2).
@@ -356,7 +353,8 @@ array_to_objlist(
         ) {
             galNumber gn;
             gn.from_row(row);
-            result.push_back(gn.centralize(block));
+            gn.centralize(block);
+            result.push_back(gn);
         }
     }
     return result;
