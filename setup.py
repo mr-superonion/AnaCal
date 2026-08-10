@@ -128,6 +128,7 @@ ext_modules.append(
             "src/detector.cpp",
             "src/geometry.cpp",
             "src/task.cpp",
+            "src/psfmodel.cpp",
         ],
         include_dirs=include_dirs,
         # Almost all of the implementation lives in these headers; listing

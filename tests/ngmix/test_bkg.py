@@ -28,14 +28,14 @@ PSF_ARRAY = (
 )
 
 
-def _block():
-    # block_overlap must be at least twice the background kernel reach
-    # (2 * (3 arcsec / scale + 1) = 32 pixels here).  Sizing the block as
-    # img + overlap keeps npatch = 1, so this is a single block whose inner
+def _cell():
+    # cell_overlap must be at least twice the background kernel reach
+    # (2 * (3 arcsec / scale + 1) = 32 pixels here).  Sizing the cell as
+    # img + overlap keeps npatch = 1, so this is a single cell whose inner
     # region is exactly the image and whose centre is the image centre --
     # the latter matters because it makes decentralize() the identity, so the
     # g1/g2 slots are the plain shear derivatives.
-    return anacal.geometry.get_block_list(
+    return anacal.geometry.get_cell_list(
         NX, NY, NX + 32, NY + 32, 32, SCALE
     )[0]
 
@@ -64,7 +64,7 @@ def _detect(arr):
     return anacal.detector.find_peaks(
         img_array=arr,
         psf_array=PSF_ARRAY,
-        block=_block(),
+        cell=_cell(),
         noise_array=None,
         image_bound=0,
         **kwargs,

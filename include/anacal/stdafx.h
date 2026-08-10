@@ -22,7 +22,7 @@ namespace py = pybind11;
 
 // Releases the GIL for the enclosing scope, but only when this thread
 // actually holds it.  The measurement entry points (Task::process_image,
-// detector::find_peaks, GaussFit::process_block) all release the GIL
+// detector::find_peaks, GaussFit::process_cell) all release the GIL
 // around their compute, and they also call each other -- the conditional
 // makes the nested release a no-op instead of a fatal double release.
 // The compute they guard must not touch the Python C API beyond reading

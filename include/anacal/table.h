@@ -139,10 +139,10 @@ struct galNumber {
     double ra = 0.0;
     double dec = 0.0;
     double x1_det, x2_det;
-    // Which block owns this source.  INTERNAL: assigned from x1_det/x2_det
-    // by Task::assign_block_ids (or detector::measure_pixel at detection);
+    // Which cell owns this source.  INTERNAL: assigned from x1_det/x2_det
+    // by Task::assign_cell_ids (or detector::measure_pixel at detection);
     // not an output column.
-    int block_id = -1;
+    int cell_id = -1;
 
     galNumber() = default;
 
@@ -157,8 +157,8 @@ struct galNumber {
     // In-place: a galNumber is 1.2 kB but only the g1/g2 slots of ten
     // qnumbers actually change, so mutating beats copying the struct.
     // One signed implementation: a POSITIVE (dx1, dx2) -- the source
-    // position wrt the block center -- shifts the reference point to
-    // the BLOCK CENTER (centralize, before per-block fitting); the
+    // position wrt the cell center -- shifts the reference point to
+    // the CELL CENTER (centralize, before per-cell fitting); the
     // NEGATED shift moves it back to the DETECTION PEAK (decentralize,
     // after fitting).
     inline void
@@ -176,16 +176,16 @@ struct galNumber {
     };
 
     inline void
-    centralize(const geometry::block & block) {
-        double dx1 = this->x1_det - block.xcen * block.scale;
-        double dx2 = this->x2_det - block.ycen * block.scale;
+    centralize(const geometry::cell & cell) {
+        double dx1 = this->x1_det - cell.xcen * cell.scale;
+        double dx2 = this->x2_det - cell.ycen * cell.scale;
         this->shift_reference(dx1, dx2);
     };
 
     inline void
-    decentralize(const geometry::block & block) {
-        double dx1 = this->x1_det - block.xcen * block.scale;
-        double dx2 = this->x2_det - block.ycen * block.scale;
+    decentralize(const geometry::cell & cell) {
+        double dx1 = this->x1_det - cell.xcen * cell.scale;
+        double dx2 = this->x2_det - cell.ycen * cell.scale;
         this->shift_reference(-dx1, -dx2);
     };
 
@@ -331,7 +331,7 @@ make_catalog_empty(
 inline std::vector<galNumber>
 array_to_objlist(
     const py::array_t<galRow> &records,
-    const geometry::block & block
+    const geometry::cell & cell
 ) {
     /* Fast zero‑copy view of the NumPy buffer */
     auto r = records.unchecked<1>();          // one‑dimensional view
@@ -339,10 +339,10 @@ array_to_objlist(
 
     std::vector<galNumber> result;
     result.reserve(static_cast<std::size_t>(n));     // upper bound
-    double x_min = block.xmin * block.scale;
-    double y_min = block.ymin * block.scale;
-    double x_max = block.xmax * block.scale;
-    double y_max = block.ymax * block.scale;
+    double x_min = cell.xmin * cell.scale;
+    double y_min = cell.ymin * cell.scale;
+    double x_max = cell.xmax * cell.scale;
+    double y_max = cell.ymax * cell.scale;
 
     for (ssize_t i = 0; i < n; ++i) {
         const galRow &row = r(i);                     // read‑only reference
@@ -353,7 +353,7 @@ array_to_objlist(
         ) {
             galNumber gn;
             gn.from_row(row);
-            gn.centralize(block);
+            gn.centralize(cell);
             result.push_back(gn);
         }
     }

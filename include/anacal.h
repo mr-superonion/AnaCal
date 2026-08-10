@@ -9,6 +9,7 @@
 #include "anacal/table.h"
 #include "anacal/detector.h"
 #include "anacal/task.h"
+#include "anacal/psfmodel.h"
 #include "anacal/math/tensor.h"
 
 #endif // ANACAL_H

@@ -22,5 +22,6 @@ namespace anacal {
         detector::pyExportDetector(m);
         geometry::pyExportGeometry(m);
         task::pyExportTask(m);
+        psfmodel::pyExportPsfModel(m);
     }
 }

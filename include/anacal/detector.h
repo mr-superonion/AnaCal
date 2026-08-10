@@ -38,8 +38,8 @@ struct bkgKernel {
     std::vector<double> w;
     // Half-width in pixels of the box the offsets were selected from, i.e. the
     // furthest this kernel ever reaches from a candidate.  find_peaks_impl
-    // compares it against the block's ``block_bound`` (geometry.h) to make sure
-    // every read lands inside the block.
+    // compares it against the cell's ``cell_bound`` (geometry.h) to make sure
+    // every read lands inside the cell.
     int nr = 0;
     // Ring k spans [ring_start[k], ring_start[k + 1]) in the arrays above, and
     // its weights sum to one on their own.
@@ -68,7 +68,7 @@ inline constexpr int cascade_nring = 4;
 inline constexpr double bkg_nsigma = 5.0;
 
 // Build the ring weights.  Depends only on the pixel scale, so this is done
-// once per block and reused by every candidate peak.
+// once per cell and reused by every candidate peak.
 inline bkgKernel
 make_bkg_kernel(double scale) {
     bkgKernel bk;
@@ -106,16 +106,16 @@ void measure_pixel(
     const std::vector<math::qnumber> & data,
     int x,                                      // index on image
     int y,
-    const geometry::block & block,
+    const geometry::cell & cell,
     double f_min,
     double omega_f,
     double omega_v,
     const bkgKernel & bk,
     double std_noise
 ) {
-    int j = y - block.ymin;
-    int i = x - block.xmin;
-    int index = j * block.nx + i;
+    int j = y - cell.ymin;
+    int i = x - cell.xmin;
+    int index = j * cell.nx + i;
     // ssfunc1(v, omega_v, omega_v) is identically zero for v <= 0, so the
     // product below vanishes unless the centre strictly exceeds every
     // neighbour.  The gate therefore sits exactly on the zero-weight locus:
@@ -129,7 +129,7 @@ void measure_pixel(
         for (int di = -drmax; di <= drmax; di++) {
             int dr2 = di * di + dj2;
             if ((dr2 <= drmax2) && (dr2 != 0)) {
-                int index2 = (j + dj) * block.nx + (i + di);
+                int index2 = (j + dj) * cell.nx + (i + di);
                 wdet = wdet * math::ssfunc1(
                     data[index] - data[index2],
                     omega_v,
@@ -140,8 +140,8 @@ void measure_pixel(
     }
     if (wdet.v > 0.0) {
         table::galNumber src;
-        src.x1_det = x * block.scale;
-        src.x2_det = y * block.scale;
+        src.x1_det = x * cell.scale;
+        src.x2_det = y * cell.scale;
         src.model.x1.v = src.x1_det;
         src.model.x2.v = src.x2_det;
 
@@ -152,7 +152,7 @@ void measure_pixel(
             math::qnumber b;
             for (std::size_t t = bk.ring_start[k];
                  t < bk.ring_start[k + 1]; ++t) {
-                int _i = (j + bk.dj[t]) * block.nx + (i + bk.di[t]);
+                int _i = (j + bk.dj[t]) * cell.nx + (i + bk.di[t]);
                 b = b + data[_i] * bk.w[t];
             }
             if (k == 0) {
@@ -165,7 +165,7 @@ void measure_pixel(
         }
 
         src.bkg = bkg;
-        src.block_id = block.index;
+        src.cell_id = cell.index;
         // The neighbour-difference product is used directly as the weight.
         // It is already bounded in [0, 1] (every factor is an ssfunc1), so it
         // needs no re-sharpening or renormalisation.
@@ -187,7 +187,7 @@ void measure_pixel(
     }
 };
 
-// Scan a block for peaks.  Takes the qimage and its noise level already built,
+// Scan a cell for peaks.  Takes the qimage and its noise level already built,
 // so that a single-band image and a multi-band coadd share this code exactly.
 inline std::vector<table::galNumber>
 find_peaks_from_data(
@@ -196,7 +196,7 @@ find_peaks_from_data(
     double snr_min,
     double omega_f,
     double omega_v,
-    const geometry::block & block,
+    const geometry::cell & cell,
     int image_ny,
     int image_nx,
     int image_bound=0
@@ -209,55 +209,55 @@ find_peaks_from_data(
     // exactly where the weight is already zero.
 
     // Local-background weights: built once here, reused by every candidate.
-    const bkgKernel bk = make_bkg_kernel(block.scale);
+    const bkgKernel bk = make_bkg_kernel(cell.scale);
 
     // The background kernel reads out to +-bk.nr around every candidate, and
-    // candidates run over the block's INNER region, so the padding between the
-    // inner region and the block edge -- ``block_bound`` in geometry.h -- must
+    // candidates run over the cell's INNER region, so the padding between the
+    // inner region and the cell edge -- ``cell_bound`` in geometry.h -- must
     // be at least bk.nr, or those reads fall outside ``data``: silently wrong
     // values where the row index merely wraps, undefined behaviour where it
-    // goes negative.  Since block_bound = max(block_overlap / 2, 3), this
-    // demands block_overlap >= 2 * bk.nr: 32 at 0.2 arcsec/pix, 62 at 0.1.
+    // goes negative.  Since cell_bound = max(cell_overlap / 2, 3), this
+    // demands cell_overlap >= 2 * bk.nr: 32 at 0.2 arcsec/pix, 62 at 0.1.
     // Refuse the configuration rather than quietly trimming the scan region, so
-    // a mis-sized block surfaces immediately instead of biasing the edges.
-    const int block_bound = std::min({
-        block.ymin_in - block.ymin, block.ymax - block.ymax_in,
-        block.xmin_in - block.xmin, block.xmax - block.xmax_in
+    // a mis-sized cell surfaces immediately instead of biasing the edges.
+    const int cell_bound = std::min({
+        cell.ymin_in - cell.ymin, cell.ymax - cell.ymax_in,
+        cell.xmin_in - cell.xmin, cell.xmax - cell.xmax_in
     });
-    if (block_bound < bk.nr) {
+    if (cell_bound < bk.nr) {
         throw std::runtime_error(
-            "detector Error: block_bound of " + std::to_string(block_bound) +
+            "detector Error: cell_bound of " + std::to_string(cell_bound) +
             " pixels is smaller than the background kernel reach of " +
-            std::to_string(bk.nr) + " pixels; pass block_overlap >= " +
-            std::to_string(2 * bk.nr) + " to get_block_list"
+            std::to_string(bk.nr) + " pixels; pass cell_overlap >= " +
+            std::to_string(2 * bk.nr) + " to get_cell_list"
         );
     }
 
-    int ystart = std::max(image_bound, block.ymin_in);
-    int yend = std::min(image_ny - image_bound, block.ymax_in);
-    int xstart = std::max(image_bound, block.xmin_in);
-    int xend = std::min(image_nx - image_bound, block.xmax_in);
+    int ystart = std::max(image_bound, cell.ymin_in);
+    int yend = std::min(image_ny - image_bound, cell.ymax_in);
+    int xstart = std::max(image_bound, cell.xmin_in);
+    int xend = std::min(image_nx - image_bound, cell.xmax_in);
 
     std::vector<table::galNumber> catalog;
     for (int y = ystart; y < yend; ++y) {
-        int j = y - block.ymin;
+        int j = y - cell.ymin;
         for (int x = xstart; x < xend; ++x) {
-            int i = x - block.xmin;
+            int i = x - cell.xmin;
             // data index
-            int index = j * block.nx + i;
+            int index = j * cell.nx + i;
             if (
                 (data[index].v > f_cut) &&
-                (data[index].v - data[j * block.nx + (i + 1)].v > 0.0) &&
-                (data[index].v - data[j * block.nx + (i - 1)].v > 0.0) &&
-                (data[index].v - data[(j + 1) * block.nx + i].v > 0.0) &&
-                (data[index].v - data[(j - 1) * block.nx + i].v > 0.0)
+                (data[index].v - data[j * cell.nx + (i + 1)].v > 0.0) &&
+                (data[index].v - data[j * cell.nx + (i - 1)].v > 0.0) &&
+                (data[index].v - data[(j + 1) * cell.nx + i].v > 0.0) &&
+                (data[index].v - data[(j - 1) * cell.nx + i].v > 0.0)
             ) {
                 measure_pixel(
                     catalog,
                     data,
                     x,
                     y,
-                    block,
+                    cell,
                     f_min,
                     omega_f,
                     omega_v,
@@ -288,7 +288,7 @@ find_peaks_impl(
     const std::vector<double>& variance,
     double omega_f,
     double omega_v,
-    const geometry::block & block,
+    const geometry::cell & cell,
     const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
     int image_bound=0,
     const std::optional<std::vector<double>>& weights=std::nullopt,
@@ -311,25 +311,25 @@ find_peaks_impl(
         w = *weights;
     } else {
         w = band_weights(
-            block.scale, sigma_arcsec_det, psf_array, variance
+            cell.scale, sigma_arcsec_det, psf_array, variance
         );
     }
 
-    std::vector<math::qnumber> data = prepare_data_block_coadd(
+    std::vector<math::qnumber> data = prepare_data_cell_coadd(
         img_array,
         psf_array,
         sigma_arcsec_det,
-        block,
+        cell,
         w,
         noise_array
     );
 
     // The caller (Task::process_image) precomputes the detection-scale
-    // coadd variance once per block; standalone callers derive it here.
+    // coadd variance once per cell; standalone callers derive it here.
     double std_noise = std::pow(
         multiband_coadd_variance.has_value() ? *multiband_coadd_variance :
         coadd_smoothed_variance(
-            block.scale,
+            cell.scale,
             sigma_arcsec_det,
             psf_array,
             variance,
@@ -344,7 +344,7 @@ find_peaks_impl(
         snr_min,
         omega_f,
         omega_v,
-        block,
+        cell,
         static_cast<int>(img_array.shape(nd - 2)),
         static_cast<int>(img_array.shape(nd - 1)),
         image_bound
@@ -360,7 +360,7 @@ find_peaks(
     const varianceArg& variance,
     double omega_f,
     double omega_v,
-    const geometry::block & block,
+    const geometry::cell & cell,
     const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
     int image_bound=0,
     const std::optional<std::vector<double>>& weights=std::nullopt,
@@ -382,7 +382,7 @@ find_peaks(
         variance_vec,
         omega_f,
         omega_v,
-        block,
+        cell,
         noise_array,
         image_bound,
         weights,

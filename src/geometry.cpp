@@ -9,7 +9,7 @@ pyExportGeometry(py::module_& m) {
         "geometry", "submodule for geometry"
     );
 
-    py::class_<block>(geometry, "block")
+    py::class_<cell>(geometry, "cell")
         .def(py::init<>())
         .def(py::init<
             int, int, int, int, int,
@@ -21,34 +21,34 @@ pyExportGeometry(py::module_& m) {
             py::arg("ymin_in"), py::arg("xmax_in"), py::arg("ymax_in"),
             py::arg("scale"), py::arg("index")
         )
-        .def_readwrite("scale", &block::scale)
-        .def_readwrite("xcen", &block::xcen)
-        .def_readwrite("ycen", &block::ycen)
-        .def_readwrite("xmin", &block::xmin)
-        .def_readwrite("ymin", &block::ymin)
-        .def_readwrite("xmax", &block::xmax)
-        .def_readwrite("ymax", &block::ymax)
-        .def_readwrite("xmin_in", &block::xmin_in)
-        .def_readwrite("ymin_in", &block::ymin_in)
-        .def_readwrite("xmax_in", &block::xmax_in)
-        .def_readwrite("ymax_in", &block::ymax_in)
-        .def_readwrite("nx", &block::nx)
-        .def_readwrite("ny", &block::ny)
-        .def_readwrite("xvs", &block::xvs)
-        .def_readwrite("yvs", &block::yvs)
-        .def_readwrite("xmsk", &block::xmsk)
-        .def_readwrite("ymsk", &block::ymsk)
-        .def_readwrite("psf_array", &block::psf_array)
-        .def_readwrite("index", &block::index);
+        .def_readwrite("scale", &cell::scale)
+        .def_readwrite("xcen", &cell::xcen)
+        .def_readwrite("ycen", &cell::ycen)
+        .def_readwrite("xmin", &cell::xmin)
+        .def_readwrite("ymin", &cell::ymin)
+        .def_readwrite("xmax", &cell::xmax)
+        .def_readwrite("ymax", &cell::ymax)
+        .def_readwrite("xmin_in", &cell::xmin_in)
+        .def_readwrite("ymin_in", &cell::ymin_in)
+        .def_readwrite("xmax_in", &cell::xmax_in)
+        .def_readwrite("ymax_in", &cell::ymax_in)
+        .def_readwrite("nx", &cell::nx)
+        .def_readwrite("ny", &cell::ny)
+        .def_readwrite("xvs", &cell::xvs)
+        .def_readwrite("yvs", &cell::yvs)
+        .def_readwrite("xmsk", &cell::xmsk)
+        .def_readwrite("ymsk", &cell::ymsk)
+        .def_readwrite("psf_array", &cell::psf_array)
+        .def_readwrite("index", &cell::index);
 
     geometry.def(
-        "get_block_list", &get_block_list,
-        "get a list of blocks",
+        "get_cell_list", &get_cell_list,
+        "get a list of cells",
         py::arg("img_nx"),
         py::arg("img_ny"),
-        py::arg("block_nx"),
-        py::arg("block_ny"),
-        py::arg("block_overlap"),
+        py::arg("cell_nx"),
+        py::arg("cell_ny"),
+        py::arg("cell_overlap"),
         py::arg("scale")
     );
 }

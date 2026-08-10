@@ -42,39 +42,40 @@ pyExportTask(py::module_& m) {
             py::arg("img_array"),
             py::arg("psf_array"),
             py::arg("variance"),
-            py::arg("block_list"),
+            py::arg("cell_list"),
             py::arg("detection")=py::none(),
             py::arg("noise_array")=py::none(),
             py::arg("mask_array")=py::none(),
             py::arg("a_ini")=0.2,
             py::arg("do_measure")=true,
-            py::arg("do_fpfs")=true
+            py::arg("do_fpfs")=true,
+            py::arg("mask_value_max")=py::none()
         );
     // Single source of truth for the zeropoint at which the flux-scale
     // thresholds are defined; the Python FPFS path reads it from here rather
     // than duplicating the literal.
     task.attr("THRESHOLD_REF_MAG_ZERO") = Task::THRESHOLD_REF_MAG_ZERO;
     task.def(
-        "assign_block_ids",
+        "assign_cell_ids",
         [](const py::array_t<table::galRow>& detection,
-           const std::vector<geometry::block>& block_list) {
+           const std::vector<geometry::cell>& cell_list) {
             std::vector<table::galNumber> cat =
                 table::array_to_objlist(detection);
-            assign_block_ids(cat, block_list);
+            assign_cell_ids(cat, cell_list);
             py::array_t<int> out(static_cast<ssize_t>(cat.size()));
             auto r = out.mutable_unchecked<1>();
             for (ssize_t i = 0;
                  i < static_cast<ssize_t>(cat.size()); ++i) {
-                r(i) = cat[i].block_id;
+                r(i) = cat[i].cell_id;
             }
             return out;
         },
-        "Owner block index for each detection position -- the same rule "
+        "Owner cell index for each detection position -- the same rule "
         "process_image applies internally: half-open inner regions "
-        "(a source on a shared edge belongs to the right/top block), "
-        "nearest block for positions outside every inner region.",
+        "(a source on a shared edge belongs to the right/top cell), "
+        "nearest cell for positions outside every inner region.",
         py::arg("detection"),
-        py::arg("block_list")
+        py::arg("cell_list")
     );
     task.def(
         "gaussian_flux_variance",

@@ -106,23 +106,23 @@ public:
         force_center(force_center){};
 
     inline StampBounds get_stamp_bounds(
-        const geometry::block& block,
+        const geometry::cell& cell,
         int rr
     ) const {
         int i_cen = static_cast<int>(
-            std::round(this->x1.v / block.scale)
-        ) - block.xmin ;
+            std::round(this->x1.v / cell.scale)
+        ) - cell.xmin ;
         int j_cen = static_cast<int>(
-            std::round(this->x2.v / block.scale)
-        ) - block.ymin;
+            std::round(this->x2.v / cell.scale)
+        ) - cell.ymin;
 
         // Clip about the centre; clamping i_max against i_min would shift the
-        // window inward (not clip it) when the source sits near a block edge.
+        // window inward (not clip it) when the source sits near a cell edge.
         int i_min = std::max(i_cen - rr, 0);
-        int i_max = std::min(i_cen + rr + 1, block.nx);
+        int i_max = std::min(i_cen + rr + 1, cell.nx);
 
         int j_min = std::max(j_cen - rr, 0);
-        int j_max = std::min(j_cen + rr + 1, block.ny);
+        int j_max = std::min(j_cen + rr + 1, cell.ny);
 
         return {i_min, i_max, j_min, j_max, i_cen, j_cen, rr};
     };
@@ -130,7 +130,7 @@ public:
     // Adaptive-radius variant: 6 sigma of the model size plus margin,
     // clamped to [24, 60] pixels.
     inline StampBounds get_stamp_bounds(
-        const geometry::block& block
+        const geometry::cell& cell
     ) const {
         int rr = static_cast<int>(
             std::max(
@@ -138,13 +138,13 @@ public:
                     std::max(
                         std::abs(this->a1.v),
                         std::abs(this->a2.v)
-                    ) / block.scale * 6 + 12,
+                    ) / cell.scale * 6 + 12,
                     60.0
                 ),
                 24.0
             )
         );
-        return this->get_stamp_bounds(block, rr);
+        return this->get_stamp_bounds(cell, rr);
     };
 
     inline modelKernelB
@@ -376,20 +376,20 @@ public:
     };
 
     inline void
-    add_to_block(
+    add_to_cell(
         std::vector<math::qnumber> & data_model,
-        const geometry::block & block,
+        const geometry::cell & cell,
         const modelKernelB & kernel
     ) const {
-        const StampBounds bb = this->get_stamp_bounds(block);
+        const StampBounds bb = this->get_stamp_bounds(cell);
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
-            if (!block.ymsk[j]) continue;
-            int jj = j * block.nx;
+            if (!cell.ymsk[j]) continue;
+            int jj = j * cell.nx;
             for (int i = bb.i_min; (i < bb.i_max); ++i) {
-                if (!block.xmsk[i]) continue;
+                if (!cell.xmsk[i]) continue;
                 if (bb.has_point(i, j)) {
                     math::qnumber r2 = this->get_r2(
-                        block.xvs[i], block.yvs[j], kernel
+                        cell.xvs[i], cell.yvs[j], kernel
                     );
                     data_model[jj + i] = (
                         data_model[jj + i] + this->get_model_from_r2(r2, kernel)
@@ -529,7 +529,7 @@ public:
     shift_reference(double dx1, double dx2) {
         // Signed reference shift of every fitted quantity; sign
         // conventions as in math::qnumber::shift_reference (positive =
-        // reference to the block center, i.e. centralize; negative =
+        // reference to the cell center, i.e. centralize; negative =
         // back to the detection peak, i.e. decentralize).
         this->F.shift_reference(dx1, dx2);
         this->t.shift_reference(dx1, dx2);

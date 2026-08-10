@@ -101,7 +101,7 @@ pyExportNgmix(py::module_& m) {
             py::arg("fpfs_c0")=1.0,
             py::arg("do_fpfs")=true
         )
-        .def("process_block", &GaussFit::process_block,
+        .def("process_cell", &GaussFit::process_cell,
             "Run iteration for fitting",
             py::arg("catalog"),
             py::arg("img_array"),
@@ -110,7 +110,8 @@ pyExportNgmix(py::module_& m) {
             py::arg("noise_array")=py::none(),
             py::arg("num_epochs")=5,
             py::arg("variance")=1.0,
-            py::arg("block")=py::none()
+            py::arg("cell")=py::none(),
+            py::arg("mask_value_max")=py::none()
         );
 }
 

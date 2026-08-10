@@ -59,7 +59,7 @@ Image::Image(
     // The buffers start UNINITIALIZED: every setter (set_r/set_r_band/
     // set_delta_r/set_f/set_delta_f/set_noise_f) fully overwrites or
     // re-zeroes its buffer before anything reads it, so a constructor
-    // memset would be pure waste (~1 MB per block-sized image).  Callers
+    // memset would be pure waste (~1 MB per cell-sized image).  Callers
     // must set before they draw/measure.
     if (mode & 1) {
         data_r = (double*) fftw_malloc(sizeof(double) * npixels);
@@ -171,6 +171,49 @@ template void Image::set_r<double>(
 );
 template void Image::set_r<float>(const py::array_t<float>&, bool);
 template void Image::set_r<double>(const py::array_t<double>&, bool);
+
+
+void
+Image::set_r_raw (
+    const double* data,
+    int arr_ny,
+    int arr_nx,
+    bool ishift
+) {
+    assert_mode(this->mode & 1);
+    const int xcen = arr_nx / 2;
+    const int ycen = arr_ny / 2;
+    int ybeg = ycen - this->ny2;
+    int yend = ybeg + this->ny;
+    int xbeg = xcen - this->nx2;
+    int xend = xbeg + this->nx;
+    int off_x = 0;
+    int off_y = 0;
+    if (xbeg < 0) {
+        off_x = -xbeg;
+        xbeg = 0;
+    }
+    if (ybeg < 0) {
+        off_y = -ybeg;
+        ybeg = 0;
+    }
+    if (xend > arr_nx) xend = arr_nx;
+    if (yend > arr_ny) yend = arr_ny;
+    if (ishift) {
+        off_y = off_y + this->ny / 2;
+        off_x = off_x + this->nx / 2;
+    }
+    std::fill_n(this->data_r, this->ny * this->nx, 0.0);
+    for (int j = ybeg; j < yend; ++j) {
+        int jj = (j - ybeg + off_y) % this->ny;
+        const double* prow = data + static_cast<std::size_t>(j) * arr_nx;
+        for (int i = xbeg; i < xend; ++i) {
+            int ii = (i - xbeg + off_x) % this->nx;
+            data_r[jj * this->nx + ii] = prow[i];
+        }
+    }
+    return;
+}
 
 
 template <typename T>
@@ -1158,37 +1201,37 @@ pyExportImage(py::module& m) {
         py::arg("klim")
     );
     image.def(
-        "prepare_data_block", &prepare_data_block,
-        "prepare the qnumber data in block",
+        "prepare_data_cell", &prepare_data_cell,
+        "prepare the qnumber data in cell",
         py::arg("img_array"),
         py::arg("psf_array"),
         py::arg("sigma_arcsec"),
-        py::arg("block"),
+        py::arg("cell"),
         py::arg("noise_array")=py::none(),
         py::arg("band")=0
     );
     image.def(
-        "prepare_data_block_image", &prepare_data_block_image,
-        "prepare the qnumber data in block return image",
+        "prepare_data_cell_image", &prepare_data_cell_image,
+        "prepare the qnumber data in cell return image",
         py::arg("img_array"),
         py::arg("psf_array"),
         py::arg("sigma_arcsec"),
-        py::arg("block"),
+        py::arg("cell"),
         py::arg("noise_array")=py::none()
     );
     image.def(
-        "prepare_model_block", &prepare_model_block,
-        "prepare the qnumber model in block",
+        "prepare_model_cell", &prepare_model_cell,
+        "prepare the qnumber model in cell",
         py::arg("catalog"),
         py::arg("sigma_arcsec"),
-        py::arg("block")
+        py::arg("cell")
     );
     image.def(
-        "prepare_model_block_image", &prepare_model_block_image,
-        "prepare the qnumber model in block",
+        "prepare_model_cell_image", &prepare_model_cell_image,
+        "prepare the qnumber model in cell",
         py::arg("catalog"),
         py::arg("sigma_arcsec"),
-        py::arg("block")
+        py::arg("cell")
     );
     py::class_<Image>(image, "Image")
         .def(py::init<int, int, double, bool, unsigned int>(),

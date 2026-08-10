@@ -62,6 +62,30 @@ namespace mask {
             py::arg("sigma"),
             py::arg("scale")
         );
+        mask.def(
+            "add_pixel_mask_column",
+            // Overload for a structured galRow ARRAY (external detection
+            // catalogs): same stamping, array in / array out.  Positions
+            // are read from the model centre (x1/x2), which must be in
+            // the mask's pixel frame.
+            [](
+                const py::array_t<table::galRow>& detection,
+                const py::array_t<int16_t>& mask_array,
+                double sigma,
+                double scale
+            ) {
+                std::vector<table::galNumber> cat =
+                    table::array_to_objlist(detection);
+                add_pixel_mask_column(cat, mask_array, sigma, scale);
+                return table::objlist_to_array(cat);
+            },
+            "Return the detection ARRAY with the pixel mask value "
+            "updated (same stamping as the catalog overload)",
+            py::arg("detection"),
+            py::arg("mask_array"),
+            py::arg("sigma"),
+            py::arg("scale")
+        );
     }
 } // end of mask
 } // end of anacal

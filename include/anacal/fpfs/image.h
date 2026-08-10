@@ -152,7 +152,7 @@ namespace anacal {
         // per-source loop below only reads the inputs through unchecked
         // accessors and writes into the output buffer, so the GIL is
         // released for its whole duration -- this is what lets callers
-        // thread over blocks of sources.  The braced scope ends the
+        // thread over cells of sources.  The braced scope ends the
         // release BEFORE the return statement touches src's refcount.
         {
             ScopedGilRelease release;

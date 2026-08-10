@@ -28,19 +28,19 @@ det_task = anacal.task.Task(
     omega_v=0.04,
     mag_zero=mag_zero,
 )
-blocks = anacal.geometry.get_block_list(
+cells = anacal.geometry.get_cell_list(
     img_nx=gal_array.shape[1],
     img_ny=gal_array.shape[0],
-    block_nx=250,
-    block_ny=250,
-    block_overlap=80,
+    cell_nx=250,
+    cell_ny=250,
+    cell_overlap=80,
     scale=pixel_scale,
 )
 det_cat = det_task.process_image(
     np.asarray(gal_array, dtype=np.float32),
     psf_array,
     variance=noise_variance,
-    block_list=blocks,
+    cell_list=cells,
     do_measure=False,
 )
 detection = np.zeros(len(det_cat), dtype=[("y", "f8"), ("x", "f8")])

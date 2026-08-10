@@ -51,8 +51,16 @@ pyExportFpfsForce(py::module_& fpfs) {
             py::arg("det"),
             py::arg("std_m00"),
             py::arg("out_dtype"),
-            py::arg("noise_array")=py::none()
+            py::arg("noise_array")=py::none(),
+            py::arg("mask_value")=py::none(),
+            py::arg("mask_value_max")=py::none(),
+            py::arg("psf_model")=py::none(),
+            py::arg("psf_offset_x")=0.0,
+            py::arg("psf_offset_y")=0.0
         );
+    // mask_value sentinel for PSF-invalid sources (always skipped).
+    fpfs.attr("PSF_INVALID_MASK_VALUE") =
+        psfmodel::psf_invalid_mask_value;
 }
 
     } // namespace fpfs

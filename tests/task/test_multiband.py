@@ -67,8 +67,8 @@ def make_task():
     )
 
 
-def make_blocks(shape):
-    return anacal.geometry.get_block_list(
+def make_cells(shape):
+    return anacal.geometry.get_cell_list(
         shape[0], shape[1], 500, 500, 64, SCALE,
     )
 
@@ -76,7 +76,7 @@ def make_blocks(shape):
 def run(img, psf, variance):
     task = make_task()
     return task.process_image(
-        img, psf, variance=variance, block_list=make_blocks(img.shape[-2:]),
+        img, psf, variance=variance, cell_list=make_cells(img.shape[-2:]),
     )
 
 

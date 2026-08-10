@@ -22,7 +22,7 @@ private:
     double* data_r = nullptr;
     fftw_complex* data_f = nullptr;
     // Persistent scratch for _rotate90_f, so the per-call
-    // fftw_malloc + copy + free (504 KB at block size) happens once per
+    // fftw_malloc + copy + free (504 KB at cell size) happens once per
     // Image instead of once per rotation.
     std::vector<std::complex<double>> rot_scratch_;
 
@@ -67,6 +67,14 @@ public:
     void set_r(
         const py::array_t<T>&,
         bool ishift=false
+    );
+
+    // Raw contiguous float64 buffer variant of the 2-arg set_r (same
+    // centering and zero-fill rules), for callers that hold a plain
+    // C++ array -- e.g. a natively drawn PSF stamp -- with no numpy
+    // object involved (GIL-free).
+    void set_r_raw(
+        const double* data, int arr_ny, int arr_nx, bool ishift=false
     );
 
     void set_delta_r(bool ishift=false);
@@ -227,7 +235,7 @@ public:
 // Thread-local workspace pools
 //
 // Constructing an Image costs two fftw_mallocs plus two planner calls under
-// the GLOBAL planner mutex; the block loops construct several per block per
+// the GLOBAL planner mutex; the cell loops construct several per cell per
 // band, and with threads that mutex becomes a scalability ceiling.  The hot
 // paths therefore LEASE a workspace from a per-thread pool: the lease
 // resets the scale-dependent state (reset_for_reuse), so a leased Image
@@ -696,20 +704,20 @@ check_band_stack(
 };
 
 inline std::vector<math::qnumber>
-prepare_data_block(
+prepare_data_cell(
     const py::array_t<pixel_t>& img_array,
     const py::array_t<double>& psf_array,
     double sigma_arcsec,
-    const geometry::block & block,
+    const geometry::cell & cell,
     const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
     ssize_t band=0
 ){
     ImageQLease lease(
-        block.nx,
-        block.ny,
-        block.scale,
+        cell.nx,
+        cell.ny,
+        cell.scale,
         sigma_arcsec,
-        3.1 / block.scale,      // klim = 3.1 / scale (matches
+        3.1 / cell.scale,      // klim = 3.1 / scale (matches
                                 // gaussian_flux_variance in task.h)
         true                    // us estimate in FFTW
     );
@@ -718,28 +726,28 @@ prepare_data_block(
         img_array,
         psf_array,
         band,
-        block.xcen,
-        block.ycen,
+        cell.xcen,
+        cell.ycen,
         noise_array
     );
 };
 
 inline py::array_t<double>
-prepare_data_block_image(
+prepare_data_cell_image(
     const py::array_t<pixel_t>& img_array,
     const py::array_t<double>& psf_array,
     double sigma_arcsec,
-    const geometry::block & block,
+    const geometry::cell & cell,
     const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
 ) {
-    auto result = py::array_t<double>({5, block.ny, block.nx});
+    auto result = py::array_t<double>({5, cell.ny, cell.nx});
     auto r = result.mutable_unchecked<3>();
 
-    std::vector<math::qnumber> qvec = prepare_data_block(
-        img_array, psf_array, sigma_arcsec, block, noise_array
+    std::vector<math::qnumber> qvec = prepare_data_cell(
+        img_array, psf_array, sigma_arcsec, cell, noise_array
     );
-    for (ssize_t j = 0, idx=0; j < block.ny; ++j) {
-        for (ssize_t i = 0; i < block.nx; ++i, ++idx) {
+    for (ssize_t j = 0, idx=0; j < cell.ny; ++j) {
+        for (ssize_t i = 0; i < cell.nx; ++i, ++idx) {
             r(0, j, i) = qvec[idx].v;
             r(1, j, i) = qvec[idx].g1;
             r(2, j, i) = qvec[idx].g2;
@@ -752,40 +760,40 @@ prepare_data_block_image(
 
 
 inline std::vector<math::qnumber>
-prepare_model_block(
+prepare_model_cell(
     const py::array_t<table::galRow> catalog,
     double sigma_arcsec,
-    const geometry::block & block
+    const geometry::cell & cell
 ){
     std::vector<table::galNumber> cat = table::array_to_objlist(
         catalog
     );
-    std::size_t n_pix = block.nx * block.ny;
+    std::size_t n_pix = cell.nx * cell.ny;
     std::vector<math::qnumber> data_model(n_pix);
     for (const table::galNumber& ss : cat) {
         const ngmix::modelKernelB kernel = ss.model.prepare_modelB(
-            block.scale,
+            cell.scale,
             sigma_arcsec
         );
-        ss.model.add_to_block(data_model, block, kernel);
+        ss.model.add_to_cell(data_model, cell, kernel);
     }
     return data_model;
 };
 
 inline py::array_t<double>
-prepare_model_block_image(
+prepare_model_cell_image(
     const py::array_t<table::galRow> catalog,
     double sigma_arcsec,
-    const geometry::block & block
+    const geometry::cell & cell
 ) {
-    auto result = py::array_t<double>({5, block.ny, block.nx});
+    auto result = py::array_t<double>({5, cell.ny, cell.nx});
     auto r = result.mutable_unchecked<3>();
 
-    std::vector<math::qnumber> qvec = prepare_model_block(
-        catalog, sigma_arcsec, block
+    std::vector<math::qnumber> qvec = prepare_model_cell(
+        catalog, sigma_arcsec, cell
     );
-    for (ssize_t j = 0, idx=0; j < block.ny; ++j) {
-        for (ssize_t i = 0; i < block.nx; ++i, ++idx) {
+    for (ssize_t j = 0, idx=0; j < cell.ny; ++j) {
+        for (ssize_t i = 0; i < cell.nx; ++i, ++idx) {
             r(0, j, i) = qvec[idx].v;
             r(1, j, i) = qvec[idx].g1;
             r(2, j, i) = qvec[idx].g2;
@@ -947,15 +955,15 @@ coadd_smoothed_variance(
     return out;
 };
 
-// The coadded qimage for one block.  Bands are accumulated one at a time, so
-// only two qimages are ever held at once (about 5 MB for a 250 x 250 block)
+// The coadded qimage for one cell.  Bands are accumulated one at a time, so
+// only two qimages are ever held at once (about 5 MB for a 250 x 250 cell)
 // rather than one per band.
 inline std::vector<math::qnumber>
-prepare_data_block_coadd(
+prepare_data_cell_coadd(
     const py::array_t<pixel_t>& img_stack,
     const py::array_t<double>& psf_stack,
     double sigma_arcsec,
-    const geometry::block & block,
+    const geometry::cell & cell,
     const std::vector<double>& w,
     const std::optional<py::array_t<pixel_t>>& noise_stack=std::nullopt
 ) {
@@ -963,11 +971,11 @@ prepare_data_block_coadd(
     std::vector<math::qnumber> out;
     for (std::size_t b = 0; b < nband; ++b) {
         const ssize_t ib = static_cast<ssize_t>(b);
-        std::vector<math::qnumber> data = prepare_data_block(
+        std::vector<math::qnumber> data = prepare_data_cell(
             img_stack,
             psf_stack,
             sigma_arcsec,
-            block,
+            cell,
             noise_stack,
             ib
         );

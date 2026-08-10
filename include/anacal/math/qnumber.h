@@ -203,20 +203,20 @@ struct qnumber {
     // position-coupling terms when the reference point of the
     // coordinates moves by (dx1, dx2).  Both wrappers below call this
     // with opposite signs; (dx1, dx2) is always the source position wrt
-    // the block center.
+    // the cell center.
     void shift_reference(double dx1, double dx2) {
         this->g1 = this->g1 + dx1 * this->x1 - dx2 * this->x2;
         this->g2 = this->g2 + dx1 * this->x2 + dx2 * this->x1;
     };
 
-    // Positive sign: shifts the reference point to the BLOCK CENTER
-    // (applied before per-block fitting).
+    // Positive sign: shifts the reference point to the CELL CENTER
+    // (applied before per-cell fitting).
     void centralize(double dx1, double dx2) {
         this->shift_reference(dx1, dx2);
     };
 
     // Opposite sign: shifts the reference point back to the DETECTION
-    // PEAK (applied after per-block fitting).
+    // PEAK (applied after per-cell fitting).
     void decentralize(double dx1, double dx2) {
         this->shift_reference(-dx1, -dx2);
     };

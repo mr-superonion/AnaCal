@@ -144,11 +144,11 @@ def test_flux_variance():
         force_center=True,
         **kwargs,
     )
-    # block_overlap must be at least twice the background kernel reach
+    # cell_overlap must be at least twice the background kernel reach
     # (2 * (3 arcsec / scale + 1) = 32 pixels here) so the local background is
-    # never estimated from pixels outside the block.  120 - 32 = 88 still
-    # exceeds the 64-pixel image, so this remains a single block.
-    blocks = anacal.geometry.get_block_list(
+    # never estimated from pixels outside the cell.  120 - 32 = 88 still
+    # exceeds the 64-pixel image, so this remains a single cell.
+    cells = anacal.geometry.get_cell_list(
         gal_array.shape[0],
         gal_array.shape[1],
         120,
@@ -156,12 +156,12 @@ def test_flux_variance():
         32,
         pixel_scale,
     )
-    assert len(blocks) == 1
+    assert len(cells) == 1
     catalog2 = det_task.process_image(
         gal_array,
         psf_array,
         variance=noise_std**2.0,
-        block_list=blocks,
+        cell_list=cells,
         a_ini=0.0,
     )
     assert len(catalog2) == 1
@@ -181,7 +181,7 @@ def test_flux_variance():
         gal_array,
         psf_array,
         variance=noise_std**2.0,
-        block_list=blocks,
+        cell_list=cells,
         a_ini=0.2,
     )
     np.testing.assert_allclose(catalog4["flux"][0], flux4, rtol=1e-3, atol=0.01)
@@ -189,7 +189,7 @@ def test_flux_variance():
         gal_array,
         psf_array,
         variance=noise_std**2.0,
-        block_list=blocks,
+        cell_list=cells,
     )
     np.testing.assert_allclose(catalog5["flux"][0], flux4, rtol=1e-3, atol=0.01)
     np.testing.assert_allclose(
@@ -210,7 +210,7 @@ def test_flux_variance():
         gal_array,
         psf_array,
         variance=noise_std**2.0,
-        block_list=blocks,
+        cell_list=cells,
         do_fpfs=False,
     )
     np.testing.assert_allclose(

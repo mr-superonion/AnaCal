@@ -59,7 +59,7 @@ def test_ngmix_fpfs():
     catalog = [src]
     prior = anacal.ngmix.modelPrior()
 
-    cat = fitter.process_block(
+    cat = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
         psf_array=psf_array,
@@ -143,7 +143,7 @@ def test_ngmix_fpfs_disabled():
     catalog = [src]
     prior = anacal.ngmix.modelPrior()
 
-    cat = fitter.process_block(
+    cat = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
         psf_array=psf_array,

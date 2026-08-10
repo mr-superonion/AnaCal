@@ -71,7 +71,7 @@ def test_ngmix_gaussian_fit_additive(test_g1=True):
     prior = anacal.ngmix.modelPrior()
 
     img_array = make_sim(g1=0, g2=0, flux=flux)
-    cat_1 = fitter.process_block(
+    cat_1 = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
         psf_array=psf_array,
@@ -159,7 +159,7 @@ def test_ngmix_gaussian_fit2():
 
     # Test shear response calculation (no multiplicative bias)
     img_array = make_sim(g1=g1_list[0], g2=g2_list[0], flux=flux)
-    cat_1 = fitter.process_block(
+    cat_1 = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
         psf_array=psf_array,
@@ -192,7 +192,7 @@ def test_ngmix_gaussian_fit2():
     )
 
     img_array = make_sim(g1=g1_list[1], g2=g2_list[1], flux=flux*2)
-    cat_2 = fitter.process_block(
+    cat_2 = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
         psf_array=psf_array,
@@ -228,7 +228,7 @@ def test_ngmix_gaussian_fit2():
     assert np.sum(np.abs(diff[2])) / np.sum(np.abs(img_array1[2])) < 2e-1
 
     # Test symmetry
-    cat_1 = fitter.process_block(
+    cat_1 = fitter.process_cell(
         catalog=catalog,
         img_array=make_sim(g1=0.00, g2=0.0, angle=0.0, flux=flux),
         psf_array=psf_array,
@@ -238,7 +238,7 @@ def test_ngmix_gaussian_fit2():
     )[0]
     ell1 = cat_1.model.get_shape()[0]
 
-    cat_2 = fitter.process_block(
+    cat_2 = fitter.process_cell(
         catalog=catalog,
         img_array=make_sim(g1=0.00, g2=0.0, angle=90.0, flux=flux),
         psf_array=psf_array,
@@ -257,7 +257,7 @@ def test_ngmix_gaussian_fit2():
     )
 
     img_array = make_sim(g1=g1_list[0], g2=g2_list[0], flux=flux)
-    cat_1 = fitter.process_block(
+    cat_1 = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
         psf_array=psf_array,
@@ -280,7 +280,7 @@ def test_ngmix_gaussian_fit2():
         atol=1e-6, rtol=0.0,
     )
     img_array = make_sim(g1=g1_list[1], g2=g2_list[1], flux=flux)
-    cat_2 = fitter.process_block(
+    cat_2 = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
         psf_array=psf_array,
@@ -360,7 +360,7 @@ def test_ngmix_gaussian_fit4():
         src.x2_det = center[1] * scale
         catalog.append(src)
 
-    result = fitter.process_block(
+    result = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
         psf_array=psf_array,
@@ -403,7 +403,7 @@ def test_ngmix_gaussian_fit4():
 # for t in t_array:
 #     src.model.t.v = t
 #     # Test shear response calculation (no multiplicative bias)
-#     cat_1 = fitter.process_block(
+#     cat_1 = fitter.process_cell(
 #         catalog=catalog,
 #         img_array=make_sim(g1=-0.02, g2=0.0, flux=flux),
 #         psf_array=psf_array,

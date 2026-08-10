@@ -237,31 +237,31 @@ gaussian_flux_variance(
 }
 
 
-// Recompute every source's block_id from its position.  The blocks'
+// Recompute every source's cell_id from its position.  The cells'
 // INNER regions tile the image without overlap, so each position has
 // exactly one owner; a source outside all inner regions (padding or the
 // image_bound margin -- possible for forced positions) is given the
-// nearest block.  This is what makes the ``block_id == block.index``
+// nearest cell.  This is what makes the ``cell_id == cell.index``
 // guard in the measurement stage trustworthy for ANY input catalog:
-// block_id is not an input column, and a stale or foreign value can no
+// cell_id is not an input column, and a stale or foreign value can no
 // longer leave a source silently unmeasured.
 inline void
-assign_block_ids(
+assign_cell_ids(
     std::vector<table::galNumber>& catalog,
-    const std::vector<geometry::block>& block_list
+    const std::vector<geometry::cell>& cell_list
 ) {
-    if (block_list.empty()) return;
+    if (cell_list.empty()) return;
 
-    // The blocks' inner regions tile the image on a REGULAR grid, so
+    // The cells' inner regions tile the image on a REGULAR grid, so
     // ownership is a row/column binary search instead of a scan over
-    // every block (which was O(sources x blocks)).  The half-open
+    // every cell (which was O(sources x cells)).  The half-open
     // [x0, x1) rule is unchanged: a source on a shared inner edge
-    // belongs to the block on its right/top, matching the detection
+    // belongs to the cell on its right/top, matching the detection
     // scan bounds.
     std::vector<double> xs, ys;
-    xs.reserve(block_list.size());
-    ys.reserve(block_list.size());
-    for (const geometry::block & b : block_list) {
+    xs.reserve(cell_list.size());
+    ys.reserve(cell_list.size());
+    for (const geometry::cell & b : cell_list) {
         xs.push_back(b.xmin_in * b.scale);
         ys.push_back(b.ymin_in * b.scale);
     }
@@ -283,22 +283,22 @@ assign_block_ids(
         ) - 1;
     };
     std::vector<int> grid(ncol * ys.size(), -1);
-    for (std::size_t ib = 0; ib < block_list.size(); ++ib) {
-        const geometry::block & b = block_list[ib];
+    for (std::size_t ib = 0; ib < cell_list.size(); ++ib) {
+        const geometry::cell & b = cell_list[ib];
         grid[
             row_of(b.ymin_in * b.scale) * ncol
             + col_of(b.xmin_in * b.scale)
         ] = static_cast<int>(ib);
     }
 
-    // Original nearest-block scan, kept for sources OUTSIDE every
+    // Original nearest-cell scan, kept for sources OUTSIDE every
     // inner region (padding or the image_bound margin -- possible for
-    // forced positions) and for block lists that are not a full grid
-    // (e.g. blocks dropped for missing PSFs upstream).
+    // forced positions) and for cell lists that are not a full grid
+    // (e.g. cells dropped for missing PSFs upstream).
     auto nearest_scan = [&](const table::galNumber & src) {
-        int best = block_list.front().index;
+        int best = cell_list.front().index;
         double best_d2 = std::numeric_limits<double>::infinity();
-        for (const geometry::block & b : block_list) {
+        for (const geometry::cell & b : cell_list) {
             double x0 = b.xmin_in * b.scale;
             double x1 = b.xmax_in * b.scale;
             double y0 = b.ymin_in * b.scale;
@@ -325,7 +325,7 @@ assign_block_ids(
                 row_of(src.x2_det) * ncol + col_of(src.x1_det)
             ];
             if (ib >= 0) {
-                const geometry::block & b = block_list[ib];
+                const geometry::cell & b = cell_list[ib];
                 if ((src.x1_det < b.xmax_in * b.scale) &&
                     (src.x2_det < b.ymax_in * b.scale)) {
                     best = b.index;
@@ -335,7 +335,7 @@ assign_block_ids(
         if (best < 0) {
             best = nearest_scan(src);
         }
-        src.block_id = best;
+        src.cell_id = best;
     }
     return;
 };
@@ -408,14 +408,14 @@ public:
         this->omega_v *= thr_ratio;
     };
 
-    // Which PSF to use for a block: the block's own stamp when it has one of
+    // Which PSF to use for a cell: the cell's own stamp when it has one of
     // the right rank and size, otherwise the exposure-wide one.  Written once
     // here because the same choice is made at three points in process_image.
     // For a 2-D PSF this is the condition that was in place before multi-band
     // support, so single-band behaviour is unchanged.
     inline const py::array_t<double>&
     choose_psf(
-        const geometry::block & block,
+        const geometry::cell & cell,
         const py::array_t<double>& psf_array
     ) const {
         const ssize_t nd = psf_array.ndim();
@@ -423,18 +423,18 @@ public:
             (psf_array.shape(nd - 2) == this->stamp_size) &&
             (psf_array.shape(nd - 1) == this->stamp_size)
         );
-        if ((block.psf_array.ndim() == nd) && shape_ok) {
-            return block.psf_array;
+        if ((cell.psf_array.ndim() == nd) && shape_ok) {
+            return cell.psf_array;
         }
         return psf_array;
     };
 
     inline std::vector<table::galNumber>
-    detect_block(
+    detect_cell(
         const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         const std::vector<double>& variance,
-        const geometry::block & block,
+        const geometry::cell & cell,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         const std::optional<std::vector<double>>& weights=std::nullopt,
         const std::optional<double>& multiband_coadd_variance=std::nullopt
@@ -450,54 +450,56 @@ public:
             variance,
             this->omega_f,
             this->omega_v,
-            block,
+            cell,
             noise_array,
             this->image_bound,
             weights,
             multiband_coadd_variance
         );
         for (table::galNumber& src : catalog) {
-            src.decentralize(block);
+            src.decentralize(cell);
         }
         return catalog;
     };
 
-    // Measure the sources a block OWNS.  ``rows`` holds exactly those
-    // sources (detected in, or assigned to, this block's inner region) and
+    // Measure the sources a cell OWNS.  ``rows`` holds exactly those
+    // sources (detected in, or assigned to, this cell's inner region) and
     // every one of them is measured.  Overlap neighbours are no longer
     // carried along: they were only needed to render neighbour models for
     // deblending, which was removed (see deblend_plan.txt).
     inline void
-    measure_block(
+    measure_cell(
         std::vector<table::galNumber>& rows,
         const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         const std::vector<double>& variance,
-        const geometry::block & block,
+        const geometry::cell & cell,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         const std::optional<std::vector<double>>& weights=std::nullopt,
         const std::optional<double>& variance_meas=std::nullopt,
-        const std::optional<double>& variance_det=std::nullopt
+        const std::optional<double>& variance_det=std::nullopt,
+        const std::optional<int>& mask_value_max=std::nullopt
     ) {
         if (rows.empty()) return;
         for (table::galNumber & src : rows) {
-            src.centralize(block);
+            src.centralize(cell);
         }
-        this->fitter.process_block_impl(
+        this->fitter.process_cell_impl(
             rows,
             img_array,
             psf_array,
             this->prior,
             this->num_epochs,
             variance,
-            block,
+            cell,
             noise_array,
             weights,
             variance_meas,
-            variance_det
+            variance_det,
+            mask_value_max
         );
         for (table::galNumber & src : rows) {
-            src.decentralize(block);
+            src.decentralize(cell);
         }
         return;
     };
@@ -507,13 +509,18 @@ public:
         const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         const varianceArg& variance,
-        const std::vector<geometry::block>& block_list,
+        const std::vector<geometry::cell>& cell_list,
         const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt,
         double a_ini=0.2,
         bool do_measure=true,
-        bool do_fpfs=true
+        bool do_fpfs=true,
+        // Sources whose mask_value exceeds this are SKIPPED by the
+        // measurement (rows kept with default values); internal
+        // detections are stamped from mask_array before the check,
+        // external catalogs carry their own mask_value column.
+        const std::optional<int>& mask_value_max=std::nullopt
     ) {
         // From here to the reset() before the output conversion,
         // everything works on C++ containers and READS the input arrays
@@ -522,16 +529,16 @@ public:
         // conversion) is pure C++ plus GIL-free ndim/shape struct reads,
         // and validation errors unwind safely through the release -- so the
         // GIL is dropped for the whole call; this is what lets callers
-        // thread over blocks.  (FFTW planning inside is serialized by the
+        // thread over cells.  (FFTW planning inside is serialized by the
         // fftw_planner_mutex shared_mutex in image.cpp.)
-        std::optional<ScopedGilRelease> release_for_blocks;
-        release_for_blocks.emplace();
+        std::optional<ScopedGilRelease> release_for_cells;
+        release_for_cells.emplace();
 
         // ``img_array`` may be a plain (ny, nx) image or an
         // (nband, ny, nx) stack; ``psf_array`` and ``noise_array`` follow it,
         // and ``variance`` carries one value per band.  Several bands are
         // combined into one qimage after each band's PSF has been removed --
-        // see prepare_data_block_coadd in image.h.
+        // see prepare_data_cell_coadd in image.h.
         const std::vector<double> variance_in = to_variance_vector(variance);
         check_band_stack(img_array, psf_array, variance_in, noise_array);
 
@@ -542,14 +549,14 @@ public:
             }
         }
 
-        // Band weights depend on the PSF, which varies from block to block, so
-        // they are worked out per block and handed to BOTH the detection and
+        // Band weights depend on the PSF, which varies from cell to cell, so
+        // they are worked out per cell and handed to BOTH the detection and
         // the measurement.  Passing them explicitly is what guarantees the two
         // stages see the same coadd.
-        auto block_weights = [&](const py::array_t<double>& psf,
-                                 const geometry::block & block) {
+        auto cell_weights = [&](const py::array_t<double>& psf,
+                                 const geometry::cell & cell) {
             return band_weights(
-                block.scale, this->sigma_arcsec_det, psf, variance_use
+                cell.scale, this->sigma_arcsec_det, psf, variance_use
             );
         };
 
@@ -562,25 +569,36 @@ public:
 
         this->fitter.do_fpfs = do_fpfs;
 
-        const std::size_t nblocks = block_list.size();
+        const std::size_t ncells = cell_list.size();
 
-        // External detections: recompute the owner of every row (block_id
+        // External detections: recompute the owner of every row (cell_id
         // is derived state, never trusted from the input -- a stale value
         // would leave sources unmeasured) and bucket the rows by owner.
         // Internal detections need no assignment pass: find_peaks scans
-        // each block's half-open inner region, which is the same ownership
-        // rule assign_block_ids applies, so the detecting block IS the
+        // each cell's half-open inner region, which is the same ownership
+        // rule assign_cell_ids applies, so the detecting cell IS the
         // owner by construction.
         const bool external = detection.has_value();
-        std::vector<std::vector<std::size_t>> rows_of(nblocks);
+        std::vector<std::vector<std::size_t>> rows_of(ncells);
         if (external) {
-            assign_block_ids(catalog, block_list);
+            assign_cell_ids(catalog, cell_list);
             std::unordered_map<int, std::size_t> pos_of;
-            for (std::size_t ib = 0; ib < nblocks; ++ib) {
-                pos_of[block_list[ib].index] = ib;
+            for (std::size_t ib = 0; ib < ncells; ++ib) {
+                pos_of[cell_list[ib].index] = ib;
             }
             for (std::size_t i = 0; i < catalog.size(); ++i) {
-                rows_of[pos_of.at(catalog[i].block_id)].push_back(i);
+                const auto it = pos_of.find(catalog[i].cell_id);
+                if (it == pos_of.end()) {
+                    // assign_cell_ids leaves cell_id = -1 only when the
+                    // cell list is empty; a bare .at() would surface
+                    // that as an opaque IndexError.
+                    throw std::runtime_error(
+                        "anacal Error: no cell owns the detection at "
+                        "index " + std::to_string(i) +
+                        " (is the cell list empty?)"
+                    );
+                }
+                rows_of[it->second].push_back(i);
             }
         }
 
@@ -611,19 +629,19 @@ public:
             return errs;
         };
 
-        // ONE loop over blocks.  Each iteration computes what its block
+        // ONE loop over cells.  Each iteration computes what its cell
         // needs (band weights and coadd variances run an FFT pipeline per
         // band, so they are computed once here and shared by detection,
-        // flux errors and measurement), takes the sources the block OWNS
+        // flux errors and measurement), takes the sources the cell OWNS
         // -- detected in its inner region, or gathered from the external
-        // catalog -- and measures exactly those.  Blocks are fully
+        // catalog -- and measures exactly those.  Cells are fully
         // independent of each other.
-        for (std::size_t ib = 0; ib < nblocks; ++ib) {
-            const geometry::block & block = block_list[ib];
-            const py::array_t<double>& psf = choose_psf(block, psf_array);
-            const std::vector<double> w = block_weights(psf, block);
+        for (std::size_t ib = 0; ib < ncells; ++ib) {
+            const geometry::cell & cell = cell_list[ib];
+            const py::array_t<double>& psf = choose_psf(cell, psf_array);
+            const std::vector<double> w = cell_weights(psf, cell);
             const double var_det = coadd_smoothed_variance(
-                block.scale,
+                cell.scale,
                 this->sigma_arcsec_det,
                 psf,
                 variance_use,
@@ -637,11 +655,11 @@ public:
                     rows.push_back(catalog[idx]);
                 }
             } else {
-                rows = detect_block(
+                rows = detect_cell(
                     img_array,
                     psf,
                     variance_use,
-                    block,
+                    cell,
                     noise_array,
                     w,
                     var_det
@@ -665,29 +683,35 @@ public:
             }
 
             if (do_measure && !rows.empty()) {
-                const std::array<double, 2> block_flux_errs =
+                // The flux errors are a property of the cell's PSF and
+                // noise, NOT of the individual measurement, so they are
+                // stamped on every row -- including sources the mask
+                // cut skips.  Leaving them at zero there would turn any
+                // downstream flux/flux_err into 0/0.
+                const std::array<double, 2> cell_flux_errs =
                     compute_flux_errors(psf, w);
                 for (table::galNumber& src : rows) {
-                    src.flux_gauss0_err = block_flux_errs[0];
-                    src.flux_gauss2_err = block_flux_errs[1];
+                    src.flux_gauss0_err = cell_flux_errs[0];
+                    src.flux_gauss2_err = cell_flux_errs[1];
                 }
                 const double var_meas = coadd_smoothed_variance(
-                    block.scale,
+                    cell.scale,
                     this->sigma_arcsec,
                     psf,
                     variance_use,
                     w
                 );
-                measure_block(
+                measure_cell(
                     rows,
                     img_array,
                     psf,
                     variance_use,
-                    block,
+                    cell,
                     noise_array,
                     w,
                     var_meas,
-                    var_det
+                    var_det,
+                    mask_value_max
                 );
             }
 
@@ -707,7 +731,7 @@ public:
 
         // Reacquire the GIL: the output conversion below allocates a
         // numpy array.
-        release_for_blocks.reset();
+        release_for_cells.reset();
 
         return table::objlist_to_array(catalog);
     };

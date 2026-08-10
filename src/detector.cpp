@@ -8,7 +8,7 @@ pyExportDetector(py::module_& m) {
         "detector", "submodule for detector"
     );
     detector.def("find_peaks", &find_peaks,
-        "Find peaks in a block.\n\n"
+        "Find peaks in a cell.\n\n"
         "img_array, psf_array and noise_array are either single images or "
         "(nband, ...) stacks; with a stack, variance takes one value per band "
         "and the bands are averaged with inverse-variance weights after each "
@@ -21,7 +21,7 @@ pyExportDetector(py::module_& m) {
         py::arg("variance"),
         py::arg("omega_f"),
         py::arg("omega_v"),
-        py::arg("block"),
+        py::arg("cell"),
         py::arg("noise_array")=py::none(),
         py::arg("image_bound")=0,
         py::arg("weights")=py::none(),

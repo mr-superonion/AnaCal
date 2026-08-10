@@ -6,7 +6,7 @@
 namespace anacal {
 namespace geometry {
 
-struct block {
+struct cell {
     int xcen = 0;
     int ycen = 0;
     int xmin = 0;
@@ -28,8 +28,8 @@ struct block {
     std::vector<bool> ymsk;
     py::array_t<double> psf_array;
 
-    block() = default;
-    block(
+    cell() = default;
+    cell(
         int xc, int yc, int xmi, int ymi, int xma, int yma,
         int xmi_in, int ymi_in, int xma_in, int yma_in, double scale,
         int index
@@ -51,58 +51,58 @@ struct block {
     }
 };
 
-inline std::vector<block> get_block_list(
+inline std::vector<cell> get_cell_list(
     int img_nx,
     int img_ny,
-    int block_nx,
-    int block_ny,
-    int block_overlap,
+    int cell_nx,
+    int cell_ny,
+    int cell_overlap,
     double scale
 ) {
-    if ((block_overlap % 2 != 0) || (block_overlap < 0)) {
+    if ((cell_overlap % 2 != 0) || (cell_overlap < 0)) {
         throw std::runtime_error(
-            "Block Error: block_overlap is not an even number"
+            "Cell Error: cell_overlap is not an even number"
         );
     }
-    int block_ny2 = block_ny / 2;
-    int block_nx2 = block_nx / 2;
+    int cell_ny2 = cell_ny / 2;
+    int cell_nx2 = cell_nx / 2;
     // Determine number of patches
     // y direction
-    int npatch_y = img_ny / (block_ny - block_overlap);
-    float npatch_y_f = img_ny / static_cast<float>(block_ny - block_overlap);
+    int npatch_y = img_ny / (cell_ny - cell_overlap);
+    float npatch_y_f = img_ny / static_cast<float>(cell_ny - cell_overlap);
     if (npatch_y_f > npatch_y) {
         npatch_y = npatch_y + 1;
     }
-    int nyy = npatch_y * (block_ny - block_overlap) + block_overlap;
+    int nyy = npatch_y * (cell_ny - cell_overlap) + cell_overlap;
     int npad_y = (nyy - img_ny) / 2;
 
     // x direction
-    int npatch_x = img_nx / (block_nx - block_overlap);
-    float npatch_x_f = img_nx / static_cast<float>(block_nx - block_overlap);
+    int npatch_x = img_nx / (cell_nx - cell_overlap);
+    float npatch_x_f = img_nx / static_cast<float>(cell_nx - cell_overlap);
     if (npatch_x_f > npatch_x) {
         npatch_x = npatch_x + 1;
     }
-    int nxx = npatch_x * (block_nx - block_overlap) + block_overlap;
+    int nxx = npatch_x * (cell_nx - cell_overlap) + cell_overlap;
     int npad_x = (nxx - img_nx) / 2;
 
-    int block_bound = std::max(block_overlap / 2, 3);
+    int cell_bound = std::max(cell_overlap / 2, 3);
 
-    std::vector<block> result(npatch_y * npatch_x);
+    std::vector<cell> result(npatch_y * npatch_x);
     // Do detection in each patch
     for (int j = 0; j < npatch_y; ++j) {
-        int ycen = (block_ny - block_overlap) * j + block_ny2 - npad_y;
-        int ymin = ycen - block_ny2; // (starting point)
-        int ymax = ycen + block_ny2; // (end point not included)
-        int ymin_in = ymin + block_bound;
-        int ymax_in = ymax - block_bound;
+        int ycen = (cell_ny - cell_overlap) * j + cell_ny2 - npad_y;
+        int ymin = ycen - cell_ny2; // (starting point)
+        int ymax = ycen + cell_ny2; // (end point not included)
+        int ymin_in = ymin + cell_bound;
+        int ymax_in = ymax - cell_bound;
         for (int i = 0; i < npatch_x; ++i) {
-            int xcen = (block_nx - block_overlap) * i + block_nx2 - npad_x;
+            int xcen = (cell_nx - cell_overlap) * i + cell_nx2 - npad_x;
             int index = j * npatch_x + i;
-            int xmin = xcen - block_nx2;
-            int xmax = xcen + block_nx2;
-            int xmin_in = xmin + block_bound;
-            int xmax_in = xmax - block_bound;
-            result[index] = block(
+            int xmin = xcen - cell_nx2;
+            int xmax = xcen + cell_nx2;
+            int xmin_in = xmin + cell_bound;
+            int xmax_in = xmax - cell_bound;
+            result[index] = cell(
                 xcen,
                 ycen,
                 xmin,
@@ -116,7 +116,7 @@ inline std::vector<block> get_block_list(
                 scale,
                 index
             );
-            block & bb = result[index];
+            cell & bb = result[index];
             // The image-pixel index of column i is i + xmin by construction
             // (xvs[i] = (i + xmin) * scale).  Recovering it as xvs[i] / scale
             // truncates toward zero, so index -1 comes back as -0.999... -> 0

@@ -5,15 +5,6 @@ import galsim
 import numpy as np
 
 
-class MyPsf(anacal.psf.BasePsf):
-    def __init__(self, psf_array):
-        super().__init__()
-        self.psf_array = psf_array
-
-    def draw(self, x, y):
-        return self.psf_array
-
-
 def test_fpfs_init():
     nstamp = 30  # nstamp x nstamp galaxies
     seed = 2  # seed for galaxy
@@ -92,7 +83,16 @@ def test_fpfs_init():
         noise_array=noise_array,
         detection=detection,
     )
-    psf_object = MyPsf(psf_array=psf_array)
+    # Native per-source PSF path: a 1x1 stamp grid holds the same PSF
+    # everywhere, so the C++ ForceTask drawing per source must equal the
+    # constant-PSF path bit for bit.
+    grid_model = anacal.psfmodel.GridPsfModel(
+        stamps=np.ascontiguousarray(
+            psf_array[None, None, :, :], dtype=np.float64
+        ),
+        dx=float(gal_array.shape[1]),
+        dy=float(gal_array.shape[0]),
+    )
     t0 = time.time()
     out1 = anacal.fpfs.process_image(
         fpfs_config=fpfs_config,
@@ -105,7 +105,7 @@ def test_fpfs_init():
         detection=detection,
     )
     t1 = time.time()
-    print("C++ Time: ", t1 - t0)
+    print("constant-PSF time: ", t1 - t0)
     out2 = anacal.fpfs.process_image(
         fpfs_config=fpfs_config,
         mag_zero=30.0,
@@ -115,10 +115,10 @@ def test_fpfs_init():
         noise_variance=max(noise_variance, 0.23),
         noise_array=noise_array,
         detection=detection,
-        psf_object=psf_object,
+        psf_model=grid_model,
     )
     t2 = time.time()
-    print("Python Time: ", t2 - t1)
+    print("native per-source time: ", t2 - t1)
     assert np.all(out1 == out2)
     return
 

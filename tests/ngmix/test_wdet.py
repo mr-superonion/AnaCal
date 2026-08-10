@@ -42,12 +42,12 @@ def test_shear_estimate_w_det():
     obj0 = galsim.Exponential(half_light_radius=0.25)
     obj0 = obj0.shear(e1=0.1, e2=-0.15).shift(0.05 * scale, 0.1 * scale)
 
-    # block_overlap must be at least twice the background kernel reach
+    # cell_overlap must be at least twice the background kernel reach
     # (2 * (3 arcsec / scale + 1) = 32 pixels here), otherwise the local
-    # background would be estimated from pixels outside the block.  Sizing the
-    # block as img + overlap keeps npatch = 1, so this is still a single block
+    # background would be estimated from pixels outside the cell.  Sizing the
+    # cell as img + overlap keeps npatch = 1, so this is still a single cell
     # whose inner region is exactly the image.
-    block = anacal.geometry.get_block_list(
+    cell = anacal.geometry.get_cell_list(
         nx,
         ny,
         nx + 32,
@@ -81,7 +81,7 @@ def test_shear_estimate_w_det():
     cats = anacal.detector.find_peaks(
         img_array=make_sim(g1=-0.02, g2=0.0),
         psf_array=psf_array,
-        block=block,
+        cell=cell,
         noise_array=None,
         image_bound=0,
         **kwargs,
@@ -95,7 +95,7 @@ def test_shear_estimate_w_det():
         cat_1 = anacal.detector.find_peaks(
             img_array=make_sim(g1=-0.02, g2=0.0, mag=mag),
             psf_array=psf_array,
-            block=block,
+            cell=cell,
             noise_array=None,
             image_bound=0,
             **kwargs,
@@ -106,7 +106,7 @@ def test_shear_estimate_w_det():
         cat_2 = anacal.detector.find_peaks(
             img_array=make_sim(g1=0.02, g2=0.0, mag=mag),
             psf_array=psf_array,
-            block=block,
+            cell=cell,
             noise_array=None,
             image_bound=0,
             **kwargs,
@@ -123,7 +123,7 @@ def test_shear_estimate_w_det():
         cat_1 = anacal.detector.find_peaks(
             img_array=make_sim(g2=-0.02, g1=0.0, mag=mag),
             psf_array=psf_array,
-            block=block,
+            cell=cell,
             noise_array=None,
             image_bound=0,
             **kwargs,
@@ -134,7 +134,7 @@ def test_shear_estimate_w_det():
         cat_2 = anacal.detector.find_peaks(
             img_array=make_sim(g2=0.02, g1=0.0, mag=mag),
             psf_array=psf_array,
-            block=block,
+            cell=cell,
             noise_array=None,
             image_bound=0,
             **kwargs,
@@ -153,7 +153,7 @@ def test_shear_estimate_w_det():
         cat_1 = anacal.detector.find_peaks(
             img_array=make_sim(g1=-0.00, g2=0.0, angle=ang),
             psf_array=psf_array,
-            block=block,
+            cell=cell,
             noise_array=None,
             image_bound=0,
             **kwargs,
@@ -162,7 +162,7 @@ def test_shear_estimate_w_det():
         cat_2 = anacal.detector.find_peaks(
             img_array=make_sim(g1=-0.00, g2=0.0, angle=ang + 90.0),
             psf_array=psf_array,
-            block=block,
+            cell=cell,
             noise_array=None,
             image_bound=0,
             **kwargs,

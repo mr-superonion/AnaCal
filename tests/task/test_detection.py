@@ -74,7 +74,7 @@ def test_task_detection():
         force_size=True,
         **kwargs,
     )
-    blocks = anacal.geometry.get_block_list(
+    cells = anacal.geometry.get_cell_list(
         img_array.shape[0],
         img_array.shape[1],
         500,
@@ -91,7 +91,7 @@ def test_task_detection():
             img_array,
             psf_array,
             variance=noise_variance,
-            block_list=blocks,
+            cell_list=cells,
         )
         gc.collect()
         return
@@ -104,7 +104,7 @@ def test_task_detection():
     print_mem(final_memory_usage - initial_memory_usage)
 
     catalog = det_task.process_image(
-        img_array, psf_array, variance=noise_variance, block_list=blocks,
+        img_array, psf_array, variance=noise_variance, cell_list=cells,
     )
     assert len(catalog) == ngal * ngal
 
@@ -122,7 +122,7 @@ def test_task_detection():
         0.0,
     )
 
-    blocks = anacal.geometry.get_block_list(
+    cells = anacal.geometry.get_cell_list(
         img_array.shape[0],
         img_array.shape[1],
         512,
@@ -134,7 +134,7 @@ def test_task_detection():
         img_array,
         psf_array,
         variance=noise_variance,
-        block_list=blocks,
+        cell_list=cells,
     )
 
     assert len(catalog) == ngal*ngal
