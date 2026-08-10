@@ -10,7 +10,9 @@ fpfs_config = anacal.fpfs.FpfsConfig(
     sigma_shapelets1=0.52,  # The first measurement scale
     sigma_shapelets2=0.60,  # The second measurement scale
 )
-gal_array = fitsio.read(os.path.join(data_dir, "image-00000_g1-0_rot0_i.fits"))
+gal_array = fitsio.read(
+    os.path.join(data_dir, "image-00000_g1-0_rot0_i.fits")
+)
 psf_array = fitsio.read(os.path.join(data_dir, "PSF_Fixed.fits"))
 mag_zero = 30.0
 pixel_scale = 0.2

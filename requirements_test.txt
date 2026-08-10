@@ -6,3 +6,5 @@ pytest-timeout>=1.2
 flake8-pyproject
 memory_profiler
 matplotlib
+psutil
+scipy

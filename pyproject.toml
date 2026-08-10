@@ -31,6 +31,8 @@ test = [
     "nbval",
     "matplotlib",
     "memory_profiler",
+    "psutil",
+    "scipy",
 ]
 dev = [
     "pytest>=3.4",
@@ -39,10 +41,13 @@ dev = [
     "nbval",
     "matplotlib",
     "memory_profiler",
+    "psutil",
+    "scipy",
     "black",
     "flake8",
     "flake8-pyproject",
 ]
+
 
 [project.urls]
 Homepage = "https://github.com/mr-superonion/AnaCal/"

@@ -23,7 +23,6 @@ maintaining minimal computational cost.
 - [NumPy](https://numpy.org/)
 - [GalSim](https://github.com/GalSim-developers/GalSim)
 - [fitsio](https://github.com/esheldon/fitsio)
-- System: `libfftw3-dev`
 
 ## Installation
 

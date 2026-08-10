@@ -14,7 +14,7 @@ Two things live here:
   step that touches DM/Python objects.
 
 Supported single-visit models: PSFEx (HSC-style) and PIFF
-PixelGrid+BasisPolynomial (Rubin DP1); the C++ layer keeps them behind
+PixelGrid+BasisPolynomial (DES, Rubin); the C++ layer keeps them behind
 one interface so further models can be added without touching the
 warping/coadding code.
 """
@@ -42,7 +42,6 @@ __all__ = [
     "GridPsfModel",
     "PerSourcePsf",
     "resize_array",
-    "read_coadd_psf_config",
     "load_coadd_psf_model",
     "NativeCoaddPsf",
 ]
@@ -89,55 +88,6 @@ class BasePsf(ABC):
         This method is abstract and must be implemented by subclasses.
         """
         pass
-
-
-def read_coadd_psf_config(source) -> tuple[str, int]:
-    """Read (warpingKernelName, cacheSize) from a persisted CoaddPsf.
-
-    These two values have NO python accessor on CoaddPsf; the only
-    source is the one-row catalog HDU with ``AR_NAME == 'CoaddPsf'``.
-    ``source`` is either the path of the file the exposure came from,
-    or the CoaddPsf object itself -- the latter is round-tripped
-    through its own ``writeFits`` into a temporary file (cheap; the
-    persisted form is the authoritative carrier of these values).
-    """
-    import astropy.io.fits as pyfits
-
-    def _scan(path):
-        with pyfits.open(path) as hdus:
-            for hdu in hdus:
-                if hdu.header.get("AR_NAME") != "CoaddPsf":
-                    continue
-                cols = getattr(hdu, "columns", None)
-                if cols is None or "warpingkernelname" not in cols.names:
-                    continue
-                row = hdu.data[0]
-                return (
-                    str(row["warpingkernelname"]),
-                    int(row["cachesize"]),
-                )
-        return None
-
-    if isinstance(source, str):
-        out = _scan(source)
-        if out is None:
-            raise RuntimeError(
-                f"no persisted CoaddPsf configuration found in {source}"
-            )
-        return out
-
-    import os
-    import tempfile
-
-    with tempfile.TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "coadd_psf.fits")
-        source.writeFits(path)
-        out = _scan(path)
-    if out is None:
-        raise RuntimeError(
-            "no persisted CoaddPsf configuration found in the PSF object"
-        )
-    return out
 
 
 class _MappingGrids:
@@ -284,18 +234,22 @@ def _load_psfex_component(inner, index: int) -> PsfexModel:
 
 
 def _load_piff_component(inner, index: int) -> PiffModel:
+    # The piff model/interp classes are recognised BY NAME rather than
+    # with isinstance: anacal must not import piff (nor the LSST
+    # stack).  Every attribute read below is duck typed for the same
+    # reason.  galsim is a real anacal dependency, so it may be
+    # imported -- but only here, where a PIFF component needs it.
     import galsim
-    import piff
 
     pp = inner._piffResult
     model = pp.model
     interp = pp.interp
-    if not isinstance(model, piff.PixelGrid):
+    if type(model).__name__ != "PixelGrid":
         raise NotImplementedError(
             f"component {index}: piff model {type(model).__name__} "
             "is not a PixelGrid"
         )
-    if not isinstance(interp, piff.BasisPolynomial):
+    if type(interp).__name__ != "BasisPolynomial":
         raise NotImplementedError(
             f"component {index}: piff interp {type(interp).__name__} "
             "is not a BasisPolynomial"
@@ -382,9 +336,13 @@ def load_coadd_psf_model(
         Region (coadd pixels) over which the WCS mappings are fitted --
         the exposure bbox.  Evaluations outside it lose accuracy.
     warping_kernel_name, cache_size :
-        From :func:`read_coadd_psf_config` -- these are persisted with
-        the coadd and must NOT be assumed (DP1/HSC files carry
-        ``lanczos5``/10000 while the DM default is lanczos3).
+        Read from the persisted CoaddPsf by the caller (see
+        ``xlens.utils.image.psf._coadd_psf_config``; reading them needs
+        DM-archive-format knowledge, which is why it does not live
+        here).  They must NOT be assumed: DP1/HSC files carry
+        ``lanczos3``/0 and ``lanczos5``/10000, while the DM
+        constructor defaults are ``lanczos3``/10000 -- neither file
+        matches the default pair.
     mapping_tol : float
         Required max mapping residual in visit pixels; the polynomial
         order is raised until the residual on a check grid is below
