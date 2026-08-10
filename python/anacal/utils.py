@@ -6,6 +6,13 @@ from numpy.typing import NDArray
 
 from ._anacal import math
 
+# Re-exported, NOT reimplemented: the centre-crop / zero-pad convention
+# has one definition, the C++ ``resize_stamp_to`` behind
+# ``anacal.psf.resize_array``.  It is bound here too so callers that
+# have nothing to do with PSFs need not reach into the psf module --
+# the two names are the same function object.
+from .psf import resize_array  # noqa: F401
+
 
 def rescale_image_to_zeropoint(
     gal_array,
