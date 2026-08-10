@@ -327,16 +327,23 @@ private:
 // parameter grid itself (q . basis(u, v), renormalized); the sub-pixel
 // image resamples that grid with a separable galsim Lanczos
 // (conserve_dc) kernel.  All arithmetic is double precision.
+// Storage and accumulation precision for the PIFF pixel-grid model.
+// DM's PIFF path is float64 throughout (piff's PixelGrid params are
+// dtype=float, PiffPsf draws into an Image of dtype np.float64), so
+// float here is a deliberate deviation from DM traded for speed --
+// flip this alias back to double to restore exact agreement.
+using piff_real = double;
+
 class PiffModel : public SingleVisitPsf {
 public:
     int nmodel;                   // model grid size N (odd)
     int stamp;                    // output stamp size (= N for DP1)
     double coord_scale;           // u = coord_scale * x_detector
-    std::vector<double> q;        // (N*N, nterm), row = iy*N + ix
+    std::vector<piff_real> q;     // (N*N, nterm), row = iy*N + ix
     std::vector<int> term_i;      // u exponent per term
     std::vector<int> term_j;      // v exponent per term
     int lanczos_n;                // galsim Lanczos order (11 for DP1)
-    std::vector<double> dc_coeff; // conserve_dc corrections c_m
+    std::vector<piff_real> dc_coeff;  // conserve_dc corrections c_m
 
     PiffModel(
         int nmodel_, int stamp_, double coord_scale_,
@@ -344,9 +351,9 @@ public:
         std::vector<int> term_i_, std::vector<int> term_j_,
         int lanczos_n_, std::vector<double> dc_coeff_
     ) : nmodel(nmodel_), stamp(stamp_), coord_scale(coord_scale_),
-        q(std::move(q_)), term_i(std::move(term_i_)),
+        q(q_.begin(), q_.end()), term_i(std::move(term_i_)),
         term_j(std::move(term_j_)), lanczos_n(lanczos_n_),
-        dc_coeff(std::move(dc_coeff_))
+        dc_coeff(dc_coeff_.begin(), dc_coeff_.end())
     {
         if (nmodel % 2 == 0 || stamp % 2 == 0) {
             throw std::runtime_error(
@@ -376,26 +383,35 @@ public:
     // galsim Lanczos(n, conserve_dc=True): sinc(x) sinc(x/n) times a
     // periodic flux-conservation correction (coefficients supplied by
     // the loader, solved from galsim's own xval).
-    inline double kfun(double x) const {
-        const double ax = std::abs(x);
-        if (ax >= lanczos_n) return 0.0;
-        constexpr double PI_AFW = 3.141592653589793238462643383279506;
-        auto sinc = [](double t) {
-            if (std::fabs(t) < 1e-15) return 1.0;
-            const double pt = 3.141592653589793238462643383279506 * t;
+    inline piff_real kfun(piff_real x) const {
+        constexpr piff_real PI_AFW = static_cast<piff_real>(
+            3.141592653589793238462643383279506
+        );
+        const piff_real ax = std::abs(x);
+        if (ax >= static_cast<piff_real>(lanczos_n)) return piff_real(0);
+        auto sinc = [](piff_real t) -> piff_real {
+            // below this the ratio is 1 to the precision of piff_real
+            if (std::fabs(t) < std::numeric_limits<piff_real>::epsilon())
+                return piff_real(1);
+            const piff_real pt = static_cast<piff_real>(
+                3.141592653589793238462643383279506
+            ) * t;
             return std::sin(pt) / pt;
         };
-        double val = sinc(x) * sinc(x / lanczos_n);
-        double corr = 1.0;
+        piff_real val = sinc(x) * sinc(x / static_cast<piff_real>(lanczos_n));
+        piff_real corr = 1;
         for (std::size_t m = 1; m <= dc_coeff.size(); ++m) {
             corr += dc_coeff[m - 1] *
-                    (1.0 - std::cos(2.0 * PI_AFW * m * x));
+                    (piff_real(1) - std::cos(
+                        piff_real(2) * PI_AFW *
+                        static_cast<piff_real>(m) * x
+                    ));
         }
         return val * corr;
     }
 
     // params(u, v) = q . basis, normalized to unit sum, reshaped (N, N)
-    std::vector<double> params_at(double px, double py) const {
+    std::vector<piff_real> params_at(double px, double py) const {
         const double u = coord_scale * px;
         const double v = coord_scale * py;
         const std::size_t nterm = term_i.size();
@@ -407,24 +423,26 @@ public:
         std::vector<double> pu(maxi + 1, 1.0), pv(maxj + 1, 1.0);
         for (int a = 1; a <= maxi; ++a) pu[a] = pu[a - 1] * u;
         for (int b = 1; b <= maxj; ++b) pv[b] = pv[b - 1] * v;
-        std::vector<double> basis(nterm);
+        std::vector<piff_real> basis(nterm);
         for (std::size_t k = 0; k < nterm; ++k) {
-            basis[k] = pu[term_i[k]] * pv[term_j[k]];
+            basis[k] = static_cast<piff_real>(
+                pu[term_i[k]] * pv[term_j[k]]
+            );
         }
         const std::size_t npix =
             static_cast<std::size_t>(nmodel) * nmodel;
-        std::vector<double> params(npix, 0.0);
+        std::vector<piff_real> params(npix, piff_real(0));
         for (std::size_t r = 0; r < npix; ++r) {
-            const double* qr = &q[r * nterm];
-            double acc = 0.0;
+            const piff_real* qr = &q[r * nterm];
+            piff_real acc = 0;
             for (std::size_t k = 0; k < nterm; ++k) {
                 acc += qr[k] * basis[k];
             }
             params[r] = acc;
         }
-        double s = 0.0;
-        for (double vv : params) s += vv;
-        for (double& vv : params) vv /= s;
+        piff_real s = 0;
+        for (piff_real vv : params) s += vv;
+        for (piff_real& vv : params) vv /= s;
         return params;
     }
 
@@ -432,7 +450,8 @@ public:
         Stamp st;
         st.nx = st.ny = nmodel;
         st.x0 = st.y0 = -(nmodel / 2);
-        st.data = params_at(px, py);
+        const std::vector<piff_real> pk = params_at(px, py);
+        st.data.assign(pk.begin(), pk.end());
         // params are already normalized; the final /sum of PiffPsf is a
         // no-op here but kept for exactness
         const double s = st.sum();
@@ -453,34 +472,37 @@ public:
         st.nx = st.ny = nmodel;
         st.x0 = static_cast<int>(std::floor(px + 0.5)) - half;
         st.y0 = static_cast<int>(std::floor(py + 0.5)) - half;
-        const std::vector<double> params = params_at(px, py);
+        const std::vector<piff_real> params = params_at(px, py);
         if (dx == 0.0 && dy == 0.0) {
-            st.data = params;
+            st.data.assign(params.begin(), params.end());
         } else {
             // separable resample: out[jy][jx] =
             //   sum_iy K(iy - jy + dy) sum_ix K(ix - jx + dx) P[iy][ix]
             const int n = nmodel;
-            std::vector<double> wx(
-                static_cast<std::size_t>(n) * n
-            ), wy(static_cast<std::size_t>(n) * n);
-            for (int jc = 0; jc < n; ++jc) {
-                for (int ic = 0; ic < n; ++ic) {
-                    wx[static_cast<std::size_t>(jc) * n + ic] =
-                        kfun((ic - jc) + dx);
-                    wy[static_cast<std::size_t>(jc) * n + ic] =
-                        kfun((ic - jc) + dy);
-                }
+            // The tap weight depends only on the integer difference
+            // (ic - jc), which takes 2n-1 values -- so evaluate kfun
+            // 2n-1 times instead of n^2 and index by the offset.  Row
+            // jc of the old n x n table is the slice starting at
+            // [n - 1 - jc].
+            std::vector<piff_real> kx(
+                static_cast<std::size_t>(2 * n - 1)
+            ), ky(static_cast<std::size_t>(2 * n - 1));
+            for (int d = -(n - 1); d <= n - 1; ++d) {
+                kx[static_cast<std::size_t>(d + n - 1)] =
+                    kfun(static_cast<piff_real>(d + dx));
+                ky[static_cast<std::size_t>(d + n - 1)] =
+                    kfun(static_cast<piff_real>(d + dy));
             }
-            std::vector<double> tmp(
-                static_cast<std::size_t>(n) * n, 0.0
+            std::vector<piff_real> tmp(
+                static_cast<std::size_t>(n) * n, piff_real(0)
             );
             for (int iy = 0; iy < n; ++iy) {
-                const double* prow =
+                const piff_real* prow =
                     &params[static_cast<std::size_t>(iy) * n];
                 for (int jx = 0; jx < n; ++jx) {
-                    const double* w =
-                        &wx[static_cast<std::size_t>(jx) * n];
-                    double acc = 0.0;
+                    const piff_real* w =
+                        &kx[static_cast<std::size_t>(n - 1 - jx)];
+                    piff_real acc = 0;
                     for (int ix = 0; ix < n; ++ix) {
                         acc += w[ix] * prow[ix];
                     }
@@ -489,10 +511,10 @@ public:
             }
             st.data.assign(static_cast<std::size_t>(n) * n, 0.0);
             for (int jy = 0; jy < n; ++jy) {
-                const double* w =
-                    &wy[static_cast<std::size_t>(jy) * n];
+                const piff_real* w =
+                    &ky[static_cast<std::size_t>(n - 1 - jy)];
                 for (int jx = 0; jx < n; ++jx) {
-                    double acc = 0.0;
+                    piff_real acc = 0;
                     for (int iy = 0; iy < n; ++iy) {
                         acc += w[iy] *
                                tmp[static_cast<std::size_t>(iy) * n + jx];
@@ -1006,10 +1028,12 @@ public:
     }
 };
 
-// Centre crop / zero-pad a stamp to (tny, tnx), with the exact xlens
-// ``resize_array`` conventions (crop start (in-out)//2; rows pad
-// bottom-first, columns pad left-first).  ``out`` must hold tny*tnx
-// doubles; pure C++, safe under a released GIL.
+// Centre crop / zero-pad a stamp to (tny, tnx).  THE definition of the
+// ``resize_array`` convention (crop start (in-out)//2; rows pad
+// bottom-first, columns pad left-first) -- ``anacal.psf.resize_array``
+// and ``xlens.utils.image.resize_array`` are both this function, so
+// the convention exists in exactly one place.  ``out`` must hold
+// tny*tnx doubles; pure C++, safe under a released GIL.
 inline void resize_stamp_to(
     const Stamp& st, int tny, int tnx, double* out
 ) {

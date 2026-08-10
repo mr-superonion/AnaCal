@@ -67,7 +67,7 @@ gaussian_flux_variance_band(
     filter_img.set_delta_f();
     filter_img.filter(filter_gauss);
     filter_img.deconvolve(psf_fft, klim);
-    const fftw_complex* filter_fft = filter_img.view_f();
+    const complex2* filter_fft = filter_img.view_f();
 
     // ---- r2c folding along x (even nx) with unit-variance white noise:
     // DC once, interior doubled, Nyquist once
@@ -529,8 +529,8 @@ public:
         // conversion) is pure C++ plus GIL-free ndim/shape struct reads,
         // and validation errors unwind safely through the release -- so the
         // GIL is dropped for the whole call; this is what lets callers
-        // thread over cells.  (FFTW planning inside is serialized by the
-        // fftw_planner_mutex shared_mutex in image.cpp.)
+        // thread over cells.  (The FFT engine is lock-free: see
+        // image.h.)
         std::optional<ScopedGilRelease> release_for_cells;
         release_for_cells.emplace();
 

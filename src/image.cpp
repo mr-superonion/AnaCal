@@ -1,26 +1,12 @@
 #include "anacal.h"
 
-#include <mutex>
-#include <shared_mutex>
-
 
 namespace anacal {
 
-// The FFTW planner (plan creation AND destruction) is not thread-safe,
-// and the measurement entry points release the GIL, so Image objects can
-// be built concurrently.  AnaCal serializes the planner itself instead
-// of relying on fftw_make_planner_thread_safe(), which lives in a
-// separate library on split FFTW builds.
-//
-// Plans of the same shape can share internal FFTW state (twiddle
-// tables), so plan creation/destruction must also exclude concurrent
-// fftw_execute calls: creation takes the EXCLUSIVE side of this lock,
-// execution the SHARED side.  Executions still run concurrently with
-// each other, which is where the compute time is; the shared lock is
-// nanoseconds against a ~0.1 ms transform.
-namespace {
-std::shared_mutex fftw_planner_mutex;
-}
+// The FFT engine (pocketfft, see image.h) has no planner and no global
+// state, so Image construction and every transform run with no lock at
+// all -- FFTW needed the planner serialized because the measurement
+// entry points release the GIL and build Images concurrently.
 
 Image::Image(
     int nx,
@@ -54,7 +40,7 @@ Image::Image(
     ky_length = ny;
     dkx = 2.0 * M_PI / nx / scale;
     dky = 2.0 * M_PI / ny / scale;
-    unsigned fftw_flag = use_estimate ? FFTW_ESTIMATE : FFTW_MEASURE;
+    (void) use_estimate;  // pocketfft has no planning modes
 
     // The buffers start UNINITIALIZED: every setter (set_r/set_r_band/
     // set_delta_r/set_f/set_delta_f/set_noise_f) fully overwrites or
@@ -62,15 +48,14 @@ Image::Image(
     // memset would be pure waste (~1 MB per cell-sized image).  Callers
     // must set before they draw/measure.
     if (mode & 1) {
-        data_r = (double*) fftw_malloc(sizeof(double) * npixels);
+        data_r = static_cast<double*>(::operator new[](
+            sizeof(double) * npixels, std::align_val_t(64)
+        ));
     }
     if (mode & 2) {
-        data_f = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npixels_f);
-    }
-    if (mode == 3) {
-        std::unique_lock<std::shared_mutex> lock(fftw_planner_mutex);
-        plan_forward = fftw_plan_dft_r2c_2d(ny, nx, data_r, data_f, fftw_flag);
-        plan_backward = fftw_plan_dft_c2r_2d(ny, nx, data_f, data_r, fftw_flag);
+        data_f = static_cast<complex2*>(::operator new[](
+            sizeof(complex2) * npixels_f, std::align_val_t(64)
+        ));
     }
     return;
 }
@@ -480,11 +465,37 @@ Image::set_noise_f(
 }
 
 
+// pocketfft argument blocks for this image's 2-D r2c / c2r, matching
+// FFTW's layout (real (ny, nx) <-> complex (ny, nx/2+1), row-major)
+// and its UNNORMALIZED convention.
+void
+Image::_fft_shapes(
+    pocketfft::shape_t& shape, pocketfft::stride_t& s_real,
+    pocketfft::stride_t& s_cplx, pocketfft::shape_t& axes
+) const {
+    shape = {static_cast<std::size_t>(ny), static_cast<std::size_t>(nx)};
+    s_real = {
+        static_cast<ptrdiff_t>(sizeof(double) * nx),
+        static_cast<ptrdiff_t>(sizeof(double))
+    };
+    s_cplx = {
+        static_cast<ptrdiff_t>(sizeof(complex2) * kx_length),
+        static_cast<ptrdiff_t>(sizeof(complex2))
+    };
+    axes = {0, 1};
+}
+
+
 void
 Image::fft() {
     assert_mode(this->mode == 3);
-    std::shared_lock<std::shared_mutex> lock(fftw_planner_mutex);
-    fftw_execute(plan_forward);
+    pocketfft::shape_t shape, axes;
+    pocketfft::stride_t s_real, s_cplx;
+    _fft_shapes(shape, s_real, s_cplx, axes);
+    pocketfft::r2c(
+        shape, s_real, s_cplx, axes, pocketfft::FORWARD, data_r,
+        reinterpret_cast<std::complex<double>*>(data_f), 1.0, 1
+    );
     return;
 }
 
@@ -492,8 +503,7 @@ Image::fft() {
 void
 Image::ifft() {
     assert_mode(this->mode == 3);
-    std::shared_lock<std::shared_mutex> lock(fftw_planner_mutex);
-    fftw_execute(plan_backward);
+    ifft_raw();
     for (int i = 0; i < npixels; ++i){
         data_r[i] = data_r[i] * this->norm_factor;
     }
@@ -504,8 +514,14 @@ Image::ifft() {
 void
 Image::ifft_raw() {
     assert_mode(this->mode == 3);
-    std::shared_lock<std::shared_mutex> lock(fftw_planner_mutex);
-    fftw_execute(plan_backward);
+    pocketfft::shape_t shape, axes;
+    pocketfft::stride_t s_real, s_cplx;
+    _fft_shapes(shape, s_real, s_cplx, axes);
+    pocketfft::c2r(
+        shape, s_cplx, s_real, axes, pocketfft::BACKWARD,
+        reinterpret_cast<const std::complex<double>*>(data_f), data_r,
+        1.0, 1
+    );
     return;
 }
 
@@ -995,9 +1011,7 @@ Image::draw_r(bool ishift) const {
 
 
 Image::Image(Image&& other) noexcept
-    : plan_forward(other.plan_forward),
-      plan_backward(other.plan_backward),
-      nx2(other.nx2),
+    : nx2(other.nx2),
       ny2(other.ny2),
       npixels(other.npixels),
       npixels_f(other.npixels_f),
@@ -1013,8 +1027,6 @@ Image::Image(Image&& other) noexcept
       ny(other.ny),
       nx(other.nx),
       scale(other.scale) {
-    other.plan_forward = nullptr;
-    other.plan_backward = nullptr;
     other.data_r = nullptr;
     other.data_f = nullptr;
     other.nx2 = 0;
@@ -1035,16 +1047,8 @@ Image::Image(Image&& other) noexcept
 
 Image& Image::operator=(Image&& other) noexcept {
     if (this != &other) {
-        if (plan_forward || plan_backward) {
-            std::unique_lock<std::shared_mutex> lock(fftw_planner_mutex);
-            if (plan_forward) fftw_destroy_plan(plan_forward);
-            if (plan_backward) fftw_destroy_plan(plan_backward);
-        }
-        fftw_free(data_r);
-        fftw_free(data_f);
+        _free_buffers();
 
-        plan_forward = other.plan_forward;
-        plan_backward = other.plan_backward;
         nx2 = other.nx2;
         ny2 = other.ny2;
         npixels = other.npixels;
@@ -1062,8 +1066,6 @@ Image& Image::operator=(Image&& other) noexcept {
         nx = other.nx;
         scale = other.scale;
 
-        other.plan_forward = nullptr;
-        other.plan_backward = nullptr;
         other.data_r = nullptr;
         other.data_f = nullptr;
         other.nx2 = 0;
@@ -1084,18 +1086,21 @@ Image& Image::operator=(Image&& other) noexcept {
 }
 
 
-Image::~Image() {
-    if (plan_forward || plan_backward) {
-        std::unique_lock<std::shared_mutex> lock(fftw_planner_mutex);
-        if (plan_forward) fftw_destroy_plan(plan_forward);
-        if (plan_backward) fftw_destroy_plan(plan_backward);
+void
+Image::_free_buffers() noexcept {
+    if (data_r != nullptr) {
+        ::operator delete[](data_r, std::align_val_t(64));
+        data_r = nullptr;
     }
-    fftw_free(data_r);
-    fftw_free(data_f);
-    plan_forward = nullptr;
-    plan_backward = nullptr;
-    data_r = nullptr;
-    data_f = nullptr;
+    if (data_f != nullptr) {
+        ::operator delete[](data_f, std::align_val_t(64));
+        data_f = nullptr;
+    }
+}
+
+
+Image::~Image() {
+    _free_buffers();
 }
 
 

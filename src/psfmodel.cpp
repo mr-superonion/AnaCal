@@ -16,8 +16,8 @@ py::tuple stamp_to_py(const Stamp& st) {
     return py::make_tuple(arr, py::make_tuple(st.x0, st.y0));
 }
 
-// xlens utils.image.resize_array conventions; delegates to the pure
-// C++ resize_stamp_to shared with the native ForceTask path.
+// The resize_array conventions; delegates to the pure C++
+// resize_stamp_to shared with the native ForceTask path.
 py::array_t<double> stamp_to_npix(const Stamp& st, int npix) {
     py::array_t<double> out({npix, npix});
     resize_stamp_to(st, npix, out.mutable_data());
@@ -392,9 +392,10 @@ pyExportPsfModel(py::module_& m) {
             const py::array_t<
                 double, py::array::c_style | py::array::forcecast
             >& arr,
-            int ny,
-            int nx
+            std::pair<int, int> target_shape
         ) {
+            const int ny = target_shape.first;
+            const int nx = target_shape.second;
             if (arr.ndim() != 2) {
                 throw std::runtime_error(
                     "psfmodel Error: resize_array input must be 2-D"
@@ -411,9 +412,12 @@ pyExportPsfModel(py::module_& m) {
             resize_stamp_to(st, ny, nx, out.mutable_data());
             return out;
         },
-        "Centre crop / zero-pad a 2-D array to (ny, nx) -- the exact "
-        "xlens resize_array conventions, evaluated in C++.",
-        py::arg("array"), py::arg("ny"), py::arg("nx")
+        "Centre crop / zero-pad a 2-D array to target_shape = "
+        "(height, width).  The single implementation of this "
+        "convention: crop start (in-out)//2, rows pad bottom-heavy, "
+        "columns pad top-heavy.  Any dtype is accepted and the result "
+        "is float64.",
+        py::arg("array"), py::arg("target_shape") = std::pair<int, int>(64, 64)
     );
 }
 

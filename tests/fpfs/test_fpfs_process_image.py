@@ -86,7 +86,7 @@ def test_fpfs_init():
     # Native per-source PSF path: a 1x1 stamp grid holds the same PSF
     # everywhere, so the C++ ForceTask drawing per source must equal the
     # constant-PSF path bit for bit.
-    grid_model = anacal.psfmodel.GridPsfModel(
+    grid_model = anacal.psf.GridPsfModel(
         stamps=np.ascontiguousarray(
             psf_array[None, None, :, :], dtype=np.float64
         ),

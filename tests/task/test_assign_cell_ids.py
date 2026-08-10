@@ -106,7 +106,7 @@ def test_dropped_cell_list():
     cells = make_cells()
     # remove the centre cell: its cell's sources fall back to nearest
     dropped = [b for b in cells if not (b.xmin_in == 170
-                                         and b.ymin_in == 170)]
+                                        and b.ymin_in == 170)]
     rng = np.random.RandomState(7)
     x1 = rng.uniform(0.0, 500 * SCALE, 2000)
     x2 = rng.uniform(0.0, 500 * SCALE, 2000)

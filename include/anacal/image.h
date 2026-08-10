@@ -4,25 +4,41 @@
 #include "table.h"
 #include "model.h"
 #include "math/tensor.h"
-#include <fftw3.h>
+// FFT engine: vendored pocketfft (BSD-3, header-only).  The plan cache
+// (POCKETFFT_CACHE_SIZE, default 0) and the internal thread pool are
+// both OFF, so a transform takes NO lock and touches no global state
+// -- unlike FFTW, whose planner is not thread-safe and had to be
+// serialized behind a shared_mutex here.
+#define POCKETFFT_NO_MULTITHREADING
+#include "pocketfft.h"
 #include <map>
 #include <utility>
 
 namespace anacal {
 inline constexpr double min_deconv_ratio = 1e-5;
 
+// Interleaved (re, im) pair: the layout of std::complex<double> (and of
+// the fftw_complex it replaced), kept as double[2] so buffer element
+// access stays ``data_f[i][0]`` / ``data_f[i][1]``.
+using complex2 = double[2];
+
 class Image {
 private:
-    fftw_plan plan_forward = nullptr;
-    fftw_plan plan_backward = nullptr;
     int nx2, ny2, npixels, npixels_f;
     int kx_length, ky_length;
     double dkx, dky;
     double norm_factor;
     double* data_r = nullptr;
-    fftw_complex* data_f = nullptr;
+    complex2* data_f = nullptr;
+
+    void _free_buffers() noexcept;
+
+    void _fft_shapes(
+        pocketfft::shape_t& shape, pocketfft::stride_t& s_real,
+        pocketfft::stride_t& s_cplx, pocketfft::shape_t& axes
+    ) const;
     // Persistent scratch for _rotate90_f, so the per-call
-    // fftw_malloc + copy + free (504 KB at cell size) happens once per
+    // buffer alloc + copy + free (504 KB at cell size) happens once per
     // Image instead of once per rotation.
     std::vector<std::complex<double>> rot_scratch_;
 
@@ -187,7 +203,7 @@ public:
         return data_r;
     }
 
-    const fftw_complex* view_f() const {
+    const complex2* view_f() const {
         assert_mode(this->mode & 2);
         return data_f;
     }
@@ -216,8 +232,8 @@ public:
     ~Image();
 
     // Restore the state a fresh Image(nx, ny, scale, ...) would have,
-    // WITHOUT reallocating the FFTW buffers or re-planning (both need the
-    // global planner mutex).  Buffer contents are NOT touched: like a
+    // WITHOUT reallocating the transform buffers.  Buffer contents are
+    // NOT touched: like a
     // fresh image they are undefined until a setter runs, and every
     // setter fully overwrites or re-zeroes before anything reads.  Only
     // full mode-3 images are pooled.  Used by ImageLease below.
@@ -234,15 +250,14 @@ public:
 // ---------------------------------------------------------------------------
 // Thread-local workspace pools
 //
-// Constructing an Image costs two fftw_mallocs plus two planner calls under
-// the GLOBAL planner mutex; the cell loops construct several per cell per
-// band, and with threads that mutex becomes a scalability ceiling.  The hot
-// paths therefore LEASE a workspace from a per-thread pool: the lease
+// Constructing an Image costs two aligned allocations of up to a few
+// hundred KB, and the cell loops construct several per cell per band.  The
+// hot paths therefore LEASE a workspace from a per-thread pool: the lease
 // resets the scale-dependent state (reset_for_reuse), so a leased Image
 // behaves exactly like a freshly constructed one -- buffer contents are
-// undefined either way until a setter runs -- but its buffers and plans are
-// reused.  Thread-local storage means no locking, and the pool dies with
-// its thread.
+// undefined either way until a setter runs -- but its buffers are reused.
+// Thread-local storage means no locking, and the pool dies with its
+// thread.
 // ---------------------------------------------------------------------------
 class ImageLease {
 public:
@@ -849,7 +864,7 @@ inline double get_smoothed_variance(
         img_obj.filter(gauss_model);
     }
     {
-        const fftw_complex* pfd = img_obj.view_f();
+        const complex2* pfd = img_obj.view_f();
         for (int j = 0; j < npix; ++j) {
             for (int i = 0; i < kx_len; ++i) {
                 const int index = j * kx_len + i;

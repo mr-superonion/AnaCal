@@ -270,11 +270,12 @@ namespace anacal {
             Image& img_obj = lease.get();
             const bool has_noise = noise_array.has_value();
 
-            // Constant-PSF filters, prepared exactly as the two
-            // FpfsImage::measure_source calls did: data filter from the
-            // PSF, noise filter from the PSF rotated 90 degrees in
-            // Fourier space.  (For a per-source PSF stack the filters
-            // are rebuilt inside the loop instead.)
+            // Constant-PSF filters: data filter from the PSF, noise
+            // filter from the PSF rotated 90 degrees in Fourier space.
+            // ONE transform serves both -- draw_f() has already copied
+            // the result out, so rotate90_f() can turn the buffer into
+            // the rotated version in place.  (For a per-source PSF the
+            // filters are rebuilt inside the loop instead.)
             py::array_t<std::complex<double>> fimg_g;
             py::array_t<std::complex<double>> fimg_n;
             if (!native_psf) {
@@ -286,8 +287,6 @@ namespace anacal {
                     filter_image, parr, scale, klim
                 );
                 if (has_noise) {
-                    img_obj.set_r(psf_array, false);
-                    img_obj.fft();
                     img_obj.rotate90_f();
                     const py::array_t<std::complex<double>> parr_n =
                         img_obj.draw_f();
@@ -414,10 +413,7 @@ namespace anacal {
                         );
                         fg = scratch_g.data();
                         if (has_noise) {
-                            img_obj.set_r_raw(
-                                psf_scratch.data(), npix, npix, false
-                            );
-                            img_obj.fft();
+                            // same transform as above, rotated in place
                             img_obj.rotate90_f();
                             const std::vector<std::complex<double>> parr_n =
                                 img_obj.draw_f_vec();

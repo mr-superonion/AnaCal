@@ -250,7 +250,7 @@ def _measure_kernel_catalog(
     )
     if psf_model is not None:
         # Per-source PSFs are drawn NATIVELY inside the C++ ForceTask
-        # loop (psfmodel.PerSourcePsf); psf_array is the per-cell /
+        # loop (psf.PerSourcePsf); psf_array is the per-cell /
         # patch-level 2-D stamp and is not used for the deconvolution.
         psf_use = np.ascontiguousarray(psf_array, dtype=np.float64)
     elif isinstance(psf_object, np.ndarray) and psf_object.ndim == 2:
@@ -258,7 +258,7 @@ def _measure_kernel_catalog(
     else:
         raise ValueError(
             "Python-side per-source PSF drawing has been removed: pass "
-            "a native psf_model (a psfmodel.PerSourcePsf, or a BasePsf "
+            "a native psf_model (a psf.PerSourcePsf, or a BasePsf "
             "exposing .native_model), or a single 2-D per-cell PSF "
             "stamp."
         )

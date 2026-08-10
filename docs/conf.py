@@ -41,7 +41,7 @@ _MOCK_MODULES = [
     "anacal._anacal.model",
     "anacal._anacal.ngmix",
     "anacal._anacal.noise",
-    "anacal._anacal.psf",
+    "anacal._anacal.psfmodel",
     "anacal._anacal.table",
     "anacal._anacal.task",
 ]

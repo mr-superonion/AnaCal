@@ -5,11 +5,10 @@ namespace anacal {
     PYBIND11_MODULE(_anacal, m)
     {
         // Thread safety note: the measurement runners release the GIL
-        // around their compute, so FFTW planning and execution can
-        // overlap between Python threads.  anacal serializes the FFTW
-        // planner itself with a shared_mutex in src/image.cpp (planning
-        // exclusive, execution shared) -- no FFTW threads library is
-        // needed.
+        // around their compute, so several Python threads run the C++
+        // core at once.  The FFT engine (pocketfft, see image.h) keeps
+        // no global state and takes no lock, so that region is fully
+        // lock-free -- no external FFT library is needed at all.
 
         pyExportModel(m);
         pyExportImage(m);

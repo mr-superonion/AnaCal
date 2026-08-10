@@ -158,6 +158,45 @@ def test_rotate90():
     return
 
 
+def test_rotate90_noise():
+    """rotate90_f in Fourier space == a 90 degree rotation in real space.
+
+    test_rotate90 above uses a smooth Moffat, which carries essentially
+    no power at the Nyquist row/column -- exactly the pixels that
+    _rotate90_f special-cases.  A white-noise field has full power
+    there, so this is the case that actually exercises that branch.
+    """
+    ngrid = 32
+    rng = np.random.RandomState(12)
+    data = rng.normal(size=(ngrid, ngrid))
+
+    # the branch under test only does work if the Nyquist column is
+    # populated, which is the whole point of using noise here
+    assert np.mean(np.abs(np.fft.rfft2(data)[:, -1])) > 1.0
+
+    # Real-space reference: the FFT puts the origin at index 0, so a 90
+    # degree rotation about it is out[y, x] = data[-x, y] in periodic
+    # indices.
+    y, x = np.mgrid[0:ngrid, 0:ngrid]
+    rotated = data[(-x) % ngrid, y]
+
+    imobj = anacal.image.Image(nx=ngrid, ny=ngrid, scale=1.0)
+    imobj.set_r(data)
+    imobj.fft()
+    original_freq = imobj.draw_f().copy()
+    imobj.rotate90_f()
+    imobj.ifft()
+    np.testing.assert_allclose(imobj.draw_r(), rotated, atol=1e-12)
+
+    # ... and irotate90_f takes it back
+    imobj.fft()
+    imobj.irotate90_f()
+    np.testing.assert_allclose(imobj.draw_f(), original_freq, atol=1e-12)
+    imobj.ifft()
+    np.testing.assert_allclose(imobj.draw_r(), data, atol=1e-12)
+    return
+
+
 def test_memory(
     d=np.pi * 0.65,
     sigma=1.0 / 3.0,

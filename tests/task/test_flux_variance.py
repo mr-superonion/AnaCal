@@ -64,7 +64,7 @@ def test_flux_variance():
         .array
     )
     psf_array = np.asarray(
-        anacal.utils.resize_array(
+        anacal.psf.resize_array(
             psf_array, (npix, npix)
         ),
         dtype=np.float64,
