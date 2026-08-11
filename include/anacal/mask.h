@@ -5,19 +5,39 @@
 
 namespace anacal {
 namespace mask {
+    // Every mask argument below is EDITED IN PLACE, so its dtype has to
+    // be checked by hand before pybind is allowed near it.  Declaring
+    // the argument as ``py::array_t<int16_t>`` would let pybind accept
+    // any dtype and hand us a converted *copy*: the flags would be set
+    // in the copy and the caller's mask would come back untouched, with
+    // no error raised.  Taking an untyped ``py::array`` skips that
+    // conversion; this helper turns it back into a typed handle that
+    // still refers to the CALLER's buffer.
+    inline py::array_t<int16_t>
+    borrow_mask(py::array& mask_array_in, const char* who) {
+        if (!mask_array_in.dtype().is(py::dtype::of<int16_t>())) {
+            throw std::invalid_argument(
+                std::string(who) + " Error: mask_array is modified in "
+                "place and must already be int16; got dtype '" +
+                py::str(mask_array_in.dtype()).cast<std::string>() + "'"
+            );
+        }
+        if (mask_array_in.ndim() != 2) {
+            throw std::runtime_error(
+                "Mask Error: The input mask array has an invalid shape."
+            );
+        }
+        return py::reinterpret_borrow<py::array_t<int16_t>>(mask_array_in);
+    }
+
+    // Flags the star footprints into ``mask_array`` (already validated).
     void
-    inline add_bright_star_mask(
+    inline add_bright_star_mask_impl(
         py::array_t<int16_t>& mask_array,
         const py::array_t<BrightStar>& star_array
     ) {
         auto star_r = star_array.unchecked<1>();
         int nn = star_array.shape(0);
-        int ndim = mask_array.ndim();
-        if (ndim != 2) {
-            throw std::runtime_error(
-                "Mask Error: The input mask array has an invalid shape."
-            );
-        }
         auto m_r = mask_array.mutable_unchecked<2>();
         int ny = m_r.shape(0);
         int nx = m_r.shape(1);
@@ -53,69 +73,31 @@ namespace mask {
         return;
     };
 
+    // Public entry point: validates, then flags the star footprints.
     void
-    inline extend_mask_image(
-        py::array_t<int16_t>& mask_array
+    inline add_bright_star_mask(
+        py::array& mask_array_in,
+        const py::array_t<BrightStar>& star_array
     ) {
-        // Get information of input array
-        int ndim = mask_array.ndim();
-        if (ndim != 2) {
-            throw std::runtime_error(
-                "Mask Error: The input mask array has an invalid shape."
-            );
-        }
-        auto m_r = mask_array.mutable_unchecked<2>();
-        int ny = m_r.shape(0);
-        int nx = m_r.shape(1);
-
-        // Initialize the convolved mask
-        py::array_t<int16_t> mask_conv({ny, nx});
-        auto conv_r = mask_conv.mutable_unchecked<2>();
-        for (int j = 0; j < ny; ++j) {
-            for (int i = 0; i < nx; ++i) {
-                conv_r(j, i) = 0.0;
-            }
-        }
-
-        // Convoved image
-        for (int y = 0; y < ny; ++y) {
-            for (int x = 0; x < nx; ++x) {
-                if (m_r(y, x) > 0){
-                    for (int j = y-2; j <= y+2; ++j) {
-                        if ((j < 0) || (j >= ny)) {
-                            continue;
-                        }
-                        for (int i = x-2; i <= x+2; ++i) {
-                            if ((i < 0) || (i >= nx)) {
-                                continue;
-                            }
-                            conv_r(j, i) = 1;
-                        }
-                    }
-                }
-            }
-        }
-        for (int j = 0; j < ny; ++j) {
-            for (int i = 0; i < nx; ++i) {
-                m_r(j, i) = conv_r(j, i);
-            }
-        }
+        auto mask_array = borrow_mask(mask_array_in, "add_bright_star_mask");
+        add_bright_star_mask_impl(mask_array, star_array);
         return;
     };
 
+    // BOTH array arguments are edited in place: the galaxy pixels under
+    // a set mask flag are zeroed, and -- when a star catalog is given --
+    // the star footprints are flagged into mask_array.
     void
     inline mask_galaxy_image(
         py::array& gal_array_in,
-        py::array_t<int16_t>& mask_array,
-        bool do_extend_mask,
+        py::array& mask_array_in,
         const std::optional<py::array_t<BrightStar>>& star_array
     ) {
-        // This one is written in place, so the dtype has to be checked by hand
-        // before pybind is allowed anywhere near it.  Declaring the argument as
-        // ``py::array_t<pixel_t>`` would let pybind accept any dtype and pass
-        // us a converted *copy*: the pixels would be zeroed in the copy and the
-        // caller's array would come back unchanged, with no error raised.
-        // Taking an untyped ``py::array`` skips that conversion entirely.
+        // Same in-place dtype trap as the mask (see borrow_mask): pybind
+        // would hand us a converted *copy* of a non-float32 array, zero
+        // the pixels there, and leave the caller's image untouched with
+        // no error raised.  Taking an untyped ``py::array`` skips that
+        // conversion entirely.
         if (!gal_array_in.dtype().is(py::dtype::of<pixel_t>())) {
             throw std::invalid_argument(
                 "mask_galaxy_image Error: gal_array is modified in place and "
@@ -126,12 +108,10 @@ namespace mask {
         auto gal_array = py::reinterpret_borrow<py::array_t<pixel_t>>(
             gal_array_in
         );
+        auto mask_array = borrow_mask(mask_array_in, "mask_galaxy_image");
 
-        if (do_extend_mask) {
-            extend_mask_image(mask_array);
-        }
         if (star_array.has_value()) {
-            add_bright_star_mask(
+            add_bright_star_mask_impl(
                 mask_array,
                 *star_array
             );

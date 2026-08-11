@@ -62,20 +62,36 @@ def test_mask():
     # in place, so AnaCal refuses any other dtype rather than quietly writing
     # into a converted copy and leaving the caller's pixels alone.
     data = np.ones((ngrid, ngrid), dtype=np.float32) * 10.0
-    anacal.mask.mask_galaxy_image(data, mask, True, star_array)
+    anacal.mask.mask_galaxy_image(data, mask, star_array)
     assert data[4, 11] == 0
     assert data[55, 41] == 0
     assert data[99, 65] == 0
 
     with pytest.raises(ValueError, match="must already be float32"):
         anacal.mask.mask_galaxy_image(
-            np.ones((ngrid, ngrid), dtype=np.float64), mask, True, star_array
+            np.ones((ngrid, ngrid), dtype=np.float64), mask, star_array
         )
 
-    mask = np.ones((ngrid, ngrid))
-    anacal.mask.extend_mask_image(mask)
+    # Both arrays are edited in place, so a wrong mask dtype must RAISE.
+    # It used to be accepted silently: pybind converted it to an int16
+    # copy, flagged the copy, and handed the caller back an untouched
+    # mask with no error.
+    with pytest.raises(ValueError, match="must already be int16"):
+        anacal.mask.add_bright_star_mask(
+            np.ones((ngrid, ngrid)), star_array
+        )
+    with pytest.raises(ValueError, match="must already be int16"):
+        anacal.mask.mask_galaxy_image(
+            np.ones((ngrid, ngrid), dtype=np.float32),
+            np.ones((ngrid, ngrid)),
+            star_array,
+        )
+
+    # An int16 mask really is written through to the caller's buffer.
+    mask = np.zeros((ngrid, ngrid), dtype=np.int16)
     anacal.mask.add_bright_star_mask(mask, star_array)
-    np.testing.assert_almost_equal(mask, np.ones((ngrid, ngrid)))
+    assert mask[4, 11] == 1
+
     mask = np.ones((ngrid, ngrid))
     b = anacal.mask.convolve_mask_gauss(
         mask,

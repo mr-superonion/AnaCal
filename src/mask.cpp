@@ -12,21 +12,27 @@ namespace mask {
         py::module_ mask = m.def_submodule("mask", "submodule for mask");
         mask.def(
             "add_bright_star_mask", &add_bright_star_mask,
-            "Update mask image according to bright star catalog",
+            "Flag bright-star footprints into a mask image.\n\n"
+            "MODIFIES mask_array IN PLACE (bitwise-ORs 1 into every "
+            "pixel inside a star radius) and returns None.  mask_array "
+            "must already be int16: it is written in place, so a "
+            "different dtype raises rather than being silently "
+            "converted to a copy that the caller never sees.",
             py::arg("mask_array"),
             py::arg("star_array")
         );
         mask.def(
-            "extend_mask_image", &extend_mask_image,
-            "Update mask image with a 2 pixel extension",
-            py::arg("mask_array")
-        );
-        mask.def(
             "mask_galaxy_image", &mask_galaxy_image,
-            "Apply mask on galaxy image",
+            "Zero the galaxy pixels that the mask flags.\n\n"
+            "MODIFIES BOTH ARRAYS IN PLACE and returns None: gal_array "
+            "pixels with mask_array > 0 are set to 0, and when "
+            "star_array is given its footprints are first flagged into "
+            "mask_array.  gal_array must already be float32 and "
+            "mask_array int16 -- both are written in place, so any "
+            "other dtype raises rather than being silently converted "
+            "to a copy that the caller never sees.",
             py::arg("gal_array"),
             py::arg("mask_array"),
-            py::arg("do_extend_mask")=true,
             py::arg("star_array")=py::none()
         );
         mask.def(
