@@ -189,7 +189,7 @@ namespace anacal {
             // Per-source mask flags + threshold: sources with
             // mask_value > mask_value_max are SKIPPED -- their output
             // rows are zero-filled, keeping the catalog row-aligned
-            // with ``det``.  The psf_invalid_mask_value sentinel (414,
+            // with ``det``.  The psf_invalid_mask_value sentinel (404,
             // "PSF invalid in some band") is EXEMPT from the threshold:
             // each band skips only where its OWN model has no coverage.
             const std::optional<
@@ -199,7 +199,7 @@ namespace anacal {
             // Native per-source PSF: stamps are drawn INSIDE the
             // GIL-released loop by the model (no Python per-galaxy
             // drawing), and a source outside the model's coverage is
-            // skipped with mask_value set to 414 in place (mask_value
+            // skipped with mask_value set to 404 in place (mask_value
             // must then be a writable int32 array).  ``det`` positions
             // are local image coordinates; the offsets map them into
             // the model's frame (the exposure bbox minimum).
@@ -344,7 +344,7 @@ namespace anacal {
                     // Threshold cut (when configured).  Zero-filled rows
                     // keep the catalog aligned with the input positions.
                     //
-                    // With a per-source PSF model the 414 sentinel is
+                    // With a per-source PSF model the 404 sentinel is
                     // EXEMPT from the cut: it means "PSF invalid in SOME
                     // band", and THIS band decides for itself via the
                     // contains() check below, so a source flagged by
@@ -353,7 +353,7 @@ namespace anacal {
                     // limited to that mode -- nothing writes the
                     // sentinel without a model, so applying it there
                     // would only let a genuinely masked source (whose
-                    // smoothed-mask value happens to be exactly 414)
+                    // smoothed-mask value happens to be exactly 404)
                     // through the cut.  In per-source mode that
                     // collision remains possible but is the price of an
                     // in-range sentinel.
@@ -369,7 +369,7 @@ namespace anacal {
                         // Draw the per-source PSF inside the released
                         // loop -- no Python per-galaxy drawing.  A
                         // source outside the model's coverage is the
-                        // DM InvalidPsfError case: flag it 414 and
+                        // DM InvalidPsfError case: flag it 404 and
                         // skip.
                         const double mx = det_r(j).x + psf_offset_x;
                         const double my = det_r(j).y + psf_offset_y;

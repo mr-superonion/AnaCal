@@ -5,20 +5,28 @@
 
 namespace anacal {
 namespace mask {
+    // Mask arrays are uint8 BITMASKS, value range 0..3:
+    //   bit 0 (value 1): masked -- bad pixels, bright-star halos. The
+    //     only bit that removes pixels from the measurement.
+    //   bit 1 (value 2): discontinuity -- real data whose CoaddPsf model
+    //     is wrong (chip gaps, clipped/rejected inputs). Never zeroed;
+    //     sampled into discontinuity_mask_value only.
+    // Callers combine the two single-purpose masks with bitwise OR.
+    //
     // Every mask argument below is EDITED IN PLACE, so its dtype has to
     // be checked by hand before pybind is allowed near it.  Declaring
-    // the argument as ``py::array_t<int16_t>`` would let pybind accept
+    // the argument as ``py::array_t<uint8_t>`` would let pybind accept
     // any dtype and hand us a converted *copy*: the flags would be set
     // in the copy and the caller's mask would come back untouched, with
     // no error raised.  Taking an untyped ``py::array`` skips that
     // conversion; this helper turns it back into a typed handle that
     // still refers to the CALLER's buffer.
-    inline py::array_t<int16_t>
+    inline py::array_t<uint8_t>
     borrow_mask(py::array& mask_array_in, const char* who) {
-        if (!mask_array_in.dtype().is(py::dtype::of<int16_t>())) {
+        if (!mask_array_in.dtype().is(py::dtype::of<uint8_t>())) {
             throw std::invalid_argument(
                 std::string(who) + " Error: mask_array is modified in "
-                "place and must already be int16; got dtype '" +
+                "place and must already be uint8; got dtype '" +
                 py::str(mask_array_in.dtype()).cast<std::string>() + "'"
             );
         }
@@ -27,13 +35,13 @@ namespace mask {
                 "Mask Error: The input mask array has an invalid shape."
             );
         }
-        return py::reinterpret_borrow<py::array_t<int16_t>>(mask_array_in);
+        return py::reinterpret_borrow<py::array_t<uint8_t>>(mask_array_in);
     }
 
     // Flags the star footprints into ``mask_array`` (already validated).
     void
     inline add_bright_star_mask_impl(
-        py::array_t<int16_t>& mask_array,
+        py::array_t<uint8_t>& mask_array,
         const py::array_t<BrightStar>& star_array
     ) {
         auto star_r = star_array.unchecked<1>();
@@ -122,9 +130,11 @@ namespace mask {
         int nx = gal_array.shape(1);
         auto mask_r = mask_array.unchecked<2>();
 
+        // Zero only bit-0 (masked) pixels. Bit 1 (discontinuity) flags
+        // real data whose PSF model is wrong -- the pixels stay.
         for (int j = 0; j < ny; ++j) {
             for (int i = 0; i < nx; ++i) {
-                if (mask_r(j, i) > 0) {
+                if (mask_r(j, i) & 1) {
                     img_r(j, i) = static_cast<pixel_t>(0.0);
                 }
             }
@@ -133,7 +143,7 @@ namespace mask {
 
     py::array_t<float>
     inline convolve_mask_gauss(
-        const py::array_t<int16_t>& mask_array,
+        const py::array_t<uint8_t>& mask_array,
         double sigma,
         double scale
     ) {
@@ -167,7 +177,7 @@ namespace mask {
 
         for (int y = 0; y < ny; ++y) {
             for (int x = 0; x < nx; ++x) {
-                if (mask_r(y, x) > 0) {
+                if (mask_r(y, x) & 1) {
                     for (int j = -ngrid2; j <= ngrid2; ++j) {
                         if ((y + j < 0) || (y + j >= ny)) {
                             continue;
@@ -176,12 +186,11 @@ namespace mask {
                             if ((x + i < 0) || (x + i >= nx)) {
                                 continue;
                             }
-                            // Convolution of the 0/1 mask with the kernel.
-                            // The pixel value is not used as a factor: if the
-                            // input were ever a raw bitmask (SAT=2, CR=8 ...)
-                            // each pixel would be weighted by its bit value,
-                            // which has no meaning.  Any pixel that passes the
-                            // mask_r > 0 gate counts as exactly one.
+                            // Convolution of BIT 0 of the mask with the
+                            // kernel; each passing pixel counts as exactly
+                            // one. This stays the exact reference for
+                            // mask_value (same gate, kernel and raster
+                            // order as add_pixel_mask_column).
                             conv_r(y + j, x + i) += kernel_r(
                                 j + ngrid2, i + ngrid2
                             );
@@ -236,19 +245,18 @@ namespace mask {
         return mask_conv;
     };
 
-    // Stamp the per-source mask value: the Gaussian-smoothed mask
-    // (convolve_mask_gauss) sampled at the source centre, times 1000 --
-    // the same values the old convolve-then-sample pair produced, bit for
-    // bit (same kernel, and masked pixels are accumulated in the same
-    // raster order).  The smoothed value is evaluated AT each source
-    // position instead of over the whole image, so the caller's mask is
-    // only read (never modified), no Python object is created -- safe
-    // under a released GIL -- and the cost is O(sources * kernel^2), not
-    // O(image) per call.
+    // Stamp the per-source mask values: the Gaussian-smoothed mask
+    // sampled at the source centre, times 1000 -- one value per mask
+    // BIT.  Bit 0 (masked) fills mask_value, exactly the values the old
+    // single-channel code produced on a 0/1 mask (same kernel, same
+    // raster accumulation order); bit 1 (discontinuity) fills
+    // discontinuity_mask_value with the identical kernel.  Evaluated AT
+    // each source position, mask only read, no Python objects -- safe
+    // under a released GIL; cost O(sources * kernel^2).
     void
     inline add_pixel_mask_column(
         std::vector<table::galNumber>& catalog,
-        const py::array_t<int16_t>& mask_array,
+        const py::array_t<uint8_t>& mask_array,
         double sigma,
         double scale
     ) {
@@ -288,20 +296,32 @@ namespace mask {
             // float and in raster order of (my, mx) to reproduce the
             // full-image convolution exactly.
             float conv = 0.0f;
+            float conv_disc = 0.0f;
             const int j0 = std::max(y - ngrid2, 0);
             const int j1 = std::min(y + ngrid2, ny - 1);
             const int i0 = std::max(x - ngrid2, 0);
             const int i1 = std::min(x + ngrid2, nx - 1);
             for (int my = j0; my <= j1; ++my) {
                 for (int mx = i0; mx <= i1; ++mx) {
-                    if (mask_r(my, mx) > 0) {
-                        conv += kernel[
-                            (y - my + ngrid2) * ngrid + (x - mx + ngrid2)
-                        ];
+                    const uint8_t mval = mask_r(my, mx);
+                    if (mval == 0) {
+                        continue;
+                    }
+                    const float kval = kernel[
+                        (y - my + ngrid2) * ngrid + (x - mx + ngrid2)
+                    ];
+                    if (mval & 1) {
+                        conv += kval;
+                    }
+                    if (mval & 2) {
+                        conv_disc += kval;
                     }
                 }
             }
             src.mask_value = static_cast<int>(conv * 1000);
+            src.discontinuity_mask_value = static_cast<int>(
+                conv_disc * 1000
+            );
         }
         return;
     };

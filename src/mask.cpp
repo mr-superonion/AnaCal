@@ -10,12 +10,16 @@ namespace mask {
             y, x
         );
         py::module_ mask = m.def_submodule("mask", "submodule for mask");
+        // The two in-place mask mutators guard the dtype by hand: pybind
+        // would otherwise CONVERT a mismatched array into a copy, mutate
+        // the copy, and silently discard every write (the same trap
+        // mask_galaxy_image documents for its image argument).
         mask.def(
             "add_bright_star_mask", &add_bright_star_mask,
             "Flag bright-star footprints into a mask image.\n\n"
-            "MODIFIES mask_array IN PLACE (bitwise-ORs 1 into every "
+            "MODIFIES mask_array IN PLACE (bitwise-ORs bit 0 into every "
             "pixel inside a star radius) and returns None.  mask_array "
-            "must already be int16: it is written in place, so a "
+            "must already be uint8: it is written in place, so a "
             "different dtype raises rather than being silently "
             "converted to a copy that the caller never sees.",
             py::arg("mask_array"),
@@ -23,12 +27,13 @@ namespace mask {
         );
         mask.def(
             "mask_galaxy_image", &mask_galaxy_image,
-            "Zero the galaxy pixels that the mask flags.\n\n"
+            "Zero the galaxy pixels that bit 0 of the mask flags; bit 1 "
+            "(discontinuity) pixels keep their data.\n\n"
             "MODIFIES BOTH ARRAYS IN PLACE and returns None: gal_array "
-            "pixels with mask_array > 0 are set to 0, and when "
+            "pixels with mask_array bit 0 set are zeroed, and when "
             "star_array is given its footprints are first flagged into "
             "mask_array.  gal_array must already be float32 and "
-            "mask_array int16 -- both are written in place, so any "
+            "mask_array uint8 -- both are written in place, so any "
             "other dtype raises rather than being silently converted "
             "to a copy that the caller never sees.",
             py::arg("gal_array"),
@@ -55,7 +60,7 @@ namespace mask {
             // lost.  Return the updated catalog instead.
             [](
                 std::vector<table::galNumber> catalog,
-                const py::array_t<int16_t>& mask_array,
+                const py::array_t<uint8_t>& mask_array,
                 double sigma,
                 double scale
             ) {
@@ -76,7 +81,7 @@ namespace mask {
             // the mask's pixel frame.
             [](
                 const py::array_t<table::galRow>& detection,
-                const py::array_t<int16_t>& mask_array,
+                const py::array_t<uint8_t>& mask_array,
                 double sigma,
                 double scale
             ) {

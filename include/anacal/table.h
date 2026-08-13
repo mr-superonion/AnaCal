@@ -72,6 +72,7 @@ struct galRow{
     double dwsel_dj1;
     double dwsel_dj2;
     int mask_value;
+    int discontinuity_mask_value;
     bool is_primary;
     double flux_gauss0;
     double dflux_gauss0_dg1;
@@ -125,6 +126,11 @@ struct galNumber {
     math::qnumber bkg = math::qnumber(0.0);
     math::qnumber wsel = math::qnumber(0.0);
     int mask_value=0;
+    // Smoothed density of DISCONTINUITY pixels (mask bit 1: chip gaps,
+    // clipped/rejected coadd inputs -- real data, wrong CoaddPsf) at the
+    // source position, same kernel and x1000 scaling as mask_value.
+    // Never used for skipping; carried as a catalog column only.
+    int discontinuity_mask_value=0;
     bool is_primary=true;
     bool initialized=false;
     math::lossNumber loss;
@@ -228,6 +234,7 @@ struct galNumber {
         ANACAL_ROW_PUT_Q(bkg, dbkg, bkg);
         ANACAL_ROW_PUT_Q(wsel, dwsel, wsel);
         row.mask_value = mask_value;
+        row.discontinuity_mask_value = discontinuity_mask_value;
         row.is_primary = is_primary;
         ANACAL_ROW_PUT_Q(flux_gauss0, dflux_gauss0, flux_gauss0);
         ANACAL_ROW_PUT_Q(flux_gauss2, dflux_gauss2, flux_gauss2);
@@ -258,6 +265,7 @@ struct galNumber {
         ANACAL_ROW_GET_Q(bkg, dbkg, bkg);
         ANACAL_ROW_GET_Q(wsel, dwsel, wsel);
         mask_value = row.mask_value;
+        discontinuity_mask_value = row.discontinuity_mask_value;
         is_primary = row.is_primary;
         ANACAL_ROW_GET_Q(flux_gauss0, dflux_gauss0, flux_gauss0);
         ANACAL_ROW_GET_Q(flux_gauss2, dflux_gauss2, flux_gauss2);

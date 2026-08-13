@@ -512,7 +512,7 @@ public:
         const std::vector<geometry::cell>& cell_list,
         const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
-        const std::optional<py::array_t<int16_t>>& mask_array=std::nullopt,
+        const std::optional<py::array_t<uint8_t>>& mask_array=std::nullopt,
         double a_ini=0.2,
         bool do_measure=true,
         bool do_fpfs=true,

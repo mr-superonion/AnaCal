@@ -868,7 +868,7 @@ def process_image(
             mask_value.dtype != np.int32
             or not mask_value.flags["C_CONTIGUOUS"]
         ):
-            # With a per-source PSF model the C++ writes the 414
+            # With a per-source PSF model the C++ writes the 404
             # sentinel INTO this array; anything that needs converting
             # would be written to a temporary and silently lost.
             raise ValueError(

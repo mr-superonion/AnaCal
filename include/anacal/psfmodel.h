@@ -30,7 +30,7 @@ namespace psfmodel {
 // mask_value sentinel for "no valid PSF model at this position in some
 // band": such sources are kept in the catalog but always skipped by
 // the measurement, independent of any mask_value_max threshold.
-constexpr int psf_invalid_mask_value = 414;
+constexpr int psf_invalid_mask_value = 404;
 
 // A PSF postage stamp: row-major (ny, nx) doubles plus the PARENT
 // coordinate of the first pixel (the afw xy0 convention).
