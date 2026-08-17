@@ -71,8 +71,8 @@ struct galRow{
     double dwsel_dg2;
     double dwsel_dj1;
     double dwsel_dj2;
-    int mask_value;
-    int discontinuity_mask_value;
+    float n_mask_base;
+    float n_mask_discontinuity;
     bool is_primary;
     double flux_gauss0;
     double dflux_gauss0_dg1;
@@ -125,12 +125,15 @@ struct galNumber {
     // local background under the source; set by detector::measure_pixel
     math::qnumber bkg = math::qnumber(0.0);
     math::qnumber wsel = math::qnumber(0.0);
-    int mask_value=0;
-    // Smoothed density of DISCONTINUITY pixels (mask bit 1: chip gaps,
-    // clipped/rejected coadd inputs -- real data, wrong CoaddPsf) at the
-    // source position, same kernel and x1000 scaling as mask_value.
+    // Gaussian-weighted MEAN of mask bit 0 (masked pixels) over the
+    // source footprint: a FRACTION in [0, 1], not a density -- see
+    // mask::add_mask_fraction_columns. Sources above
+    // ``n_mask_base_max`` are skipped by the measurement.
+    float n_mask_base=0.0f;
+    // The same fraction for mask bit 1 (DISCONTINUITY: chip gaps,
+    // clipped/rejected coadd inputs -- real data, wrong CoaddPsf).
     // Never used for skipping; carried as a catalog column only.
-    int discontinuity_mask_value=0;
+    float n_mask_discontinuity=0.0f;
     bool is_primary=true;
     bool initialized=false;
     math::lossNumber loss;
@@ -155,10 +158,10 @@ struct galNumber {
     galNumber(
         ngmix::NgmixGaussian model,
         math::qnumber wdet,
-        int mask_value,
+        float n_mask_base,
         math::lossNumber loss
     ) : model(model), wdet(wdet),
-        mask_value(mask_value), loss(loss) {}
+        n_mask_base(n_mask_base), loss(loss) {}
 
     // In-place: a galNumber is 1.2 kB but only the g1/g2 slots of ten
     // qnumbers actually change, so mutating beats copying the struct.
@@ -233,8 +236,8 @@ struct galNumber {
         ANACAL_ROW_PUT_Q(wdet, dwdet, wdet);
         ANACAL_ROW_PUT_Q(bkg, dbkg, bkg);
         ANACAL_ROW_PUT_Q(wsel, dwsel, wsel);
-        row.mask_value = mask_value;
-        row.discontinuity_mask_value = discontinuity_mask_value;
+        row.n_mask_base = n_mask_base;
+        row.n_mask_discontinuity = n_mask_discontinuity;
         row.is_primary = is_primary;
         ANACAL_ROW_PUT_Q(flux_gauss0, dflux_gauss0, flux_gauss0);
         ANACAL_ROW_PUT_Q(flux_gauss2, dflux_gauss2, flux_gauss2);
@@ -264,8 +267,8 @@ struct galNumber {
         ANACAL_ROW_GET_Q(wdet, dwdet, wdet);
         ANACAL_ROW_GET_Q(bkg, dbkg, bkg);
         ANACAL_ROW_GET_Q(wsel, dwsel, wsel);
-        mask_value = row.mask_value;
-        discontinuity_mask_value = row.discontinuity_mask_value;
+        n_mask_base = row.n_mask_base;
+        n_mask_discontinuity = row.n_mask_discontinuity;
         is_primary = row.is_primary;
         ANACAL_ROW_GET_Q(flux_gauss0, dflux_gauss0, flux_gauss0);
         ANACAL_ROW_GET_Q(flux_gauss2, dflux_gauss2, flux_gauss2);

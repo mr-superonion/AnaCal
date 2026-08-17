@@ -18,7 +18,7 @@ pyExportTable(py::module_& m) {
         wdet, dwdet_dg1, dwdet_dg2, dwdet_dj1, dwdet_dj2,
         bkg, dbkg_dg1, dbkg_dg2, dbkg_dj1, dbkg_dj2,
         wsel, dwsel_dg1, dwsel_dg2, dwsel_dj1, dwsel_dj2,
-        mask_value, discontinuity_mask_value, is_primary,
+        n_mask_base, n_mask_discontinuity, is_primary,
         flux_gauss0, dflux_gauss0_dg1, dflux_gauss0_dg2,
         dflux_gauss0_dj1, dflux_gauss0_dj2,
         flux_gauss2, dflux_gauss2_dg1, dflux_gauss2_dg2,
@@ -46,7 +46,7 @@ pyExportTable(py::module_& m) {
             int, math::lossNumber
             >(),
             py::arg("model"), py::arg("wdet"),
-            py::arg("mask_value"),
+            py::arg("n_mask_base"),
             py::arg("loss")
         )
         .def_readwrite("model", &galNumber::model)
@@ -55,10 +55,10 @@ pyExportTable(py::module_& m) {
         .def_readonly("wdet", &galNumber::wdet)
         .def_readonly("bkg", &galNumber::bkg)
         .def_readonly("wsel", &galNumber::wsel)
-        .def_readonly("mask_value", &galNumber::mask_value)
+        .def_readonly("n_mask_base", &galNumber::n_mask_base)
         .def_readonly(
-            "discontinuity_mask_value",
-            &galNumber::discontinuity_mask_value
+            "n_mask_discontinuity",
+            &galNumber::n_mask_discontinuity
         )
         .def_readonly("loss", &galNumber::loss)
         .def_readonly("flux_gauss0", &galNumber::flux_gauss0)

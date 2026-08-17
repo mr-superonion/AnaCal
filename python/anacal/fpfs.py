@@ -218,8 +218,8 @@ def _measure_kernel_catalog(
     sigma_shapelets,
     kernel,
     base_column_name,
-    mask_value=None,
-    mask_value_max=None,
+    n_mask_base=None,
+    n_mask_base_max=None,
     psf_model=None,
     psf_offset=(0.0, 0.0),
 ):
@@ -263,8 +263,8 @@ def _measure_kernel_catalog(
             "stamp."
         )
     eff_mask = (
-        None if mask_value is None
-        else np.ascontiguousarray(mask_value, dtype=np.int32)
+        None if n_mask_base is None
+        else np.ascontiguousarray(n_mask_base, dtype=np.float32)
     )
     return force.process_image(
         gal_array=gal_array,
@@ -274,8 +274,8 @@ def _measure_kernel_catalog(
         std_m00=float(ftask.std_m00),
         out_dtype=_catalog_dtype(kernel, base_column_name),
         noise_array=noise_array,
-        mask_value=eff_mask,
-        mask_value_max=mask_value_max,
+        n_mask_base=eff_mask,
+        n_mask_base_max=n_mask_base_max,
         psf_model=psf_model,
         psf_offset_x=float(psf_offset[0]),
         psf_offset_y=float(psf_offset[1]),
@@ -786,8 +786,8 @@ def process_image(
     detection: NDArray | None = None,
     psf_object: BasePsf | None | NDArray = None,
     base_column_name: str | None = None,
-    mask_value: NDArray | None = None,
-    mask_value_max: int | None = None,
+    n_mask_base: NDArray | None = None,
+    n_mask_base_max: float | None = None,
     psf_model=None,
     psf_offset: tuple = (0.0, 0.0),
     **kwargs,
@@ -859,20 +859,20 @@ def process_image(
         )
     if detection.dtype.names != ("y", "x"):
         raise ValueError("detection has wrong column names")
-    if mask_value is not None:
-        if len(mask_value) != len(detection):
+    if n_mask_base is not None:
+        if len(n_mask_base) != len(detection):
             raise ValueError(
-                "mask_value must hold one value per detection"
+                "n_mask_base must hold one value per detection"
             )
         if psf_model is not None and (
-            mask_value.dtype != np.int32
-            or not mask_value.flags["C_CONTIGUOUS"]
+            n_mask_base.dtype != np.float32
+            or not n_mask_base.flags["C_CONTIGUOUS"]
         ):
-            # With a per-source PSF model the C++ writes the 404
+            # With a per-source PSF model the C++ writes the 1.0
             # sentinel INTO this array; anything that needs converting
             # would be written to a temporary and silently lost.
             raise ValueError(
-                "mask_value must be a C-contiguous int32 array when "
+                "n_mask_base must be a C-contiguous float32 array when "
                 "psf_model is given: it is updated in place with the "
                 "PSF-invalid sentinel"
             )
@@ -896,8 +896,8 @@ def process_image(
             sigma_shapelets=sigma_shapelets,
             kernel=kernel,
             base_column_name=base_column_name,
-            mask_value=mask_value,
-            mask_value_max=mask_value_max,
+            n_mask_base=n_mask_base,
+            n_mask_base_max=n_mask_base_max,
             psf_model=psf_model,
             psf_offset=psf_offset,
         )

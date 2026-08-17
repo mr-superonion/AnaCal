@@ -255,7 +255,7 @@ public:
         const std::optional<std::vector<double>>& weights=std::nullopt,
         const std::optional<double>& variance_meas_opt=std::nullopt,
         const std::optional<double>& variance_det_opt=std::nullopt,
-        const std::optional<int>& mask_value_max=std::nullopt
+        const std::optional<double>& n_mask_base_max=std::nullopt
     ) {
         // PRECONDITION: the band stacks were validated by the caller
         // (Task::process_image or process_cell below) -- validating once
@@ -324,15 +324,15 @@ public:
 
         // Sources on heavily masked pixels are SKIPPED, not dropped:
         // their rows stay in the catalog with default measurement
-        // values, flagged by their mask_value column.
-        const int mvmax = mask_value_max.has_value()
-            ? *mask_value_max
-            : std::numeric_limits<int>::max();
+        // values, flagged by their n_mask_base column.
+        const float mvmax = n_mask_base_max.has_value()
+            ? static_cast<float>(*n_mask_base_max)
+            : std::numeric_limits<float>::max();
 
         // initialize the sources
         for (std::size_t i = 0; i < ng; ++i) {
             table::galNumber & src = catalog[i];
-            if (src.mask_value > mvmax) {
+            if (src.n_mask_base > mvmax) {
                 // Skipped sources must be INERT downstream: detection
                 // left wsel = wdet > 0 (detector.h) and the measurement
                 // that would overwrite it never runs, so without this a
@@ -357,7 +357,7 @@ public:
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
             for (std::size_t i=0; i<ng; ++i) {
                 table::galNumber & src = catalog[i];
-                if (src.mask_value > mvmax) continue;
+                if (src.n_mask_base > mvmax) continue;
                 const modelKernelD kernel = src.model.prepare_modelD(
                     this->scale,
                     this->sigma_arcsec
@@ -373,7 +373,7 @@ public:
 
         for (std::size_t i=0; i<ng; ++i) {
             table::galNumber & src = catalog[i];
-            if (src.mask_value > mvmax) continue;
+            if (src.n_mask_base > mvmax) continue;
             this->measure_gaussian_fluxes(
                 data, src, cell
             );
@@ -403,7 +403,7 @@ public:
         int num_epochs = 5,
         const varianceArg& variance = 1.0,
         std::optional<geometry::cell> cell=std::nullopt,
-        const std::optional<int>& mask_value_max=std::nullopt
+        const std::optional<double>& n_mask_base_max=std::nullopt
     ) {
         const ssize_t nd = img_array.ndim();
         int image_ny = static_cast<int>(img_array.shape(nd - 2));
@@ -439,7 +439,7 @@ public:
             std::nullopt,
             std::nullopt,
             std::nullopt,
-            mask_value_max
+            n_mask_base_max
         );
         return result;
     };

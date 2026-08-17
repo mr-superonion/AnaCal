@@ -187,19 +187,20 @@ namespace anacal {
             const py::object& out_dtype,
             const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
             // Per-source mask flags + threshold: sources with
-            // mask_value > mask_value_max are SKIPPED -- their output
+            // n_mask_base > n_mask_base_max are SKIPPED -- their output
             // rows are zero-filled, keeping the catalog row-aligned
-            // with ``det``.  The psf_invalid_mask_value sentinel (404,
-            // "PSF invalid in some band") is EXEMPT from the threshold:
-            // each band skips only where its OWN model has no coverage.
+            // with ``det``.  The psf_invalid_mask_value sentinel (1.0,
+            // "PSF invalid in some band") skips ALWAYS, threshold or
+            // not: a source without a usable PSF anywhere is dropped
+            // from every band, not only from the band that found out.
             const std::optional<
-                py::array_t<int, py::array::c_style>
-            >& mask_value=std::nullopt,
-            const std::optional<int>& mask_value_max=std::nullopt,
+                py::array_t<float, py::array::c_style>
+            >& n_mask_base=std::nullopt,
+            const std::optional<double>& n_mask_base_max=std::nullopt,
             // Native per-source PSF: stamps are drawn INSIDE the
             // GIL-released loop by the model (no Python per-galaxy
             // drawing), and a source outside the model's coverage is
-            // skipped with mask_value set to 404 in place (mask_value
+            // skipped with n_mask_base set to 1.0 in place (the array
             // must then be a writable int32 array).  ``det`` positions
             // are local image coordinates; the offsets map them into
             // the model's frame (the exposure bbox minimum).
@@ -241,11 +242,11 @@ namespace anacal {
                 );
             }
             const bool do_mask_cut = (
-                mask_value.has_value() && mask_value_max.has_value()
+                n_mask_base.has_value() && n_mask_base_max.has_value()
             );
-            if (mask_value.has_value() && mask_value->shape(0) != nrow) {
+            if (n_mask_base.has_value() && n_mask_base->shape(0) != nrow) {
                 throw std::runtime_error(
-                    "FPFS Error: mask_value must hold one value per source."
+                    "FPFS Error: n_mask_base must hold one value per source."
                 );
             }
             if (native_psf &&
@@ -321,17 +322,18 @@ namespace anacal {
             // The writable mask pointer is acquired while the GIL is
             // still held (handle copy + writeability check); the raw
             // pointer stays valid for the whole call.
-            int* mv_mut = nullptr;
-            if (mask_value.has_value() && native_psf) {
-                py::array_t<int, py::array::c_style> mv_arr =
-                    *mask_value;
+            float* mv_mut = nullptr;
+            if (n_mask_base.has_value() && native_psf) {
+                py::array_t<float, py::array::c_style> mv_arr =
+                    *n_mask_base;
                 mv_mut = mv_arr.mutable_data();
             }
             {
                 ScopedGilRelease release;
-                const int* mv_ptr =
-                    mask_value.has_value() ? mask_value->data() : nullptr;
-                const int mvmax = do_mask_cut ? *mask_value_max : 0;
+                const float* mv_ptr =
+                    n_mask_base.has_value() ? n_mask_base->data() : nullptr;
+                const float mvmax = do_mask_cut
+                    ? static_cast<float>(*n_mask_base_max) : 0.0f;
                 std::vector<std::complex<double>> scratch_g;
                 std::vector<std::complex<double>> scratch_n;
                 std::vector<double> psf_scratch;
@@ -341,25 +343,25 @@ namespace anacal {
                     );
                 }
                 for (ssize_t j = 0; j < nrow; ++j) {
-                    // Threshold cut (when configured).  Zero-filled rows
-                    // keep the catalog aligned with the input positions.
+                    // Skip conditions.  Zero-filled rows keep the
+                    // catalog aligned with the input positions.
                     //
-                    // With a per-source PSF model the 404 sentinel is
-                    // EXEMPT from the cut: it means "PSF invalid in SOME
-                    // band", and THIS band decides for itself via the
-                    // contains() check below, so a source flagged by
-                    // another band is still measured wherever its own
-                    // PSF is valid.  The exemption is deliberately
-                    // limited to that mode -- nothing writes the
-                    // sentinel without a model, so applying it there
-                    // would only let a genuinely masked source (whose
-                    // smoothed-mask value happens to be exactly 404)
-                    // through the cut.  In per-source mode that
-                    // collision remains possible but is the price of an
-                    // in-range sentinel.
-                    if (do_mask_cut && mv_ptr[j] > mvmax &&
-                        !(native_psf &&
-                          mv_ptr[j] == psfmodel::psf_invalid_mask_value)) {
+                    // 1. The sentinel, ALWAYS and independently of any
+                    //    configured threshold.  "No valid PSF model
+                    //    here" is a property of the SOURCE, not of one
+                    //    band: a source flagged by any band is dropped
+                    //    from EVERY band, whether or not this band's
+                    //    own model could have measured it.
+                    // 2. n_mask_base over the configured threshold.
+                    //
+                    // The sentinel is 1.0, the top of the n_mask_base
+                    // range, so it collides with a source whose kernel
+                    // footprint lies entirely inside the mask.  That
+                    // collision is harmless BY DESIGN: both readings of
+                    // 1.0 mean "unusable", and both skip.
+                    if (mv_ptr != nullptr &&
+                        (mv_ptr[j] >= psfmodel::psf_invalid_mask_value ||
+                         (do_mask_cut && mv_ptr[j] > mvmax))) {
                         rows[j] = FpfsCatRow{};
                         continue;
                     }
@@ -369,7 +371,7 @@ namespace anacal {
                         // Draw the per-source PSF inside the released
                         // loop -- no Python per-galaxy drawing.  A
                         // source outside the model's coverage is the
-                        // DM InvalidPsfError case: flag it 404 and
+                        // DM InvalidPsfError case: flag it 1.0 and
                         // skip.
                         const double mx = det_r(j).x + psf_offset_x;
                         const double my = det_r(j).y + psf_offset_y;

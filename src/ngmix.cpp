@@ -111,7 +111,7 @@ pyExportNgmix(py::module_& m) {
             py::arg("num_epochs")=5,
             py::arg("variance")=1.0,
             py::arg("cell")=py::none(),
-            py::arg("mask_value_max")=py::none()
+            py::arg("n_mask_base_max")=py::none()
         );
 }
 

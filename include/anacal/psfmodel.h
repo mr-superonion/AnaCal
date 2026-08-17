@@ -27,10 +27,19 @@
 namespace anacal {
 namespace psfmodel {
 
-// mask_value sentinel for "no valid PSF model at this position in some
+// n_mask_base sentinel for "no valid PSF model at this position in some
 // band": such sources are kept in the catalog but always skipped by
-// the measurement, independent of any mask_value_max threshold.
-constexpr int psf_invalid_mask_value = 404;
+// the measurement, independent of any n_mask_base_max threshold, and
+// in EVERY band -- lacking a usable PSF anywhere makes the source
+// unusable everywhere, so whether this particular band could have
+// measured it does not matter.
+//
+// n_mask_base is a masked FRACTION in [0, 1], so the sentinel is the
+// top of that range -- "as unusable as a fully masked source".  It
+// therefore collides with a source whose kernel footprint is entirely
+// inside the mask (also exactly 1.0), and that is deliberate: both
+// readings mean unusable and both skip.
+constexpr float psf_invalid_mask_value = 1.0f;
 
 // A PSF postage stamp: row-major (ny, nx) doubles plus the PARENT
 // coordinate of the first pixel (the afw xy0 convention).
@@ -833,7 +842,8 @@ class PerSourcePsf {
 public:
     virtual ~PerSourcePsf() = default;
     // False where no valid PSF model exists (the source is then flagged
-    // with psf_invalid_mask_value and skipped in that band).
+    // with psf_invalid_mask_value and skipped -- in this band and, via
+    // the shared n_mask_base array, in every other band too).
     virtual bool contains(double x, double y) const = 0;
     virtual Stamp compute_image(double x, double y) const = 0;
 };

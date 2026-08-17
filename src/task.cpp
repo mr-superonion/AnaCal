@@ -49,7 +49,7 @@ pyExportTask(py::module_& m) {
             py::arg("a_ini")=0.2,
             py::arg("do_measure")=true,
             py::arg("do_fpfs")=true,
-            py::arg("mask_value_max")=py::none()
+            py::arg("n_mask_base_max")=py::none()
         );
     // Single source of truth for the zeropoint at which the flux-scale
     // thresholds are defined; the Python FPFS path reads it from here rather

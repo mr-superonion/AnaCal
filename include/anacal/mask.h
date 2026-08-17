@@ -10,7 +10,7 @@ namespace mask {
     //     only bit that removes pixels from the measurement.
     //   bit 1 (value 2): discontinuity -- real data whose CoaddPsf model
     //     is wrong (chip gaps, clipped/rejected inputs). Never zeroed;
-    //     sampled into discontinuity_mask_value only.
+    //     sampled into n_mask_discontinuity only.
     // Callers combine the two single-purpose masks with bitwise OR.
     //
     // Every mask argument below is EDITED IN PLACE, so its dtype has to
@@ -189,7 +189,7 @@ namespace mask {
                             // Convolution of BIT 0 of the mask with the
                             // kernel; each passing pixel counts as exactly
                             // one. This stays the exact reference for
-                            // mask_value (same gate, kernel and raster
+                            // n_mask_base (same gate, kernel and raster
                             // order as add_pixel_mask_column).
                             conv_r(y + j, x + i) += kernel_r(
                                 j + ngrid2, i + ngrid2
@@ -245,22 +245,26 @@ namespace mask {
         return mask_conv;
     };
 
-    // Stamp the per-source mask values: the Gaussian-smoothed mask
-    // sampled at the source centre, times 1000 -- one value per mask
-    // BIT.  Bit 0 (masked) fills mask_value, exactly the values the old
-    // single-channel code produced on a 0/1 mask (same kernel, same
-    // raster accumulation order); bit 1 (discontinuity) fills
-    // discontinuity_mask_value with the identical kernel.  Evaluated AT
-    // each source position, mask only read, no Python objects -- safe
-    // under a released GIL; cost O(sources * kernel^2).
+    // Stamp the per-source mask FRACTIONS: the Gaussian-weighted MEAN
+    // of each mask bit over the source footprint -- the same
+    // normalised estimator as gaussian_average_at_sources, evaluated
+    // once per source for both bits.  Bit 0 (masked) fills
+    // n_mask_base, bit 1 (discontinuity) fills n_mask_discontinuity.
+    //
+    // Both are FRACTIONS in [0, 1]: sum(K * bit) / sum(K).  A source
+    // sitting entirely on masked pixels reads 1, one with a tenth of
+    // its footprint masked reads 0.1, and the value no longer depends
+    // on how much of the kernel fell off the image edge.
+    //
+    // Evaluated AT each source position, mask only read, no Python
+    // objects -- safe under a released GIL; cost O(sources * kernel^2).
     void
-    inline add_pixel_mask_column(
+    inline add_mask_fraction_columns(
         std::vector<table::galNumber>& catalog,
         const py::array_t<uint8_t>& mask_array,
         double sigma,
         double scale
     ) {
-        // Kernel exactly as in convolve_mask_gauss.
         const int ngrid = int(sigma / scale) * 6 + 1;
         const int ngrid2 = int((ngrid - 1) / 2);
         std::vector<float> kernel(
@@ -291,39 +295,126 @@ namespace mask {
             if (y < 0 || y >= ny || x < 0 || x >= nx) {
                 continue;
             }
-            // conv(y, x) = sum over masked pixels (my, mx) within the
-            // kernel reach of kernel(y - my, x - mx); accumulated in
-            // float and in raster order of (my, mx) to reproduce the
-            // full-image convolution exactly.
-            float conv = 0.0f;
-            float conv_disc = 0.0f;
+            float base = 0.0f;
+            float disc = 0.0f;
+            float norm = 0.0f;
             const int j0 = std::max(y - ngrid2, 0);
             const int j1 = std::min(y + ngrid2, ny - 1);
             const int i0 = std::max(x - ngrid2, 0);
             const int i1 = std::min(x + ngrid2, nx - 1);
             for (int my = j0; my <= j1; ++my) {
                 for (int mx = i0; mx <= i1; ++mx) {
-                    const uint8_t mval = mask_r(my, mx);
-                    if (mval == 0) {
-                        continue;
-                    }
                     const float kval = kernel[
                         (y - my + ngrid2) * ngrid + (x - mx + ngrid2)
                     ];
+                    norm += kval;
+                    const uint8_t mval = mask_r(my, mx);
                     if (mval & 1) {
-                        conv += kval;
+                        base += kval;
                     }
                     if (mval & 2) {
-                        conv_disc += kval;
+                        disc += kval;
                     }
                 }
             }
-            src.mask_value = static_cast<int>(conv * 1000);
-            src.discontinuity_mask_value = static_cast<int>(
-                conv_disc * 1000
-            );
+            if (norm > 0.0f) {
+                src.n_mask_base = base / norm;
+                src.n_mask_discontinuity = disc / norm;
+            }
         }
         return;
+    };
+
+    // Gaussian-WEIGHTED AVERAGE of an image at source positions.
+    //
+    // Companion to add_mask_fraction_columns: identical kernel and
+    // normalisation, sum(K * image) / sum(K), but it takes an arbitrary
+    // image and RETURNS the values instead of stamping the catalog --
+    // because the quantity is per BAND (n_inputs for grizy) while a
+    // catalog row holds one n_mask_base.
+    //
+    // ``x_pixel`` / ``y_pixel`` are pixel coordinates in the image's own
+    // frame; sigma and scale are in arcsec and arcsec/pixel. Sources
+    // whose centre lies outside the image get 0. Pure reads plus a
+    // local kernel, so the GIL is released; cost O(sources * kernel^2).
+    py::array_t<float>
+    inline gaussian_average_at_sources(
+        const py::array_t<
+            float, py::array::c_style | py::array::forcecast
+        >& image,
+        const py::array_t<
+            double, py::array::c_style | py::array::forcecast
+        >& x_pixel,
+        const py::array_t<
+            double, py::array::c_style | py::array::forcecast
+        >& y_pixel,
+        double sigma,
+        double scale
+    ) {
+        if (image.ndim() != 2) {
+            throw std::runtime_error(
+                "Mask Error: The input image has an invalid shape."
+            );
+        }
+        const ssize_t nsrc = x_pixel.shape(0);
+        if (y_pixel.shape(0) != nsrc) {
+            throw std::runtime_error(
+                "Mask Error: x_pixel and y_pixel must have the same length."
+            );
+        }
+        py::array_t<float> out(nsrc);
+        {
+            ScopedGilRelease release;
+            const int ngrid = int(sigma / scale) * 6 + 1;
+            const int ngrid2 = int((ngrid - 1) / 2);
+            std::vector<float> kernel(
+                static_cast<std::size_t>(ngrid) * ngrid
+            );
+            const float A = float(
+                scale * scale / (2.0 * M_PI * sigma * sigma)
+            );
+            const float sigma2 = -1.0 / (2 * float(sigma * sigma));
+            for (int y = 0; y < ngrid; ++y) {
+                for (int x = 0; x < ngrid; ++x) {
+                    float dx = (x - ngrid2) * scale;
+                    float dy = (y - ngrid2) * scale;
+                    kernel[y * ngrid + x] = A * std::exp(
+                        (dx * dx + dy * dy) * sigma2
+                    );
+                }
+            }
+            auto img_r = image.unchecked<2>();
+            auto xr = x_pixel.unchecked<1>();
+            auto yr = y_pixel.unchecked<1>();
+            auto out_r = out.mutable_unchecked<1>();
+            const int ny = static_cast<int>(img_r.shape(0));
+            const int nx = static_cast<int>(img_r.shape(1));
+            for (ssize_t k = 0; k < nsrc; ++k) {
+                const int x = static_cast<int>(std::round(xr(k)));
+                const int y = static_cast<int>(std::round(yr(k)));
+                if (y < 0 || y >= ny || x < 0 || x >= nx) {
+                    out_r(k) = 0.0f;
+                    continue;
+                }
+                float num = 0.0f;
+                float den = 0.0f;
+                const int j0 = std::max(y - ngrid2, 0);
+                const int j1 = std::min(y + ngrid2, ny - 1);
+                const int i0 = std::max(x - ngrid2, 0);
+                const int i1 = std::min(x + ngrid2, nx - 1);
+                for (int my = j0; my <= j1; ++my) {
+                    for (int mx = i0; mx <= i1; ++mx) {
+                        const float kval = kernel[
+                            (y - my + ngrid2) * ngrid + (x - mx + ngrid2)
+                        ];
+                        num += kval * img_r(my, mx);
+                        den += kval;
+                    }
+                }
+                out_r(k) = (den > 0.0f) ? (num / den) : 0.0f;
+            }
+        }
+        return out;
     };
 
     void pyExportMask(py::module& m);

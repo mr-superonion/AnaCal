@@ -54,7 +54,21 @@ namespace mask {
             py::arg("scale")
         );
         mask.def(
-            "add_pixel_mask_column",
+            "gaussian_average_at_sources", &gaussian_average_at_sources,
+            "Gaussian-weighted MEAN of an image at source positions.\n\n"
+            "Same kernel as add_mask_fraction_columns -- normalised, "
+            "sum(K * image) / sum(K) -- and returned as an array rather "
+            "than stamped onto the catalog, so it can carry a per-BAND "
+            "quantity such as the number of coadd inputs. Positions are "
+            "pixels in the image's frame; sources outside it get 0.",
+            py::arg("image"),
+            py::arg("x_pixel"),
+            py::arg("y_pixel"),
+            py::arg("sigma"),
+            py::arg("scale")
+        );
+        mask.def(
+            "add_mask_fraction_columns",
             // The C++ function updates the catalog in place, but pybind11
             // hands it a COPY of the Python list, so the update would be
             // lost.  Return the updated catalog instead.
@@ -64,17 +78,18 @@ namespace mask {
                 double sigma,
                 double scale
             ) {
-                add_pixel_mask_column(catalog, mask_array, sigma, scale);
+                add_mask_fraction_columns(catalog, mask_array, sigma, scale);
                 return catalog;
             },
-            "Return the detection catalog with the pixel mask value updated",
+            "Return the catalog with n_mask_base / n_mask_discontinuity\n"
+            "set to the Gaussian-weighted mask fractions in [0, 1]",
             py::arg("catalog"),
             py::arg("mask_array"),
             py::arg("sigma"),
             py::arg("scale")
         );
         mask.def(
-            "add_pixel_mask_column",
+            "add_mask_fraction_columns",
             // Overload for a structured galRow ARRAY (external detection
             // catalogs): same stamping, array in / array out.  Positions
             // are read from the model centre (x1/x2), which must be in
@@ -87,11 +102,11 @@ namespace mask {
             ) {
                 std::vector<table::galNumber> cat =
                     table::array_to_objlist(detection);
-                add_pixel_mask_column(cat, mask_array, sigma, scale);
+                add_mask_fraction_columns(cat, mask_array, sigma, scale);
                 return table::objlist_to_array(cat);
             },
-            "Return the detection ARRAY with the pixel mask value "
-            "updated (same stamping as the catalog overload)",
+            "Return the detection ARRAY with the mask fractions set "
+            "(same stamping as the catalog overload)",
             py::arg("detection"),
             py::arg("mask_array"),
             py::arg("sigma"),

@@ -17,7 +17,7 @@ def test_mask():
     np.testing.assert_almost_equal(np.sum(b), 1, decimal=1)
     assert b[ngrid // 2 + 10, ngrid // 2 - 20] == np.max(b)
 
-    # add_pixel_mask_column returns the updated catalog (the input list is a
+    # add_mask_fraction_columns returns the updated catalog (the input list is a
     # copy at the pybind boundary, so in-place mutation would be lost).
     # It must reproduce sampling the convolve_mask_gauss image exactly,
     # while only READING the mask (the smoothed value is evaluated at each
@@ -29,14 +29,27 @@ def test_mask():
     off_mask.model.x1 = anacal.math.qnumber(5 * scale)
     off_mask.model.x2 = anacal.math.qnumber(5 * scale)
     mask_before = mask.copy()
-    out = anacal.mask.add_pixel_mask_column(
+    out = anacal.mask.add_mask_fraction_columns(
         [on_mask, off_mask], mask, sigma_arcsec, scale
     )
-    assert out[0].mask_value == int(
-        b[ngrid // 2 + 10, ngrid // 2 - 20] * 1000
+    # The stamped value is the NORMALISED mean of the mask over the
+    # kernel, sum(K * mask) / sum(K); convolve_mask_gauss is the
+    # un-normalised density sum(K * mask). Away from the image edge the
+    # two therefore differ by exactly sum(K), which is 0.976 rather
+    # than 1 because the kernel is truncated at 3 sigma.
+    ng = int(sigma_arcsec / scale) * 6 + 1
+    ng2 = (ng - 1) // 2
+    yy, xx = np.mgrid[-ng2:ng2 + 1, -ng2:ng2 + 1]
+    kern = (scale ** 2 / (2 * np.pi * sigma_arcsec ** 2)) * np.exp(
+        -((xx * scale) ** 2 + (yy * scale) ** 2) / (2 * sigma_arcsec ** 2)
     )
-    assert out[0].mask_value > 0
-    assert out[1].mask_value == 0
+    assert 0.0 < out[0].n_mask_base <= 1.0
+    np.testing.assert_allclose(
+        out[0].n_mask_base,
+        b[ngrid // 2 + 10, ngrid // 2 - 20] / kern.sum(),
+        rtol=1e-5,
+    )
+    assert out[1].n_mask_base == 0
     np.testing.assert_array_equal(mask, mask_before)
     star_array = np.array(
         [
@@ -137,16 +150,18 @@ def test_mask_bits():
         g.model.x2 = anacal.math.qnumber(y * scale)
         return g
 
-    out = anacal.mask.add_pixel_mask_column(
+    out = anacal.mask.add_mask_fraction_columns(
         [src(12, 12), src(27, 12), src(5, 5), src(30.5, 30.5)],
         mask, sigma, scale,
     )
-    assert out[0].mask_value > 0 and out[0].discontinuity_mask_value == 0
-    assert out[1].mask_value == 0 and out[1].discontinuity_mask_value > 0
-    assert out[2].mask_value == 0 and out[2].discontinuity_mask_value == 0
-    # symmetric blobs at symmetric offsets: identical smoothed values
-    assert out[0].mask_value == out[1].discontinuity_mask_value
-    assert out[3].mask_value == out[3].discontinuity_mask_value > 0
+    assert out[0].n_mask_base > 0 and out[0].n_mask_discontinuity == 0
+    assert out[1].n_mask_base == 0 and out[1].n_mask_discontinuity > 0
+    assert out[2].n_mask_base == 0 and out[2].n_mask_discontinuity == 0
+    # symmetric blobs at symmetric offsets: identical smoothed fractions
+    assert out[0].n_mask_base == out[1].n_mask_discontinuity
+    assert out[3].n_mask_base == out[3].n_mask_discontinuity > 0
+    # fractions, never densities: bounded by 1
+    assert all(0.0 <= o.n_mask_base <= 1.0 for o in out)
 
     # the galaxy image loses bit-0 pixels only
     gal = np.ones((40, 40), dtype=np.float32)

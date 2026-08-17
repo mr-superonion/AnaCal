@@ -478,7 +478,7 @@ public:
         const std::optional<std::vector<double>>& weights=std::nullopt,
         const std::optional<double>& variance_meas=std::nullopt,
         const std::optional<double>& variance_det=std::nullopt,
-        const std::optional<int>& mask_value_max=std::nullopt
+        const std::optional<double>& n_mask_base_max=std::nullopt
     ) {
         if (rows.empty()) return;
         for (table::galNumber & src : rows) {
@@ -496,7 +496,7 @@ public:
             weights,
             variance_meas,
             variance_det,
-            mask_value_max
+            n_mask_base_max
         );
         for (table::galNumber & src : rows) {
             src.decentralize(cell);
@@ -516,11 +516,11 @@ public:
         double a_ini=0.2,
         bool do_measure=true,
         bool do_fpfs=true,
-        // Sources whose mask_value exceeds this are SKIPPED by the
+        // Sources whose n_mask_base exceeds this are SKIPPED by the
         // measurement (rows kept with default values); internal
         // detections are stamped from mask_array before the check,
-        // external catalogs carry their own mask_value column.
-        const std::optional<int>& mask_value_max=std::nullopt
+        // external catalogs carry their own n_mask_base column.
+        const std::optional<double>& n_mask_base_max=std::nullopt
     ) {
         // From here to the reset() before the output conversion,
         // everything works on C++ containers and READS the input arrays
@@ -671,9 +671,9 @@ public:
                 // Stamp the mask value right after detection (pure C++
                 // reads and a local kernel, so it stays inside the GIL
                 // release).  External catalogs are NOT restamped: they
-                // keep the mask_value assigned when they were detected.
+                // keep the n_mask_base assigned when they were detected.
                 if (mask_array.has_value()) {
-                    mask::add_pixel_mask_column(
+                    mask::add_mask_fraction_columns(
                         rows,
                         *mask_array,
                         this->sigma_arcsec_det * 1.5,
@@ -711,7 +711,7 @@ public:
                     w,
                     var_meas,
                     var_det,
-                    mask_value_max
+                    n_mask_base_max
                 );
             }
 
