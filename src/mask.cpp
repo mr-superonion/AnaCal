@@ -41,14 +41,17 @@ namespace mask {
             py::arg("star_array")=py::none()
         );
         mask.def(
-            "convolve_mask", &convolve_mask,
-            "Smooths the mask image with a kernel",
-            py::arg("mask_array"),
-            py::arg("kernel")
-        );
-        mask.def(
             "convolve_mask_gauss", &convolve_mask_gauss,
-            "Smooths the mask image with a Gaussian kernel",
+            "Smooth the mask image with a Gaussian kernel, returning the "
+            "UN-NORMALISED density sum(K * mask).\n\n"
+            "Gates on BIT 0 (masked) only: bit 1 (discontinuity) pixels "
+            "do not contribute, so a discontinuity-only mask smooths to "
+            "zero.  This is the full-image reference for the n_mask_base "
+            "column that add_mask_fraction_columns stamps at the source "
+            "positions -- but that one is NORMALISED, sum(K * mask) / "
+            "sum(K), so away from the image edge the two differ by "
+            "exactly sum(K) (0.976, not 1, the kernel being truncated "
+            "at 3 sigma).",
             py::arg("mask_array"),
             py::arg("sigma"),
             py::arg("scale")

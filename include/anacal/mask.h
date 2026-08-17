@@ -188,9 +188,10 @@ namespace mask {
                             }
                             // Convolution of BIT 0 of the mask with the
                             // kernel; each passing pixel counts as exactly
-                            // one. This stays the exact reference for
+                            // one. This stays the reference for
                             // n_mask_base (same gate, kernel and raster
-                            // order as add_pixel_mask_column).
+                            // order as add_mask_fraction_columns) up to
+                            // that column's sum(K) normalisation.
                             conv_r(y + j, x + i) += kernel_r(
                                 j + ngrid2, i + ngrid2
                             );
@@ -201,49 +202,6 @@ namespace mask {
         }
         return mask_conv;
     }
-
-    inline py::array_t<int> convolve_mask(
-        py::array_t<int> mask_array,
-        py::array_t<int> kernel
-    ) {
-        auto img = mask_array.unchecked<2>();
-        auto ker = kernel.unchecked<2>();
-
-        const int height = img.shape(0);
-        const int width  = img.shape(1);
-        const int kh = ker.shape(0);
-        const int kw = ker.shape(1);
-        if (kh % 2 != 1 || kw % 2 != 1)
-            throw std::invalid_argument("Kernel size must be odd");
-        const int kh2 = kh / 2;
-        const int kw2 = kw / 2;
-
-        py::array_t<int> mask_conv({height, width});
-        auto out = mask_conv.mutable_unchecked<2>();
-
-        // Initialize mask_conv to zero
-        for (int i = 0; i < height; ++i)
-            for (int j = 0; j < width; ++j)
-                out(i, j) = 0.0;
-
-        // Loop over only nonzero pixels
-        for (int y = kh2; y < height - kh2; ++y) {
-            for (int x = kw2; x < width - kw2; ++x) {
-                int v = img(y, x);
-                if (v == 0.0) continue;  // Skip zeros
-                for (int dy = -kh2; dy <= kh2; ++dy) {
-                    const int ny = y + dy;
-                    const int ky = dy + kh2;
-                    for (int dx = -kw2; dx <= kw2; ++dx) {
-                        const int nx = x + dx;
-                        const int kx = dx + kw2;
-                        out(ny, nx) += v * ker(ky, kx);
-                    }
-                }
-            }
-        }
-        return mask_conv;
-    };
 
     // Stamp the per-source mask FRACTIONS: the Gaussian-weighted MEAN
     // of each mask bit over the source footprint -- the same
