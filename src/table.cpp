@@ -15,7 +15,6 @@ pyExportTable(py::module_& m) {
         e2, de2_dg1, de2_dg2, de2_dj1, de2_dj2,
         x1, dx1_dg1, dx1_dg2, dx1_dj1, dx1_dj2,
         x2, dx2_dg1, dx2_dg2, dx2_dj1, dx2_dj2,
-        wdet, dwdet_dg1, dwdet_dg2, dwdet_dj1, dwdet_dj2,
         bkg, dbkg_dg1, dbkg_dg2, dbkg_dj1, dbkg_dj2,
         wsel, dwsel_dg1, dwsel_dg2, dwsel_dj1, dwsel_dj2,
         n_mask_base, n_mask_discontinuity, is_primary,
@@ -45,14 +44,13 @@ pyExportTable(py::module_& m) {
             ngmix::NgmixGaussian, math::qnumber,
             int, math::lossNumber
             >(),
-            py::arg("model"), py::arg("wdet"),
+            py::arg("model"), py::arg("wsel"),
             py::arg("n_mask_base"),
             py::arg("loss")
         )
         .def_readwrite("model", &galNumber::model)
         .def_readwrite("x1_det", &galNumber::x1_det)
         .def_readwrite("x2_det", &galNumber::x2_det)
-        .def_readonly("wdet", &galNumber::wdet)
         .def_readonly("bkg", &galNumber::bkg)
         .def_readonly("wsel", &galNumber::wsel)
         .def_readonly("n_mask_base", &galNumber::n_mask_base)

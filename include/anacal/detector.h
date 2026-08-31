@@ -9,8 +9,8 @@ namespace detector {
 inline constexpr int drmax = 5;
 inline constexpr int drmax2 = drmax * drmax;
 
-// Smallest detection weight worth keeping a row for.
-inline constexpr double wdet_min = 1e-5;
+// Smallest selection weight worth keeping a row for.
+inline constexpr double wsel_min = 1e-5;
 
 // Local-background estimate for the detection weight.
 //
@@ -32,7 +32,7 @@ inline constexpr double wdet_min = 1e-5;
 // blend stays differentiable.  Verified against central finite differences on
 // fixed configurations whose -DG, 0, +DG points all share a regime of the
 // smooth step (tests/ngmix/test_bkg.py): d(bkg)/dg agrees to 0.2%, and the
-// background term's contribution to dwdet/dg to 0.5%.
+// background term's contribution to dwsel/dg to 0.5%.
 struct bkgKernel {
     std::vector<int> di, dj;
     std::vector<double> w;
@@ -123,14 +123,14 @@ void measure_pixel(
     // Radius-5 disk: di^2 + dj^2 <= 25 inclusive, excluding the centre, so
     // 80 neighbour differences.  The disk is invariant under a 90 degree
     // rotation, which is what keeps the weight free of additive shear bias.
-    math::qnumber wdet = math::qnumber(1.0);
+    math::qnumber wsel = math::qnumber(1.0);
     for (int dj = -drmax; dj <= drmax; dj++) {
         int dj2 = dj * dj;
         for (int di = -drmax; di <= drmax; di++) {
             int dr2 = di * di + dj2;
             if ((dr2 <= drmax2) && (dr2 != 0)) {
                 int index2 = (j + dj) * cell.nx + (i + di);
-                wdet = wdet * math::ssfunc1(
+                wsel = wsel * math::ssfunc1(
                     data[index] - data[index2],
                     omega_v,
                     omega_v
@@ -138,7 +138,7 @@ void measure_pixel(
             }
         }
     }
-    if (wdet.v > 0.0) {
+    if (wsel.v > 0.0) {
         table::galNumber src;
         src.x1_det = x * cell.scale;
         src.x2_det = y * cell.scale;
@@ -168,8 +168,11 @@ void measure_pixel(
         src.cell_id = cell.index;
         // The neighbour-difference product is used directly as the weight.
         // It is already bounded in [0, 1] (every factor is an ssfunc1), so it
-        // needs no re-sharpening or renormalisation.
-        src.wdet = wdet * math::ssfunc1(
+        // needs no re-sharpening or renormalisation.  This IS the selection
+        // weight: nothing downstream touches it -- the measurement no longer
+        // applies a further size cut on top.  Forced catalogs never pass
+        // through here and must carry their own wsel (and dwsel_dg1/dg2).
+        src.wsel = wsel * math::ssfunc1(
             data[index],
             f_min,
             omega_f
@@ -178,12 +181,7 @@ void measure_pixel(
             bkg_nsigma * std_noise,
             omega_f
         );
-        // At detection the detection weight IS the selection weight; the
-        // measurement stage refines it (wdet * FPFS size cut).  Forced
-        // catalogs never pass through here and must carry an explicit
-        // wdet instead (e.g. catalog["wdet"] = 1.0).
-        src.wsel = src.wdet;
-        if (src.wdet.v > wdet_min) catalog.push_back(src);
+        if (src.wsel.v > wsel_min) catalog.push_back(src);
     }
 };
 

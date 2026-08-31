@@ -254,7 +254,6 @@ public:
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         const std::optional<std::vector<double>>& weights=std::nullopt,
         const std::optional<double>& variance_meas_opt=std::nullopt,
-        const std::optional<double>& variance_det_opt=std::nullopt,
         const std::optional<double>& n_mask_base_max=std::nullopt
     ) {
         // PRECONDITION: the band stacks were validated by the caller
@@ -307,21 +306,6 @@ public:
                 variance,
                 w
             );
-        double std_fpfs = 0.0;
-        if (this->do_fpfs) {
-            std_fpfs = std::sqrt(
-                variance_det_opt.has_value()
-                ? *variance_det_opt
-                : coadd_smoothed_variance(
-                    cell.scale,
-                    detection_sigma(this->sigma_arcsec),
-                    psf_array,
-                    variance,
-                    w
-                )
-            );
-        }
-
         // Sources on heavily masked pixels are SKIPPED, not dropped:
         // their rows stay in the catalog with default measurement
         // values, flagged by their n_mask_base column.
@@ -333,13 +317,13 @@ public:
         for (std::size_t i = 0; i < ng; ++i) {
             table::galNumber & src = catalog[i];
             if (src.n_mask_base > mvmax) {
-                // Skipped sources must be INERT downstream: detection
-                // left wsel = wdet > 0 (detector.h) and the measurement
-                // that would overwrite it never runs, so without this a
-                // skipped source would enter weighted sums carrying a
+                // Skipped sources must be INERT downstream: they carry
+                // a real wsel (> 0 from detection, or stated by the
+                // caller for a forced catalog) but never get measured,
+                // so without this they would enter weighted sums with a
                 // real selection weight and a default (zero) shape --
-                // exactly what the "both weights start at zero" fail-
-                // closed contract in table.h forbids.
+                // exactly what the fail-closed contract in table.h
+                // forbids.
                 src.wsel = math::qnumber();
                 continue;
             }
@@ -377,17 +361,14 @@ public:
             this->measure_gaussian_fluxes(
                 data, src, cell
             );
+            // The measurement does NOT set wsel.  It is fixed at
+            // detection (detector::measure_pixel), or stated by the
+            // caller for a forced catalog; the FPFS size cut that used
+            // to multiply into it here has been removed.
             if (this->do_fpfs) {
                 this->measure_fpfs(
                     data, src, cell
                 );
-                src.wsel = src.wdet * math::ssfunc1(
-                    src.fpfs_m2 - 0.05 * src.fpfs_m0,
-                    std_fpfs,
-                    std_fpfs
-                );
-            } else {
-                src.wsel = src.wdet;
             }
         }
         return;
@@ -436,7 +417,6 @@ public:
             variance_vec,
             bb,
             noise_array,
-            std::nullopt,
             std::nullopt,
             std::nullopt,
             n_mask_base_max

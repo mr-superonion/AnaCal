@@ -11,11 +11,11 @@ kwargs = {
 }
 
 
-# The magnitudes below sit inside the wdet transition, where dwdet/dg is
+# The magnitudes below sit inside the wsel transition, where dwsel/dg is
 # non-zero.  That transition moved brighter (was ~27.5-27.9) when the second
-# detection layer -- ssfunc1(wdet, p_min, omega_p) -- was removed, since the
+# detection layer -- ssfunc1(wsel, p_min, omega_p) -- was removed, since the
 # raw neighbour-difference product is no longer re-sharpened.
-def test_shear_estimate_w_det():
+def test_shear_estimate_w_sel():
     nx = 64
     ny = 64
     scale = 0.2
@@ -115,8 +115,8 @@ def test_shear_estimate_w_det():
         cat_2 = cat_2[0]
 
         np.testing.assert_approx_equal(
-            (cat_2.wdet.v - cat_1.wdet.v) / 0.04,
-            (cat_2.wdet.g1 + cat_1.wdet.g1) / 2.0,
+            (cat_2.wsel.v - cat_1.wsel.v) / 0.04,
+            (cat_2.wsel.g1 + cat_1.wsel.g1) / 2.0,
             2,
         )
 
@@ -143,8 +143,8 @@ def test_shear_estimate_w_det():
         cat_2 = cat_2[0]
 
         np.testing.assert_approx_equal(
-            (cat_2.wdet.v - cat_1.wdet.v) / 0.04,
-            (cat_2.wdet.g2 + cat_1.wdet.g2) / 2.0,
+            (cat_2.wsel.v - cat_1.wsel.v) / 0.04,
+            (cat_2.wsel.g2 + cat_1.wsel.g2) / 2.0,
             2,
         )
 
@@ -169,8 +169,8 @@ def test_shear_estimate_w_det():
         )[0]
 
         np.testing.assert_approx_equal(
-            cat_1.wdet.v,
-            cat_2.wdet.v,
+            cat_1.wsel.v,
+            cat_2.wsel.v,
             6,
         )
     return

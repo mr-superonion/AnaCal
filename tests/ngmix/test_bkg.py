@@ -2,7 +2,7 @@ import anacal
 import galsim
 import numpy as np
 
-# Same detector settings as test_wdet.
+# Same detector settings as test_wsel.
 kwargs = {
     "sigma_arcsec": 0.4,
     "snr_min": 10,
@@ -107,9 +107,9 @@ BKG_RESPONSE_CONFIGS = [
     (26.8, 0.5),
 ]
 
-# (mag, hlr, comp): one detection at a fixed pixel, 0.02 < wdet < 0.98 at all
+# (mag, hlr, comp): one detection at a fixed pixel, 0.02 < wsel < 0.98 at all
 # three shear points, and the blend regime identical across the three.
-WDET_RESPONSE_CONFIGS = [
+WSEL_RESPONSE_CONFIGS = [
     (23.0, 2.5, "g1"),
     (23.0, 2.5, "g2"),
     (23.5, 2.0, "g1"),
@@ -171,31 +171,31 @@ def test_bkg_shear_response():
             )
 
 
-def test_wdet_shear_response_with_background():
-    """The background term's contribution to dwdet/dg.
+def test_wsel_shear_response_with_background():
+    """The background term's contribution to dwsel/dg.
 
-    ``test_wdet`` uses a faint isolated source where bkg is ~0, so the
+    ``test_wsel`` uses a faint isolated source where bkg is ~0, so the
     background factor sits saturated at 1 and contributes nothing to the
     derivative.  Here the source is extended enough that ``data - bkg`` lands
-    inside the cut's transition, so dwdet/dg genuinely depends on d(bkg)/dg.
+    inside the cut's transition, so dwsel/dg genuinely depends on d(bkg)/dg.
     Measured agreement on the fixed configurations is 0.2% or better.
     """
-    for mag, hlr, comp in WDET_RESPONSE_CONFIGS:
+    for mag, hlr, comp in WSEL_RESPONSE_CONFIGS:
         c1, c0, c2 = _shear_triplet(mag, hlr, comp)
         for c in (c1, c0, c2):
-            assert 0.02 < c.wdet.v < 0.98, (
-                f"mag={mag} hlr={hlr} {comp}: wdet={c.wdet.v:.4f} left the "
+            assert 0.02 < c.wsel.v < 0.98, (
+                f"mag={mag} hlr={hlr} {comp}: wsel={c.wsel.v:.4f} left the "
                 "sloped part of the cut; the fixed configuration has drifted"
             )
-        fd = (c2.wdet.v - c1.wdet.v) / (2.0 * DG)
-        an = 0.5 * (getattr(c1.wdet, comp) + getattr(c2.wdet, comp))
+        fd = (c2.wsel.v - c1.wsel.v) / (2.0 * DG)
+        an = 0.5 * (getattr(c1.wsel, comp) + getattr(c2.wsel, comp))
         scale = max(abs(fd), abs(an))
         assert scale > 1e-2, (
-            f"dwdet/d{comp} vanished at mag={mag} hlr={hlr}; the fixed "
+            f"dwsel/d{comp} vanished at mag={mag} hlr={hlr}; the fixed "
             "configuration no longer exercises the background term"
         )
         assert abs(fd - an) <= 0.005 * scale, (
-            f"dwdet/d{comp} mismatch at mag={mag} hlr={hlr} "
-            f"(wdet={c0.wdet.v:.4f}): step-by-hand {fd:.6g} vs "
+            f"dwsel/d{comp} mismatch at mag={mag} hlr={hlr} "
+            f"(wsel={c0.wsel.v:.4f}): step-by-hand {fd:.6g} vs "
             f"AnaCal {an:.6g} (differ by {abs(fd - an) / scale:.2%})"
         )

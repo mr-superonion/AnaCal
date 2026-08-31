@@ -54,9 +54,9 @@ def make_detection(pixel_scale, noise_variance):
     )
     detection["y"] = cat["x2_det"] / pixel_scale
     detection["x"] = cat["x1_det"] / pixel_scale
-    # The differentiable detection weight and its shear response come from
+    # The differentiable selection weight and its shear response come from
     # the detector; FPFS carries no selection weight of its own.
-    return detection, cat["wdet"], cat["dwdet_dg1"]
+    return detection, cat["wsel"], cat["dwsel_dg1"]
 
 
 def func():
@@ -68,7 +68,7 @@ def func():
     pixel_scale = 0.2
     noise_variance = 0.23**2.0
     noise_array = None
-    detection, wdet, dwdet_dg1 = make_detection(pixel_scale, noise_variance)
+    detection, wsel, dwsel_dg1 = make_detection(pixel_scale, noise_variance)
     out = anacal.fpfs.process_image(
         fpfs_config=fpfs_config,
         mag_zero=mag_zero,
@@ -81,14 +81,14 @@ def func():
     )
 
     # Response ratios per measurement kernel, weighted by the detector's
-    # differentiable detection weight so the selection response is
+    # differentiable selection weight so the selection response is
     # included: sum(w e) / sum(dw/dg e + w de/dg).
     for kernel in ("fpfs1", "fpfs2"):
         e1 = out[f"{kernel}_e1"]
         e1g1 = out[f"{kernel}_de1_dg1"]
         print(
-            np.sum(wdet * e1)
-            / np.sum(dwdet_dg1 * e1 + wdet * e1g1)
+            np.sum(wsel * e1)
+            / np.sum(dwsel_dg1 * e1 + wsel * e1g1)
         )
     del out, fpfs_config
     return

@@ -53,11 +53,6 @@ struct galRow{
     double dx2_dg2;
     double dx2_dj1;
     double dx2_dj2;
-    double wdet;
-    double dwdet_dg1;
-    double dwdet_dg2;
-    double dwdet_dj1;
-    double dwdet_dj2;
     // Local background level under the source, as estimated by the detector's
     // ring cascade (detector.h).  Same units as the smoothed image, i.e. on the
     // catalog's mag_zero.
@@ -113,17 +108,15 @@ struct galRow{
 struct galNumber {
     // value with derivatives to Gaussian model parameters
     ngmix::NgmixGaussian model;
-    // Fail-closed: both weights start at zero and are only given real
-    // values by detection (wdet, wsel) and measurement (wsel), so a source
-    // that never passes through those stages stays inert in every weighted
-    // sum instead of counting as selected.  Detection catalogs passed into
-    // the measurement are expected to come from AnaCal detection, whose
-    // sources all carry wdet > wdet_min; the measurement computes
-    // wsel = wdet * (FPFS cut), so a source entering with wdet = 0 simply
-    // stays at zero weight.
-    math::qnumber wdet = math::qnumber(0.0);
     // local background under the source; set by detector::measure_pixel
     math::qnumber bkg = math::qnumber(0.0);
+    // The one selection weight, differentiable in shear.  Fail-closed: it
+    // starts at zero and is only given a real value by detection
+    // (detector::measure_pixel), so a source that never passed through
+    // detection stays inert in every weighted sum instead of counting as
+    // selected.  A forced/external catalog does not pass through detection
+    // and so must state its OWN wsel (with dwsel_dg1/dg2): the measurement
+    // never overwrites it, and a row left at wsel = 0 is simply unweighted.
     math::qnumber wsel = math::qnumber(0.0);
     // Gaussian-weighted MEAN of mask bit 0 (masked pixels) over the
     // source footprint: a FRACTION in [0, 1], not a density -- see
@@ -157,10 +150,10 @@ struct galNumber {
 
     galNumber(
         ngmix::NgmixGaussian model,
-        math::qnumber wdet,
+        math::qnumber wsel,
         float n_mask_base,
         math::lossNumber loss
-    ) : model(model), wdet(wdet),
+    ) : model(model), wsel(wsel),
         n_mask_base(n_mask_base), loss(loss) {}
 
     // In-place: a galNumber is 1.2 kB but only the g1/g2 slots of ten
@@ -172,7 +165,6 @@ struct galNumber {
     // after fitting).
     inline void
     shift_reference(double dx1, double dx2) {
-        this->wdet.shift_reference(dx1, dx2);
         this->bkg.shift_reference(dx1, dx2);
         this->wsel.shift_reference(dx1, dx2);
         this->model.shift_reference(dx1, dx2);
@@ -233,7 +225,6 @@ struct galNumber {
         ANACAL_ROW_PUT_Q(e2, de2, shape[1]);
         ANACAL_ROW_PUT_Q(x1, dx1, model.x1);
         ANACAL_ROW_PUT_Q(x2, dx2, model.x2);
-        ANACAL_ROW_PUT_Q(wdet, dwdet, wdet);
         ANACAL_ROW_PUT_Q(bkg, dbkg, bkg);
         ANACAL_ROW_PUT_Q(wsel, dwsel, wsel);
         row.n_mask_base = n_mask_base;
@@ -264,7 +255,6 @@ struct galNumber {
         // model.get_shape(), so there is nothing to restore for them here.
         ANACAL_ROW_GET_Q(x1, dx1, model.x1);
         ANACAL_ROW_GET_Q(x2, dx2, model.x2);
-        ANACAL_ROW_GET_Q(wdet, dwdet, wdet);
         ANACAL_ROW_GET_Q(bkg, dbkg, bkg);
         ANACAL_ROW_GET_Q(wsel, dwsel, wsel);
         n_mask_base = row.n_mask_base;
@@ -325,11 +315,11 @@ make_catalog_empty(
         row.x2 = x2_view(i);
         row.x1_det = x1_view(i);
         row.x2_det = x2_view(i);
-        // Weights stay 0 at initialization (galRow{} zero-fills them): an
-        // unmeasured table carries no weight.  To use this catalog as a
-        // forced ``detection`` input the caller must set wdet explicitly
-        // (e.g. catalog["wdet"] = 1.0); the measurement computes
-        // wsel = wdet * (FPFS cut), so sources left at wdet = 0 come back
+        // wsel stays 0 at initialization (galRow{} zero-fills it): an
+        // undetected table carries no weight.  To use this catalog as a
+        // forced ``detection`` input the caller must state the selection
+        // itself -- wsel together with dwsel_dg1/dg2 -- because the
+        // measurement never assigns it.  Rows left at wsel = 0 come back
         // with zero selection weight.
         row.is_primary = true;
         catalog_view(i) = row;

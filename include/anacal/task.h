@@ -477,7 +477,6 @@ public:
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         const std::optional<std::vector<double>>& weights=std::nullopt,
         const std::optional<double>& variance_meas=std::nullopt,
-        const std::optional<double>& variance_det=std::nullopt,
         const std::optional<double>& n_mask_base_max=std::nullopt
     ) {
         if (rows.empty()) return;
@@ -495,7 +494,6 @@ public:
             noise_array,
             weights,
             variance_meas,
-            variance_det,
             n_mask_base_max
         );
         for (table::galNumber & src : rows) {
@@ -640,13 +638,6 @@ public:
             const geometry::cell & cell = cell_list[ib];
             const py::array_t<double>& psf = choose_psf(cell, psf_array);
             const std::vector<double> w = cell_weights(psf, cell);
-            const double var_det = coadd_smoothed_variance(
-                cell.scale,
-                this->sigma_arcsec_det,
-                psf,
-                variance_use,
-                w
-            );
 
             std::vector<table::galNumber> rows;
             if (external) {
@@ -655,6 +646,9 @@ public:
                     rows.push_back(catalog[idx]);
                 }
             } else {
+                // Only detection needs the variance at the detection
+                // scale; the measurement no longer uses it, so this stays
+                // inside the branch that detects.
                 rows = detect_cell(
                     img_array,
                     psf,
@@ -662,7 +656,13 @@ public:
                     cell,
                     noise_array,
                     w,
-                    var_det
+                    coadd_smoothed_variance(
+                        cell.scale,
+                        this->sigma_arcsec_det,
+                        psf,
+                        variance_use,
+                        w
+                    )
                 );
                 for (table::galNumber& src : rows) {
                     src.model.a1 = math::qnumber(a_ini);
@@ -710,7 +710,6 @@ public:
                     noise_array,
                     w,
                     var_meas,
-                    var_det,
                     n_mask_base_max
                 );
             }

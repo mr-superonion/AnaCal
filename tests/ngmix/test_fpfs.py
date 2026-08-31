@@ -152,6 +152,5 @@ def test_ngmix_fpfs_disabled():
         variance=0.1,
     )[0]
 
-    np.testing.assert_allclose(cat.wsel.v, cat.wdet.v)
     np.testing.assert_allclose(cat.fpfs_m0.v, 0.0)
     np.testing.assert_allclose(cat.fpfs_m2.v, 0.0)
