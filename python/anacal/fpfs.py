@@ -5,10 +5,10 @@ import numpy as np
 import numpy.lib.recfunctions as rfn
 from numpy.typing import NDArray
 
+from ._anacal.fpfs import ForceTask as _ForceTask
 from ._anacal.fpfs import (
     FpfsImage,
 )
-from ._anacal.fpfs import ForceTask as _ForceTask
 from ._anacal.fpfs import catalog_columns as _catalog_columns
 from ._anacal.fpfs import gauss_kernel_rfft as _gauss_kernel_rfft
 from ._anacal.fpfs import get_kmax as _get_kmax

@@ -17,7 +17,6 @@ authors = [
 ]
 dependencies = [
     "numpy>=1.23",
-    "galsim",
     "fitsio",
 ]
 

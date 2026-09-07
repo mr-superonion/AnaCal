@@ -4,7 +4,6 @@
 
 
 fitsio
-galsim
 numpy
 setuptools>=71.1
 wheel

@@ -2,10 +2,10 @@ import gc
 import time
 
 import anacal
-import galsim
 import numpy as np
 
 from . import mem_used, print_mem
+from .fixtures import load
 from .sim import gauss_tophat_kernel_rfft
 
 
@@ -69,35 +69,17 @@ def test_gausstophat(
 def test_deconvolve_image(seed=1):
     rcut = 32
     scale = 0.2
-    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
-        e1=0.02, e2=-0.02
-    )
     ngrid = 64
-    nrot = 1
 
-    psf_data = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale)
-        .drawImage(nx=ngrid, ny=ngrid, scale=scale)
-        .array
-    )
-    psf_data = psf_data[
+    # pre-rendered: a sheared Moffat PSF and one COSMOS galaxy (seed 1,
+    # "g1-0", mag_zero 27) at 0.2 arcsec/pixel
+    assert seed == 1, "only seed 1 is pre-rendered"
+    fix = load("image")
+    psf_data = fix["psf_deconv"][
         ngrid // 2 - rcut : ngrid // 2 + rcut,
         ngrid // 2 - rcut : ngrid // 2 + rcut,
     ]
-    gname = "g1-0"
-    gal_data = anacal.simulation.make_isolated_sim(
-        gal_type="mixed",
-        sim_method="fft",
-        psf_obj=psf_obj,
-        gname=gname,
-        seed=seed,
-        ny=ngrid,
-        nx=ngrid * nrot,
-        scale=scale,
-        do_shift=False,
-        buff=0,
-        nrot_per_gal=nrot,
-    )[0]
+    gal_data = fix["gal_deconv"]
 
     # linear observables
     dec_obj = anacal.image.Image(nx=ngrid, ny=ngrid, scale=1.0)
@@ -120,25 +102,13 @@ def test_deconvolve_image(seed=1):
 
 
 def test_rotate90():
-    scale = 0.2
-    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=3.0).shear(
-        e1=0.1, e2=-0.02
-    )
     ngrid = 64
 
-    psf_data = (
-        psf_obj.shift(4.5 * scale, 17 * scale)
-        .shift(0.5 * scale, 0.5 * scale)
-        .drawImage(nx=ngrid, ny=ngrid, scale=scale)
-        .array
-    )
-    psf_data2 = (
-        psf_obj.shift(4.5 * scale, 17 * scale)
-        .rotate(90 * galsim.degrees)
-        .shift(0.5 * scale, 0.5 * scale)
-        .drawImage(nx=ngrid, ny=ngrid, scale=scale)
-        .array
-    )
+    # pre-rendered: an off-centre sheared Moffat, and the same object
+    # rotated by 90 degrees before drawing
+    fix = load("image")
+    psf_data = fix["psf_rot"]
+    psf_data2 = fix["psf_rot90"]
     imobj = anacal.image.Image(nx=ngrid, ny=ngrid, scale=1.0)
     imobj.set_r(psf_data)
     imobj.fft()

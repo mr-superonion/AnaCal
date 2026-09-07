@@ -2,23 +2,18 @@ import os
 
 import anacal
 import fitsio
-import galsim
 import numpy as np
 import numpy.lib.recfunctions as rfn
+
+from ..fixtures import load
 
 
 def test_noise_covariance():
     variance = 0.22**2.0
     sigma_as = 0.55
     pixel_scale = 0.2
-    ngrid = 64
-    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0)
-    psf_obj = psf_obj.shear(e1=0.02, e2=-0.02)
-    psf_array = (
-        psf_obj.shift(0.5 * pixel_scale, 0.5 * pixel_scale)
-        .drawImage(nx=ngrid, ny=ngrid, scale=pixel_scale)
-        .array
-    )
+    # pre-rendered sheared Moffat PSF (beta 3.5, fwhm 0.6), 64 x 64
+    psf_array = load("fpfs_noise_cov")["psf_moffat35"]
     test_fname = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
         "cov_elem.fits",
@@ -52,13 +47,8 @@ def test_covariance_from_simulation():
     nreal = 20000
     seed = 212
 
-    # --- PSF ---
-    psf_obj = galsim.Moffat(beta=2.5, fwhm=0.8)
-    psf_array = (
-        psf_obj.shift(0.5 * pixel_scale, 0.5 * pixel_scale)
-        .drawImage(nx=ngrid, ny=ngrid, scale=pixel_scale)
-        .array
-    )
+    # --- PSF: pre-rendered Moffat (beta 2.5, fwhm 0.8), 64 x 64 ---
+    psf_array = load("fpfs_noise_cov")["psf_moffat25"]
 
     # --- FpfsTask ---
     ftask = anacal.fpfs.FpfsTask(

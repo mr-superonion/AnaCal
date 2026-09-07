@@ -14,14 +14,11 @@ maintaining minimal computational cost.
 - **High-performance C++ core** — critical inner loops (shapelet convolution,
   source detection, deconvolution) are implemented in C++ and exposed through
   pybind11.
-- **Simulation utilities** — generate isolated and blended COSMOS-like galaxy
-  images for shear calibration studies.
 
 ## Dependencies
 
 - Python ≥ 3.10
 - [NumPy](https://numpy.org/)
-- [GalSim](https://github.com/GalSim-developers/GalSim)
 - [fitsio](https://github.com/esheldon/fitsio)
 
 ## Installation

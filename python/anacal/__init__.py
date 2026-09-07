@@ -2,10 +2,10 @@
 
 Exposes the compiled :mod:`_anacal` extension alongside convenient
 submodules such as :mod:`fpfs`, :mod:`psf` (the PSF interface and the
-native coadd-PSF models), :mod:`simulation`, and general utilities.
+native coadd-PSF models), and general utilities.
 """
 
-from . import _anacal, fpfs, psf, simulation, utils
+from . import _anacal, fpfs, psf, utils
 from .__version__ import __version__  # noqa
 from ._anacal import (
     detector,

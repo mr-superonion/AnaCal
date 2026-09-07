@@ -1,61 +1,23 @@
 import gc
 
 import anacal
-import galsim
 import numpy as np
 from memory_profiler import memory_usage
 
 from .. import mem_used, print_mem
+from ..fixtures import load
 
 
 def test_task_detection():
     nn = 24
-    mag = 23.5
-
-    flux = 10 ** ((30.0 - mag) / 2.5)
-
     scale = 0.2
-    psf_fwhm = 0.7
     ngal = 20
-    # PSF
-    psf_obj = galsim.Moffat(
-        beta=2.5,
-        fwhm=psf_fwhm,
-    ).shear(
-        g1=0.02,
-        g2=-0.02,
-    )
-    psf_array = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale)
-        .drawImage(
-            nx=nn,
-            ny=nn,
-            scale=scale,
-        )
-        .array
-    )
-
-    obj = galsim.Exponential(
-        half_light_radius=0.30
-    ).shear(g1=0.03).withFlux(flux)
-    obj = galsim.Convolve(psf_obj, obj)
-
-    # Create an empty image
-    full_image = galsim.ImageF(ncol=nn, nrow=nn, scale=scale)
-
-    # Define centers
-    crange = np.arange(nn // 2, nn, nn)
-    centers = [(x, y) for x in crange for y in crange]
-
-    # Draw galaxies at specified positions
-    for center in centers:
-        shift = galsim.PositionD(
-            (center[0] - nn / 2 + 0.5) * scale,
-            (center[1] - nn / 2 + 0.5) * scale,
-        )
-        final_galaxy = obj.shift(shift)
-        final_galaxy.drawImage(image=full_image, add_to_image=True)
-    img_array = np.tile(full_image.array, (ngal, ngal))
+    # pre-rendered (tests/data/task_detection.fits): a sheared Moffat PSF
+    # (beta 2.5, fwhm 0.7) and one g1 = 0.03 exponential (hlr 0.3, mag
+    # 23.5) centred on an nn x nn stamp; the field is that stamp tiled
+    fix = load("task_detection")
+    psf_array = fix["psf"]
+    img_array = np.tile(fix["stamp"], (ngal, ngal))
     kwargs = {
         "omega_f": 0.8,
         "omega_v": 0.04,

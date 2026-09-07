@@ -1,6 +1,7 @@
 import anacal
 import numpy as np
-import pytest
+
+from .fixtures import load
 
 # 3..7 are the common piff choices; 11 is what DP1 uses.
 LANCZOS_ORDERS = (3, 4, 5, 6, 7, 9, 11)
@@ -84,18 +85,27 @@ def test_lanczos_kernel_interpolates_and_conserves_dc():
 
 def test_lanczos_kernel_matches_galsim():
     """PIFF models are fit with galsim's kernel, so match it, not the
-    ideal: galsim keeps five aliasing terms and so do we."""
-    galsim = pytest.importorskip("galsim")
+    ideal: galsim keeps five aliasing terms and so do we.
+
+    The reference values are galsim.Lanczos(n, conserve_dc).xval, stored
+    by tests/data/make_fixtures.py; galsim itself is not needed here.
+    """
+    fix = load("psf_lanczos")
+    assert len(fix) == len(LANCZOS_ORDERS)
     for n in LANCZOS_ORDERS:
-        x = np.linspace(-n + 0.013, n - 0.021, 1777)
-        for conserve_dc in (False, True):
-            interp = galsim.Lanczos(n, conserve_dc=conserve_dc)
-            ref = np.array([interp.xval(float(v)) for v in x])
-            kv = anacal.psf._lanczos_dc_kvals(n) if conserve_dc else None
-            got = anacal.psf.lanczos_kernel(
-                x, n, kv if kv is not None else np.zeros(0)
-            )
-            np.testing.assert_allclose(got, ref, rtol=0, atol=1e-13)
+        x, raw, dc = fix[f"lanczos_{n}"]
+        np.testing.assert_allclose(
+            anacal.psf.lanczos_kernel(x, n, np.zeros(0)),
+            raw,
+            rtol=0,
+            atol=1e-13,
+        )
+        np.testing.assert_allclose(
+            anacal.psf.lanczos_kernel(x, n, anacal.psf._lanczos_dc_kvals(n)),
+            dc,
+            rtol=0,
+            atol=1e-13,
+        )
 
 
 if __name__ == "__main__":

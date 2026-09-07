@@ -1,6 +1,7 @@
 import anacal
-import galsim
 import numpy as np
+
+from ..fixtures import load
 
 # Same detector settings as test_wsel.
 kwargs = {
@@ -20,12 +21,15 @@ PSF_FWHM = 0.7
 # blended-ring regime is 0.0012% here, versus 0.075% at DG = 0.02.
 DG = 0.002
 
-psf_obj = galsim.Moffat(beta=2.5, fwhm=PSF_FWHM).shear(g1=0.02, g2=-0.02)
-PSF_ARRAY = (
-    psf_obj.shift(0.5 * SCALE, 0.5 * SCALE)
-    .drawImage(nx=NX, ny=NY, scale=SCALE)
-    .array
-)
+# Every image below is pre-rendered by tests/data/make_fixtures.py
+# (ngmix_bkg): a sheared Moffat PSF (beta 2.5, fwhm PSF_FWHM) and, per
+# configuration, one e = (0.1, -0.15) exponential at the image centre,
+# optionally on a broad Gaussian pedestal.  The galaxies are float64
+# because the shear step is DG.  The configuration tables below are
+# duplicated in make_fixtures.py; the fixture key carries the position
+# in the table, so keep the two in the same order.
+FIX = load("ngmix_bkg")
+PSF_ARRAY = FIX["psf"]
 
 
 def _cell():
@@ -38,26 +42,6 @@ def _cell():
     return anacal.geometry.get_cell_list(
         NX, NY, NX + 32, NY + 32, 32, SCALE
     )[0]
-
-
-def _draw(g1, g2, mag, hlr, pedestal_mag=None):
-    """One extended source at the image centre, optionally on a flat-ish
-    pedestal.  The source is extended so that its own light reaches the 1-3
-    arcsec background rings, which is what makes ``bkg`` respond to shear."""
-    # ImageD (float64): rendering at single precision puts a round-off floor
-    # on how small a shear step the finite difference can resolve.
-    img = galsim.ImageD(ncol=NX, nrow=NY, scale=SCALE)
-    obj = galsim.Exponential(half_light_radius=hlr)
-    obj = obj.shear(e1=0.1, e2=-0.15).shear(g1=g1, g2=g2)
-    obj = obj.withFlux(10.0 ** ((30.0 - mag) / 2.5))
-    obj = obj.shift(0.5 * SCALE, 0.5 * SCALE)
-    galsim.Convolve(psf_obj, obj).drawImage(image=img, add_to_image=True)
-    if pedestal_mag is not None:
-        ped = galsim.Gaussian(sigma=12.0)
-        ped = ped.withFlux(10.0 ** ((30.0 - pedestal_mag) / 2.5))
-        ped = ped.shift(0.5 * SCALE, 0.5 * SCALE)
-        galsim.Convolve(psf_obj, ped).drawImage(image=img, add_to_image=True)
-    return img.array
 
 
 def _detect(arr):
@@ -79,10 +63,12 @@ def test_bkg_tracks_a_flat_background():
     rings it is nearly flat and ``bkg`` must sit close to the pedestal surface
     brightness at the source position.
     """
-    ped_only = _draw(0.0, 0.0, mag=40.0, hlr=0.3, pedestal_mag=16.0)
+    # a mag 40 source on the mag 16 pedestal: the pedestal alone
+    ped_only = FIX["ped_only"]
     level = float(np.median(ped_only[NY // 2 - 1:NY // 2 + 2,
                                      NX // 2 - 1:NX // 2 + 2]))
-    cat = _detect(_draw(0.0, 0.0, mag=22.0, hlr=0.3, pedestal_mag=16.0))
+    # mag 22, hlr 0.3 on the same pedestal
+    cat = _detect(FIX["ped_src"])
     assert len(cat) == 1
     # a compact source barely leaks into the rings, so this is the pedestal
     np.testing.assert_allclose(cat[0].bkg.v, level, rtol=0.2)
@@ -122,19 +108,20 @@ WSEL_RESPONSE_CONFIGS = [
 ]
 
 
-def _shear_triplet(mag, hlr, comp):
+def _shear_triplet(prefix, mag, hlr, comp):
     """Catalogs at -DG, 0, +DG applied to ``comp``.
+
+    The images are the fixtures ``<prefix>_m``, ``<prefix>_0`` and
+    ``<prefix>_p``; mag/hlr/comp only label the assertion messages.
 
     Asserts the configuration is still usable -- exactly one detection, read at
     the same pixel in all three -- so that a code change that moves a fixed
     configuration out of its regime fails loudly instead of comparing numbers
     that are not comparable.
     """
-    other = "g2" if comp == "g1" else "g1"
     cats = []
-    for dv in (-DG, 0.0, +DG):
-        sh = {comp: dv, other: 0.0}
-        c = _detect(_draw(mag=mag, hlr=hlr, **sh))
+    for tag, dv in (("m", -DG), ("0", 0.0), ("p", +DG)):
+        c = _detect(FIX[f"{prefix}_{tag}"])
         assert len(c) == 1, (
             f"mag={mag} hlr={hlr} {comp}={dv}: expected one detection, "
             f"got {len(c)}; the fixed test configuration has drifted"
@@ -154,9 +141,9 @@ def test_bkg_shear_response():
     about 5e-6 relative, and the measured agreement is 0.06% or better, so the
     tolerance can be tight.
     """
-    for mag, hlr in BKG_RESPONSE_CONFIGS:
+    for i, (mag, hlr) in enumerate(BKG_RESPONSE_CONFIGS):
         for comp in ("g1", "g2"):
-            c1, _, c2 = _shear_triplet(mag, hlr, comp)
+            c1, _, c2 = _shear_triplet(f"bkg_{i}_{comp}", mag, hlr, comp)
             fd = (c2.bkg.v - c1.bkg.v) / (2.0 * DG)
             an = 0.5 * (getattr(c1.bkg, comp) + getattr(c2.bkg, comp))
             scale = max(abs(fd), abs(an))
@@ -180,8 +167,8 @@ def test_wsel_shear_response_with_background():
     inside the cut's transition, so dwsel/dg genuinely depends on d(bkg)/dg.
     Measured agreement on the fixed configurations is 0.2% or better.
     """
-    for mag, hlr, comp in WSEL_RESPONSE_CONFIGS:
-        c1, c0, c2 = _shear_triplet(mag, hlr, comp)
+    for i, (mag, hlr, comp) in enumerate(WSEL_RESPONSE_CONFIGS):
+        c1, c0, c2 = _shear_triplet(f"wsel_{i}", mag, hlr, comp)
         for c in (c1, c0, c2):
             assert 0.02 < c.wsel.v < 0.98, (
                 f"mag={mag} hlr={hlr} {comp}: wsel={c.wsel.v:.4f} left the "

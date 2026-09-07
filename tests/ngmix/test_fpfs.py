@@ -1,48 +1,20 @@
 import anacal
-import galsim
 import numpy as np
+
+from ..fixtures import load
 
 
 def test_ngmix_fpfs():
     nx = 64
     ny = 64
     scale = 0.2
-    psf_fwhm = 0.8
     sigma_shapelets = 0.38
-    # PSF
-    psf_obj = galsim.Moffat(
-        beta=2.5,
-        fwhm=psf_fwhm,
-    ).shear(
-        g1=0.02,
-        g2=-0.02,
-    )
-    psf_array = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(
-            nx=nx,
-            ny=ny,
-            scale=scale,
-        )
-        .array
-    )
-
-    flux = 150.0
-    angle = 30.0
-    obj0 = galsim.Exponential(half_light_radius=0.21).shear(e1=0.2, e2=0)
-    obj = obj0.rotate(angle * galsim.degrees).withFlux(flux)
-    obj = obj.shift(0.5 * scale, 0.5 * scale)
-    obj = galsim.Convolve(psf_obj, obj)
-
-    # Create an empty image
-    full_image = galsim.ImageF(ncol=nx, nrow=ny, scale=scale)
-
-    center = (32, 32)
-    shift = galsim.PositionD(
-        (center[0] - nx / 2) * scale, (center[1] - ny / 2) * scale
-    )
-    final_galaxy = obj.shift(shift)
-    final_galaxy.drawImage(image=full_image, add_to_image=True)
-    img_array = full_image.array
+    # pre-rendered (tests/data/ngmix_fpfs.fits): a sheared Moffat PSF
+    # (beta 2.5, fwhm 0.8) and an e1 = 0.2 exponential (hlr 0.21, flux
+    # 150, rotated 30 deg) centred on pixel (32, 32)
+    fix = load("ngmix_fpfs")
+    psf_array = fix["psf"]
+    img_array = fix["gal"]
 
     num_epochs = 20
     fitter = anacal.ngmix.GaussFit(

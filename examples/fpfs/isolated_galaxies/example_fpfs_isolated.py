@@ -1,9 +1,10 @@
+import os
+
 import anacal
-import galsim
+import fitsio
 import numpy as np
 
-nstamp = 20  # nstamp x nstamp galaxies
-seed = 2  # seed for galaxy
+nstamp = 10  # nstamp x nstamp galaxies, as stored in isolated_sim.fits
 noise_seed = 1  # seed for noise
 pixel_scale = 0.2  # LSST image pixel scale
 # noise variance for r-bands 10 year LSST coadd (magnitude zero point at 30)
@@ -19,7 +20,6 @@ do_add_noise = False  # Add image noise or not
 
 rcut = 32  # cutout radius
 test_component = 1  # which shear component to test
-nrot_per_gal = 4  # number of rotation for each galaxy
 
 # Simulation
 ngrid = rcut * 2
@@ -51,30 +51,17 @@ fpfs_config = anacal.fpfs.FpfsConfig(
 )
 
 
-psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0)
-psf_array = (
-    psf_obj.shift(0.5 * pixel_scale, 0.5 * pixel_scale)
-    .drawImage(nx=ngrid, ny=ngrid, scale=pixel_scale)
-    .array
-)
+# Pre-rendered with GalSim by tests/data/make_fixtures.py: a Moffat PSF
+# (beta 3.5, fwhm 0.6) and, for each shear sign, an nstamp x nstamp grid
+# of COSMOS galaxies (4 rotations per galaxy, seed 2) at 0.2 arcsec/pixel.
+data_dir = os.path.dirname(os.path.abspath(__file__))
+sim_file = os.path.join(data_dir, "isolated_sim.fits")
+psf_array = fitsio.read(sim_file, ext="psf")
 
 # Measurement
 out = []
 for gname in ["g%d-1" % test_component, "g%d-0" % test_component]:
-    gal_array = anacal.simulation.make_isolated_sim(
-        gal_type="mixed",
-        sim_method="fft",
-        psf_obj=psf_obj,
-        gname=gname,
-        seed=seed,
-        ny=ngrid * nstamp,
-        nx=ngrid * nstamp,
-        scale=pixel_scale,
-        do_shift=False,
-        buff=buff,
-        nrot_per_gal=nrot_per_gal,
-        mag_zero=30,
-    )[0]
+    gal_array = fitsio.read(sim_file, ext="gal_%s" % gname)
 
     if do_add_noise:
         # Add noise to galaxy image

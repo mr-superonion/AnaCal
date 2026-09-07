@@ -1,29 +1,29 @@
 import anacal
-import galsim
 import numpy as np
 import numpy.lib.recfunctions as rfn
+
+from ..fixtures import load
 
 ngrid = 64
 mag_zero = 27
 
+# (pixel scale, x shift, y shift) of the pre-rendered cases in
+# tests/data/fpfs_force_measure.fits: a sheared Moffat PSF and a sheared
+# Gaussian galaxy offset by the shift.  Same order as
+# make_fixtures.FORCE_CASES.
+CASES = [
+    (0.2, 0.0, 0.0),
+    (0.2, 2.31, 0.43),
+    (0.2, -2.35, 1.63),
+    (0.164, -0.5, 1.5),
+]
+FIX = load("fpfs_force_measure")
+
 
 def simulate_gal_psf(scale, shift_x, shift_y):
-    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
-        e1=0.02, e2=-0.02
-    )
-
-    psf_array = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale)
-        .drawImage(nx=ngrid, ny=ngrid, scale=scale)
-        .array
-    )
-
-    gal_obj = galsim.Gaussian(fwhm=0.6).shear(e1=0.2, e2=-0.24)
-    gal_array = (
-        gal_obj.shift((0.5 + shift_x) * scale, (0.5 + shift_y) * scale)
-        .drawImage(nx=ngrid, ny=ngrid, scale=scale)
-        .array
-    )
+    i = CASES.index((scale, shift_x, shift_y))
+    psf_array = FIX[f"psf_{i}"]
+    gal_array = FIX[f"gal_{i}"]
 
     # force detection at center
     coords = np.array(

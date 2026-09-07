@@ -7,9 +7,10 @@ the weighting of the bands, and the noise level of the result.
 """
 
 import anacal
-import galsim
 import numpy as np
 import pytest
+
+from ..fixtures import load
 
 SCALE = 0.2
 SIGMA_ARCSEC = 0.4
@@ -23,26 +24,24 @@ KWARGS = {
 }
 
 
+# pre-rendered (tests/data/task_multiband.fits): sheared Moffat PSFs
+# (beta 2.5) of a few widths and one g1 = 0.03 exponential (hlr 0.3)
+# convolved with each of them at a few magnitudes; keys are
+# psf_<fwhm> and stamp_<fwhm>_<mag> with the decimal points dropped
+FIX = load("task_multiband")
+
+
 def make_psf(fwhm):
-    obj = galsim.Moffat(beta=2.5, fwhm=fwhm).shear(g1=0.02, g2=-0.02)
-    return obj, (
-        obj.shift(0.5 * SCALE, 0.5 * SCALE)
-        .drawImage(nx=STAMP, ny=STAMP, scale=SCALE)
-        .array
-    )
+    """(psf key, psf array) for the Moffat of this fwhm."""
+    key = f"psf_{fwhm:.1f}".replace(".", "")
+    return key, FIX[key]
 
 
-def make_image(psf_obj, mag, seed=None):
+def make_image(psf_key, mag, seed=None):
     """One tiled field of identical galaxies, optionally with noise."""
-    flux = 10 ** ((30.0 - mag) / 2.5)
-    gal = galsim.Exponential(half_light_radius=0.30).shear(g1=0.03)
-    gal = galsim.Convolve(psf_obj, gal.withFlux(flux))
-
-    stamp = galsim.ImageF(ncol=STAMP, nrow=STAMP, scale=SCALE)
-    gal.shift(
-        galsim.PositionD(0.5 * SCALE, 0.5 * SCALE)
-    ).drawImage(image=stamp)
-    img = np.tile(stamp.array, (NGAL, NGAL)).astype(np.float32)
+    fwhm = psf_key[len("psf_"):]
+    stamp = FIX[f"stamp_{fwhm}_{mag:.1f}".replace(".", "")]
+    img = np.tile(stamp, (NGAL, NGAL)).astype(np.float32)
     if seed is not None:
         rng = np.random.RandomState(seed)
         img = img + rng.normal(

@@ -1,5 +1,7 @@
+import os
+
 import anacal
-import galsim
+import fitsio
 
 # --- Configuration ---
 pixel_scale = 0.2
@@ -7,12 +9,9 @@ noise_std = 0.6
 noise_variance = noise_std**2.0
 ngrid = 64
 
-# --- PSF ---
-psf_obj = galsim.Moffat(beta=2.5, fwhm=0.8)
-psf_array = (
-    psf_obj.shift(0.5 * pixel_scale, 0.5 * pixel_scale)
-    .drawImage(nx=ngrid, ny=ngrid, scale=pixel_scale)
-    .array
+# --- PSF: pre-rendered Moffat (beta 2.5, fwhm 0.8), 64 x 64 at 0.2" ---
+psf_array = fitsio.read(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "psf_moffat.fits")
 )
 
 ftask = anacal.fpfs.FpfsTask(

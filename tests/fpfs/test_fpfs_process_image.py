@@ -1,13 +1,13 @@
 import time
 
 import anacal
-import galsim
 import numpy as np
+
+from ..fixtures import load
 
 
 def test_fpfs_init():
-    nstamp = 30  # nstamp x nstamp galaxies
-    seed = 2  # seed for galaxy
+    nstamp = 10  # nstamp x nstamp galaxies, as rendered in the fixture
     noise_seed = 1  # seed for noise
     pixel_scale = 0.2  # LSST image pixel scale
     # noise variance for r-bands 10 year LSST coadd (mag zero point at 30)
@@ -15,8 +15,6 @@ def test_fpfs_init():
     noise_variance = noise_std**2.0
 
     rcut = 32  # cutout radius
-    test_component = 1  # which shear component to test
-    nrot_per_gal = 4  # number of rotation for each galaxy
 
     # Simulation
     ngrid = rcut * 2
@@ -27,28 +25,14 @@ def test_fpfs_init():
         sigma_shapelets2=0.45,  # The second measurement scale
     )
 
-    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0)
-    psf_array = (
-        psf_obj.shift(0.5 * pixel_scale, 0.5 * pixel_scale)
-        .drawImage(nx=ngrid, ny=ngrid, scale=pixel_scale)
-        .array
-    )
-
-    gname = "g%d-1" % test_component
-    gal_array = anacal.simulation.make_isolated_sim(
-        gal_type="mixed",
-        sim_method="fft",
-        psf_obj=psf_obj,
-        gname=gname,
-        seed=seed,
-        ny=ngrid * nstamp,
-        nx=ngrid * nstamp,
-        scale=pixel_scale,
-        do_shift=False,
-        buff=buff,
-        nrot_per_gal=nrot_per_gal,
-        mag_zero=30,
-    )[0]
+    # Pre-rendered by tests/data/make_fixtures.py: a Moffat PSF (beta
+    # 3.5, fwhm 0.6) and an nstamp x nstamp grid of COSMOS galaxies
+    # sheared by g1 = +0.02 (seed 2, 4 rotations per galaxy, mag_zero
+    # 30), padded by `buff` pixels on every side.
+    fix = load("fpfs_process_image")
+    psf_array = fix["psf"]
+    gal_array = fix["gal"]
+    assert gal_array.shape == (ngrid * nstamp + 2 * buff,) * 2
 
     # Add noise to galaxy image
     gal_array = gal_array + np.random.RandomState(noise_seed).normal(
@@ -66,7 +50,7 @@ def test_fpfs_init():
     # Detection is external now (the AnaCal detector owns detection); the
     # simulation puts one galaxy at the centre of each ngrid x ngrid stamp,
     # so the detection catalogue is simply the stamp-centre grid.
-    centers = np.arange(nstamp) * ngrid + ngrid // 2
+    centers = np.arange(nstamp) * ngrid + ngrid // 2 + buff
     yy, xx = np.meshgrid(centers, centers, indexing="ij")
     detection = np.zeros(
         nstamp * nstamp, dtype=[("y", np.float64), ("x", np.float64)]

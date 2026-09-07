@@ -1,40 +1,25 @@
 import anacal
-import galsim
 import numpy as np
 import pytest
+
+from ..fixtures import load
 
 ngrid = 64
 mag_zero = 27
 
+# tests/data/fpfs_shearest.fits: a sheared Moffat PSF and, per seed, one
+# row of 12 rotated copies of a COSMOS galaxy sheared by g1 = -0.02
+# ("g1-0"), 0.2 arcsec/pixel, mag_zero 27
+FIX = load("fpfs_shearest")
+
 
 def simulate_gal_psf(scale, seed, rcut, gcomp="g1", nrot=4):
-    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.6, trunc=0.6 * 4.0).shear(
-        e1=0.02, e2=-0.02
-    )
-
-    psf_array = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale)
-        .drawImage(nx=ngrid, ny=ngrid, scale=scale)
-        .array
-    )
-    psf_array = psf_array[
+    assert (scale, gcomp, nrot) == (0.2, "g1", 12), "not pre-rendered"
+    psf_array = FIX["psf"][
         ngrid // 2 - rcut : ngrid // 2 + rcut,
         ngrid // 2 - rcut : ngrid // 2 + rcut,
     ]
-    gname = "%s-0" % gcomp
-    gal_array = anacal.simulation.make_isolated_sim(
-        gal_type="mixed",
-        sim_method="fft",
-        psf_obj=psf_obj,
-        gname=gname,
-        seed=seed,
-        ny=ngrid,
-        nx=ngrid * nrot,
-        scale=scale,
-        do_shift=False,
-        buff=0,
-        nrot_per_gal=nrot,
-    )[0]
+    gal_array = FIX[f"gal_seed{seed}"]
 
     # force detection at center
     indx = np.arange(ngrid // 2, ngrid * nrot, ngrid)

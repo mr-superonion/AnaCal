@@ -1,8 +1,10 @@
-"""Simulation utilities for generating synthetic galaxy images.
+"""COSMOS-based galaxy image simulation (GalSim), for test fixtures.
 
-Provides COSMOS-based galaxy generation, isolated and blended image
-simulations, and noise generation routines used for shear calibration
-studies.
+This used to be ``anacal.simulation``.  AnaCal itself no longer depends
+on GalSim; the images the tests and examples need are rendered once by
+``make_fixtures.py`` in this directory and stored as FITS, and this
+module is the renderer that script uses.  It is not part of the
+installed package.
 """
 # FPFS shear estimator
 # Copyright 20210905 Xiangchong Li.
@@ -26,10 +28,7 @@ import fitsio
 import galsim
 import numpy as np
 
-_data_dir = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "data",
-)
+_data_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 def _galsim_round_sersic(n, sersic_prec):

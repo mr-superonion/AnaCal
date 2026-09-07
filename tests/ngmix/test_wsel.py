@@ -1,6 +1,7 @@
 import anacal
-import galsim
 import numpy as np
+
+from ..fixtures import load
 
 kwargs = {
     "sigma_arcsec": 0.4,
@@ -19,28 +20,17 @@ def test_shear_estimate_w_sel():
     nx = 64
     ny = 64
     scale = 0.2
-    psf_fwhm = 0.7
 
-    # PSF
-    psf_obj = galsim.Moffat(
-        beta=2.5,
-        fwhm=psf_fwhm,
-    ).shear(
-        g1=0.02,
-        g2=-0.02,
-    )
-    psf_array = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale)
-        .drawImage(
-            nx=nx,
-            ny=ny,
-            scale=scale,
-        )
-        .array
-    )
-
-    obj0 = galsim.Exponential(half_light_radius=0.25)
-    obj0 = obj0.shear(e1=0.1, e2=-0.15).shift(0.05 * scale, 0.1 * scale)
+    # pre-rendered (tests/data/ngmix_wsel.fits): a sheared Moffat PSF
+    # (beta 2.5, fwhm 0.7) and an e = (0.1, -0.15) exponential (hlr 0.25,
+    # slightly off-centre) under the shears (g1m/g1p/g2m/g2p = -/+0.02),
+    # magnitudes (m0..m3 = 26.7, 26.8, 26.9, 27.0) and rotations (a0..a9,
+    # fixed random angles; the test used to draw them unseeded) stepped
+    # through below.  Keys as in make_fixtures.ngmix_wsel.
+    fix = load("ngmix_wsel")
+    psf_array = fix["psf"]
+    n_mag = 4
+    n_angle = 10
 
     # cell_overlap must be at least twice the background kernel reach
     # (2 * (3 arcsec / scale + 1) = 32 pixels here), otherwise the local
@@ -56,30 +46,8 @@ def test_shear_estimate_w_sel():
         scale,
     )[0]
 
-    def make_sim(g1, g2, angle=0.0, mag=26.8):
-        obj = obj0.rotate(angle * galsim.degrees).shear(g1=g1, g2=g2)
-        obj = obj.shift(0.5 * scale, 0.5 * scale)
-        flux = 10 ** ((30.0 - mag) / 2.5)
-        obj = galsim.Convolve(psf_obj, obj).withFlux(flux)
-
-        # Create an empty image
-        full_image = galsim.ImageF(ncol=nx, nrow=ny, scale=scale)
-
-        # Define centers for 100 substamps
-        crange = np.arange(32, 64, 64)
-        centers = [(x, y) for x in crange for y in crange]
-
-        # Draw galaxies at specified positions
-        for center in centers:
-            shift = galsim.PositionD(
-                (center[0] - nx / 2) * scale, (center[1] - ny / 2) * scale
-            )
-            final_galaxy = obj.shift(shift)
-            final_galaxy.drawImage(image=full_image, add_to_image=True)
-        return full_image.array
-
     cats = anacal.detector.find_peaks(
-        img_array=make_sim(g1=-0.02, g2=0.0),
+        img_array=fix["gal_init"],
         psf_array=psf_array,
         cell=cell,
         noise_array=None,
@@ -91,9 +59,9 @@ def test_shear_estimate_w_sel():
     assert cats[0].model.x2.v / scale == ny // 2
 
     # Test shear response calculation (no multiplicative bias)
-    for mag in np.arange(26.7, 27.1, 0.1):
+    for i in range(n_mag):
         cat_1 = anacal.detector.find_peaks(
-            img_array=make_sim(g1=-0.02, g2=0.0, mag=mag),
+            img_array=fix[f"gal_m{i}_g1m"],
             psf_array=psf_array,
             cell=cell,
             noise_array=None,
@@ -104,7 +72,7 @@ def test_shear_estimate_w_sel():
         cat_1 = cat_1[0]
 
         cat_2 = anacal.detector.find_peaks(
-            img_array=make_sim(g1=0.02, g2=0.0, mag=mag),
+            img_array=fix[f"gal_m{i}_g1p"],
             psf_array=psf_array,
             cell=cell,
             noise_array=None,
@@ -121,7 +89,7 @@ def test_shear_estimate_w_sel():
         )
 
         cat_1 = anacal.detector.find_peaks(
-            img_array=make_sim(g2=-0.02, g1=0.0, mag=mag),
+            img_array=fix[f"gal_m{i}_g2m"],
             psf_array=psf_array,
             cell=cell,
             noise_array=None,
@@ -132,7 +100,7 @@ def test_shear_estimate_w_sel():
         cat_1 = cat_1[0]
 
         cat_2 = anacal.detector.find_peaks(
-            img_array=make_sim(g2=0.02, g1=0.0, mag=mag),
+            img_array=fix[f"gal_m{i}_g2p"],
             psf_array=psf_array,
             cell=cell,
             noise_array=None,
@@ -149,9 +117,9 @@ def test_shear_estimate_w_sel():
         )
 
     # Test symmetry (no additive bias)
-    for ang in np.random.random(10) * 360:
+    for i in range(n_angle):
         cat_1 = anacal.detector.find_peaks(
-            img_array=make_sim(g1=-0.00, g2=0.0, angle=ang),
+            img_array=fix[f"gal_a{i}_0"],
             psf_array=psf_array,
             cell=cell,
             noise_array=None,
@@ -160,7 +128,7 @@ def test_shear_estimate_w_sel():
         )[0]
 
         cat_2 = anacal.detector.find_peaks(
-            img_array=make_sim(g1=-0.00, g2=0.0, angle=ang + 90.0),
+            img_array=fix[f"gal_a{i}_90"],
             psf_array=psf_array,
             cell=cell,
             noise_array=None,

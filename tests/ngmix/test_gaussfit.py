@@ -1,34 +1,17 @@
 import anacal
-import galsim
 import numpy as np
+
+from ..fixtures import load
 
 
 def test_ngmix_gaussian_fit_additive(test_g1=True):
-    nx = 64
-    ny = 64
     scale = 0.2
-    psf_fwhm = 0.7
     sigma_arcsec = 0.4
-    dx1 = -0.2
-    dx2 = 0.11
-    # PSF
-    psf_obj = galsim.Moffat(
-        beta=2.5,
-        fwhm=psf_fwhm,
-    ).shear(
-        g1=0.02,
-        g2=-0.02,
-    )
-    psf_array = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(
-            nx=nx,
-            ny=ny,
-            scale=scale,
-        )
-        .array
-    )
-
-    obj0 = galsim.Exponential(half_light_radius=0.2)
+    # pre-rendered (tests/data/ngmix_gaussfit.fits): a sheared Moffat
+    # PSF (beta 2.5, fwhm 0.7) and a round exponential (hlr 0.2, flux
+    # 150) offset by (-0.2, 0.11) pixels from the stamp centre
+    fix = load("ngmix_gaussfit")
+    psf_array = fix["psf"]
 
     fitter = anacal.ngmix.GaussFit(
         scale=scale,
@@ -36,29 +19,6 @@ def test_ngmix_gaussian_fit_additive(test_g1=True):
         stamp_size=32,
     )
 
-    def make_sim(g1, g2, angle=0.0, flux=1.0):
-        obj = obj0.rotate(angle * galsim.degrees).withFlux(flux)
-        obj = obj.shear(g1=g1, g2=g2)
-        obj = obj.shift((0.5 + dx1) * scale, (0.5 + dx2) * scale)
-        obj = galsim.Convolve(psf_obj, obj)
-
-        # Create an empty image
-        full_image = galsim.ImageF(ncol=nx, nrow=ny, scale=scale)
-
-        # Define centers for 100 substamps
-        crange = np.arange(32, 64, 64)
-        centers = [(x, y) for x in crange for y in crange]
-
-        # Draw galaxies at specified positions
-        for center in centers:
-            shift = galsim.PositionD(
-                (center[0] - nx / 2) * scale, (center[1] - ny / 2) * scale
-            )
-            final_galaxy = obj.shift(shift)
-            final_galaxy.drawImage(image=full_image, add_to_image=True)
-        return full_image.array
-
-    flux = 150.0
     num_epochs = 35
     src = anacal.table.galNumber()
     src.model.x1.v = 32 * scale
@@ -70,7 +30,7 @@ def test_ngmix_gaussian_fit_additive(test_g1=True):
     catalog = [src]
     prior = anacal.ngmix.modelPrior()
 
-    img_array = make_sim(g1=0, g2=0, flux=flux)
+    img_array = fix["gal_add"]
     cat_1 = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
@@ -88,60 +48,21 @@ def test_ngmix_gaussian_fit2():
     nx = 64
     ny = 64
     scale = 0.2
-    psf_fwhm = 0.7
     sigma_arcsec = 0.4
     dx1 = -0.2
     dx2 = 0.11
-
-    # PSF
-    psf_obj = galsim.Moffat(
-        beta=2.5,
-        fwhm=psf_fwhm,
-    ).shear(
-        g1=0.02,
-        g2=-0.02,
-    )
-    psf_array = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale)
-        .drawImage(
-            nx=nx,
-            ny=ny,
-            scale=scale,
-        )
-        .array
-    )
-
-
-    obj0 = galsim.Exponential(half_light_radius=0.2)
-    obj0 = obj0.shear(e1=0.2, e2=-0.1)
+    # pre-rendered (tests/data/ngmix_gaussfit.fits): the same PSF and an
+    # e = (0.2, -0.1) exponential (hlr 0.2) offset by (dx1, dx2) pixels
+    # from the stamp centre, under the shears / fluxes / rotations used
+    # below (g1p = +0.02, g1m = -0.02, f = flux, a = rotation in deg)
+    fix = load("ngmix_gaussfit")
+    psf_array = fix["psf"]
 
     fitter = anacal.ngmix.GaussFit(
         scale=scale,
         sigma_arcsec=sigma_arcsec,
         stamp_size=32,
     )
-
-    def make_sim(g1, g2, angle=0.0, flux=1.0):
-        obj = obj0.rotate(angle * galsim.degrees).withFlux(flux)
-        obj = obj.shear(g1=g1, g2=g2)
-        obj = obj.shift((0.5 + dx1) * scale, (0.5 + dx2) * scale)
-        obj = galsim.Convolve(psf_obj, obj)
-
-        # Create an empty image
-        full_image = galsim.ImageF(ncol=nx, nrow=ny, scale=scale)
-
-        # Define centers for 100 substamps
-        crange = np.arange(nx // 2, nx, nx)
-        centers = [(x, y) for x in crange for y in crange]
-
-        # Draw galaxies at specified positions
-        for center in centers:
-            shift = galsim.PositionD(
-                (center[0] - nx / 2) * scale, (center[1] - ny / 2) * scale
-            )
-            final_galaxy = obj.shift(shift)
-            final_galaxy.drawImage(image=full_image, add_to_image=True)
-        return full_image.array
 
     flux = 150.0
     num_epochs = 35
@@ -154,11 +75,8 @@ def test_ngmix_gaussian_fit2():
     catalog = [src]
     prior = anacal.ngmix.modelPrior()
 
-    g1_list = [0.02, -0.02]
-    g2_list = [0.0, 0.0]
-
     # Test shear response calculation (no multiplicative bias)
-    img_array = make_sim(g1=g1_list[0], g2=g2_list[0], flux=flux)
+    img_array = fix["gal_g1p_f150"]
     cat_1 = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
@@ -191,7 +109,7 @@ def test_ngmix_gaussian_fit2():
         rtol=1e-2,
     )
 
-    img_array = make_sim(g1=g1_list[1], g2=g2_list[1], flux=flux*2)
+    img_array = fix["gal_g1m_f300"]
     cat_2 = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
@@ -230,7 +148,7 @@ def test_ngmix_gaussian_fit2():
     # Test symmetry
     cat_1 = fitter.process_cell(
         catalog=catalog,
-        img_array=make_sim(g1=0.00, g2=0.0, angle=0.0, flux=flux),
+        img_array=fix["gal_g0_a0"],
         psf_array=psf_array,
         prior=prior,
         num_epochs=num_epochs,
@@ -240,7 +158,7 @@ def test_ngmix_gaussian_fit2():
 
     cat_2 = fitter.process_cell(
         catalog=catalog,
-        img_array=make_sim(g1=0.00, g2=0.0, angle=90.0, flux=flux),
+        img_array=fix["gal_g0_a90"],
         psf_array=psf_array,
         prior=prior,
         num_epochs=num_epochs,
@@ -256,7 +174,7 @@ def test_ngmix_gaussian_fit2():
         force_size=True,
     )
 
-    img_array = make_sim(g1=g1_list[0], g2=g2_list[0], flux=flux)
+    img_array = fix["gal_g1p_f150"]
     cat_1 = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
@@ -279,7 +197,7 @@ def test_ngmix_gaussian_fit2():
         cat_1.model.x2.v / scale - ny // 2, dx2,
         atol=1e-6, rtol=0.0,
     )
-    img_array = make_sim(g1=g1_list[1], g2=g2_list[1], flux=flux)
+    img_array = fix["gal_g1m_f150"]
     cat_2 = fitter.process_cell(
         catalog=catalog,
         img_array=img_array,
@@ -304,45 +222,15 @@ def test_ngmix_gaussian_fit4():
     ny = 64
 
     scale = 0.2
-    psf_fwhm = 0.7
     sigma_arcsec = 0.4
-    # PSF
-    psf_obj = galsim.Moffat(
-        beta=2.5,
-        fwhm=psf_fwhm,
-    ).shear(
-        g1=0.02,
-        g2=-0.02,
-    )
-    psf_array = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale)
-        .drawImage(
-            nx=nx,
-            ny=ny,
-            scale=scale,
-        )
-        .array
-    )
-
-    obj = galsim.Gaussian(half_light_radius=0.25).shear(g1=0.03)
-    obj = galsim.Convolve(psf_obj, obj)
-
-    # Create an empty image
-    full_image = galsim.ImageF(ncol=nx, nrow=ny, scale=scale)
-
-    # Define centers for 4 substamps
+    # pre-rendered (tests/data/ngmix_gaussfit.fits): the PSF drawn on the
+    # 256 x 64 strip and four g1 = 0.03 Gaussians (hlr 0.25) placed at
+    # `centers` with `fluxes`
+    fix = load("ngmix_gaussfit")
+    psf_array = fix["psf_wide"]
+    img_array = fix["gal_wide"]
     centers = [(31.2, 31.2), (95.9, 32.05), (160, 32.1), (224, 31.8)]
     fluxes = [12, 23, 8.5, 18.4]
-
-    # Draw galaxies at specified positions
-    for i, center in enumerate(centers):
-        shift = galsim.PositionD(
-            (center[0] - (nx - 1) / 2) * scale,
-            (center[1] - (ny - 1) / 2) * scale
-        )
-        final_galaxy = obj.shift(shift).withFlux(fluxes[i])
-        final_galaxy.drawImage(image=full_image, add_to_image=True)
-    img_array = full_image.array
 
     fitter = anacal.ngmix.GaussFit(
         scale=scale,

@@ -27,14 +27,6 @@ API Reference
     :undoc-members:
     :show-inheritance:
 
-:mod:`anacal.simulation` Module
--------------------------------
-
-.. automodule:: anacal.simulation
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 :mod:`anacal.utils` Module
 --------------------------
 

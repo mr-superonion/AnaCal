@@ -1,48 +1,19 @@
 import anacal
-import galsim
 import numpy as np
+
+from ..fixtures import load
 
 
 def test_angle():
-    nx = 64
-    ny = 64
     scale = 0.2
-    psf_fwhm = 0.7
     sigma_arcsec = 0.4
-    # PSF
-    psf_obj = galsim.Moffat(
-        beta=2.5,
-        fwhm=psf_fwhm,
-    ).shear(
-        g1=0.02,
-        g2=-0.02,
-    )
-    psf_array = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale).drawImage(
-            nx=nx,
-            ny=ny,
-            scale=scale,
-        )
-        .array
-    )
-
-    flux = 150.0
+    # pre-rendered (tests/data/ngmix_angle.fits): a sheared Moffat PSF
+    # (beta 2.5, fwhm 0.7) and an e1 = 0.2 exponential (hlr 0.16, flux
+    # 150) rotated by `angle` degrees, both centred on pixel (32, 32)
     angle = 30.0
-    obj0 = galsim.Exponential(half_light_radius=0.16).shear(e1=0.2, e2=0)
-    obj = obj0.rotate(angle * galsim.degrees).withFlux(flux)
-    obj = obj.shift(0.5 * scale, 0.5 * scale)
-    obj = galsim.Convolve(psf_obj, obj)
-
-    # Create an empty image
-    full_image = galsim.ImageF(ncol=nx, nrow=ny, scale=scale)
-
-    center = (ny // 2, nx // 2)
-    shift = galsim.PositionD(
-        (center[0] - nx // 2) * scale, (center[1] - ny // 2) * scale
-    )
-    img_array = obj.shift(shift).drawImage(
-        image=full_image, add_to_image=True
-    ).array
+    fix = load("ngmix_angle")
+    psf_array = fix["psf"]
+    img_array = fix["gal"]
 
     num_epochs = 20
     fitter = anacal.ngmix.GaussFit(

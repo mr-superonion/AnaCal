@@ -1,30 +1,15 @@
 import anacal
-import galsim
 import numpy as np
+
+from ..fixtures import load
 
 
 def test_noise_variance():
     stamp_size = 600
     scale = 0.2
-    psf_fwhm = 0.6
 
-    # PSF
-    psf_obj = galsim.Moffat(
-        beta=2.5,
-        fwhm=psf_fwhm,
-    ).shear(
-        g1=0.02,
-        g2=-0.02,
-    )
-    psf_array = (
-        psf_obj.shift(0.5 * scale, 0.5 * scale)
-        .drawImage(
-            nx=64,
-            ny=64,
-            scale=scale,
-        )
-        .array
-    )
+    # pre-rendered sheared Moffat PSF (beta 2.5, fwhm 0.6), 64 x 64
+    psf_array = load("image_noise_variance")["psf"]
     noise_variance = 0.2 ** 2.0
     img_array = np.random.RandomState(0).normal(
         scale=np.sqrt(noise_variance),

@@ -1,8 +1,9 @@
 import os
 
 import anacal
-import galsim
 import numpy as np
+
+from ..fixtures import load
 
 data_dir = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -54,36 +55,18 @@ def test_flux_variance():
     sigma_arcsec = 0.38
     sigma_shapelets = sigma_arcsec * np.sqrt(2.0)
     npix = 64
-    psf_obj = galsim.Moffat(beta=3.5, fwhm=0.8, trunc=0.6 * 4.0).shear(
-        e1=0.02, e2=-0.02
-    )
-
-    psf_array = (
-        psf_obj.shift(0.5 * pixel_scale, 0.5 * pixel_scale)
-        .drawImage(nx=npix, ny=npix, scale=pixel_scale)
-        .array
-    )
+    # pre-rendered (tests/data/task_flux_variance.fits): a sheared,
+    # truncated Moffat PSF (beta 3.5, fwhm 0.8) and one COSMOS galaxy
+    # (seed 0, "g1-0", mag_zero 30) at 0.2 arcsec/pixel
+    fix = load("task_flux_variance")
+    psf_array = fix["psf"]
     psf_array = np.asarray(
         anacal.psf.resize_array(
             psf_array, (npix, npix)
         ),
         dtype=np.float64,
     )
-    gname = "g1-0"
-    gal_array = anacal.simulation.make_isolated_sim(
-        gal_type="mixed",
-        sim_method="fft",
-        psf_obj=psf_obj,
-        gname=gname,
-        seed=0,
-        ny=npix,
-        nx=npix,
-        scale=pixel_scale,
-        do_shift=False,
-        buff=0,
-        nrot_per_gal=1,
-        mag_zero=mag_zero,
-    )[0]
+    gal_array = fix["gal"]
     flux, flux_var = gaussian_flux_variance(
         img_array=gal_array,
         psf_array=psf_array,
