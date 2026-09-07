@@ -3,7 +3,6 @@
 # prior to running pip install .
 
 
-fitsio
 numpy
 setuptools>=71.1
 wheel

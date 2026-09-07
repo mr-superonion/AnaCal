@@ -1,3 +1,5 @@
+# the tests and examples read FITS files; the package itself does not
+fitsio
 nbval
 black
 pytest>=3.4

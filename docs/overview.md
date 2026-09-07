@@ -19,7 +19,6 @@ maintaining minimal computational cost.
 
 - Python ≥ 3.10
 - [NumPy](https://numpy.org/)
-- [fitsio](https://github.com/esheldon/fitsio)
 
 ## Installation
 

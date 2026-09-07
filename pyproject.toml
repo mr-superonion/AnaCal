@@ -17,13 +17,13 @@ authors = [
 ]
 dependencies = [
     "numpy>=1.23",
-    "fitsio",
 ]
 
 # docs/overview.md advertises `pip install -e ".[dev]"`; keep these in sync
 # with requirements_test.txt (the conda path used by CI).
 [project.optional-dependencies]
 test = [
+    "fitsio",
     "pytest>=3.4",
     "pytest-xdist>=1.19",
     "pytest-timeout>=1.2",
@@ -34,6 +34,7 @@ test = [
     "scipy",
 ]
 dev = [
+    "fitsio",
     "pytest>=3.4",
     "pytest-xdist>=1.19",
     "pytest-timeout>=1.2",
@@ -53,9 +54,6 @@ Homepage = "https://github.com/mr-superonion/AnaCal/"
 
 [tool.setuptools.packages.find]
 where = ["python"]
-
-[tool.setuptools.package-data]
-anacal = ["data/*.fits"]
 
 # Never package in-tree extension builds (from `build_ext --inplace`) as
 # package data: they would overwrite the freshly compiled extension in
