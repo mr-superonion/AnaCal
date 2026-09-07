@@ -31,6 +31,7 @@ from ._anacal.psfmodel import (
     PerSourcePsf,
     PiffModel,
     PsfexModel,
+    lanczos_kernel,
     resize_array,
 )
 
@@ -42,6 +43,7 @@ __all__ = [
     "GridPsfModel",
     "PerSourcePsf",
     "resize_array",
+    "lanczos_kernel",
     "load_coadd_psf_model",
     "NativeCoaddPsf",
 ]
@@ -153,61 +155,47 @@ def _fit_mapping(grids: _MappingGrids, visit_wcs, order: int):
     return cu.reshape(m, m), cv.reshape(m, m), res
 
 
-# The coefficients depend on nothing but the Lanczos order, while a
-# coadd hands us one component per contributing visit -- all of which
-# use the same interpolant (121 identical solves on a DP1 patch).
+# The K_m depend on nothing but the Lanczos order, while a coadd hands
+# us one component per contributing visit -- all of which use the same
+# interpolant (121 identical evaluations on a DP1 patch).
 @lru_cache(maxsize=None)
-def _lanczos_dc_coeffs_cached(n: int) -> tuple:
-    """conserve_dc correction coefficients of ``galsim.Lanczos(n, True)``.
+def _lanczos_dc_kvals_cached(n: int, nterm: int = 5) -> tuple:
+    """conserve_dc corrections of a Lanczos-``n`` kernel, as in galsim.
 
-    galsim's corrected kernel is ``sinc(x) sinc(x/n) * (1 + sum_m c_m
-    (1 - cos(2 pi m x)))`` with ``n // 2`` terms; the c_m are solved
-    here directly from galsim's own ``xval`` so the C++ kernel matches
-    galsim to ~1e-12 without reimplementing its internal fit.
+    galsim (``Interpolant.cpp``) makes the kernel conserve a flat field
+    by dividing the raw ``sinc(x) sinc(x/n)`` by ``1 - 2 sum_{m=1}^{5}
+    K_m (1 - cos(2 pi m x))``, where ``K_m`` is the Fourier transform
+    of the raw, truncated kernel at integer frequency ``m``::
+
+        K_m = int_{-n}^{n} sinc(x) sinc(x/n) cos(2 pi m x) dx
+
+    The integrand is entire, so Gauss-Legendre quadrature converges to
+    machine precision; the kernel built from these K_m matches
+    ``galsim.Lanczos(n, conserve_dc=True).xval`` to ~1e-14 for n = 3
+    to 11 (``tests/test_psf.py``).  galsim itself is not needed.
     """
-    import galsim
-
-    interp = galsim.Lanczos(n, conserve_dc=True)
-    nm = n // 2
-
-    def raw(x):
-        return np.sinc(x) * np.sinc(x / n)
-
-    xs = np.linspace(0.13, 0.47, nm)
-    A = np.stack(
-        [1.0 - np.cos(2.0 * np.pi * m * xs) for m in range(1, nm + 1)],
-        axis=1,
+    if n < 1:
+        raise ValueError(f"Lanczos order must be positive, got {n}")
+    # the integrand oscillates at up to ~6 cycles per pixel over 2n
+    # pixels; 64 nodes per pixel is far past the exponential-convergence
+    # threshold (~36 per pixel) and still trivially cheap
+    nodes, weights = np.polynomial.legendre.leggauss(64 * n + 64)
+    x = nodes * n
+    w = weights * n
+    raw = np.sinc(x) * np.sinc(x / n)
+    return tuple(
+        float(np.sum(w * raw * np.cos(2.0 * np.pi * m * x)))
+        for m in range(1, nterm + 1)
     )
-    ratio = np.array(
-        [interp.xval(float(x)) for x in xs]
-    ) / raw(xs) - 1.0
-    coeff = np.linalg.solve(A, ratio)
-    # verify on a dense grid
-    xt = np.linspace(0.05, n - 1.05, 400)
-    approx = raw(xt) * (
-        1.0
-        + sum(
-            coeff[m - 1] * (1.0 - np.cos(2.0 * np.pi * m * xt))
-            for m in range(1, nm + 1)
-        )
-    )
-    exact = np.array([interp.xval(float(x)) for x in xt])
-    err = float(np.max(np.abs(approx - exact)))
-    if err > 1.0e-9:
-        raise RuntimeError(
-            f"conserve_dc coefficient fit failed for Lanczos({n}): "
-            f"max error {err:.2e}"
-        )
-    return tuple(coeff)
 
 
-def _lanczos_dc_coeffs(n: int) -> NDArray:
-    """Cached :func:`_lanczos_dc_coeffs_cached` as a fresh array.
+def _lanczos_dc_kvals(n: int) -> NDArray:
+    """Cached :func:`_lanczos_dc_kvals_cached` as a fresh array.
 
     The cache stores a tuple so a caller cannot mutate the shared
     entry; each call gets its own array to hand to the C++ model.
     """
-    return np.array(_lanczos_dc_coeffs_cached(int(n)), dtype=float)
+    return np.array(_lanczos_dc_kvals_cached(int(n)), dtype=float)
 
 
 def _load_psfex_component(inner, index: int) -> PsfexModel:
@@ -234,12 +222,10 @@ def _load_psfex_component(inner, index: int) -> PsfexModel:
 
 
 def _load_piff_component(inner, index: int) -> PiffModel:
-    # The piff model/interp classes are recognised BY NAME rather than
-    # with isinstance: anacal must not import piff (nor the LSST
-    # stack).  Every attribute read below is duck typed for the same
-    # reason.  galsim is a real anacal dependency, so it may be
-    # imported -- but only here, where a PIFF component needs it.
-    import galsim
+    # The piff / galsim classes are recognised BY NAME rather than with
+    # isinstance: anacal must not import piff, galsim, nor the LSST
+    # stack.  Every attribute read below is duck typed for the same
+    # reason.
 
     pp = inner._piffResult
     model = pp.model
@@ -265,7 +251,7 @@ def _load_piff_component(inner, index: int) -> PiffModel:
             "coordinates) are not supported"
         )
     wcs = list(pp.wcs.values())[0]
-    if not isinstance(wcs, galsim.PixelScale):
+    if type(wcs).__name__ != "PixelScale":
         raise NotImplementedError(
             f"component {index}: piff wcs {type(wcs).__name__} is not "
             "a PixelScale"
@@ -289,13 +275,13 @@ def _load_piff_component(inner, index: int) -> PiffModel:
             f"component {index}: unsupported interp keys {keys}"
         )
     gs_interp = model.interp
-    if not isinstance(gs_interp, galsim.Lanczos):
+    if type(gs_interp).__name__ != "Lanczos":
         raise NotImplementedError(
             f"component {index}: interpolant "
             f"{type(gs_interp).__name__} is not Lanczos"
         )
     if gs_interp.conserve_dc:
-        dc = _lanczos_dc_coeffs(int(gs_interp.n))
+        dc = _lanczos_dc_kvals(int(gs_interp.n))
     else:
         dc = np.zeros(0)
     nmodel = int(model.size)
@@ -314,7 +300,7 @@ def _load_piff_component(inner, index: int) -> PiffModel:
         stamp=int(inner.width),
         coord_scale=coord_scale,
         lanczos_n=int(gs_interp.n),
-        dc_coeff=np.ascontiguousarray(dc),
+        dc_kval=np.ascontiguousarray(dc),
     )
 
 

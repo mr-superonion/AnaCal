@@ -162,7 +162,7 @@ pyExportPsfModel(py::module_& m) {
                 int lanczos_n,
                 const py::array_t<
                     double, py::array::c_style | py::array::forcecast
-                >& dc_coeff
+                >& dc_kval
             ) {
                 std::vector<double> qv(q.size());
                 std::memcpy(
@@ -177,10 +177,10 @@ pyExportPsfModel(py::module_& m) {
                     tj.data(), term_j.data(),
                     term_j.size() * sizeof(int)
                 );
-                std::vector<double> dc(dc_coeff.size());
+                std::vector<double> dc(dc_kval.size());
                 std::memcpy(
-                    dc.data(), dc_coeff.data(),
-                    dc_coeff.size() * sizeof(double)
+                    dc.data(), dc_kval.data(),
+                    dc_kval.size() * sizeof(double)
                 );
                 return std::make_shared<PiffModel>(
                     nmodel, stamp, coord_scale, std::move(qv),
@@ -192,8 +192,10 @@ pyExportPsfModel(py::module_& m) {
             "the (N*N, nterm) interpolation matrix (row = iy*N + ix), "
             "term_i/term_j the u/v exponents per term, coord_scale maps "
             "detector pixels to the interpolation coordinates "
-            "(u = coord_scale * x), and dc_coeff the galsim conserve_dc "
-            "correction coefficients solved by the loader.",
+            "(u = coord_scale * x), and dc_kval the conserve_dc "
+            "corrections K_1..K_5 (Fourier transform of the raw Lanczos "
+            "kernel at integer frequencies, as galsim defines them; "
+            "empty for conserve_dc=False).",
             py::arg("q"),
             py::arg("term_i"),
             py::arg("term_j"),
@@ -201,7 +203,7 @@ pyExportPsfModel(py::module_& m) {
             py::arg("stamp"),
             py::arg("coord_scale"),
             py::arg("lanczos_n"),
-            py::arg("dc_coeff")
+            py::arg("dc_kval")
         )
         .def("compute_image",
             [](const PiffModel& self, double x, double y) {
@@ -418,6 +420,37 @@ pyExportPsfModel(py::module_& m) {
         "columns pad top-heavy.  Any dtype is accepted and the result "
         "is float64.",
         py::arg("array"), py::arg("target_shape") = std::pair<int, int>(64, 64)
+    );
+
+    psfmodel.def("lanczos_kernel",
+        [](
+            const py::array_t<
+                double, py::array::c_style | py::array::forcecast
+            >& x,
+            int lanczos_n,
+            const py::array_t<
+                double, py::array::c_style | py::array::forcecast
+            >& dc_kval
+        ) {
+            const std::vector<piff_real> kv(
+                dc_kval.data(), dc_kval.data() + dc_kval.size()
+            );
+            py::array_t<double> out(
+                std::vector<py::ssize_t>(x.shape(), x.shape() + x.ndim())
+            );
+            const double* xp = x.data();
+            double* op = out.mutable_data();
+            for (py::ssize_t i = 0; i < x.size(); ++i) {
+                op[i] = static_cast<double>(
+                    lanczos_xval(static_cast<piff_real>(xp[i]), lanczos_n, kv)
+                );
+            }
+            return out;
+        },
+        "The Lanczos-n interpolation kernel used by PiffModel, evaluated "
+        "at x (pixels), with the conserve_dc corrections dc_kval "
+        "(K_1..K_5; empty for conserve_dc=False).  Exposed for tests.",
+        py::arg("x"), py::arg("lanczos_n"), py::arg("dc_kval")
     );
 }
 

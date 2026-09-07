@@ -343,6 +343,43 @@ private:
 // flip this alias back to double to restore exact agreement.
 using piff_real = double;
 
+// Lanczos-n interpolation kernel exactly as galsim evaluates it
+// (Interpolant.cpp, Lanczos::xCalc).  The raw kernel sinc(x) sinc(x/n),
+// truncated at |x| >= n, does not conserve a flat field; galsim's
+// conserve_dc divides it by
+//     1 - 2 sum_{m=1}^{5} K_m (1 - cos(2 pi m x)),
+// where K_m is the Fourier transform of the raw kernel at integer
+// frequency m (galsim writes the same factor as polynomials in
+// sin^2(pi x)).  An empty dc_kval is conserve_dc = False.  The K_m are
+// computed by the Python loader (anacal.psf._lanczos_dc_kvals) with
+// plain quadrature, so galsim itself is not needed.
+inline piff_real
+lanczos_xval(piff_real x, int n, const std::vector<piff_real>& dc_kval) {
+    constexpr piff_real PI_AFW = static_cast<piff_real>(
+        3.141592653589793238462643383279506
+    );
+    const piff_real ax = std::abs(x);
+    if (ax >= static_cast<piff_real>(n)) return piff_real(0);
+    auto sinc = [](piff_real t) -> piff_real {
+        // below this the ratio is 1 to the precision of piff_real
+        if (std::fabs(t) < std::numeric_limits<piff_real>::epsilon())
+            return piff_real(1);
+        const piff_real pt = static_cast<piff_real>(
+            3.141592653589793238462643383279506
+        ) * t;
+        return std::sin(pt) / pt;
+    };
+    const piff_real val = sinc(x) * sinc(x / static_cast<piff_real>(n));
+    piff_real corr = 1;
+    for (std::size_t m = 1; m <= dc_kval.size(); ++m) {
+        corr -= piff_real(2) * dc_kval[m - 1] *
+                (piff_real(1) - std::cos(
+                    piff_real(2) * PI_AFW * static_cast<piff_real>(m) * x
+                ));
+    }
+    return val / corr;
+}
+
 class PiffModel : public SingleVisitPsf {
 public:
     int nmodel;                   // model grid size N (odd)
@@ -352,17 +389,17 @@ public:
     std::vector<int> term_i;      // u exponent per term
     std::vector<int> term_j;      // v exponent per term
     int lanczos_n;                // galsim Lanczos order (11 for DP1)
-    std::vector<piff_real> dc_coeff;  // conserve_dc corrections c_m
+    std::vector<piff_real> dc_kval;   // conserve_dc K_m, m = 1..5
 
     PiffModel(
         int nmodel_, int stamp_, double coord_scale_,
         std::vector<double> q_,
         std::vector<int> term_i_, std::vector<int> term_j_,
-        int lanczos_n_, std::vector<double> dc_coeff_
+        int lanczos_n_, std::vector<double> dc_kval_
     ) : nmodel(nmodel_), stamp(stamp_), coord_scale(coord_scale_),
         q(q_.begin(), q_.end()), term_i(std::move(term_i_)),
         term_j(std::move(term_j_)), lanczos_n(lanczos_n_),
-        dc_coeff(dc_coeff_.begin(), dc_coeff_.end())
+        dc_kval(dc_kval_.begin(), dc_kval_.end())
     {
         if (nmodel % 2 == 0 || stamp % 2 == 0) {
             throw std::runtime_error(
@@ -393,30 +430,7 @@ public:
     // periodic flux-conservation correction (coefficients supplied by
     // the loader, solved from galsim's own xval).
     inline piff_real kfun(piff_real x) const {
-        constexpr piff_real PI_AFW = static_cast<piff_real>(
-            3.141592653589793238462643383279506
-        );
-        const piff_real ax = std::abs(x);
-        if (ax >= static_cast<piff_real>(lanczos_n)) return piff_real(0);
-        auto sinc = [](piff_real t) -> piff_real {
-            // below this the ratio is 1 to the precision of piff_real
-            if (std::fabs(t) < std::numeric_limits<piff_real>::epsilon())
-                return piff_real(1);
-            const piff_real pt = static_cast<piff_real>(
-                3.141592653589793238462643383279506
-            ) * t;
-            return std::sin(pt) / pt;
-        };
-        piff_real val = sinc(x) * sinc(x / static_cast<piff_real>(lanczos_n));
-        piff_real corr = 1;
-        for (std::size_t m = 1; m <= dc_coeff.size(); ++m) {
-            corr += dc_coeff[m - 1] *
-                    (piff_real(1) - std::cos(
-                        piff_real(2) * PI_AFW *
-                        static_cast<piff_real>(m) * x
-                    ));
-        }
-        return val * corr;
+        return lanczos_xval(x, lanczos_n, dc_kval);
     }
 
     // params(u, v) = q . basis, normalized to unit sum, reshaped (N, N)
