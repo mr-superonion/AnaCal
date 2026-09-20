@@ -108,6 +108,14 @@ pyExportNgmix(py::module_& m) {
             "Returns the distorted model value at x, y",
             py::arg("x"), py::arg("y"), py::arg("c")
         )
+        .def("get_loss", &NgmixGaussian::get_loss,
+            "chi2 of one pixel with its gradient and Gauss-Newton curvature "
+            "(diagonal and cross terms) in (F, mxx, myy, mxy, x1, x2), given "
+            "the pixel value, its variance, the r2 lossNumber from get_r2 "
+            "and the modelKernelD.",
+            py::arg("img_val"), py::arg("variance_val"), py::arg("r2"),
+            py::arg("c")
+        )
         .def("get_shape", &NgmixGaussian::get_shape,
             "Returns shape (e1, e2)"
         )

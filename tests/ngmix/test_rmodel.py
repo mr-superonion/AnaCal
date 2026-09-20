@@ -73,6 +73,145 @@ def test_ngmix_gaussian_against_jax():
     return
 
 
+# jax.grad of the model at the pixel (-0.43, 0.21), in the order
+# (F, mxx, myy, mxy, x1, x2); same values as pinned above
+_JAX_MODEL = 0.2224227455
+_JAX_GRAD = np.array([
+    0.1588733897, 0.1378220981, 0.2027733151, -1.3256970074,
+    -0.5228219703, 0.5433435420,
+])
+_PAR_NAMES = ["F", "mxx", "myy", "mxy", "x1", "x2"]
+
+
+def _loss_gradient(loss):
+    return np.array([
+        getattr(loss, "v_" + n).v for n in _PAR_NAMES
+    ])
+
+
+def _loss_curvature(loss):
+    """The 6x6 Gauss-Newton matrix from the lossNumber fields, with
+    every off-diagonal entry read from its own field."""
+    pairs = {
+        ("F", "F"): "v_FF", ("F", "mxx"): "v_Fmxx", ("F", "myy"): "v_Fmyy",
+        ("F", "mxy"): "v_Fmxy", ("F", "x1"): "v_Fx1", ("F", "x2"): "v_Fx2",
+        ("mxx", "mxx"): "v_mxxmxx", ("mxx", "myy"): "v_mxxmyy",
+        ("mxx", "mxy"): "v_mxxmxy", ("mxx", "x1"): "v_mxxx1",
+        ("mxx", "x2"): "v_mxxx2", ("myy", "myy"): "v_myymyy",
+        ("myy", "mxy"): "v_myymxy", ("myy", "x1"): "v_myyx1",
+        ("myy", "x2"): "v_myyx2", ("mxy", "mxy"): "v_mxymxy",
+        ("mxy", "x1"): "v_mxyx1", ("mxy", "x2"): "v_mxyx2",
+        ("x1", "x1"): "v_x1x1", ("x1", "x2"): "v_x1x2", ("x2", "x2"): "v_x2x2",
+    }
+    h = np.zeros((6, 6))
+    for (a, b), field in pairs.items():
+        i, j = _PAR_NAMES.index(a), _PAR_NAMES.index(b)
+        h[i, j] = h[j, i] = getattr(loss, field).v
+    return h
+
+
+def test_loss_gradient_and_curvature_against_jax():
+    """get_loss accumulates, per pixel, the chi2 gradient
+    b_i = -2 (d - m) dm/dp_i / var and the Gauss-Newton curvature
+    H_ij = 2 (dm/dp_i)(dm/dp_j) / var, every cross term included.  Both
+    are checked against the JAX-pinned model gradient at the same
+    pixel, for two pixel values (one on each side of the model)."""
+    m = _model(FLUX, MXX, MYY, MXY, X1, X2)
+    kernel = m.prepare_modelD(SCALE, SIGMA)
+    x, y, var = -0.43, 0.21, 0.3
+    r2 = m.get_r2(x, y, kernel)
+    for d in (0.5, 0.1):
+        loss = m.get_loss(anacal.math.qnumber(d), var, r2, kernel)
+        resid = d - _JAX_MODEL
+        np.testing.assert_allclose(loss.v.v, resid**2 / var, rtol=1e-8)
+        np.testing.assert_allclose(loss.v_in.v, loss.v.v, rtol=0)
+        np.testing.assert_allclose(
+            _loss_gradient(loss), -2.0 * resid * _JAX_GRAD / var,
+            rtol=1e-7, err_msg="chi2 gradient",
+        )
+        np.testing.assert_allclose(
+            _loss_curvature(loss), 2.0 * np.outer(_JAX_GRAD, _JAX_GRAD) / var,
+            rtol=1e-7, err_msg="Gauss-Newton curvature (all 21 entries)",
+        )
+        assert loss.n_pix == 1.0
+
+
+def _stamp_pixels():
+    xs = np.arange(-2.0, 2.01, 0.5)
+    return [(x, y) for x in xs for y in xs]
+
+
+def _chi2_gradient(pars, data, var):
+    """Sum of the per-pixel get_loss gradients over a stamp."""
+    m = _model(*pars)
+    kernel = m.prepare_modelD(SCALE, SIGMA)
+    g = np.zeros(6)
+    for (x, y), d in zip(_stamp_pixels(), data):
+        loss = m.get_loss(
+            anacal.math.qnumber(d), var, m.get_r2(x, y, kernel), kernel
+        )
+        g += _loss_gradient(loss)
+    return g
+
+
+def test_loss_curvature_is_hessian_at_zero_residual():
+    """Independent of JAX: on a stamp whose data equal the model, the
+    exact Hessian of chi2 is the Gauss-Newton matrix (the residual term
+    vanishes), so the summed curvature, cross terms included, must
+    match central finite differences of the summed gradient; and the
+    summed gradient must match finite differences of chi2 itself for
+    data that do not equal the model."""
+    pars = [FLUX, MXX, MYY, MXY, X1, X2]
+    var = 0.3
+    m = _model(*pars)
+    kernel = m.prepare_modelD(SCALE, SIGMA)
+    model_data = np.array([
+        m.get_model(x, y, kernel).v.v for x, y in _stamp_pixels()
+    ])
+    h_an = np.zeros((6, 6))
+    for (x, y), d in zip(_stamp_pixels(), model_data):
+        loss = m.get_loss(
+            anacal.math.qnumber(d), var, m.get_r2(x, y, kernel), kernel
+        )
+        h_an += _loss_curvature(loss)
+    h = 1e-5
+    h_fd = np.zeros((6, 6))
+    for k in range(6):
+        up, dn = list(pars), list(pars)
+        up[k] += h
+        dn[k] -= h
+        h_fd[:, k] = (
+            _chi2_gradient(up, model_data, var)
+            - _chi2_gradient(dn, model_data, var)
+        ) / (2.0 * h)
+    np.testing.assert_allclose(h_fd, h_fd.T, rtol=1e-5, atol=1e-8)
+    np.testing.assert_allclose(
+        h_an, h_fd, rtol=2e-5, atol=1e-8,
+        err_msg="summed Gauss-Newton curvature vs FD Hessian",
+    )
+
+    # gradient against finite differences of chi2 on perturbed data
+    data = model_data * 1.3 + 0.05
+
+    def chi2(p):
+        mm = _model(*p)
+        kk = mm.prepare_modelD(SCALE, SIGMA)
+        return sum(
+            (d - mm.get_model(x, y, kk).v.v) ** 2 / var
+            for (x, y), d in zip(_stamp_pixels(), data)
+        )
+
+    g_an = _chi2_gradient(pars, data, var)
+    for k in range(6):
+        up, dn = list(pars), list(pars)
+        up[k] += h
+        dn[k] -= h
+        np.testing.assert_allclose(
+            g_an[k], (chi2(up) - chi2(dn)) / (2.0 * h), rtol=1e-6,
+            err_msg=f"d chi2 / d {_PAR_NAMES[k]}",
+        )
+
+
 def _value(pars, x, y):
     m = _model(*pars)
     return m.get_model(x, y, m.prepare_modelD(SCALE, SIGMA)).v.v
