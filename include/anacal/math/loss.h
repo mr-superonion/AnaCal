@@ -7,104 +7,67 @@
 namespace anacal {
 namespace math {
 
+// Every qnumber field of lossNumber, once: the operators below are
+// generated from this list so that a field added here cannot be
+// forgotten in one of them.  v is the loss; v_X its gradient in model
+// parameter X (F: flux; mxx, myy, mxy: intrinsic covariance
+// components; x1, x2: centre); v_XX and v_XY the Gauss-Newton
+// curvature (diagonal and cross terms).
+#define ANACAL_LOSS_FIELDS(X) \
+    X(v) X(v_in) \
+    X(v_F) X(v_mxx) X(v_myy) X(v_mxy) X(v_x1) X(v_x2) \
+    X(v_FF) X(v_mxxmxx) X(v_myymyy) X(v_mxymxy) X(v_x1x1) X(v_x2x2) \
+    X(v_mxxmyy) X(v_mxxmxy) X(v_myymxy) \
+    X(v_mxxx1) X(v_mxxx2) X(v_myyx1) X(v_myyx2) X(v_mxyx1) X(v_mxyx2) \
+    X(v_x1x2) \
+    X(v_Fmxx) X(v_Fmyy) X(v_Fmxy) X(v_Fx1) X(v_Fx2)
+
 struct lossNumber {
     // value with derivatives to Gaussian model parameters
-    math::qnumber v, v_F, v_t, v_a1, v_a2, v_x1, v_x2;
-    math::qnumber v_FF, v_tt, v_a1a1, v_a2a2, v_x1x1, v_x2x2;
+#define ANACAL_LOSS_DECLARE(name) math::qnumber name;
+    ANACAL_LOSS_FIELDS(ANACAL_LOSS_DECLARE)
+#undef ANACAL_LOSS_DECLARE
+    // v is the chi2 of the whole fitting window; v_in and n_pix are the
+    // chi2 and the pixel count of the pixels the model actually covers
+    // (inside its apodisation edge) -- what the misfit damping in
+    // update_model_params looks at, so that a neighbour elsewhere in
+    // the window does not count as misfit of this source
+    double n_pix = 0.0;
 
     lossNumber() = default;
 
-    lossNumber(
-        math::qnumber v,
-        math::qnumber v_F,
-        math::qnumber v_t,
-        math::qnumber v_a1,
-        math::qnumber v_a2,
-        math::qnumber v_x1,
-        math::qnumber v_x2,
-        math::qnumber v_FF,
-        math::qnumber v_tt,
-        math::qnumber v_a1a1,
-        math::qnumber v_a2a2,
-        math::qnumber v_x1x1,
-        math::qnumber v_x2x2
-    ) : v(v), v_F(v_F), v_t(v_t), v_a1(v_a1), v_a2(v_a2),
-        v_x1(v_x1), v_x2(v_x2),
-        v_FF(v_FF), v_tt(v_tt), v_a1a1(v_a1a1), v_a2a2(v_a2a2),
-        v_x1x1(v_x1x1), v_x2x2(v_x2x2) {}
-
-    // Define addition for lossNumber + lossNumber
     lossNumber operator+(const lossNumber& other) const {
-        return lossNumber(
-            this->v + other.v,
-            this->v_F + other.v_F,
-            this->v_t + other.v_t,
-            this->v_a1 + other.v_a1,
-            this->v_a2 + other.v_a2,
-            this->v_x1 + other.v_x1,
-            this->v_x2 + other.v_x2,
-            this->v_FF + other.v_FF,
-            this->v_tt + other.v_tt,
-            this->v_a1a1 + other.v_a1a1,
-            this->v_a2a2 + other.v_a2a2,
-            this->v_x1x1 + other.v_x1x1,
-            this->v_x2x2 + other.v_x2x2
-        );
+        lossNumber out;
+#define ANACAL_LOSS_ADD(name) out.name = this->name + other.name;
+        ANACAL_LOSS_FIELDS(ANACAL_LOSS_ADD)
+#undef ANACAL_LOSS_ADD
+        out.n_pix = this->n_pix + other.n_pix;
+        return out;
     }
 
-    // Define subtraction for lossNumber - lossNumber
     lossNumber operator-(const lossNumber& other) const {
-        return lossNumber(
-            this->v - other.v,
-            this->v_F - other.v_F,
-            this->v_t - other.v_t,
-            this->v_a1 - other.v_a1,
-            this->v_a2 - other.v_a2,
-            this->v_x1 - other.v_x1,
-            this->v_x2 - other.v_x2,
-            this->v_FF - other.v_FF,
-            this->v_tt - other.v_tt,
-            this->v_a1a1 - other.v_a1a1,
-            this->v_a2a2 - other.v_a2a2,
-            this->v_x1x1 - other.v_x1x1,
-            this->v_x2x2 - other.v_x2x2
-        );
+        lossNumber out;
+#define ANACAL_LOSS_SUB(name) out.name = this->name - other.name;
+        ANACAL_LOSS_FIELDS(ANACAL_LOSS_SUB)
+#undef ANACAL_LOSS_SUB
+        out.n_pix = this->n_pix - other.n_pix;
+        return out;
     }
 
-    // Define unary negation for -lossNumber
     lossNumber operator-() const {
-        return lossNumber(
-            -this->v,
-            -this->v_F,
-            -this->v_t,
-            -this->v_a1,
-            -this->v_a2,
-            -this->v_x1,
-            -this->v_x2,
-            -this->v_FF,
-            -this->v_tt,
-            -this->v_a1a1,
-            -this->v_a2a2,
-            -this->v_x1x1,
-            -this->v_x2x2
-        );
+        lossNumber out;
+#define ANACAL_LOSS_NEG(name) out.name = -this->name;
+        ANACAL_LOSS_FIELDS(ANACAL_LOSS_NEG)
+#undef ANACAL_LOSS_NEG
+        out.n_pix = -this->n_pix;
+        return out;
     }
 
     inline void reset() {
-        this->v = math::qnumber(0.0);
-        this->v_F = math::qnumber(0.0);
-        this->v_t = math::qnumber(0.0);
-        this->v_a1 = math::qnumber(0.0);
-        this->v_a2 = math::qnumber(0.0);
-        this->v_x1 = math::qnumber(0.0);
-        this->v_x2 = math::qnumber(0.0);
-
-        this->v_FF = math::qnumber(0.0);
-        this->v_tt = math::qnumber(0.0);
-        this->v_a1a1 = math::qnumber(0.0);
-        this->v_a2a2 = math::qnumber(0.0);
-        this->v_x1x1 = math::qnumber(0.0);
-        this->v_x2x2 = math::qnumber(0.0);
+#define ANACAL_LOSS_RESET(name) this->name = math::qnumber(0.0);
+        ANACAL_LOSS_FIELDS(ANACAL_LOSS_RESET)
+#undef ANACAL_LOSS_RESET
+        this->n_pix = 0.0;
     };
 };
 

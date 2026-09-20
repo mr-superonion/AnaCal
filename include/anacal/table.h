@@ -18,21 +18,21 @@ struct galRow{
     double dflux_dg2;
     double dflux_dj1;
     double dflux_dj2;
-    double t;
-    double dt_dg1;
-    double dt_dg2;
-    double dt_dj1;
-    double dt_dj2;
-    double a1;
-    double da1_dg1;
-    double da1_dg2;
-    double da1_dj1;
-    double da1_dj2;
-    double a2;
-    double da2_dg1;
-    double da2_dg2;
-    double da2_dj1;
-    double da2_dj2;
+    double mxx;
+    double dmxx_dg1;
+    double dmxx_dg2;
+    double dmxx_dj1;
+    double dmxx_dj2;
+    double myy;
+    double dmyy_dg1;
+    double dmyy_dg2;
+    double dmyy_dj1;
+    double dmyy_dj2;
+    double mxy;
+    double dmxy_dg1;
+    double dmxy_dg2;
+    double dmxy_dj1;
+    double dmxy_dj2;
     double e1;
     double de1_dg1;
     double de1_dg2;
@@ -103,6 +103,9 @@ struct galRow{
     double fpfs_dm2_dj2;
     double x1_det;
     double x2_det;
+    // epochs of the model fit this source actually went through (the
+    // convergence gate stops a source early; see GaussFit)
+    uint8_t n_epochs;
 };
 
 struct galNumber {
@@ -129,6 +132,13 @@ struct galNumber {
     float n_mask_discontinuity=0.0f;
     bool is_primary=true;
     bool initialized=false;
+    // Convergence state of the model fit (GaussFit::process_cell_impl):
+    // ``converged`` is set once an epoch's step, value and response
+    // slots together, falls below the fitter's conv_tol, after which the
+    // source is skipped; ``n_epochs`` counts the epochs it went through.
+    // Both are reset when a measurement starts.
+    bool converged=false;
+    uint8_t n_epochs=0;
     math::lossNumber loss;
     math::qnumber fpfs_e1;
     math::qnumber fpfs_e2;
@@ -218,9 +228,11 @@ struct galNumber {
         row.ra = ra;
         row.dec = dec;
         ANACAL_ROW_PUT_Q(flux, dflux, model.F);
-        ANACAL_ROW_PUT_Q(t, dt, model.t);
-        ANACAL_ROW_PUT_Q(a1, da1, model.a1);
-        ANACAL_ROW_PUT_Q(a2, da2, model.a2);
+        ANACAL_ROW_PUT_Q(mxx, dmxx, model.mxx);
+        ANACAL_ROW_PUT_Q(myy, dmyy, model.myy);
+        ANACAL_ROW_PUT_Q(mxy, dmxy, model.mxy);
+        // the semi-axes and angle are not stored: table::axes_from_catalog
+        // derives them from mxx / myy / mxy when needed
         ANACAL_ROW_PUT_Q(e1, de1, shape[0]);
         ANACAL_ROW_PUT_Q(e2, de2, shape[1]);
         ANACAL_ROW_PUT_Q(x1, dx1, model.x1);
@@ -238,6 +250,7 @@ struct galNumber {
         ANACAL_ROW_PUT_Q(fpfs_e2, fpfs_de2, fpfs_e2);
         ANACAL_ROW_PUT_Q(fpfs_m0, fpfs_dm0, fpfs_m0);
         ANACAL_ROW_PUT_Q(fpfs_m2, fpfs_dm2, fpfs_m2);
+        row.n_epochs = n_epochs;
         row.x1_det = x1_det;
         row.x2_det = x2_det;
         return row;
@@ -248,11 +261,11 @@ struct galNumber {
         ra = row.ra;
         dec = row.dec;
         ANACAL_ROW_GET_Q(flux, dflux, model.F);
-        ANACAL_ROW_GET_Q(t, dt, model.t);
-        ANACAL_ROW_GET_Q(a1, da1, model.a1);
-        ANACAL_ROW_GET_Q(a2, da2, model.a2);
-        // e1/e2 are DERIVED columns: to_row computes them from a1/a2/t via
-        // model.get_shape(), so there is nothing to restore for them here.
+        ANACAL_ROW_GET_Q(mxx, dmxx, model.mxx);
+        ANACAL_ROW_GET_Q(myy, dmyy, model.myy);
+        ANACAL_ROW_GET_Q(mxy, dmxy, model.mxy);
+        // e1/e2 are DERIVED columns: to_row computes them from the
+        // covariance, so there is nothing to restore here.
         ANACAL_ROW_GET_Q(x1, dx1, model.x1);
         ANACAL_ROW_GET_Q(x2, dx2, model.x2);
         ANACAL_ROW_GET_Q(bkg, dbkg, bkg);
@@ -270,6 +283,7 @@ struct galNumber {
         ANACAL_ROW_GET_Q(fpfs_m2, fpfs_dm2, fpfs_m2);
         x1_det = row.x1_det;
         x2_det = row.x2_det;
+        n_epochs = row.n_epochs;
     };
 
 #undef ANACAL_ROW_PUT_Q

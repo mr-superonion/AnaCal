@@ -243,6 +243,19 @@ inline qnumber exp(
     );
 }; // exponential function
 
+inline qnumber log(
+    const qnumber& qn
+) {
+    double dl = 1.0 / qn.v;
+    return qnumber(
+        std::log(qn.v),
+        dl * qn.g1,
+        dl * qn.g2,
+        dl * qn.x1,
+        dl * qn.x2
+    );
+}; // natural log (qn.v > 0)
+
 inline qnumber tanh(
     const qnumber& qn
 ) {

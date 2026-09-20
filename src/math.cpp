@@ -249,33 +249,13 @@ namespace math {
         math.def("eye6", &eye<6>, "Generate a indentity qmatrix");
         math.def("eye8", &eye<8>, "Generate a indentity qmatrix");
 
-        py::class_<lossNumber>(math, "lossNumber")
-            .def(py::init<
-                qnumber, qnumber, qnumber, qnumber,
-                qnumber, qnumber, qnumber, qnumber,
-                qnumber, qnumber, qnumber, qnumber,
-                qnumber>(),
-                py::arg("v"),
-                py::arg("v_F"), py::arg("v_t"),
-                py::arg("v_a1"), py::arg("v_a2"),
-                py::arg("v_x1"), py::arg("v_x2"),
-                py::arg("v_FF"), py::arg("v_tt"),
-                py::arg("v_a1a1"), py::arg("v_a2a2"),
-                py::arg("v_x1x1"), py::arg("v_x2x2")
-            )
-            .def_readwrite("v", &lossNumber::v)
-            .def_readwrite("v_F", &lossNumber::v_F)
-            .def_readwrite("v_t", &lossNumber::v_t)
-            .def_readwrite("v_a1", &lossNumber::v_a1)
-            .def_readwrite("v_a2", &lossNumber::v_a2)
-            .def_readwrite("v_x1", &lossNumber::v_x1)
-            .def_readwrite("v_x2", &lossNumber::v_x2)
-            .def_readwrite("v_FF", &lossNumber::v_FF)
-            .def_readwrite("v_tt", &lossNumber::v_tt)
-            .def_readwrite("v_a1a1", &lossNumber::v_a1a1)
-            .def_readwrite("v_a2a2", &lossNumber::v_a2a2)
-            .def_readwrite("v_x1x1", &lossNumber::v_x1x1)
-            .def_readwrite("v_x2x2", &lossNumber::v_x2x2);
+        py::class_<lossNumber> loss_cls(math, "lossNumber");
+        loss_cls.def(py::init<>());
+#define ANACAL_LOSS_BIND(name) \
+        loss_cls.def_readwrite(#name, &lossNumber::name);
+        ANACAL_LOSS_FIELDS(ANACAL_LOSS_BIND)
+#undef ANACAL_LOSS_BIND
+        loss_cls.def_readwrite("n_pix", &lossNumber::n_pix);
 
     }
 } // math

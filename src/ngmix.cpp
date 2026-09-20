@@ -12,18 +12,14 @@ pyExportNgmix(py::module_& m) {
         .def(py::init<>())
         .def_readonly("w_F", &modelPrior::w_F)
         .def_readonly("w_a", &modelPrior::w_a)
-        .def_readonly("w_t", &modelPrior::w_t)
         .def_readonly("w_x", &modelPrior::w_x)
         .def("set_sigma_F", &modelPrior::set_sigma_F,
             "set the Gaussian prior on Flux",
             py::arg("sigma_F")
         )
-        .def("set_sigma_t", &modelPrior::set_sigma_t,
-            "set the Gaussian prior on log radius",
-            py::arg("sigma_t")
-        )
         .def("set_sigma_a", &modelPrior::set_sigma_a,
-            "set the Gaussian prior on ellipticity",
+            "set the Gaussian prior (towards 0, width in arcsec^2) on "
+            "each intrinsic covariance component mxx, myy, mxy",
             py::arg("sigma_a")
         )
         .def("set_sigma_x", &modelPrior::set_sigma_x,
@@ -33,13 +29,20 @@ pyExportNgmix(py::module_& m) {
 
     py::class_<modelKernelB>(ngmix, "modelKernelB")
         .def(py::init<>())
-        .def_readonly("f", &modelKernelB::f);
+        .def_readonly("f", &modelKernelB::f)
+        .def_readonly("ixx", &modelKernelB::ixx)
+        .def_readonly("ixy", &modelKernelB::ixy)
+        .def_readonly("iyy", &modelKernelB::iyy);
 
     py::class_<modelKernelD>(ngmix, "modelKernelD")
         .def(py::init<>())
         .def_readonly("f", &modelKernelD::f)
-        .def_readonly("f_a1", &modelKernelD::f_a1)
-        .def_readonly("f_a2", &modelKernelD::f_a2);
+        .def_readonly("ixx", &modelKernelD::ixx)
+        .def_readonly("ixy", &modelKernelD::ixy)
+        .def_readonly("iyy", &modelKernelD::iyy)
+        .def_readonly("f_mxx", &modelKernelD::f_mxx)
+        .def_readonly("f_myy", &modelKernelD::f_myy)
+        .def_readonly("f_mxy", &modelKernelD::f_mxy);
 
     py::class_<NgmixGaussian>(ngmix, "NgmixGaussian")
         .def(py::init<bool, bool>(),
@@ -47,11 +50,40 @@ pyExportNgmix(py::module_& m) {
             py::arg("force_center")=false
         )
         .def_readwrite("F", &NgmixGaussian::F)
-        .def_readwrite("t", &NgmixGaussian::t)
-        .def_readwrite("a1", &NgmixGaussian::a1)
-        .def_readwrite("a2", &NgmixGaussian::a2)
+        .def_readwrite("mxx", &NgmixGaussian::mxx)
+        .def_readwrite("myy", &NgmixGaussian::myy)
+        .def_readwrite("mxy", &NgmixGaussian::mxy)
+        // a1 / a2 / t are derived from the covariance; setting one of
+        // them rebuilds the covariance from the (a1, a2, t) triple
+        .def_property("a1",
+            [](const NgmixGaussian& m) { return m.get_axes()[0]; },
+            [](NgmixGaussian& m, const math::qnumber& v) {
+                auto ax = m.get_axes(); m.set_axes(v, ax[1], ax[2]);
+            }
+        )
+        .def_property("a2",
+            [](const NgmixGaussian& m) { return m.get_axes()[1]; },
+            [](NgmixGaussian& m, const math::qnumber& v) {
+                auto ax = m.get_axes(); m.set_axes(ax[0], v, ax[2]);
+            }
+        )
+        .def_property("t",
+            [](const NgmixGaussian& m) { return m.get_axes()[2]; },
+            [](NgmixGaussian& m, const math::qnumber& v) {
+                auto ax = m.get_axes(); m.set_axes(ax[0], ax[1], v);
+            }
+        )
+        .def("set_axes", &NgmixGaussian::set_axes,
+            "Set the intrinsic covariance from semi-axes a1 (along t), a2 "
+            "and the angle t",
+            py::arg("a1"), py::arg("a2"), py::arg("t")
+        )
+        .def("get_axes", &NgmixGaussian::get_axes,
+            "Derived (a1, a2, t) of the intrinsic covariance"
+        )
         .def_readwrite("x1", &NgmixGaussian::x1)
         .def_readwrite("x2", &NgmixGaussian::x2)
+        .def_readwrite("sigma2_shape", &NgmixGaussian::sigma2_shape)
         .def_readwrite("force_size", &NgmixGaussian::force_size)
         .def_readwrite("force_center", &NgmixGaussian::force_center)
         .def("prepare_modelD", &NgmixGaussian::prepare_modelD,
@@ -91,7 +123,8 @@ pyExportNgmix(py::module_& m) {
     py::class_<GaussFit>(ngmix, "GaussFit")
         .def(
             py::init<
-                double, double, int, bool, bool, double, bool
+                double, double, int, bool, bool, double, bool,
+                double, double, double, double, double, double, double
             >(),
             py::arg("scale"),
             py::arg("sigma_arcsec"),
@@ -99,7 +132,14 @@ pyExportNgmix(py::module_& m) {
             py::arg("force_size")=false,
             py::arg("force_center")=false,
             py::arg("fpfs_c0")=1.0,
-            py::arg("do_fpfs")=true
+            py::arg("do_fpfs")=true,
+            py::arg("lm_lambda0")=0.2,
+            py::arg("lm_decay")=0.5,
+            py::arg("damping_floor")=50.0,
+            py::arg("conv_tol")=1.0e-10,
+            py::arg("trust_shape")=0.05,
+            py::arg("trust_center")=0.1,
+            py::arg("misfit_damping")=1.0
         )
         .def("process_cell", &GaussFit::process_cell,
             "Run iteration for fitting",

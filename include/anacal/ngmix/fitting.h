@@ -13,6 +13,12 @@ namespace ngmix {
 // Radius of the model-fitting window about each source, in arcsec.
 inline constexpr double fit_radius_arcsec = 3.5;
 
+// Smallest semi-axis the moment-based initialisation hands to the fit,
+// in arcsec.  It must be strictly positive: every a1 / a2 derivative of
+// the model carries a factor a1 / a2 (the model depends on their
+// squares), so a source started at exactly zero would never move.
+inline constexpr double init_a_min = 0.1;
+
 class GaussFit {
 public:
     // stamp dimension
@@ -22,6 +28,15 @@ public:
     bool force_size, force_center;
     double fpfs_c0;
     bool do_fpfs;
+    // damping of the shape / centre step (see update_model_params):
+    // lam_k = lm_lambda0 * lm_decay^k on epoch k, a constant floor on
+    // the diagonal, a misfit term, and per-epoch trust radii on the
+    // shape (arcsec^2) and the centre (arcsec)
+    double lm_lambda0, lm_decay, damping_floor;
+    double trust_shape, trust_center, misfit_damping;
+    // a source stops once the size of its step -- value and response
+    // slots together, in chi2 units (update_model_params) -- is below this
+    double conv_tol;
     double sigma2, sigma_m2, rfac, ffac, ffac2, ffac3;
     double sigma2_lim;
     double r2_lim_stamp;
@@ -33,13 +48,40 @@ public:
         bool force_size=false,
         bool force_center=false,
         double fpfs_c0=1.0,
-        bool do_fpfs=true
+        bool do_fpfs=true,
+        double lm_lambda0=0.2,
+        double lm_decay=0.5,
+        double damping_floor=50.0,
+        double conv_tol=1.0e-10,
+        double trust_shape=0.05,
+        double trust_center=0.1,
+        double misfit_damping=1.0
     ) : scale(scale), sigma_arcsec(sigma_arcsec), stamp_size(stamp_size),
         ss2(stamp_size / 2), force_size(force_size),
         force_center(force_center),
         fpfs_c0(fpfs_c0),
-        do_fpfs(do_fpfs)
+        do_fpfs(do_fpfs),
+        lm_lambda0(lm_lambda0), lm_decay(lm_decay),
+        damping_floor(damping_floor),
+        trust_shape(trust_shape), trust_center(trust_center),
+        misfit_damping(misfit_damping),
+        conv_tol(conv_tol)
     {
+        if (trust_shape < 0.0 || trust_center < 0.0 || misfit_damping < 0.0) {
+            throw std::invalid_argument(
+                "GaussFit: need trust_shape, trust_center, misfit_damping >= 0"
+            );
+        }
+        if (lm_lambda0 < 0.0 || lm_decay <= 0.0 || lm_decay > 1.0 ||
+            damping_floor < 0.0) {
+            throw std::invalid_argument(
+                "GaussFit: need lm_lambda0 >= 0, 0 < lm_decay <= 1, "
+                "damping_floor >= 0"
+            );
+        }
+        if (!(conv_tol >= 0.0)) {
+            throw std::invalid_argument("GaussFit: need conv_tol >= 0");
+        }
         this->sigma2 = sigma_arcsec * sigma_arcsec;
         this->sigma_m2 = 1.0 / this->sigma2;
         this->rfac = -0.5 * this->sigma_m2;
@@ -71,6 +113,15 @@ public:
                     math::lossNumber r2 = model.get_r2(
                         cell.xvs[i], cell.yvs[j], kernel
                     );
+                    if (r2.v.v >= apod_r2_hi) {
+                        // model and all its derivatives are exactly
+                        // zero here: only the data term of chi2 is
+                        // left, kept so that loss.v stays the chi2 of
+                        // the whole window
+                        const math::qnumber& d = data[jj + i];
+                        src.loss.v = src.loss.v + d * d * (1.0 / variance);
+                        continue;
+                    }
                     src.loss = src.loss + model.get_loss(
                         data[jj + i], variance, r2, kernel
                     );
@@ -78,6 +129,87 @@ public:
             }
         }
         return;
+    };
+
+    // Flux pre-pass: F = sum(d m~) / (sum(m~^2) + w_F var / 2) for the
+    // CURRENT shape, the exact minimiser of chi2 (+ the Gaussian flux
+    // prior) in F.  Called at the top of every epoch, before the loss and
+    // the shape step, so the shape gradients are always taken at the
+    // optimal flux for the shape they belong to: d chi2 / dF = 0 there,
+    // so the partial shape gradient at fixed F is the gradient of the
+    // profiled chi2.  A negative or zero starting flux is overwritten
+    // before any shape gradient is formed, and F* < 0 only when the data
+    // in the window are genuinely negative.  F* is a ratio of two qnumber
+    // sums, so the shear response propagates through it.
+    inline void
+    solve_flux(
+        const std::vector<math::qnumber> & data,
+        double variance,
+        table::galNumber & src,
+        const geometry::cell & cell,
+        const modelPrior & prior
+    ) const {
+        ngmix::NgmixGaussian & model = src.model;
+        const modelKernelB kb = model.prepare_modelB(
+            this->scale, this->sigma_arcsec
+        );
+        const StampBounds bb = model.get_stamp_bounds(
+            cell, fit_radius_arcsec / cell.scale
+        );
+        math::qnumber sdm, smm;
+        for (int j = bb.j_min; (j < bb.j_max); ++j) {
+            if (!cell.ymsk[j]) continue;
+            int jj = j * cell.nx;
+            for (int i = bb.i_min; (i < bb.i_max); ++i) {
+                if (!cell.xmsk[i]) continue;
+                if (bb.has_point(i, j)) {
+                    math::qnumber r2 = model.get_r2(
+                        cell.xvs[i], cell.yvs[j], kb
+                    );
+                    if (r2.v >= apod_r2_hi) continue;
+                    math::qnumber mt = model.get_unit_model_from_r2(r2, kb);
+                    sdm = sdm + data[jj + i] * mt;
+                    smm = smm + mt * mt;
+                }
+            }
+        }
+        math::qnumber denom = smm + prior.w_F * (0.5 * variance);
+        if (denom.v > 0.0) {
+            model.F = sdm / denom;
+        }
+        return;
+    };
+
+    // Reduced chi2 a perfect model reaches on this cell: the robust
+    // variance of the (deconvolved, re-smoothed) data over the cell,
+    // MAD^2, divided by the variance the loss assumes, and never below
+    // 1 (data quieter than the nominal noise -- a noiseless test stamp
+    // -- simply gives a reduced chi2 below 1 and no misfit).  Every 2nd
+    // pixel in each direction is enough for a per-cell scalar.
+    inline double
+    misfit_reference(
+        const std::vector<math::qnumber> & data,
+        double variance,
+        const geometry::cell & cell
+    ) const {
+        std::vector<double> v;
+        v.reserve(static_cast<std::size_t>(cell.nx) * cell.ny / 4 + 1);
+        for (int j = 0; j < cell.ny; j += 2) {
+            if (!cell.ymsk[j]) continue;
+            int jj = j * cell.nx;
+            for (int i = 0; i < cell.nx; i += 2) {
+                if (!cell.xmsk[i]) continue;
+                v.push_back(data[jj + i].v);
+            }
+        }
+        if (v.size() < 16 || !(variance > 0.0)) return 1.0;
+        const std::size_t mid = v.size() / 2;
+        std::nth_element(v.begin(), v.begin() + mid, v.end());
+        const double med = v[mid];
+        for (double& x : v) x = std::abs(x - med);
+        std::nth_element(v.begin(), v.begin() + mid, v.end());
+        const double mad = 1.4826 * v[mid];
+        return std::max(mad * mad / variance, 1.0);
     };
 
     inline void
@@ -149,13 +281,40 @@ public:
         return;
     };
 
+    // One eigenvalue ``lam`` of the aperture-weighted covariance of the
+    // deconvolved, re-smoothed image -> the intrinsic variance along it.
+    // The Gaussian aperture (width sigma) and the re-smoothing (sigma)
+    // both enter: for a Gaussian source of observed variance
+    // c = m + sigma^2 the weighted moment is lam = c sigma^2 / (c +
+    // sigma^2).  Both inversions can fail on real data -- a star, noise
+    // or a blended neighbour push lam past sigma^2 or m below zero --
+    // so they are wrapped in SMOOTH clamps (no kink in the estimator):
+    // lam is held inside (0.05, 0.9) sigma^2, which caps m at 8
+    // sigma^2, and m gets a positive floor of init_a_min^2.  A source
+    // whose moments are unusable therefore starts at init_a_min, no
+    // worse than the fixed a_ini it used to start at.
+    inline math::qnumber
+    init_eigen(const math::qnumber& lam) const {
+        const double s2 = this->sigma2;
+        math::qnumber lam_c = smooth_min(lam, 0.9 * s2, 0.05 * s2);
+        lam_c = smooth_max(lam_c, 0.05 * s2, 0.05 * s2);
+        math::qnumber c = lam_c * s2 / (s2 - lam_c);
+        const double amin2 = init_a_min * init_a_min;
+        return smooth_max(c - s2, amin2, amin2);
+    };
+
+    // Initial intrinsic covariance from the Gaussian-weighted quadrupole
+    // moments of the source: eigen-decompose the weighted covariance,
+    // map each eigenvalue through init_eigen and rebuild M at the same
+    // angle.  Everything is a qnumber, so the shear response of the
+    // starting point propagates like the rest of the fit.
     inline void
-    initialize_angle(
+    initialize_shape(
         const std::vector<math::qnumber> & data,
         NgmixGaussian & model,
         const geometry::cell & cell
     ) const {
-        math::qnumber mxx, myy, mxy;
+        math::qnumber m0, mxx, myy, mxy;
         double dd = 1.0 / this->sigma2;
 
         const StampBounds bb = model.get_stamp_bounds(cell, fit_radius_arcsec / cell.scale);
@@ -176,13 +335,30 @@ public:
                 if (bb.has_point(i, j)) {
                     math::qnumber w = math::exp(-0.5 * r2);
                     math::qnumber f = w * data[jj + i];
+                    m0 = m0 + f;
                     mxx = mxx + f * x2;
                     myy = myy + f * y2;
                     mxy = mxy + f * xy;
                 }
             }
         }
-        model.t = 0.5 * math::atan2(2.0 * mxy, mxx - myy);
+        if (m0.v > 0.0) {
+            math::qnumber sxx = mxx / m0;
+            math::qnumber syy = myy / m0;
+            math::qnumber sxy = mxy / m0;
+            math::qnumber tr = sxx + syy;
+            // the tiny offset keeps sqrt differentiable for an exactly
+            // round source (1e-8 arcsec^4, far below any real moment)
+            math::qnumber diff = math::sqrt(
+                math::pow(sxx - syy, 2) + 4.0 * math::pow(sxy, 2) + 1.0e-16
+            );
+            math::qnumber ang = 0.5 * math::atan2(2.0 * sxy, sxx - syy);
+            model.set_eigen(
+                this->init_eigen(0.5 * (tr + diff)),
+                this->init_eigen(0.5 * (tr - diff)),
+                ang
+            );
+        }
         return;
     };
 
@@ -200,7 +376,7 @@ public:
         for (int j = bb.j_min; (j < bb.j_max); ++j) {
             if (!cell.ymsk[j]) continue;
             int jj = j * cell.nx;
-            // Same as initialize_angle: full qnumber subtraction keeps the
+            // Same as initialize_shape: full qnumber subtraction keeps the
             // centroid's shear response in the aperture weight, matching
             // get_fpfs_moments (rmodel.h).
             math::qnumber ys = cell.yvs[j] - model.x2;
@@ -236,8 +412,10 @@ public:
         NgmixGaussian & model,
         const geometry::cell & cell
     ) const {
-        double a_sum = model.a1.v + model.a2.v;
-        double sigma2_flux = this->sigma2 + 0.25 * a_sum * a_sum;
+        // matched aperture: the smoothing plus the mean intrinsic variance
+        double sigma2_flux = this->sigma2 + 0.5 * std::max(
+            model.mxx.v + model.myy.v, 0.0
+        );
         model.F = measure_flux(sigma2_flux, cell, data, model);
         return;
     };
@@ -329,19 +507,33 @@ public:
             }
             src.model.force_size=this->force_size;
             src.model.force_center=this->force_center;
+            src.model.sigma2_shape = this->sigma2;
+            src.converged = false;
+            src.n_epochs = 0;
             if (!src.initialized) {
+                // Shape from the moments (replaces the a_ini / row
+                // values of a1, a2 unless the size is forced); flux
+                // from a matched aperture at that shape.
                 if (!this->force_size) {
-                    initialize_angle(data, src.model, cell);
+                    initialize_shape(data, src.model, cell);
                 }
                 initialize_flux(data, src.model, cell);
                 src.initialized = true;
             }
         }
 
+        const double misfit_ref = (this->misfit_damping > 0.0 && num_epochs > 0)
+            ? this->misfit_reference(data, variance_meas, cell)
+            : 1.0;
         for (int epoch = 0; epoch < num_epochs; ++epoch) {
+            const double lam = this->lm_lambda0 * std::pow(
+                this->lm_decay, static_cast<double>(epoch)
+            );
             for (std::size_t i=0; i<ng; ++i) {
                 table::galNumber & src = catalog[i];
                 if (src.n_mask_base > mvmax) continue;
+                if (src.converged) continue;
+                this->solve_flux(data, variance_meas, src, cell, prior);
                 const modelKernelD kernel = src.model.prepare_modelD(
                     this->scale,
                     this->sigma_arcsec
@@ -349,9 +541,16 @@ public:
                 this->measure_loss(
                     data, variance_meas, src, cell, kernel
                 );
-                src.model.update_model_params(
-                    src.loss, prior, src.x1_det, src.x2_det, variance_meas
+                const double c = src.model.update_model_params(
+                    src.loss, prior, src.x1_det, src.x2_det,
+                    lam, this->damping_floor,
+                    this->trust_shape, this->trust_center,
+                    this->misfit_damping, misfit_ref, this->sigma2
                 );
+                if (src.n_epochs < 255) src.n_epochs += 1;
+                // this step, value and response alike, was below
+                // tolerance: stop here (see update_model_params)
+                if (c < this->conv_tol) src.converged = true;
             }
         }
 

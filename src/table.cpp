@@ -8,9 +8,9 @@ pyExportTable(py::module_& m) {
     PYBIND11_NUMPY_DTYPE(galRow,
         ra, dec,
         flux, dflux_dg1, dflux_dg2, dflux_dj1, dflux_dj2,
-        t, dt_dg1, dt_dg2, dt_dj1, dt_dj2,
-        a1, da1_dg1, da1_dg2, da1_dj1, da1_dj2,
-        a2, da2_dg1, da2_dg2, da2_dj1, da2_dj2,
+        mxx, dmxx_dg1, dmxx_dg2, dmxx_dj1, dmxx_dj2,
+        myy, dmyy_dg1, dmyy_dg2, dmyy_dj1, dmyy_dj2,
+        mxy, dmxy_dg1, dmxy_dg2, dmxy_dj1, dmxy_dj2,
         e1, de1_dg1, de1_dg2, de1_dj1, de1_dj2,
         e2, de2_dg1, de2_dg2, de2_dj1, de2_dj2,
         x1, dx1_dg1, dx1_dg2, dx1_dj1, dx1_dj2,
@@ -27,7 +27,8 @@ pyExportTable(py::module_& m) {
         fpfs_e2, fpfs_de2_dg1, fpfs_de2_dg2, fpfs_de2_dj1, fpfs_de2_dj2,
         fpfs_m0, fpfs_dm0_dg1, fpfs_dm0_dg2, fpfs_dm0_dj1, fpfs_dm0_dj2,
         fpfs_m2, fpfs_dm2_dg1, fpfs_dm2_dg2, fpfs_dm2_dj1, fpfs_dm2_dj2,
-        x1_det, x2_det
+        x1_det, x2_det,
+        n_epochs
     );
     py::module_ table = m.def_submodule(
         "table", "submodule for table"
@@ -59,6 +60,8 @@ pyExportTable(py::module_& m) {
             &galNumber::n_mask_discontinuity
         )
         .def_readonly("loss", &galNumber::loss)
+        .def_readonly("converged", &galNumber::converged)
+        .def_readonly("n_epochs", &galNumber::n_epochs)
         .def_readonly("flux_gauss0", &galNumber::flux_gauss0)
         .def_readonly("flux_gauss2", &galNumber::flux_gauss2)
         .def_readwrite("flux_gauss0_err", &galNumber::flux_gauss0_err)
