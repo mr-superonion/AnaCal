@@ -144,7 +144,7 @@ pyExportNgmix(py::module_& m) {
             py::arg("lm_lambda0")=0.2,
             py::arg("lm_decay")=0.5,
             py::arg("damping_floor")=50.0,
-            py::arg("conv_tol")=1.0e-10,
+            py::arg("conv_tol")=1.0e-3,
             py::arg("trust_shape")=0.05,
             py::arg("trust_center")=0.1,
             py::arg("misfit_damping")=1.0

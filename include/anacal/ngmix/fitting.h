@@ -52,7 +52,7 @@ public:
         double lm_lambda0=0.2,
         double lm_decay=0.5,
         double damping_floor=50.0,
-        double conv_tol=1.0e-10,
+        double conv_tol=1.0e-3,
         double trust_shape=0.05,
         double trust_center=0.1,
         double misfit_damping=1.0

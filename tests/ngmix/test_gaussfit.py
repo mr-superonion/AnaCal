@@ -17,6 +17,7 @@ def test_ngmix_gaussian_fit_additive(test_g1=True):
         scale=scale,
         sigma_arcsec=sigma_arcsec,
         stamp_size=32,
+        conv_tol=1.0e-10,  # precision test: run to full convergence
     )
 
     num_epochs = 35
@@ -62,6 +63,7 @@ def test_ngmix_gaussian_fit2():
         scale=scale,
         sigma_arcsec=sigma_arcsec,
         stamp_size=32,
+        conv_tol=1.0e-10,  # precision test: run to full convergence
     )
 
     flux = 150.0
@@ -172,6 +174,7 @@ def test_ngmix_gaussian_fit2():
         sigma_arcsec=sigma_arcsec,
         stamp_size=32,
         force_size=True,
+        conv_tol=1.0e-10,  # precision test: run to full convergence
     )
 
     img_array = fix["gal_g1p_f150"]
@@ -235,7 +238,8 @@ def test_ngmix_gaussian_fit4():
     fitter = anacal.ngmix.GaussFit(
         scale=scale,
         sigma_arcsec=sigma_arcsec,
-        stamp_size=48
+        stamp_size=48,
+        conv_tol=1.0e-10,  # precision test: run to full convergence
     )
 
     # initialize parameters
