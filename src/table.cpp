@@ -102,6 +102,46 @@ pyExportTable(py::module_& m) {
         py::arg("catalog")
     );
     table.def(
+        "axes_from_catalog",
+        [](const py::array_t<galRow>& records) {
+            auto r = records.unchecked<1>();
+            py::list fields;
+            for (const char* stem : {"a1", "a2", "t"}) {
+                const std::string s(stem);
+                fields.append(py::make_tuple(s, "f8"));
+                for (const char* d : {"_dg1", "_dg2", "_dj1", "_dj2"}) {
+                    fields.append(py::make_tuple("d" + s + d, "f8"));
+                }
+            }
+            py::dtype dt = py::dtype::from_args(fields);
+            py::array out(dt, r.shape(0));
+            double* o = static_cast<double*>(out.mutable_data());
+            for (ssize_t i = 0; i < r.shape(0); ++i) {
+                galNumber obj;
+                obj.from_row(r(i));
+                const std::array<math::qnumber, 3> ax = obj.model.get_axes();
+                for (int k = 0; k < 3; ++k) {
+                    double* p = o + i * 15 + k * 5;
+                    p[0] = ax[k].v;
+                    p[1] = ax[k].g1;
+                    p[2] = ax[k].g2;
+                    p[3] = ax[k].x1;
+                    p[4] = ax[k].x2;
+                }
+            }
+            return out;
+        },
+        "Semi-axes and angle of the intrinsic covariance, with their shear "
+        "and position responses, for every row of a catalog: a structured "
+        "array (a1, da1_dg1, da1_dg2, da1_dj1, da1_dj2, a2, ..., t, ...) "
+        "derived from the mxx / myy / mxy columns through "
+        "NgmixGaussian::get_axes.  a1 is the major axis (along t), a2 the "
+        "minor one; a negative covariance eigenvalue -- allowed by the fit, "
+        "only the smoothed covariance must be positive -- gives a semi-axis "
+        "at the 1e-3 arcsec floor.",
+        py::arg("catalog")
+    );
+    table.def(
         "column_names",
         []() {
             py::dtype dtype = py::dtype::of<galRow>();

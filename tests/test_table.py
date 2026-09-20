@@ -48,3 +48,39 @@ def test_row_roundtrip():
     out2 = anacal.table.catalog_roundtrip(out)
     for name in names:
         assert out2[name][0] == out[name][0], name
+
+
+def test_axes_from_catalog():
+    """a1 / a2 / t are not stored; axes_from_catalog derives them from
+    mxx / myy / mxy exactly as NgmixGaussian.get_axes does, responses
+    included."""
+    a1, a2, t = 0.15, 0.22, np.pi / 5.0
+    model = anacal.ngmix.NgmixGaussian()
+    model.set_axes(
+        anacal.math.qnumber(a1, 0.3, -0.1, 0.02, 0.01),
+        anacal.math.qnumber(a2, -0.2, 0.4, -0.03, 0.05),
+        anacal.math.qnumber(t, 1.1, 0.7, 0.2, -0.4),
+    )
+    src = anacal.table.galNumber()
+    src.model = model
+    cat = anacal.table.objlist_to_array([src, src])
+    assert "a1" not in cat.dtype.names
+    axes = anacal.table.axes_from_catalog(cat)
+    assert axes.dtype.names == (
+        "a1", "da1_dg1", "da1_dg2", "da1_dj1", "da1_dj2",
+        "a2", "da2_dg1", "da2_dg2", "da2_dj1", "da2_dj2",
+        "t", "dt_dg1", "dt_dg2", "dt_dj1", "dt_dj2",
+    )
+    assert len(axes) == 2
+    ref = model.get_axes()   # major axis first, angle of the major axis
+    for k, name in enumerate(("a1", "a2", "t")):
+        expect = ref[k].to_array()
+        got = [axes[name][0]] + [
+            axes[f"d{name}_{s}"][0] for s in ("dg1", "dg2", "dj1", "dj2")
+        ]
+        np.testing.assert_allclose(got, expect, rtol=1e-12, atol=0)
+    # the covariance columns round-trip the input exactly
+    np.testing.assert_allclose(
+        [cat["mxx"][0], cat["myy"][0], cat["mxy"][0]],
+        [model.mxx.v, model.myy.v, model.mxy.v], rtol=1e-12,
+    )
