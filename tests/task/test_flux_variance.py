@@ -140,18 +140,6 @@ def test_flux_variance():
         pixel_scale,
     )
     assert len(cells) == 1
-    catalog2 = det_task.process_image(
-        gal_array,
-        psf_array,
-        variance=noise_std**2.0,
-        cell_list=cells,
-        a_ini=0.0,
-    )
-    assert len(catalog2) == 1
-    flux3 = catalog2["flux"][0]
-    np.testing.assert_allclose(flux, flux3, rtol=0.001, atol=0.01)
-
-
     flux4, flux_var4 = gaussian_flux_variance(
         img_array=gal_array,
         psf_array=psf_array,
@@ -160,6 +148,52 @@ def test_flux_variance():
         pixel_scale=pixel_scale,
         noise_variance=noise_std**2.0,
     )
+    # At num_epochs = 0 the exported flux is the PROFILED model flux of
+    # the forced Gaussian (covariance a_ini^2 I, centre at the detection),
+    # F* = sum(d m~) / sum(m~^2) over the fit window of the deconvolved,
+    # re-smoothed image: forced photometry with a Gaussian profile.  For
+    # a Gaussian template this is the matched-aperture flux of the same
+    # width, so it equals the sigma^2 + a_ini^2 aperture flux to 1e-6
+    # (the aperture fluxes are also exported as flux_gauss0 / flux_gauss2).
+
+    def profiled_flux(cat, a_ini):
+        q = anacal.image.ImageQ(
+            nx=npix, ny=npix, scale=pixel_scale, sigma_arcsec=sigma_arcsec,
+            klim=100.0,
+        )
+        data = q.prepare_qnumber_image(
+            gal_array, psf_array, xcen=npix // 2, ycen=npix // 2
+        )[0]
+        m = anacal.ngmix.NgmixGaussian()
+        m.set_axes(
+            anacal.math.qnumber(a_ini), anacal.math.qnumber(a_ini),
+            anacal.math.qnumber(0.0),
+        )
+        m.x1 = anacal.math.qnumber(cat["x1"][0])
+        m.x2 = anacal.math.qnumber(cat["x2"][0])
+        m.F = anacal.math.qnumber(1.0)
+        unit = m.get_image_stamp(npix, npix, pixel_scale, sigma_arcsec)[0]
+        yy, xx = np.mgrid[0:npix, 0:npix]
+        win = (
+            (xx * pixel_scale - m.x1.v) ** 2 + (yy * pixel_scale - m.x2.v) ** 2
+        ) < 3.5 ** 2
+        return np.sum(data[win] * unit[win]) / np.sum(unit[win] ** 2)
+
+    catalog2 = det_task.process_image(
+        gal_array,
+        psf_array,
+        variance=noise_std**2.0,
+        cell_list=cells,
+        a_ini=0.0,
+    )
+    assert len(catalog2) == 1
+    np.testing.assert_allclose(
+        catalog2["flux"][0], profiled_flux(catalog2, 0.0), rtol=1e-6, atol=0
+    )
+    np.testing.assert_allclose(catalog2["flux"][0], flux, rtol=1e-6, atol=0)
+    np.testing.assert_allclose(
+        catalog2["flux_gauss0"][0], flux, rtol=1e-3, atol=0.01
+    )
     catalog4 = det_task.process_image(
         gal_array,
         psf_array,
@@ -167,14 +201,17 @@ def test_flux_variance():
         cell_list=cells,
         a_ini=0.2,
     )
-    np.testing.assert_allclose(catalog4["flux"][0], flux4, rtol=1e-3, atol=0.01)
+    np.testing.assert_allclose(
+        catalog4["flux"][0], profiled_flux(catalog4, 0.2), rtol=1e-6, atol=0
+    )
+    np.testing.assert_allclose(catalog4["flux"][0], flux4, rtol=1e-6, atol=0)
     catalog5 = det_task.process_image(
         gal_array,
         psf_array,
         variance=noise_std**2.0,
         cell_list=cells,
     )
-    np.testing.assert_allclose(catalog5["flux"][0], flux4, rtol=1e-3, atol=0.01)
+    np.testing.assert_allclose(catalog5["flux"][0], catalog4["flux"][0])
     np.testing.assert_allclose(
         catalog5["flux_gauss0"][0],
         flux, rtol=1e-4, atol=1e-3,

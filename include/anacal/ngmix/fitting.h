@@ -32,11 +32,23 @@ public:
     // lam_k = lm_lambda0 * lm_decay^k on epoch k, a constant floor on
     // the diagonal, a misfit term, and per-epoch trust radii on the
     // shape (arcsec^2) and the centre (arcsec)
-    double lm_lambda0, lm_decay, damping_floor;
+    double lm_lambda0, lm_decay, damping_floor, damping_rel;
     double trust_shape, trust_center, misfit_damping;
-    // a source stops once the size of its step -- value and response
-    // slots together, in chi2 units (update_model_params) -- is below this
-    double conv_tol;
+    // smooth convergence gate on the chi2 decrease achieved by the last
+    // step, RELATIVE to the source's own chi2 scale F^2 H_FF / 2 (the
+    // chi2 of the model against an empty image, ~ (S/N)^2), so that the
+    // tolerance means the same relative precision for a faint and a
+    // bright source (rmodel.h gate_factor): 0 at conv_tol, 1 at conv_tol
+    // * gate_ratio; gate_ratio <= 1 makes it a hard step.  DEFAULT 0:
+    // the gate is off and every source takes num_epochs epochs.  On a
+    // real coadd the gate's own derivative term, -(ds/dc)(dc/dg) step,
+    // is heavy-tailed on the sources that pass through the ramp
+    // without stopping (one DP1 source went from R = +4.6 to -1338 at
+    // a relative tolerance of 1e-6, and a wider ramp does not help),
+    // while at a tolerance harmless for the response it stops almost
+    // nobody; with the relative damping the fit converges in 5-8 epochs
+    // anyway.  Kept for tests and experiments.
+    double conv_tol, gate_ratio;
     double sigma2, sigma_m2, rfac, ffac, ffac2, ffac3;
     double sigma2_lim;
     double r2_lim_stamp;
@@ -51,36 +63,40 @@ public:
         bool do_fpfs=true,
         double lm_lambda0=0.2,
         double lm_decay=0.5,
-        double damping_floor=50.0,
-        double conv_tol=1.0e-3,
+        double damping_floor=1.0,
+        double damping_rel=0.1,
         double trust_shape=0.05,
         double trust_center=0.1,
-        double misfit_damping=1.0
+        double misfit_damping=1.0,
+        double conv_tol=0.0,
+        double gate_ratio=10.0
     ) : scale(scale), sigma_arcsec(sigma_arcsec), stamp_size(stamp_size),
         ss2(stamp_size / 2), force_size(force_size),
         force_center(force_center),
         fpfs_c0(fpfs_c0),
         do_fpfs(do_fpfs),
         lm_lambda0(lm_lambda0), lm_decay(lm_decay),
-        damping_floor(damping_floor),
+        damping_floor(damping_floor), damping_rel(damping_rel),
         trust_shape(trust_shape), trust_center(trust_center),
         misfit_damping(misfit_damping),
-        conv_tol(conv_tol)
+        conv_tol(conv_tol), gate_ratio(gate_ratio)
     {
+        if (!(conv_tol >= 0.0) || !(gate_ratio >= 0.0)) {
+            throw std::invalid_argument(
+                "GaussFit: need conv_tol >= 0 and gate_ratio >= 0"
+            );
+        }
         if (trust_shape < 0.0 || trust_center < 0.0 || misfit_damping < 0.0) {
             throw std::invalid_argument(
                 "GaussFit: need trust_shape, trust_center, misfit_damping >= 0"
             );
         }
         if (lm_lambda0 < 0.0 || lm_decay <= 0.0 || lm_decay > 1.0 ||
-            damping_floor < 0.0) {
+            damping_floor < 0.0 || damping_rel < 0.0) {
             throw std::invalid_argument(
                 "GaussFit: need lm_lambda0 >= 0, 0 < lm_decay <= 1, "
-                "damping_floor >= 0"
+                "damping_floor >= 0, damping_rel >= 0"
             );
-        }
-        if (!(conv_tol >= 0.0)) {
-            throw std::invalid_argument("GaussFit: need conv_tol >= 0");
         }
         this->sigma2 = sigma_arcsec * sigma_arcsec;
         this->sigma_m2 = 1.0 / this->sigma2;
@@ -406,19 +422,6 @@ public:
         return math::qnumber(0.0);
     };
 
-    inline void
-    initialize_flux(
-        const std::vector<math::qnumber> & data,
-        NgmixGaussian & model,
-        const geometry::cell & cell
-    ) const {
-        // matched aperture: the smoothing plus the mean intrinsic variance
-        double sigma2_flux = this->sigma2 + 0.5 * std::max(
-            model.mxx.v + model.myy.v, 0.0
-        );
-        model.F = measure_flux(sigma2_flux, cell, data, model);
-        return;
-    };
 
     inline void
     process_cell_impl(
@@ -510,15 +513,31 @@ public:
             src.model.sigma2_shape = this->sigma2;
             src.converged = false;
             src.n_epochs = 0;
+            src.chi2_prev = math::qnumber(0.0);
             if (!src.initialized) {
                 // Shape from the moments (replaces the a_ini / row
-                // values of a1, a2 unless the size is forced); flux
-                // from a matched aperture at that shape.
+                // values unless the size is forced).  There is no
+                // starting flux: the flux is profiled, solve_flux sets
+                // it from the shape at the top of every epoch, and once
+                // more below when there are no epochs.
                 if (!this->force_size) {
                     initialize_shape(data, src.model, cell);
                 }
-                initialize_flux(data, src.model, cell);
                 src.initialized = true;
+            }
+        }
+        if (num_epochs == 0) {
+            // No fit: the exported flux is still the profiled model flux
+            // for the shape and centre the source carries -- the moment
+            // initialisation, a forced a_ini, or an input catalog's
+            // covariance and centre.  With force_size and force_center
+            // this is forced photometry with a Gaussian profile: the
+            // flux (a qnumber, with its shear and shift responses) of
+            // the given covariance at the given position.
+            for (std::size_t i=0; i<ng; ++i) {
+                table::galNumber & src = catalog[i];
+                if (src.n_mask_base > mvmax) continue;
+                this->solve_flux(data, variance_meas, src, cell, prior);
             }
         }
 
@@ -541,16 +560,36 @@ public:
                 this->measure_loss(
                     data, variance_meas, src, cell, kernel
                 );
-                const double c = src.model.update_model_params(
+                // gate on |chi2_prev - chi2|, the decrease the last step
+                // achieved (open on the first epoch and when the gate is
+                // disabled); |.| has its kink at 0, inside the region
+                // where the gate is identically 0, so the gate stays smooth
+                math::qnumber gate(1.0);
+                if (this->conv_tol > 0.0 && src.n_epochs > 0) {
+                    math::qnumber dchi2 = src.chi2_prev - src.loss.v;
+                    if (dchi2.v < 0.0) dchi2 = -1.0 * dchi2;
+                    // relative to the chi2 of the model itself
+                    const math::qnumber& F = src.model.F;
+                    math::qnumber scl = 0.5 * F * F * src.loss.v_FF;
+                    if (scl.v > 0.0) {
+                        gate = gate_factor(
+                            dchi2 / scl, this->conv_tol,
+                            this->conv_tol * this->gate_ratio
+                        );
+                    }
+                }
+                src.chi2_prev = src.loss.v;
+                src.model.update_model_params(
                     src.loss, prior, src.x1_det, src.x2_det,
-                    lam, this->damping_floor,
+                    lam, this->damping_floor, this->damping_rel,
                     this->trust_shape, this->trust_center,
-                    this->misfit_damping, misfit_ref, this->sigma2
+                    this->misfit_damping, misfit_ref, this->sigma2,
+                    gate
                 );
                 if (src.n_epochs < 255) src.n_epochs += 1;
-                // this step, value and response alike, was below
-                // tolerance: stop here (see update_model_params)
-                if (c < this->conv_tol) src.converged = true;
+                // gate exactly zero: nothing moved and, chi2 being
+                // unchanged from here on, nothing will; skip the source
+                if (gate.v <= 0.0) src.converged = true;
             }
         }
 

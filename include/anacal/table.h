@@ -133,12 +133,16 @@ struct galNumber {
     bool is_primary=true;
     bool initialized=false;
     // Convergence state of the model fit (GaussFit::process_cell_impl):
-    // ``converged`` is set once an epoch's step, value and response
-    // slots together, falls below the fitter's conv_tol, after which the
-    // source is skipped; ``n_epochs`` counts the epochs it went through.
-    // Both are reset when a measurement starts.
+    // ``converged`` is set once the smooth gate on the achieved chi2
+    // decrease is exactly zero, after which the source is skipped;
+    // ``n_epochs`` counts the epochs it went through.  Both are reset
+    // when a measurement starts.
     bool converged=false;
     uint8_t n_epochs=0;
+    // chi2 of the window at the previous epoch (a qnumber): the gate of
+    // the next step is a smooth function of the decrease achieved by
+    // the last one, see GaussFit::process_cell_impl
+    math::qnumber chi2_prev;
     math::lossNumber loss;
     math::qnumber fpfs_e1;
     math::qnumber fpfs_e2;

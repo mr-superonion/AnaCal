@@ -128,6 +128,19 @@ solve_spd_qnumber(
     return true;
 }
 
+// Convergence gate: exactly 0 for x <= lo, exactly 1 for x >= hi, a C1
+// cubic smoothstep in between; a qnumber function of a qnumber, so an
+// update theta <- theta - s step carries the gate's own derivative.
+// hi <= lo degenerates to a hard step at lo.
+inline math::qnumber
+gate_factor(const math::qnumber& x, double lo, double hi) {
+    if (!(hi > lo)) return math::qnumber(x.v > lo ? 1.0 : 0.0);
+    if (x.v <= lo) return math::qnumber(0.0);
+    if (x.v >= hi) return math::qnumber(1.0);
+    math::qnumber u = (x - lo) * (1.0 / (hi - lo));
+    return u * u * (3.0 - 2.0 * u);
+}
+
 // Smooth trust radius: scale a step vector of squared length d2 so that
 // its length never exceeds r, leaving a step much shorter than r
 // almost untouched (relative change (|step| / r)^2 / 2).
@@ -139,20 +152,30 @@ trust_factor(const math::qnumber& d2, double r) {
 
 struct modelPrior {
     // Gaussian priors, each stored as w = 2 / sigma^2 (the loss is a
-    // chi2): w_F on the flux (towards 0), w_a on each of the three
-    // intrinsic covariance components mxx, myy, mxy (towards 0; sigma
-    // in arcsec^2), w_x on the centre (towards the detection position;
-    // sigma in arcsec).
-    math::qnumber w_F, w_a, w_x;
+    // chi2): w_F on the flux (towards 0), w_T on the intrinsic size
+    // T = mxx + myy (towards 0; sigma in arcsec^2; for a round source of
+    // semi-axis a, T = 2 a^2), w_x on the centre (towards the detection
+    // position; sigma in arcsec), w_e on the ellipticity (e1, e2) of the
+    // model at the re-smoothing scale, get_shape, towards 0 (sigma
+    // dimensionless; |e| < 1 always, so a Gaussian needs no cutoff).
+    // Size and shape are thus regularised separately; there is no prior
+    // on the individual covariance components.  A default-constructed
+    // modelPrior has no prior at all (every w = 0); the production
+    // defaults live in the xlens configuration (AnacalConfig).
+    math::qnumber w_F, w_T, w_x, w_e;
 
     modelPrior() = default;
+
+    inline void set_sigma_e(math::qnumber sigma_e){
+        this->w_e = 2.0 / math::pow(sigma_e, 2.0);
+    };
 
     inline void set_sigma_F(math::qnumber sigma_F){
         this->w_F = 2.0 / math::pow(sigma_F, 2.0);
     };
 
-    inline void set_sigma_a(math::qnumber sigma_a){
-        this->w_a = 2.0 / math::pow(sigma_a, 2.0);
+    inline void set_sigma_T(math::qnumber sigma_T){
+        this->w_T = 2.0 / math::pow(sigma_T, 2.0);
     };
 
     inline void set_sigma_x(math::qnumber sigma_x){
@@ -633,29 +656,29 @@ public:
     // bright neighbour's, say -- can carry a source across the window
     // in one epoch.
     //
-    // Convergence.  A step is a qnumber: its VALUE moves the parameter
-    // and its four derivative slots move the parameter's shear /
-    // position response.  Both converge at the same rate but from
-    // different starting errors -- a source whose start is already at
-    // the minimum in value can still carry the start's response, far
-    // from the fit's -- so the fit is not done until the whole qnumber
-    // has stopped moving.  The measure returned is
-    //     c = grad . step.v  +  sum_slots step.s^T A step.s
-    // (the predicted chi2 decrease, and the same per unit shear / unit
-    // position shift), and the caller stops the source once
-    // c < conv_tol.  The stop is a hard one, so the estimator jumps by
-    // the size of the LAST step wherever the epoch count changes: at
-    // most ~ sqrt(2 conv_tol / curv) in every slot, negligible at the
-    // default tolerance.  A smooth gate on the value criterion was
-    // tried instead and rejected: its derivative, (ds/dc)(dc/dg),
-    // diverges as the value error goes to zero while the response
-    // slots have not, and inside the ramp the estimator's derivative
-    // took huge, rapidly varying values.
+    // Convergence.  The step is scaled by ``gate``, a qnumber the caller
+    // forms as a smooth function of the chi2 decrease the PREVIOUS step
+    // achieved (GaussFit::process_cell_impl, gate_factor): 1 while the
+    // fit is still improving, exactly 0 once the last step changed chi2
+    // by less than the tolerance, a C1 ramp in between.  Because chi2
+    // and the gate are qnumbers the update theta <- theta - gate step
+    // carries the gate's own derivative, so the estimator is a smooth
+    // function of the pixels and the propagated response is its exact
+    // derivative.  The gate closes in finitely many epochs: a scaled
+    // step achieves a smaller decrease, which lowers the next gate, so
+    // the achieved decrease collapses to zero once inside the ramp (a
+    // gate on the PREDICTED decrease b.step, by contrast, never closes,
+    // since not moving leaves the prediction unchanged).  A source that
+    // stops with the gate exports the exact response of the map it
+    // went through, which is that of a partially converged fit: chi2
+    // is stationary at the minimum, so this criterion sees the value
+    // converge, not the response; the tolerance sets how far that is
+    // allowed to be, and conv_tol = 0 disables the gate (fixed epochs).
     //
     // Should the factorisation fail (it cannot for floor > 0, the
     // Gauss-Newton matrix being positive semi-definite), the epoch
     // falls back to the decoupled per-parameter step.
-    inline double
+    inline void
     update_model_params(
         const math::lossNumber& loss,
         const modelPrior& prior,
@@ -663,11 +686,13 @@ public:
         double x2_det,
         double lam,
         double floor,
+        double floor_rel,
         double trust_shape,
         double trust_center,
         double misfit,
         double misfit_ref,
-        double sigma2_guard
+        double sigma2_guard,
+        const math::qnumber& gate
     ) {
         math::qnumber fac = math::qnumber(1.0 + lam);
         if (misfit > 0.0 && loss.n_pix > 0.0 && misfit_ref > 0.0) {
@@ -680,28 +705,70 @@ public:
         std::array<math::qnumber*, 5> par{};
         std::array<math::qnumber, 5> b{};
         std::array<std::array<math::qnumber, 5>, 5> A{};
+        std::array<math::qnumber, 5> diagH{};
         int n = 0;
         int i0 = -1, i1 = -1, i2 = -1, ix1 = -1, ix2 = -1;
         if (!this->force_size) {
             i0 = n; par[n] = &this->mxx;
-            b[n] = loss.v_mxx + prior.w_a * this->mxx;
-            A[n][n] = loss.v_mxxmxx * fac + prior.w_a + floor; ++n;
+            b[n] = loss.v_mxx;
+            diagH[n] = loss.v_mxxmxx;
+            A[n][n] = loss.v_mxxmxx * fac + floor; ++n;
             i1 = n; par[n] = &this->myy;
-            b[n] = loss.v_myy + prior.w_a * this->myy;
-            A[n][n] = loss.v_myymyy * fac + prior.w_a + floor; ++n;
+            b[n] = loss.v_myy;
+            diagH[n] = loss.v_myymyy;
+            A[n][n] = loss.v_myymyy * fac + floor; ++n;
             i2 = n; par[n] = &this->mxy;
-            b[n] = loss.v_mxy + prior.w_a * this->mxy;
-            A[n][n] = loss.v_mxymxy * fac + prior.w_a + floor; ++n;
+            b[n] = loss.v_mxy;
+            diagH[n] = loss.v_mxymxy;
+            A[n][n] = loss.v_mxymxy * fac + floor; ++n;
             A[i0][i1] = loss.v_mxxmyy * fac;
             A[i0][i2] = loss.v_mxxmxy * fac;
             A[i1][i2] = loss.v_myymxy * fac;
         }
+        if (!this->force_size && prior.w_T.v > 0.0) {
+            // Gaussian prior T^2 / sigma_T^2 on the size T = mxx + myy:
+            // gradient w_T T on both diagonal components, curvature w_T
+            // on their 2x2 block (mxy carries no size)
+            math::qnumber wT = prior.w_T * (this->mxx + this->myy);
+            b[i0] = b[i0] + wT;
+            b[i1] = b[i1] + wT;
+            A[i0][i0] = A[i0][i0] + prior.w_T;
+            A[i1][i1] = A[i1][i1] + prior.w_T;
+            A[i0][i1] = A[i0][i1] + prior.w_T;
+        }
+        if (!this->force_size && prior.w_e.v > 0.0 && this->sigma2_shape > 0.0) {
+            // Gaussian prior (e1^2 + e2^2) / sigma_e^2 on the ellipticity at
+            // the re-smoothing scale, e1 = (mxx - myy) / tr, e2 = 2 mxy / tr,
+            // tr = mxx + myy + 2 sigma_shape^2: gradient and Gauss-Newton
+            // curvature in (mxx, myy, mxy), all qnumbers so the prior's
+            // effect on the response is propagated like the pixels'
+            math::qnumber tr = this->mxx + this->myy + 2.0 * this->sigma2_shape;
+            math::qnumber itr = 1.0 / tr;
+            math::qnumber e1 = (this->mxx - this->myy) * itr;
+            math::qnumber e2 = 2.0 * this->mxy * itr;
+            std::array<math::qnumber, 3> d1{
+                (1.0 - e1) * itr, -1.0 * (1.0 + e1) * itr, math::qnumber(0.0)
+            };
+            std::array<math::qnumber, 3> d2{
+                -1.0 * e2 * itr, -1.0 * e2 * itr, 2.0 * itr
+            };
+            const std::array<int, 3> idx{i0, i1, i2};
+            for (int a = 0; a < 3; ++a) {
+                b[idx[a]] = b[idx[a]] + prior.w_e * (e1 * d1[a] + e2 * d2[a]);
+                for (int c = 0; c <= a; ++c) {
+                    A[idx[c]][idx[a]] = A[idx[c]][idx[a]]
+                        + prior.w_e * (d1[a] * d1[c] + d2[a] * d2[c]);
+                }
+            }
+        }
         if (!this->force_center) {
             ix1 = n; par[n] = &this->x1;
             b[n] = loss.v_x1 + prior.w_x * (this->x1 - x1_det);
+            diagH[n] = loss.v_x1x1;
             A[n][n] = loss.v_x1x1 * fac + prior.w_x + floor; ++n;
             ix2 = n; par[n] = &this->x2;
             b[n] = loss.v_x2 + prior.w_x * (this->x2 - x2_det);
+            diagH[n] = loss.v_x2x2;
             A[n][n] = loss.v_x2x2 * fac + prior.w_x + floor; ++n;
             A[ix1][ix2] = loss.v_x1x2 * fac;
             if (!this->force_size) {
@@ -713,7 +780,7 @@ public:
                 A[i2][ix2] = loss.v_mxyx2 * fac;
             }
         }
-        if (n == 0) return 0.0;
+        if (n == 0) return;
         // The flux is profiled out (solve_flux), so the curvature that
         // governs the shape / centre step is that of the PROFILED chi2:
         // the Schur complement H - h_F h_F^T / H_FF, with h_F the
@@ -736,6 +803,20 @@ public:
                     for (int j = 0; j <= i; ++j) {
                         A[j][i] = A[j][i] - hF[i] * hF[j] * inv;
                     }
+                }
+            }
+            // Levenberg-Marquardt term: floor_rel times the PROFILED
+            // curvature of each parameter on the diagonal.  Unlike the
+            // constant floor it scales with the source, so the
+            // convergence rate it sets, ~ floor_rel / (1 + floor_rel) per
+            // epoch, is the same for a faint and a bright source; the
+            // constant floor alone made faint sources (curvature ~ floor)
+            // contract by only floor / (H + floor) per epoch.
+            if (floor_rel > 0.0) {
+                for (int i = 0; i < n; ++i) {
+                    math::qnumber s_ii = diagH[i];
+                    if (hFF.v > 0.0) s_ii = s_ii - hF[i] * hF[i] / hFF;
+                    A[i][i] = A[i][i] + floor_rel * s_ii;
                 }
             }
         }
@@ -766,11 +847,48 @@ public:
         // The smoothed covariance C = M + sigma^2 I must stay positive
         // definite.  The chi2 itself is a barrier (the model diverges
         // as det C -> 0) and the trust radius bounds each move, so a
-        // step never reaches the boundary for any sensible source; the
-        // check below is the last resort for a pathological one and
-        // simply shortens ITS step (a hard branch, but one no real fit
-        // takes: the whole window would have to pull the covariance
-        // through the barrier).
+        // step never reaches the boundary for any sensible source.
+        //
+        // Smooth boundary cap.  For each of the three conditions
+        // cxx > fc, cyy > fc, det C > fd (soft floors fc = 0.05 sigma^2,
+        // fd = 0.05 sigma^4) the fraction of the step at which the
+        // condition would be hit is 1/u with, to first order in the
+        // step, u_xx = dxx / (cxx - fc), u_yy = dyy / (cyy - fc) and
+        // u_det = (cxx dyy + cyy dxx - 2 cxy dxy) / (det C - fd); only a
+        // step moving TOWARDS a boundary counts (smooth positive part).
+        // The shape step is scaled by
+        //     phi = (1 + u_xx^4 + u_yy^4 + u_det^4)^(-1/4),
+        // a smooth soft-minimum of the three fractions that is ~1 when
+        // the boundary is far (1 - 1/4 (u/1)^4: 0.3% at a third of the
+        // way, 1e-4 at a tenth) and ~1/u when the step would cross it.
+        // Everything is a qnumber, so the cap is propagated exactly like
+        // the trust radius.
+        if (!this->force_size && sigma2_guard > 0.0) {
+            const double fc = 0.05 * sigma2_guard;
+            const double fd = 0.05 * sigma2_guard * sigma2_guard;
+            math::qnumber cxx = this->mxx + sigma2_guard;
+            math::qnumber cyy = this->myy + sigma2_guard;
+            const math::qnumber& cxy = this->mxy;
+            math::qnumber det0 = cxx * cyy - cxy * cxy;
+            if (cxx.v > fc && cyy.v > fc && det0.v > fd) {
+                const double eps = 0.02;
+                math::qnumber uxx = smooth_max(step[i0] / (cxx - fc), 0.0, eps);
+                math::qnumber uyy = smooth_max(step[i1] / (cyy - fc), 0.0, eps);
+                math::qnumber d1 = cxx * step[i1] + cyy * step[i0]
+                    - 2.0 * cxy * step[i2];
+                math::qnumber udet = smooth_max(d1 / (det0 - fd), 0.0, eps);
+                math::qnumber q = uxx * uxx * uxx * uxx + uyy * uyy * uyy * uyy
+                    + udet * udet * udet * udet;
+                math::qnumber phi = math::pow(1.0 + q, -0.25);
+                step[i0] = step[i0] * phi;
+                step[i1] = step[i1] * phi;
+                step[i2] = step[i2] * phi;
+            }
+        }
+        // Hard guard behind the smooth cap, at the tighter floors 0 and
+        // 0.01 sigma^4: the cap is first order in the step, so this is
+        // the last resort for a pathological source and should never
+        // fire; if it does the shape step is halved (a hard branch).
         if (!this->force_size && sigma2_guard > 0.0) {
             double shrink = 1.0;
             for (int k = 0; k < 12; ++k) {
@@ -789,18 +907,10 @@ public:
                 step[i2] = step[i2] * shrink;
             }
         }
-        double c = 0.0;
-        for (int i = 0; i < n; ++i) {
-            c += b[i].v * step[i].v;
-            for (int j = 0; j < n; ++j) {
-                c += A[i][j].v * (
-                    step[i].g1 * step[j].g1 + step[i].g2 * step[j].g2 +
-                    step[i].x1 * step[j].x1 + step[i].x2 * step[j].x2
-                );
-            }
-            *par[i] = *par[i] - step[i];
+        if (gate.v > 0.0) {
+            for (int i = 0; i < n; ++i) *par[i] = *par[i] - gate * step[i];
         }
-        return c;
+        return;
     };
 
     // Ellipticity of the model at the re-smoothing scale,

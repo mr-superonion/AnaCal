@@ -440,24 +440,35 @@ def ngmix_gaussfit():
         g2=-0.02,
         scale=scale,
     )
-    obj = galsim.Gaussian(half_light_radius=0.25).shear(g1=0.03)
-    obj = galsim.Convolve(psf_obj, obj)
-    full = galsim.ImageF(ncol=nx, nrow=ny, scale=scale)
     centers = [(31.2, 31.2), (95.9, 32.05), (160, 32.1), (224, 31.8)]
     fluxes = [12, 23, 8.5, 18.4]
-    for (cx, cy), flux in zip(centers, fluxes):
-        shift = galsim.PositionD(
-            (cx - (nx - 1) / 2) * scale, (cy - (ny - 1) / 2) * scale
+
+    def strip(gal, key, **meta):
+        # the same four round galaxies, sheared by g1 = 0.03, for
+        # several radial profiles: the Gaussian is what the model is, the
+        # exponential and the bulge + disk are what the model is not
+        obj = galsim.Convolve(psf_obj, gal.shear(g1=0.03))
+        full = galsim.ImageF(ncol=nx, nrow=ny, scale=scale)
+        for (cx, cy), flux in zip(centers, fluxes):
+            shift = galsim.PositionD(
+                (cx - (nx - 1) / 2) * scale, (cy - (ny - 1) / 2) * scale
+            )
+            obj.shift(shift).withFlux(flux).drawImage(
+                image=full, add_to_image=True
+            )
+        fx.add(
+            key, full.array, g1=0.03, scale=scale,
+            centers=str(centers), fluxes=str(fluxes), **meta,
         )
-        obj.shift(shift).withFlux(flux).drawImage(image=full, add_to_image=True)
-    fx.add(
-        "gal_wide",
-        full.array,
-        hlr=0.25,
-        g1=0.03,
-        scale=scale,
-        centers=str(centers),
-        fluxes=str(fluxes),
+
+    strip(galsim.Gaussian(half_light_radius=0.25), "gal_wide", hlr=0.25)
+    strip(
+        galsim.Exponential(half_light_radius=0.25), "gal_wide_exp", hlr=0.25
+    )
+    strip(
+        0.3 * galsim.DeVaucouleurs(half_light_radius=0.15)
+        + 0.7 * galsim.Exponential(half_light_radius=0.3),
+        "gal_wide_bd", hlr_b=0.15, hlr_d=0.3, fbulge=0.3,
     )
     fx.write()
 

@@ -379,11 +379,13 @@ public:
         double mag_zero=THRESHOLD_REF_MAG_ZERO,
         double lm_lambda0=0.2,
         double lm_decay=0.5,
-        double damping_floor=50.0,
-        double conv_tol=1.0e-3,
+        double damping_floor=1.0,
+        double damping_rel=0.1,
         double trust_shape=0.05,
         double trust_center=0.1,
-        double misfit_damping=1.0
+        double misfit_damping=1.0,
+        double conv_tol=0.0,
+        double gate_ratio=10.0
     ) : scale(scale), sigma_arcsec(sigma_arcsec), snr_peak_min(snr_peak_min),
         omega_f(omega_f), omega_v(omega_v),
         prior(prior ? *prior : ngmix::modelPrior()),
@@ -394,8 +396,8 @@ public:
             fpfs_c0 * std::pow(
                 10.0, (mag_zero - THRESHOLD_REF_MAG_ZERO) / 2.5
             ),
-            true, lm_lambda0, lm_decay, damping_floor, conv_tol,
-            trust_shape, trust_center, misfit_damping
+            true, lm_lambda0, lm_decay, damping_floor, damping_rel,
+            trust_shape, trust_center, misfit_damping, conv_tol, gate_ratio
         )
     {
         if (stamp_size % 2 != 0 ) {

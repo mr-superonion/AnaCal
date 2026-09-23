@@ -11,16 +11,23 @@ pyExportNgmix(py::module_& m) {
     py::class_<modelPrior>(ngmix, "modelPrior")
         .def(py::init<>())
         .def_readonly("w_F", &modelPrior::w_F)
-        .def_readonly("w_a", &modelPrior::w_a)
+        .def_readonly("w_T", &modelPrior::w_T)
         .def_readonly("w_x", &modelPrior::w_x)
+        .def_readonly("w_e", &modelPrior::w_e)
+        .def("set_sigma_e", &modelPrior::set_sigma_e,
+            "set the Gaussian prior (towards 0, dimensionless width) on the "
+            "ellipticity (e1, e2) of the model at the re-smoothing scale",
+            py::arg("sigma_e")
+        )
         .def("set_sigma_F", &modelPrior::set_sigma_F,
             "set the Gaussian prior on Flux",
             py::arg("sigma_F")
         )
-        .def("set_sigma_a", &modelPrior::set_sigma_a,
-            "set the Gaussian prior (towards 0, width in arcsec^2) on "
-            "each intrinsic covariance component mxx, myy, mxy",
-            py::arg("sigma_a")
+        .def("set_sigma_T", &modelPrior::set_sigma_T,
+            "set the Gaussian prior (towards 0, width in arcsec^2) on the "
+            "intrinsic size T = mxx + myy (T = 2 a^2 for a round source of "
+            "semi-axis a)",
+            py::arg("sigma_T")
         )
         .def("set_sigma_x", &modelPrior::set_sigma_x,
             "set the Gaussian prior on position",
@@ -132,7 +139,8 @@ pyExportNgmix(py::module_& m) {
         .def(
             py::init<
                 double, double, int, bool, bool, double, bool,
-                double, double, double, double, double, double, double
+                double, double, double, double, double, double, double,
+                double, double
             >(),
             py::arg("scale"),
             py::arg("sigma_arcsec"),
@@ -143,11 +151,13 @@ pyExportNgmix(py::module_& m) {
             py::arg("do_fpfs")=true,
             py::arg("lm_lambda0")=0.2,
             py::arg("lm_decay")=0.5,
-            py::arg("damping_floor")=50.0,
-            py::arg("conv_tol")=1.0e-3,
+            py::arg("damping_floor")=1.0,
+            py::arg("damping_rel")=0.1,
             py::arg("trust_shape")=0.05,
             py::arg("trust_center")=0.1,
-            py::arg("misfit_damping")=1.0
+            py::arg("misfit_damping")=1.0,
+            py::arg("conv_tol")=0.0,
+            py::arg("gate_ratio")=10.0
         )
         .def("process_cell", &GaussFit::process_cell,
             "Run iteration for fitting",
