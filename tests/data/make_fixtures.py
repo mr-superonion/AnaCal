@@ -473,6 +473,53 @@ def ngmix_gaussfit():
     fx.write()
 
 
+# test_gaussfit.test_gaussian_covariance_recovery: (sigma [arcsec], g1, g2,
+# flux) of four elliptical Gaussians and their centres (pixels) on a 256 x 64
+# strip; the table is duplicated in the test.
+GAUSSCOV_CASES = [
+    (0.20, 0.0, 0.0, 20.0),
+    (0.25, 0.15, 0.0, 30.0),
+    (0.30, 0.0, -0.2, 40.0),
+    (0.35, -0.1, 0.12, 50.0),
+]
+GAUSSCOV_CENTERS = [(31.2, 31.7), (95.6, 32.3), (160.4, 31.9), (223.8, 32.1)]
+
+
+def ngmix_gausscov():
+    """Noise-free elliptical Gaussians whose intrinsic covariance is known
+    in closed form, for the covariance recovery test.  float64 so the
+    comparison is not limited by rounding."""
+    fx = Fixture(os.path.join(HERE, "ngmix_gausscov.fits"))
+    scale, nx, ny = 0.2, 256, 64
+    psf_obj = moffat(2.5, 0.7, g1=0.02, g2=-0.02)
+    fx.add(
+        "psf",
+        draw_psf(psf_obj, 64, scale),
+        beta=2.5,
+        fwhm=0.7,
+        g1=0.02,
+        g2=-0.02,
+        scale=scale,
+    )
+    img = galsim.ImageD(ncol=nx, nrow=ny, scale=scale)
+    for (sig, g1, g2, flux), (cx, cy) in zip(
+        GAUSSCOV_CASES, GAUSSCOV_CENTERS
+    ):
+        gal = galsim.Gaussian(sigma=sig, flux=flux).shear(g1=g1, g2=g2)
+        gal = gal.shift(
+            (cx - (nx - 1) / 2) * scale, (cy - (ny - 1) / 2) * scale
+        )
+        galsim.Convolve(psf_obj, gal).drawImage(image=img, add_to_image=True)
+    fx.add(
+        "gal",
+        img.array,
+        scale=scale,
+        cases=str(GAUSSCOV_CASES),
+        centers=str(GAUSSCOV_CENTERS),
+    )
+    fx.write()
+
+
 WSEL_MAGS = np.arange(26.7, 27.1, 0.1)
 WSEL_ANGLES = np.random.RandomState(0).random(10) * 360.0
 
@@ -844,6 +891,7 @@ if __name__ == "__main__":
         ngmix_angle,
         ngmix_fpfs,
         ngmix_gaussfit,
+        ngmix_gausscov,
         ngmix_wsel,
         ngmix_bkg,
         task_detection,

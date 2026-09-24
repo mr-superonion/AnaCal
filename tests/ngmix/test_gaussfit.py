@@ -364,3 +364,68 @@ def test_ngmix_gaussian_fit4_free_centre_response():
 # plt.xlabel("log(R)")
 # plt.ylabel("loss")
 # plt.axhline(0.0, ls='--')
+
+
+# (sigma [arcsec], g1, g2, flux) and centres (pixels) of the four Gaussians
+# in tests/data/ngmix_gausscov.fits; duplicated from make_fixtures.py.
+GAUSSCOV_CASES = [
+    (0.20, 0.0, 0.0, 20.0),
+    (0.25, 0.15, 0.0, 30.0),
+    (0.30, 0.0, -0.2, 40.0),
+    (0.35, -0.1, 0.12, 50.0),
+]
+GAUSSCOV_CENTERS = [(31.2, 31.7), (95.6, 32.3), (160.4, 31.9), (223.8, 32.1)]
+
+
+def _gaussian_covariance(sigma, g1, g2):
+    """Covariance (mxx, myy, mxy) of a round Gaussian of width ``sigma``
+    after GalSim's shear (g1, g2): sigma^2 S S^T with
+    S = [[1 + g1, g2], [g2, 1 - g1]] / sqrt(1 - |g|^2)."""
+    gg = g1 * g1 + g2 * g2
+    k = sigma * sigma / (1.0 - gg)
+    return k * (1.0 + gg + 2.0 * g1), k * (1.0 + gg - 2.0 * g1), k * 2.0 * g2
+
+
+@pytest.mark.parametrize("force_center, offset", [(True, 0.0), (False, 0.5)])
+def test_gaussian_covariance_recovery(force_center, offset):
+    """The fitted intrinsic covariance (mxx, myy, mxy) of noise-free,
+    PSF-convolved elliptical Gaussians -- the profile the model is -- equals
+    the input covariance, together with the flux and the centre.  With a
+    free centre the fit starts half a pixel from the truth in x and y.
+    Measured agreement is 4e-5 sigma^2 or better."""
+    fix = load("ngmix_gausscov")
+    scale = 0.2
+    fitter = anacal.ngmix.GaussFit(
+        scale=scale, sigma_arcsec=0.4, stamp_size=48,
+        force_center=force_center,
+    )
+    catalog = []
+    for cx, cy in GAUSSCOV_CENTERS:
+        src = anacal.table.galNumber()
+        src.model.x1.v = (cx + offset) * scale
+        src.model.x2.v = (cy - offset) * scale
+        src.x1_det = src.model.x1.v
+        src.x2_det = src.model.x2.v
+        catalog.append(src)
+    result = fitter.process_cell(
+        catalog=catalog,
+        img_array=fix["gal"],
+        psf_array=fix["psf"],
+        prior=anacal.ngmix.modelPrior(),
+        num_epochs=10,
+        variance=1.0,
+    )
+    assert len(result) == len(GAUSSCOV_CASES)
+    for rr, (sigma, g1, g2, flux), (cx, cy) in zip(
+        result, GAUSSCOV_CASES, GAUSSCOV_CENTERS
+    ):
+        m = rr.model
+        np.testing.assert_allclose(
+            [m.mxx.v, m.myy.v, m.mxy.v],
+            _gaussian_covariance(sigma, g1, g2),
+            rtol=0, atol=2e-4 * sigma**2,
+        )
+        np.testing.assert_allclose(m.F.v, flux, rtol=1e-4)
+        np.testing.assert_allclose(
+            [m.x1.v / scale, m.x2.v / scale], [cx, cy], rtol=0, atol=1e-4
+        )
