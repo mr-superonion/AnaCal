@@ -40,7 +40,8 @@ def _cell():
     # the latter matters because it makes decentralize() the identity, so the
     # g1/g2 slots are the plain shear derivatives.
     return anacal.geometry.get_cell_list(
-        NX, NY, NX + 32, NY + 32, 32, SCALE
+        img_nx=NX, img_ny=NY, cell_nx=NX + 32, cell_ny=NY + 32,
+        cell_overlap=32, scale=SCALE,
     )[0]
 
 

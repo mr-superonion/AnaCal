@@ -37,12 +37,12 @@ def test_task_detection():
         **kwargs,
     )
     cells = anacal.geometry.get_cell_list(
-        img_array.shape[0],
-        img_array.shape[1],
-        500,
-        500,
-        64,
-        scale,
+        img_nx=img_array.shape[1],
+        img_ny=img_array.shape[0],
+        cell_nx=500,
+        cell_ny=500,
+        cell_overlap=64,
+        scale=scale,
     )
 
     initial_memory_usage = mem_used()
@@ -85,12 +85,12 @@ def test_task_detection():
     )
 
     cells = anacal.geometry.get_cell_list(
-        img_array.shape[0],
-        img_array.shape[1],
-        512,
-        512,
-        150,
-        scale,
+        img_nx=img_array.shape[1],
+        img_ny=img_array.shape[0],
+        cell_nx=512,
+        cell_ny=512,
+        cell_overlap=150,
+        scale=scale,
     )
     catalog = det_task.process_image(
         img_array,

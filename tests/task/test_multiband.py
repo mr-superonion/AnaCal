@@ -68,7 +68,8 @@ def make_task():
 
 def make_cells(shape):
     return anacal.geometry.get_cell_list(
-        shape[0], shape[1], 500, 500, 64, SCALE,
+        img_nx=shape[1], img_ny=shape[0], cell_nx=500, cell_ny=500,
+        cell_overlap=64, scale=SCALE,
     )
 
 

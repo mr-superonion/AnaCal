@@ -38,12 +38,12 @@ def test_shear_estimate_w_sel():
     # cell as img + overlap keeps npatch = 1, so this is still a single cell
     # whose inner region is exactly the image.
     cell = anacal.geometry.get_cell_list(
-        nx,
-        ny,
-        nx + 32,
-        ny + 32,
-        32,
-        scale,
+        img_nx=nx,
+        img_ny=ny,
+        cell_nx=nx + 32,
+        cell_ny=ny + 32,
+        cell_overlap=32,
+        scale=scale,
     )[0]
 
     cats = anacal.detector.find_peaks(

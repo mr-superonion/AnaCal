@@ -132,12 +132,12 @@ def test_flux_variance():
     # never estimated from pixels outside the cell.  120 - 32 = 88 still
     # exceeds the 64-pixel image, so this remains a single cell.
     cells = anacal.geometry.get_cell_list(
-        gal_array.shape[0],
-        gal_array.shape[1],
-        120,
-        120,
-        32,
-        pixel_scale,
+        img_nx=gal_array.shape[1],
+        img_ny=gal_array.shape[0],
+        cell_nx=120,
+        cell_ny=120,
+        cell_overlap=32,
+        scale=pixel_scale,
     )
     assert len(cells) == 1
     flux4, flux_var4 = gaussian_flux_variance(

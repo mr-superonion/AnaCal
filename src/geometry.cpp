@@ -43,7 +43,11 @@ pyExportGeometry(py::module_& m) {
 
     geometry.def(
         "get_cell_list", &get_cell_list,
-        "get a list of cells",
+        "get a list of cells.  Keyword-only: img_nx is the image WIDTH "
+        "(number of columns, shape[-1]) and img_ny its HEIGHT (shape[-2]); "
+        "a positional (ny, nx) call would silently swap them on a "
+        "non-square image, so positional calls are refused.",
+        py::kw_only(),
         py::arg("img_nx"),
         py::arg("img_ny"),
         py::arg("cell_nx"),
