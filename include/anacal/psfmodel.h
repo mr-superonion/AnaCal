@@ -1053,30 +1053,31 @@ public:
 };
 
 // Centre crop / zero-pad a stamp to (tny, tnx).  THE definition of the
-// ``resize_array`` convention (crop start (in-out)//2; rows pad
-// bottom-first, columns pad left-first) -- ``anacal.psf.resize_array``
-// and ``xlens.utils.image.resize_array`` are both this function, so
-// the convention exists in exactly one place.  ``out`` must hold
-// tny*tnx doubles; pure C++, safe under a released GIL.
+// ``resize_array`` convention -- ``anacal.psf.resize_array`` and
+// ``xlens.utils.image.resize_array`` are both this function, so the
+// convention exists in exactly one place.  The input's centre pixel
+// (n / 2, integer division, 0-based) lands on the output's centre pixel
+// (m / 2): the AnaCal PSF centre, the pixel shifted to the FFT origin, is
+// preserved for every combination of even and odd sizes.  A crop starts
+// at n / 2 - m / 2; a pad places the stamp at m / 2 - n / 2.  ``out`` must
+// hold tny*tnx doubles; pure C++, safe under a released GIL.
 inline void resize_stamp_to(
     const Stamp& st, int tny, int tnx, double* out
 ) {
     std::fill(out, out + static_cast<std::size_t>(tny) * tnx, 0.0);
     int src_y0 = 0, dst_y0 = 0, ny = st.ny;
     if (st.ny > tny) {
-        src_y0 = (st.ny - tny) / 2;
+        src_y0 = st.ny / 2 - tny / 2;
         ny = tny;
     } else if (st.ny < tny) {
-        const int pad = tny - st.ny;
-        dst_y0 = pad - pad / 2;
+        dst_y0 = tny / 2 - st.ny / 2;
     }
     int src_x0 = 0, dst_x0 = 0, nx = st.nx;
     if (st.nx > tnx) {
-        src_x0 = (st.nx - tnx) / 2;
+        src_x0 = st.nx / 2 - tnx / 2;
         nx = tnx;
     } else if (st.nx < tnx) {
-        const int pad = tnx - st.nx;
-        dst_x0 = pad - pad / 2;
+        dst_x0 = tnx / 2 - st.nx / 2;
     }
     for (int y = 0; y < ny; ++y) {
         const double* srow = &st.data[

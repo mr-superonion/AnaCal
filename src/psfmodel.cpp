@@ -416,9 +416,11 @@ pyExportPsfModel(py::module_& m) {
         },
         "Centre crop / zero-pad a 2-D array to target_shape = "
         "(height, width).  The single implementation of this "
-        "convention: crop start (in-out)//2, rows pad bottom-heavy, "
-        "columns pad top-heavy.  Any dtype is accepted and the result "
-        "is float64.",
+        "convention: the input's centre pixel (n // 2, 0-based) lands on "
+        "the output's centre pixel (m // 2) for every combination of even "
+        "and odd sizes, so a PSF centred on the AnaCal PSF pixel "
+        "(npix // 2, npix // 2) stays centred.  Any dtype is accepted and "
+        "the result is float64.",
         py::arg("array"), py::arg("target_shape") = std::pair<int, int>(64, 64)
     );
 

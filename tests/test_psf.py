@@ -1,5 +1,6 @@
 import anacal
 import numpy as np
+import pytest
 
 from .fixtures import load
 
@@ -110,3 +111,28 @@ def test_lanczos_kernel_matches_galsim():
 
 if __name__ == "__main__":
     test_pypsf()
+
+
+@pytest.mark.parametrize("nin", [40, 41, 48, 49, 64, 65])
+@pytest.mark.parametrize("nout", [32, 33, 48, 49, 64, 65])
+def test_resize_array_keeps_the_psf_centre(nin, nout):
+    """The AnaCal PSF centre, pixel (n // 2, n // 2) (0-based, the pixel
+    shifted to the FFT origin), lands on (m // 2, m // 2) for every
+    combination of even and odd sizes, cropping or padding, and for a
+    non-square target."""
+    arr = np.zeros((nin, nin))
+    arr[nin // 2, nin // 2] = 1.0
+    out = anacal.psf.resize_array(arr, (nout, nout))
+    assert out[nout // 2, nout // 2] == 1.0
+    assert out.sum() == 1.0
+    out = anacal.psf.resize_array(arr, (nout, nout + 1))
+    assert out[nout // 2, (nout + 1) // 2] == 1.0
+    # a centred profile stays symmetric about the centre pixel
+    y, x = np.mgrid[0:nin, 0:nin] - nin // 2
+    prof = np.exp(-(x * x + y * y) / 18.0)
+    out = anacal.psf.resize_array(prof, (nout, nout))
+    c = nout // 2
+    k = min(c, nout - 1 - c, 5)
+    np.testing.assert_allclose(
+        out[c, c - k:c + k + 1], out[c, c - k:c + k + 1][::-1]
+    )
