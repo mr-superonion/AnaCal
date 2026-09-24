@@ -314,7 +314,13 @@ class FpfsTask:
         kmax (float | None): Maximum wavenumber for Fourier-space truncation.
             If ``None``, estimated automatically from the PSF.
         psf_array (NDArray | None): Average PSF image of shape
-            ``(npix, npix)``.  Defaults to a delta function at centre.
+            ``(npix, npix)``, centred on pixel ``(npix // 2, npix // 2)``
+            (0-based): that pixel is shifted to the FFT origin, so for even
+            ``npix`` the centre is half a pixel off the geometric middle
+            (GalSim draws there only after ``.shift(0.5 * scale,
+            0.5 * scale)``), and a PSF centred elsewhere shifts the
+            deconvolved image by the same amount.  Defaults to a delta
+            function at that pixel.
         kmax_thres (float): Threshold for automatic ``kmax`` estimation.
     """
 
@@ -556,7 +562,8 @@ class FpfsTask:
 
         Args:
             gal_array (NDArray): Galaxy image array.
-            psf_array (NDArray): PSF image of shape ``(npix, npix)``.
+            psf_array (NDArray): PSF image of shape ``(npix, npix)``,
+                centred on pixel ``(npix // 2, npix // 2)`` (0-based).
             det (NDArray | None): Detection catalog with ``('y', 'x')``
                 columns.
             noise_array (NDArray | None): Pure noise image for noise-bias
@@ -809,7 +816,9 @@ def process_image(
         noise_variance (float): Variance of image noise per pixel.
         mag_zero (float): Magnitude zero-point of the exposure.
         gal_array (NDArray): Galaxy exposure array.
-        psf_array (NDArray): Average PSF image of shape ``(npix, npix)``.
+        psf_array (NDArray): Average PSF image of shape ``(npix, npix)``,
+            centred on pixel ``(npix // 2, npix // 2)`` (0-based); see
+            ``FpfsTask``.
         noise_array (NDArray | None): Pure noise array for noise-bias
             subtraction.
         mask_array (NDArray | None): Mask array (1 for masked pixels).

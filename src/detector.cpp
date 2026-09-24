@@ -13,7 +13,10 @@ pyExportDetector(py::module_& m) {
         "(nband, ...) stacks; with a stack, variance takes one value per band "
         "and the bands are averaged with inverse-variance weights after each "
         "band's PSF has been removed.  Pass weights to pin that averaging to "
-        "a specific set instead of deriving it.",
+        "a specific set instead of deriving it.  "
+        "The PSF stamp must be centred on pixel (npsf // 2, npsf // 2), "
+        "0-based: that pixel is shifted to the FFT origin, so a PSF centred "
+        "elsewhere shifts the detection image and every detected position.",
         py::arg("img_array"),
         py::arg("psf_array"),
         py::arg("sigma_arcsec"),

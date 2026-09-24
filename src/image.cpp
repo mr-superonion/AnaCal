@@ -134,6 +134,10 @@ Image::set_r (
     auto r = input.template unchecked<2>();
     int arr_ny = r.shape(0);
     int arr_nx = r.shape(1);
+    // The array's CENTRE PIXEL convention: (arr_nx / 2, arr_ny / 2) in
+    // integer division, 0-based, is what ishift moves to the FFT origin.
+    // PSF stamps must be centred there -- for an even size that is half a
+    // pixel off the geometric middle -- or the deconvolved image shifts.
     int xcen = arr_nx / 2;
     int ycen = arr_ny / 2;
     this->set_r(
@@ -1371,7 +1375,9 @@ pyExportImage(py::module& m) {
         )
         .def("prepare_qnumber_image",
             &ImageQ::prepare_qnumber_image,
-            "prepare the qnumber image",
+            "prepare the qnumber image (value and the g1, g2, x1, x2 slots) of "
+            "gal_array, deconvolved by psf_array and re-smoothed.  psf_array "
+            "must be centred on pixel (npsf // 2, npsf // 2), 0-based.",
             py::arg("gal_array"),
             py::arg("psf_array"),
             py::arg("xcen"),

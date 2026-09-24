@@ -49,7 +49,12 @@ pyExportTask(py::module_& m) {
             "(ny, nx) and (npsf, npsf) -- or (nband, ...) stacks.  With a "
             "stack, variance takes one value per band and the bands are "
             "combined, after each band's PSF has been removed, into one "
-            "inverse-variance weighted detection image.",
+            "inverse-variance weighted detection image.  The PSF stamp "
+            "must be centred on pixel (npsf // 2, npsf // 2), 0-based: that "
+            "pixel is shifted to the FFT origin, so for an even stamp the "
+            "centre is half a pixel off the geometric middle, and a PSF "
+            "centred elsewhere shifts the deconvolved image by the same "
+            "amount.",
             py::arg("img_array"),
             py::arg("psf_array"),
             py::arg("variance"),
