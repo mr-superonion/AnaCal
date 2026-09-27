@@ -34,20 +34,25 @@ public:
     // shape (arcsec^2) and the centre (arcsec)
     double lm_lambda0, lm_decay, damping_floor, damping_rel;
     double trust_shape, trust_center, misfit_damping;
-    // smooth convergence gate on the chi2 decrease achieved by the last
-    // step, RELATIVE to the source's own chi2 scale F^2 H_FF / 2 (the
-    // chi2 of the model against an empty image, ~ (S/N)^2), so that the
-    // tolerance means the same relative precision for a faint and a
-    // bright source (rmodel.h gate_factor): 0 at conv_tol, 1 at conv_tol
-    // * gate_ratio; gate_ratio <= 1 makes it a hard step.  DEFAULT 0:
-    // the gate is off and every source takes num_epochs epochs.  On a
-    // real coadd the gate's own derivative term, -(ds/dc)(dc/dg) step,
-    // is heavy-tailed on the sources that pass through the ramp
-    // without stopping (one DP1 source went from R = +4.6 to -1338 at
-    // a relative tolerance of 1e-6, and a wider ramp does not help),
-    // while at a tolerance harmless for the response it stops almost
-    // nobody; with the relative damping the fit converges in 5-8 epochs
-    // anyway.  Kept for tests and experiments.
+    // Smooth convergence gate (rmodel.h gate_factor) on what the last
+    // step achieved, all terms dimensionless:
+    //     x = |dchi2| / (F^2 H_FF / 2)                  chi2 decrease,
+    //                                                    relative to ~(S/N)^2
+    //       + (dmxx^2 + dmyy^2 + 2 dmxy^2) / (T + 2 sigma^2)^2
+    //                                                    covariance step
+    //       + (dx1^2 + dx2^2) / sigma^2                  centre step
+    // 0 at x <= conv_tol, 1 at x >= conv_tol * gate_ratio (gate_ratio <=
+    // 1 makes it a hard step).  The chi2 term alone is flat long before
+    // the parameters settle (for a bright source dchi2 / (S/N)^2 drops
+    // below 1e-2 after one step while T still moves by 10%), and a gate
+    // that closes while the step is still large has a heavy-tailed
+    // derivative term -(ds/dx)(dx/dg) step (one DP1 source went from
+    // R = +4.6 to -1338).  The parameter terms make the gate close only
+    // once the step itself is small, so that term multiplies a small
+    // step by construction; the squares keep every term smooth (no
+    // kink of |.| inside the open region).  Because the gate is a
+    // qnumber of qnumbers the update carries its exact derivative.
+    // DEFAULT 0: off, every source takes num_epochs epochs.
     double conv_tol, gate_ratio;
     double sigma2, sigma_m2, rfac, ffac, ffac2, ffac3;
     double sigma2_lim;
@@ -514,6 +519,11 @@ public:
             src.converged = false;
             src.n_epochs = 0;
             src.chi2_prev = math::qnumber(0.0);
+            src.mxx_prev = src.model.mxx;
+            src.myy_prev = src.model.myy;
+            src.mxy_prev = src.model.mxy;
+            src.x1_prev = src.model.x1;
+            src.x2_prev = src.model.x2;
             if (!src.initialized) {
                 // Shape from the moments (replaces the a_ini / row
                 // values unless the size is forced).  There is no
@@ -560,10 +570,13 @@ public:
                 this->measure_loss(
                     data, variance_meas, src, cell, kernel
                 );
-                // gate on |chi2_prev - chi2|, the decrease the last step
-                // achieved (open on the first epoch and when the gate is
-                // disabled); |.| has its kink at 0, inside the region
-                // where the gate is identically 0, so the gate stays smooth
+                // gate on what the last step achieved: the chi2 decrease
+                // relative to the model's own chi2 scale plus the
+                // relative covariance and centre steps (see the member
+                // comment); open on the first epoch and when the gate is
+                // disabled.  |dchi2| has its kink at 0, inside the region
+                // where the gate is identically 0 (the parameter terms
+                // are squares), so the gate stays smooth.
                 math::qnumber gate(1.0);
                 if (this->conv_tol > 0.0 && src.n_epochs > 0) {
                     math::qnumber dchi2 = src.chi2_prev - src.loss.v;
@@ -571,14 +584,28 @@ public:
                     // relative to the chi2 of the model itself
                     const math::qnumber& F = src.model.F;
                     math::qnumber scl = 0.5 * F * F * src.loss.v_FF;
-                    if (scl.v > 0.0) {
-                        gate = gate_factor(
-                            dchi2 / scl, this->conv_tol,
-                            this->conv_tol * this->gate_ratio
-                        );
-                    }
+                    math::qnumber x = (scl.v > 0.0)
+                        ? dchi2 / scl : math::qnumber(0.0);
+                    const math::qnumber dxx = src.model.mxx - src.mxx_prev;
+                    const math::qnumber dyy = src.model.myy - src.myy_prev;
+                    const math::qnumber dxy = src.model.mxy - src.mxy_prev;
+                    const math::qnumber trc = src.model.mxx + src.model.myy
+                        + 2.0 * this->sigma2;
+                    x = x + (dxx * dxx + dyy * dyy + 2.0 * dxy * dxy)
+                        / (trc * trc);
+                    const math::qnumber d1 = src.model.x1 - src.x1_prev;
+                    const math::qnumber d2 = src.model.x2 - src.x2_prev;
+                    x = x + (d1 * d1 + d2 * d2) * this->sigma_m2;
+                    gate = gate_factor(
+                        x, this->conv_tol, this->conv_tol * this->gate_ratio
+                    );
                 }
                 src.chi2_prev = src.loss.v;
+                src.mxx_prev = src.model.mxx;
+                src.myy_prev = src.model.myy;
+                src.mxy_prev = src.model.mxy;
+                src.x1_prev = src.model.x1;
+                src.x2_prev = src.model.x2;
                 src.model.update_model_params(
                     src.loss, prior, src.x1_det, src.x2_det,
                     lam, this->damping_floor, this->damping_rel,

@@ -139,10 +139,11 @@ struct galNumber {
     // when a measurement starts.
     bool converged=false;
     uint8_t n_epochs=0;
-    // chi2 of the window at the previous epoch (a qnumber): the gate of
-    // the next step is a smooth function of the decrease achieved by
-    // the last one, see GaussFit::process_cell_impl
+    // State of the previous epoch (qnumbers): the gate of the next step
+    // is a smooth function of what the last one achieved -- the chi2
+    // decrease and the parameter step -- see GaussFit::process_cell_impl
     math::qnumber chi2_prev;
+    math::qnumber mxx_prev, myy_prev, mxy_prev, x1_prev, x2_prev;
     math::lossNumber loss;
     math::qnumber fpfs_e1;
     math::qnumber fpfs_e2;
