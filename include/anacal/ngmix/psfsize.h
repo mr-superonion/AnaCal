@@ -69,6 +69,11 @@ fit_psf_gauss(
         nx, ny, nx, ny, 0, scale
     )[0];
     auto r = psf_array.unchecked<2>();
+    // From here on only C++ containers and the unchecked accessor are
+    // touched (the cell's py::array_t member above needed the GIL to
+    // construct), so the fit runs GIL-free: xlens calls this from its
+    // threaded cell loop.
+    ScopedGilRelease release;
     // the cell grid is the array grid (get_cell_list pads nothing when
     // the cell is the whole image)
     std::vector<math::qnumber> data(static_cast<std::size_t>(nx) * ny);
