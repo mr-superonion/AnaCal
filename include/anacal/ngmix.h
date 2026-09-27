@@ -3,6 +3,7 @@
 
 #include "ngmix/rmodel.h"
 #include "ngmix/fitting.h"
+#include "ngmix/psfsize.h"
 
 namespace anacal {
 namespace ngmix {

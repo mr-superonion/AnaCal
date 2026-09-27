@@ -174,6 +174,44 @@ pyExportNgmix(py::module_& m) {
             py::arg("cell")=py::none(),
             py::arg("n_mask_base_max")=py::none()
         );
+
+    py::class_<PsfGaussFit>(ngmix, "PsfGaussFit")
+        .def(py::init<>())
+        .def_readonly("e1", &PsfGaussFit::e1)
+        .def_readonly("e2", &PsfGaussFit::e2)
+        .def_readonly("T", &PsfGaussFit::T)
+        .def_readonly("x1", &PsfGaussFit::x1)
+        .def_readonly("x2", &PsfGaussFit::x2)
+        .def_readonly("flux", &PsfGaussFit::flux)
+        .def_readonly("n_epochs", &PsfGaussFit::n_epochs)
+        .def_readonly("converged", &PsfGaussFit::converged);
+
+    ngmix.def("fit_psf_gauss", &fit_psf_gauss,
+        "Least-squares elliptical Gaussian (= adaptive moments) of a raw "
+        "PSF image, fitted with the model-fit machinery. Returns e1, e2 "
+        "(distortion, (Cxx - Cyy) / T, 2 Cxy / T with x along axis 1), "
+        "T = Cxx + Cyy [arcsec^2] and the centre [arcsec on the array "
+        "grid]",
+        py::arg("psf_array"),
+        py::arg("scale"),
+        py::arg("max_epochs")=200,
+        py::arg("tol")=1.0e-10
+    );
+    ngmix.def("ellip_dilation", &ellip_dilation,
+        "metadetect's ellipticity dilation 1 + 2 (sqrt(1 + |e|) - 1), "
+        "capped at dilation_max",
+        py::arg("e1"),
+        py::arg("e2"),
+        py::arg("dilation_max")=1.1
+    );
+    ngmix.def("fitgauss_sigma_arcsec", &fitgauss_sigma_arcsec,
+        "sigma [arcsec] of metadetect's fitgauss reconvolution Gaussian, "
+        "sqrt(T d / 2), from the PSF image (without metacal's separate "
+        "1 + 2 step shear-step dilation)",
+        py::arg("psf_array"),
+        py::arg("scale"),
+        py::arg("dilation_max")=1.1
+    );
 }
 
 } // end of ngmix
