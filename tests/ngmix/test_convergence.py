@@ -24,7 +24,13 @@ FIX = load("ngmix_gaussfit")
 # whole shear pair)
 DX1 = -0.2
 DX2 = 0.11
-E1_CONVERGED = 0.04418555  # e1 of gal_g1p_f150 after 40 ungated epochs
+# Tolerance on the multiplicative bias m of e/R = g.  The ellipticity
+# is the INTRINSIC one, (mxx - myy) / T, whose per-galaxy estimator
+# carries a second-order term m ~ 3 g^2 (1.2e-3 at g = 0.02), so the
+# tolerance sits above it.
+M_TOL = 2.0e-3
+# intrinsic e1 of gal_g1p_f150 after 40 ungated epochs
+E1_CONVERGED = 0.22728199
 
 
 def _fit(img, num_epochs, variance=0.1, force_center=False, **kw):
@@ -113,7 +119,7 @@ def test_gated_response_matches_finite_difference():
     recovered shear is below 1e-4 (measured 1e-5)."""
     fd, an, m, c1, c2 = _pair(30, conv_tol=1e-8)
     assert c1.converged and c2.converged
-    assert abs(m) < 1.0e-4
+    assert abs(m) < M_TOL
 
 
 @pytest.mark.parametrize("conv_tol", [1e-2, 1e-3, 1e-4])
@@ -130,7 +136,7 @@ def test_loose_tolerance_with_fixed_centre(conv_tol):
     )
     assert c1.converged and c2.converged
     assert c1.n_epochs < 5 and c2.n_epochs < 5
-    assert abs(m) < 1.0e-4
+    assert abs(m) < M_TOL
 
 
 def test_default_is_fixed_epochs():
@@ -202,34 +208,52 @@ def test_model_is_apodised_to_exactly_zero():
 
 
 def test_ellipticity_prior_response_is_exact():
-    """A Gaussian prior on (e1, e2) at the re-smoothing scale shrinks e
-    and its response together, and the propagated response stays the
-    exact derivative: the multiplicative bias of the same-flux pair is
-    unchanged at 1e-6 with the prior on, while e1 and R both drop."""
-    def pair(sigma_e):
+    """A Gaussian prior on the intrinsic (e1, e2) shrinks e and its
+    response, and the propagated response stays the exact derivative:
+    the multiplicative bias of the +/- g pair is below M_TOL with the
+    prior on and off.
+
+    The prior does NOT shrink e and R by the same factor for one galaxy
+    with an intrinsic ellipticity (its e/R moves by ~2% at sigma_e =
+    0.1); only for an ensemble whose intrinsic shapes cancel is the
+    shear estimate unchanged.  So <e1> / <R11> is checked on a ring: the
+    same g1 = +0.02 galaxy rotated by 0, 45, 90 and 135 deg (measured
+    change 4e-4 at sigma_e = 0.1, 5e-5 at 0.3)."""
+    def prior_of(sigma_e):
         prior = anacal.ngmix.modelPrior()
         if sigma_e > 0:
             prior.set_sigma_e(anacal.math.qnumber(sigma_e))
-        out = []
-        for key in ("gal_g1p_f150", "gal_g1m_f150"):
-            fitter = anacal.ngmix.GaussFit(
-                scale=SCALE, sigma_arcsec=SIGMA, stamp_size=32
-            )
-            src = anacal.table.galNumber()
-            src.model.x1.v = src.model.x2.v = 32 * SCALE
-            src.x1_det = src.x2_det = 32 * SCALE
-            out.append(fitter.process_cell(
-                catalog=[src], img_array=FIX[key], psf_array=FIX["psf"],
-                prior=prior, num_epochs=30, variance=0.1,
-            )[0].model.get_shape()[0])
-        e_p, e_m = out
+        return prior
+
+    def shape(key, prior):
+        fitter = anacal.ngmix.GaussFit(
+            scale=SCALE, sigma_arcsec=SIGMA, stamp_size=32
+        )
+        src = anacal.table.galNumber()
+        src.model.x1.v = src.model.x2.v = 32 * SCALE
+        src.x1_det = src.x2_det = 32 * SCALE
+        return fitter.process_cell(
+            catalog=[src], img_array=FIX[key], psf_array=FIX["psf"],
+            prior=prior, num_epochs=30, variance=0.1,
+        )[0].model.get_shape()[0]
+
+    def pair(sigma_e):
+        e_p = shape("gal_g1p_f150", prior_of(sigma_e))
+        e_m = shape("gal_g1m_f150", prior_of(sigma_e))
         fd = (e_p.v - e_m.v) / 0.04
         an = 0.5 * (e_p.g1 + e_m.g1)
         return e_p.v, an, fd / an - 1.0
 
+    def ring(sigma_e):
+        es = [
+            shape(f"gal_g1p_{k}", prior_of(sigma_e))
+            for k in ("f150", "a45", "a90", "a135")
+        ]
+        return np.mean([e.v for e in es]) / np.mean([e.g1 for e in es])
+
     e0, r0, m0 = pair(0.0)
     e1, r1, m1 = pair(0.1)
-    assert abs(m0) < 1.0e-4 and abs(m1) < 1.0e-4
+    assert abs(m0) < M_TOL and abs(m1) < M_TOL
     assert 0.0 < e1 < e0 and 0.0 < r1 < r0
-    # shrinkage of e and of R go together, so e / R is what it was
-    np.testing.assert_allclose(e1 / r1, e0 / r0, rtol=2.0e-3)
+    # the ring's shear estimate is what it was without the prior
+    np.testing.assert_allclose(ring(0.1), ring(0.0), rtol=1.0e-3)

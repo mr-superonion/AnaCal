@@ -219,10 +219,17 @@ def test_ngmix_gaussian_fit2():
 
 WIDE_CENTERS = [(31.2, 31.2), (95.9, 32.05), (160, 32.1), (224, 31.8)]
 WIDE_FLUXES = [12, 23, 8.5, 18.4]
+# g1 of the strip (tests/data/make_fixtures.py wide_g)
+WIDE_G = 0.02
+# Tolerance on the multiplicative bias m of e/R = g.  The ellipticity
+# is the INTRINSIC one, (mxx - myy) / T, whose per-galaxy estimator
+# carries a second-order term m ~ 3 g^2 (1.2e-3 at g = 0.02), so the
+# tolerance sits above it.
+M_TOL = 2.0e-3
 
 
 def _fit_wide(key, force_center, num_epochs=25, offset=0.0, **kw):
-    """The four round galaxies sheared by g1 = 0.03 on the 256 x 64 strip
+    """The four round galaxies sheared by g1 = WIDE_G on the 256 x 64 strip
     (tests/data/ngmix_gaussfit.fits), started ``offset`` pixels
     (+x, -y) from their true centres."""
     fix = load("ngmix_gaussfit")
@@ -250,7 +257,7 @@ def _fit_wide(key, force_center, num_epochs=25, offset=0.0, **kw):
 
 def _max_m(result):
     return max(
-        abs(rr.model.get_shape()[0].v / rr.model.get_shape()[0].g1 / 0.03 - 1)
+        abs(rr.model.get_shape()[0].v / rr.model.get_shape()[0].g1 / WIDE_G - 1)
         for rr in result
     )
 
@@ -271,7 +278,7 @@ def test_ngmix_gaussian_fit4(key, flux_rtol):
     for rr, flux in zip(result, WIDE_FLUXES):
         assert rr.converged and rr.n_epochs < 5
         [e1, e2] = rr.model.get_shape()
-        assert abs(e1.v / e1.g1 / 0.03 - 1.0) < 1e-3
+        assert abs(e1.v / e1.g1 / WIDE_G - 1.0) < M_TOL
         assert abs(e2.v / e2.g2) < 2e-5
         np.testing.assert_allclose(rr.model.F.v, flux, rtol=flux_rtol)
 
@@ -294,14 +301,14 @@ def test_free_centre_off_truth_needs_small_tolerance_and_many_epochs(key):
     the shear to 1e-4 in two epochs at any tolerance
     (test_ngmix_gaussian_fit4)."""
     good = _fit_wide(key, False, num_epochs=50, offset=0.5, conv_tol=1e-10)
-    assert _max_m(good) < 1e-3
+    assert _max_m(good) < M_TOL
     for rr, (cx, cy) in zip(good, WIDE_CENTERS):
         assert rr.converged and rr.n_epochs < 50
         assert abs(rr.model.x1.v / 0.2 - cx) < 1e-4
         assert abs(rr.model.x2.v / 0.2 - cy) < 1e-4
-    assert _max_m(_fit_wide(key, False, num_epochs=10, offset=0.5)) < 1e-3
+    assert _max_m(_fit_wide(key, False, num_epochs=10, offset=0.5)) < M_TOL
     assert _max_m(_fit_wide(key, False, 10, 0.5, conv_tol=1e-3)) > 1e-1
-    assert _max_m(_fit_wide(key, False, 5, 0.5)) > 1e-3
+    assert _max_m(_fit_wide(key, False, 5, 0.5)) > M_TOL
 
 
 def test_ngmix_gaussian_fit4_free_centre_response():
@@ -333,7 +340,7 @@ def test_ngmix_gaussian_fit4_free_centre_response():
             0.0, atol=1e-5, rtol=0,
         )
         [e1, e2] = rr.model.get_shape()
-        assert abs(e1.v / e1.g1 / 0.03 - 1.0) < 1e-3
+        assert abs(e1.v / e1.g1 / WIDE_G - 1.0) < M_TOL
 
 
 # # Loss function

@@ -155,9 +155,10 @@ struct modelPrior {
     // chi2): w_F on the flux (towards 0), w_T on the intrinsic size
     // T = mxx + myy (towards 0; sigma in arcsec^2; for a round source of
     // semi-axis a, T = 2 a^2), w_x on the centre (towards the detection
-    // position; sigma in arcsec), w_e on the ellipticity (e1, e2) of the
-    // model at the re-smoothing scale, get_shape, towards 0 (sigma
-    // dimensionless; |e| < 1 always, so a Gaussian needs no cutoff).
+    // position; sigma in arcsec), w_e on the INTRINSIC ellipticity
+    // (e1, e2) = (mxx - myy, 2 mxy) / T of get_shape (same smooth floor
+    // on T), towards 0 (sigma dimensionless).  |e| exceeds 1 exactly
+    // where det M < 0, which the Gaussian penalises but does not forbid.
     // Size and shape are thus regularised separately; there is no prior
     // on the individual covariance components.  A default-constructed
     // modelPrior has no prior at all (every w = 0); the production
@@ -296,7 +297,7 @@ public:
     math::qnumber x1;
     math::qnumber x2;
     // sigma^2 of the re-smoothing the source was fitted under (set by
-    // GaussFit); get_shape reports the ellipticity at that scale
+    // GaussFit); informational -- neither get_shape nor the priors use it
     double sigma2_shape = 0.0;
 
     NgmixGaussian(
@@ -736,21 +737,28 @@ public:
             A[i1][i1] = A[i1][i1] + prior.w_T;
             A[i0][i1] = A[i0][i1] + prior.w_T;
         }
-        if (!this->force_size && prior.w_e.v > 0.0 && this->sigma2_shape > 0.0) {
-            // Gaussian prior (e1^2 + e2^2) / sigma_e^2 on the ellipticity at
-            // the re-smoothing scale, e1 = (mxx - myy) / tr, e2 = 2 mxy / tr,
-            // tr = mxx + myy + 2 sigma_shape^2: gradient and Gauss-Newton
-            // curvature in (mxx, myy, mxy), all qnumbers so the prior's
-            // effect on the response is propagated like the pixels'
-            math::qnumber tr = this->mxx + this->myy + 2.0 * this->sigma2_shape;
+        if (!this->force_size && prior.w_e.v > 0.0) {
+            // Gaussian prior (e1^2 + e2^2) / sigma_e^2 on the INTRINSIC
+            // ellipticity, the one get_shape reports: e1 = (mxx - myy) / tr,
+            // e2 = 2 mxy / tr with tr = smooth_max(T, 0.005, 1e-5), T = mxx
+            // + myy.  Gradient and Gauss-Newton curvature in (mxx, myy,
+            // mxy); s = d tr / dT is the slope of the smooth floor (1 away
+            // from it).  All qnumbers, so the prior's effect on the
+            // response is propagated like the pixels'.
+            const double lo = 0.005, eps = 1.0e-5;
+            math::qnumber dT = this->mxx + this->myy - lo;
+            math::qnumber rt = math::sqrt(dT * dT + eps * eps);
+            math::qnumber tr = lo + 0.5 * (dT + rt);
+            math::qnumber sl = 0.5 * (1.0 + dT / rt);
             math::qnumber itr = 1.0 / tr;
             math::qnumber e1 = (this->mxx - this->myy) * itr;
             math::qnumber e2 = 2.0 * this->mxy * itr;
             std::array<math::qnumber, 3> d1{
-                (1.0 - e1) * itr, -1.0 * (1.0 + e1) * itr, math::qnumber(0.0)
+                (1.0 - e1 * sl) * itr, -1.0 * (1.0 + e1 * sl) * itr,
+                math::qnumber(0.0)
             };
             std::array<math::qnumber, 3> d2{
-                -1.0 * e2 * itr, -1.0 * e2 * itr, 2.0 * itr
+                -1.0 * e2 * sl * itr, -1.0 * e2 * sl * itr, 2.0 * itr
             };
             const std::array<int, 3> idx{i0, i1, i2};
             for (int a = 0; a < 3; ++a) {
@@ -913,27 +921,19 @@ public:
         return;
     };
 
-    // Ellipticity of the model at the re-smoothing scale,
-    //     (e1, e2) = ((cxx - cyy), 2 cxy) / (cxx + cyy),  C = M + sigma^2 I,
-    // i.e. of the Gaussian that is actually compared with the
-    // (deconvolved, re-smoothed) pixels.  C is positive definite, so
-    // |e| < 1 always.  The INTRINSIC ellipticity (mxx - myy) / T is not
-    // usable as a per-object estimator: for an unresolved source the
-    // intrinsic covariance is zero within noise and can be negative,
-    // so that ratio is unbounded (|e| ~ 30 and |R| > 5 for a third of
-    // the sources on a DP1 patch).  The smoothing dilutes the shear
-    // signal by ~ T / (T + 2 sigma^2), which the propagated response
-    // calibrates exactly, and an unresolved source gets a small
-    // response instead of a wild shape.  With sigma2_shape = 0 (a
-    // model that was never fitted) this is the intrinsic ellipticity
-    // with a small positive floor on T.
+    // INTRINSIC ellipticity of the model,
+    //     (e1, e2) = ((mxx - myy), 2 mxy) / T,  T = mxx + myy,
+    // i.e. of the PSF-free covariance M (not of the re-smoothed
+    // C = M + sigma^2 I).  T has a smooth positive floor, 2 x (0.05
+    // arcsec)^2 with a 1e-5 arcsec^2 hand-over, so the ratio stays finite
+    // and differentiable -- but it is NOT bounded: for an unresolved
+    // source M is zero within noise (a fit can even drive T below 0,
+    // since only C is kept positive definite), so |e| and |R| can be
+    // large.  Select on T (e.g. T > 0.1 arcsec^2) before using it.  The
+    // ellipticity prior (set_sigma_e) acts on this same ellipticity.
     inline std::array<math::qnumber, 2>
     get_shape() const {
-        math::qnumber tr = this->mxx + this->myy + 2.0 * this->sigma2_shape;
-        if (this->sigma2_shape <= 0.0) {
-            // floor at 2 x (0.05 arcsec)^2, 1e-5 arcsec^2 hand-over
-            tr = smooth_max(tr, 0.005, 1.0e-5);
-        }
+        math::qnumber tr = smooth_max(this->mxx + this->myy, 0.005, 1.0e-5);
         math::qnumber e1 = (this->mxx - this->myy) / tr;
         math::qnumber e2 = 2.0 * this->mxy / tr;
         return {e1, e2};

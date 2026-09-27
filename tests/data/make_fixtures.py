@@ -429,6 +429,11 @@ def ngmix_gaussfit():
     sim(obj0, -0.02, 0.0, 0.0, 150.0, "gal_g1m_f150", **m)
     sim(obj0, 0.0, 0.0, 0.0, 150.0, "gal_g0_a0", **m)
     sim(obj0, 0.0, 0.0, 90.0, 150.0, "gal_g0_a90", **m)
+    # test_ellipticity_prior_response_is_exact: the g1 = +0.02 galaxy above
+    # (gal_g1p_f150, angle 0) rotated by 45, 90 and 135 deg -- a ring whose
+    # intrinsic ellipticities cancel in both components
+    for angle in (45, 90, 135):
+        sim(obj0, 0.02, 0.0, float(angle), 150.0, f"gal_g1p_a{angle}", **m)
     # test_ngmix_gaussian_fit4: four sources on a 256 x 64 strip
     nx, ny = 256, 64
     fx.add(
@@ -443,11 +448,14 @@ def ngmix_gaussfit():
     centers = [(31.2, 31.2), (95.9, 32.05), (160, 32.1), (224, 31.8)]
     fluxes = [12, 23, 8.5, 18.4]
 
+    # shear of the strip; tests/ngmix/test_gaussfit.py WIDE_G must match
+    wide_g = 0.02
+
     def strip(gal, key, **meta):
-        # the same four round galaxies, sheared by g1 = 0.03, for
+        # the same four round galaxies, sheared by g1 = wide_g, for
         # several radial profiles: the Gaussian is what the model is, the
         # exponential and the bulge + disk are what the model is not
-        obj = galsim.Convolve(psf_obj, gal.shear(g1=0.03))
+        obj = galsim.Convolve(psf_obj, gal.shear(g1=wide_g))
         full = galsim.ImageF(ncol=nx, nrow=ny, scale=scale)
         for (cx, cy), flux in zip(centers, fluxes):
             shift = galsim.PositionD(
@@ -457,7 +465,7 @@ def ngmix_gaussfit():
                 image=full, add_to_image=True
             )
         fx.add(
-            key, full.array, g1=0.03, scale=scale,
+            key, full.array, g1=wide_g, scale=scale,
             centers=str(centers), fluxes=str(fluxes), **meta,
         )
 

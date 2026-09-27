@@ -16,7 +16,8 @@ pyExportNgmix(py::module_& m) {
         .def_readonly("w_e", &modelPrior::w_e)
         .def("set_sigma_e", &modelPrior::set_sigma_e,
             "set the Gaussian prior (towards 0, dimensionless width) on the "
-            "ellipticity (e1, e2) of the model at the re-smoothing scale",
+            "intrinsic ellipticity (e1, e2) = (mxx - myy, 2 mxy) / T of the "
+            "model, as get_shape returns it",
             py::arg("sigma_e")
         )
         .def("set_sigma_F", &modelPrior::set_sigma_F,
@@ -124,7 +125,9 @@ pyExportNgmix(py::module_& m) {
             py::arg("c")
         )
         .def("get_shape", &NgmixGaussian::get_shape,
-            "Returns shape (e1, e2)"
+            "Returns the intrinsic ellipticity (e1, e2) = (mxx - myy, 2 mxy) / T, "
+            "T = mxx + myy with a smooth floor at 0.005 arcsec^2 (unbounded "
+            "for unresolved sources; select on T)"
         )
         .def("get_flux_stamp", &NgmixGaussian::get_flux_stamp,
             "Returns the flux on a stamp",
