@@ -28,7 +28,24 @@ import fitsio
 import galsim
 import numpy as np
 
-_data_dir = os.path.dirname(os.path.abspath(__file__))
+COSMOS_CATALOG_NAME = "src_cosmos.fits"
+
+
+def default_cosmos_catalog(catsim_dir=None):
+    """Path of the COSMOS catalog, ``$CATSIM_DIR/src_cosmos.fits``.
+
+    The 29 MB catalog is not kept in the AnaCal repository; it is the
+    same file ``xlens.simulator.simplesim`` reads from ``$CATSIM_DIR``.
+    """
+    catsim_dir = catsim_dir or os.environ.get("CATSIM_DIR", ".")
+    fname = os.path.join(catsim_dir, COSMOS_CATALOG_NAME)
+    if not os.path.isfile(fname):
+        raise FileNotFoundError(
+            f"COSMOS catalog {COSMOS_CATALOG_NAME} not found in "
+            f"{catsim_dir}. Set CATSIM_DIR to the directory holding it "
+            "(see tests/data/README.md) or pass cat_name."
+        )
+    return fname
 
 
 def _galsim_round_sersic(n, sersic_prec):
@@ -569,7 +586,7 @@ def make_isolated_sim(
             *index* selects from ``[-shear_value, shear_value, 0]``.
         seed (int): Random seed for the simulation.
         cat_name (str | None): Path to a COSMOS FITS catalogue.
-            Defaults to the bundled ``src_cosmos.fits``.
+            Defaults to ``$CATSIM_DIR/src_cosmos.fits``.
         scale (float): Pixel scale in arcseconds.
         mag_zero (float): Magnitude zero-point (27 for HSC).
         rot_field (list[float] | None): Field rotation angles in
@@ -610,7 +627,7 @@ def make_isolated_sim(
     rng = galsim.BaseDeviate(seed)
     ngeff = max(ngal // nrot_per_gal, 1)
     if cat_name is None:
-        cat_name = os.path.join(_data_dir, "src_cosmos.fits")
+        cat_name = default_cosmos_catalog()
     cosmos_cat = CosmosCatalog(
         filename=cat_name,
         max_mag=max_mag,
