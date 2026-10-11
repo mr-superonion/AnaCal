@@ -1,3 +1,10 @@
+"""The Gaussian fitter (ngmix.GaussFit.process_cell) on noise-free
+stamps: additive and multiplicative bias of the propagated shear
+response, flux and centre recovery, forced size, and the covariance
+recovery of the profile the model is.  The convergence gate is in
+test_convergence.py, the model derivatives in test_rmodel.py.
+"""
+
 import anacal
 import numpy as np
 import pytest
@@ -5,7 +12,7 @@ import pytest
 from ..fixtures import load
 
 
-def test_ngmix_gaussian_fit_additive(test_g1=True):
+def test_round_galaxy_has_no_additive_bias():
     scale = 0.2
     sigma_arcsec = 0.4
     # pre-rendered (tests/data/ngmix_gaussfit.fits): a sheared Moffat
@@ -45,7 +52,7 @@ def test_ngmix_gaussian_fit_additive(test_g1=True):
     return
 
 
-def test_ngmix_gaussian_fit2():
+def test_shear_response_flux_centre_and_symmetry():
     nx = 64
     ny = 64
     scale = 0.2
@@ -266,7 +273,7 @@ def _max_m(result):
     "key, flux_rtol",
     [("gal_wide", 1e-2), ("gal_wide_exp", 5e-2), ("gal_wide_bd", 5e-2)],
 )
-def test_ngmix_gaussian_fit4(key, flux_rtol):
+def test_shear_recovery_forced_centre(key, flux_rtol):
     """Shear recovery per galaxy, e1 / (de1/dg1) = g1, with the centre
     forced to the truth and the gate on at a relative tolerance of 1e-4
     (closes after two epochs), for the profile the model is (Gaussian)
@@ -299,7 +306,7 @@ def test_free_centre_off_truth_needs_small_tolerance_and_many_epochs(key):
     centroid 1e-2 pixel off and |m| of order one, and 5 fixed epochs
     leave |m| ~ 2e-2.  With the centre forced the same galaxies recover
     the shear to 1e-4 in two epochs at any tolerance
-    (test_ngmix_gaussian_fit4)."""
+    (test_shear_recovery_forced_centre)."""
     good = _fit_wide(key, False, num_epochs=50, offset=0.5, conv_tol=1e-10)
     assert _max_m(good) < M_TOL
     for rr, (cx, cy) in zip(good, WIDE_CENTERS):
@@ -311,7 +318,7 @@ def test_free_centre_off_truth_needs_small_tolerance_and_many_epochs(key):
     assert _max_m(_fit_wide(key, False, 5, 0.5)) > M_TOL
 
 
-def test_ngmix_gaussian_fit4_free_centre_response():
+def test_free_centre_response():
     """With a free centre the fitted centroid of a source at offset r
     from the shear centre responds to the shear as dx/dg = r (and to
     g2 with the axes swapped).  The centres start at the truth, so the
@@ -341,36 +348,6 @@ def test_ngmix_gaussian_fit4_free_centre_response():
         )
         [e1, e2] = rr.model.get_shape()
         assert abs(e1.v / e1.g1 / WIDE_G - 1.0) < M_TOL
-
-
-# # Loss function
-# num_epochs=1
-# loss_array = []
-# ddloss_array = []
-# t_array = np.arange(-5, 5.0, 0.005)
-# for t in t_array:
-#     src.model.t.v = t
-#     # Test shear response calculation (no multiplicative bias)
-#     cat_1 = fitter.process_cell(
-#         catalog=catalog,
-#         img_array=make_sim(g1=-0.02, g2=0.0, flux=flux),
-#         psf_array=psf_array,
-#         prior=prior,
-#         num_epochs=num_epochs,
-#         variance=1.0,
-#     )[0]
-#     loss_array.append(cat_1.loss.v.v)
-#     ddloss_array.append(cat_1.loss.v_tt.v)
-# loss_array = np.array(loss_array)
-# ddloss_array = np.array(ddloss_array)
-
-# src.model.t.v = -1.5
-# plt.close()
-# plt.plot(t_array, loss_array)
-# plt.plot(t_array, ddloss_array)
-# plt.xlabel("log(R)")
-# plt.ylabel("loss")
-# plt.axhline(0.0, ls='--')
 
 
 # (sigma [arcsec], g1, g2, flux) and centres (pixels) of the four Gaussians

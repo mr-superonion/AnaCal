@@ -1,3 +1,8 @@
+"""Shift invariance of the forced FPFS measurement: the same galaxy
+measured at sub-pixel offsets from the stamp centre, and at another
+pixel scale, gives the same moments.
+"""
+
 import anacal
 import numpy as np
 import numpy.lib.recfunctions as rfn
@@ -61,7 +66,7 @@ def do_test(scale, shift_x, shift_y):
     return rfn.structured_to_unstructured(src["data"])
 
 
-def test_shear_estimation():
+def test_shift_invariance():
     data1 = do_test(0.2, 0.0, 0.0)
     data2 = do_test(0.2, 2.31, 0.43)
     np.testing.assert_almost_equal(data1, data2, decimal=4)
@@ -71,4 +76,3 @@ def test_shear_estimation():
 
     data2 = do_test(0.164, -0.5, 1.5)
     np.testing.assert_almost_equal(data1, data2, decimal=4)
-    return

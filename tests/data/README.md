@@ -26,10 +26,24 @@ shifted by half a pixel so that the PSF centre lands on pixel
 
 | File | Test | HDUs | Content |
 |---|---|---|---|
-| `fpfs_process_image.fits` | `test_fpfs_process_image.py` | `psf`, `gal` | 670×670 COSMOS scene: 10×10 stamps of 64 px plus a 15 px border, 4 rotations per galaxy, `g1 = +0.02`, seed 2, mag zero point 30. PSF: Moffat β 3.5, FWHM 0.6″, truncated at 2.4″. |
+| `fpfs_process_image.fits` | `test_fpfs_process_image.py`, `test_fpfs_renoise.py`, `test_task_force_consistency.py`, `task/test_renoise_task.py` | `psf`, `gal` | 670×670 COSMOS scene: 10×10 stamps of 64 px plus a 15 px border, 4 rotations per galaxy, `g1 = +0.02`, seed 2, mag zero point 30. PSF: Moffat β 3.5, FWHM 0.6″, truncated at 2.4″. The noisy end-to-end tests share it through `fixtures.cosmos_scene()` / `cosmos_centres()`. |
 | `fpfs_shearest.fits` | `test_fpfs_shearest.py` | `psf`, `gal_seed12`, `gal_seed23`, `gal_seed42` | Three 64×768 COSMOS strips of 12 rotations each, `g1 = −0.02`, seeds 12, 23 and 42, mag zero point 27. PSF: Moffat β 3.5, FWHM 0.6″, truncated at 2.4″, `e = (0.02, −0.02)`. |
 | `fpfs_force_measure.fits` | `test_fpfs_force_measure.py` | `psf_0`…`psf_3`, `gal_0`…`gal_3` | One elliptical Gaussian (FWHM 0.6″, `e = (0.2, −0.24)`) on 64×64 stamps, in the four (pixel scale, x offset, y offset) cases of `FORCE_CASES`: centred at 0.2″, two offsets of about 2 px at 0.2″, and an offset one at 0.164″; each with its PSF stamp. |
 | `fpfs_noise_cov.fits` | `test_fpfs_noise_cov.py` | `psf_moffat35`, `psf_moffat25` | Two PSF stamps for the noise-covariance test: Moffat β 3.5, FWHM 0.6″, truncated, `e = (0.02, −0.02)`; and Moffat β 2.5, FWHM 0.8″. |
+
+### Regression references (not rendered)
+
+Single-HDU files that AnaCal itself produced, read with
+`fixtures.load_reference("<name>")`.  They pin the forced FPFS measurement
+to its earlier output; re-create them from the current code only when a
+change of the output is intended.
+
+| File | Test | Content |
+|---|---|---|
+| `fpfs_measure_gal.fits`, `fpfs_measure_psf.fits` | `test_fpfs_measure.py` | A 1024×1024 blended scene (float64) and its 64×64 PSF. |
+| `fpfs_measure_src.fits` | `test_fpfs_measure.py` | The 12 shapelet modes of the 3274 sources the detector finds on that scene. |
+| `fpfs_measure_bfunc_real.fits`, `fpfs_measure_bfunc_imag.fits` | `test_fpfs_measure.py` | The 12 shapelet basis functions on the 64×33 half plane. |
+| `fpfs_noise_cov_elem.fits` | `test_fpfs_noise_cov.py` | The 12×12 analytic noise covariance of the `psf_moffat35` PSF. |
 
 ### `image*`: image preparation (`tests/test_image.py`, `tests/image/`)
 

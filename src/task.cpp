@@ -30,7 +30,7 @@ pyExportTask(py::module_& m) {
             py::arg("image_bound")=0,
             py::arg("num_epochs")=10,
             py::arg("force_size")=false,
-            py::arg("force_center")=false,
+            py::arg("force_center")=true,
             py::arg("fpfs_c0")=1.0,
             py::arg("mag_zero")=Task::THRESHOLD_REF_MAG_ZERO,
             py::arg("lm_lambda0")=0.2,

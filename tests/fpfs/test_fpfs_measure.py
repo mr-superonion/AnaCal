@@ -1,34 +1,13 @@
-import os
+"""Regression of the forced FPFS measurement (FpfsTask.run) against stored
+outputs: the shapelet basis in Fourier space and the moments of the
+sources the detector finds on a 1024 x 1024 blended scene.
+"""
 
 import anacal
-import fitsio
 import numpy as np
 import numpy.lib.recfunctions as rfn
 
-src_fname = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "src_g.fits",
-)
-
-gal_fname = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "gal_array.fits",
-)
-
-psf_fname = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "psf_array.fits",
-)
-
-br_fname = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "bfunc_real.fits",
-)
-
-bi_fname = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "bfunc_imag.fits",
-)
+from ..fixtures import load_reference
 
 
 def make_detection(gal_array, psf_array, scale, noise_variance):
@@ -65,11 +44,10 @@ def make_detection(gal_array, psf_array, scale, noise_variance):
     return det
 
 
-def test_fpfs_measure():
+def test_forced_measurement_regression():
     scale = 0.2
-    ngrid2 = 64
-    psf_array = fitsio.read(psf_fname)
-    gal_array = fitsio.read(gal_fname)
+    psf_array = load_reference("fpfs_measure_psf")
+    gal_array = load_reference("fpfs_measure_gal")
     sigma_shapelets = 0.53
     std = 0.2
 
@@ -89,29 +67,9 @@ def test_fpfs_measure():
     )
     assert src["noise"] is None
     src1 = rfn.structured_to_unstructured(src["data"])
-    bfunc_real = fitsio.read(br_fname)
-    bfunc_imag = fitsio.read(bi_fname)
-    src2 = fitsio.read(src_fname)
+    bfunc_real = load_reference("fpfs_measure_bfunc_real")
+    bfunc_imag = load_reference("fpfs_measure_bfunc_imag")
+    src2 = load_reference("fpfs_measure_src")
     np.testing.assert_almost_equal(ftask.bfunc.real, bfunc_real)
     np.testing.assert_almost_equal(ftask.bfunc.imag, bfunc_imag)
     np.testing.assert_almost_equal(src1, src2, decimal=4)
-
-    # use grid PSF
-    psf_array2 = np.zeros((1, 1, ngrid2, ngrid2))
-    psf_array2[0, 0] = psf_array
-    # grid_psf = anacal.psf.GridPsf(
-    #     x0=0,
-    #     y0=0,
-    #     dx=ngrid,
-    #     dy=ngrid,
-    #     model_array=psf_array2,
-    # )
-
-    # src = ftask.run(gal_array=gal_array, psf=grid_psf, det=det1)
-    # src3 = rfn.structured_to_unstructured(src["data"])
-    # np.testing.assert_almost_equal(src1, src3, decimal=5)
-    return
-
-
-if __name__ == "__main__":
-    test_fpfs_measure()

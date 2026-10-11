@@ -375,7 +375,7 @@ public:
         int image_bound=0,
         int num_epochs=10,
         bool force_size=false,
-        bool force_center=false,
+        bool force_center=true,
         double fpfs_c0=1.0,
         double mag_zero=THRESHOLD_REF_MAG_ZERO,
         double lm_lambda0=0.2,

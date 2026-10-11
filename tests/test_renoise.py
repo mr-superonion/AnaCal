@@ -19,7 +19,7 @@ from .fixtures import symmetrized_spectrum
 
 SCALE = 0.2
 SIGMA_H = 0.52
-KLIM = 3.1 / SCALE
+KLIM = anacal.task.KLIM_PIX / SCALE
 
 
 def kgrid(n):
@@ -201,10 +201,11 @@ def test_kernels_elliptical_gaussian_psf(delta):
     np.testing.assert_allclose(
         (rk.Sd * (1 + rk.g**2))[ok], rk.Sd_sym[ok], rtol=1e-10
     )
-    np.testing.assert_allclose((rk.w**2)[ok], c * (rk.Sd_sym / rk.Sd)[ok])
+    ratio = rk.Sd_sym[ok] / rk.Sd[ok]  # S^d > 0 inside the band
+    np.testing.assert_allclose((rk.w**2)[ok], c * ratio)
     np.testing.assert_allclose(
         rk.kappa1[ok],
-        -np.sqrt(rk.Sd_sym / rk.Sd)[ok] * rk.a_sym1[ok] / (2 * np.sqrt(c)),
+        -np.sqrt(ratio) * rk.a_sym1[ok] / (2 * np.sqrt(c)),
     )
     if delta == 0.0:
         # finite differences of ln S^d_sym, away from the max crossing
@@ -412,9 +413,10 @@ def test_assigned_response_cancels_shear_dependence():
 
 # ---------------------------------------------------------------------------
 # Option 2 inside the qnumber image (ImageQ.prepare_qnumber_image with
-# renoise_kernels): one pure-noise image, the filler from its 90-degree
-# rotated transform, the added noise w * noise and the assigned response
-# kappa_j * noise in the g_j slots.
+# renoise_kernels): the image already carries the filler; from the one
+# pure-noise image come the added noise w * noise in the value slot and
+# the assigned response kappa_j * noise in the g_j slots.  Option 1 only
+# changes the variance bookkeeping (total_spectrum).
 # ---------------------------------------------------------------------------
 
 
@@ -476,7 +478,7 @@ def test_symmetrized_spectrum():
     ok = inband(n) & (rk.Sd > 0)
     assert sym.symmetrized and not ns.symmetrized
     np.testing.assert_allclose(
-        sym.S[ok], (var * rk.Sd_sym / rk.Sd)[ok], rtol=1e-12
+        sym.S[ok], var * rk.Sd_sym[ok] / rk.Sd[ok], rtol=1e-12
     )
     np.testing.assert_allclose(sym.S_raw, ns.S)
     np.testing.assert_allclose(sym.g[ok], rk.g[ok])

@@ -5,39 +5,42 @@ The image carries the spin-2 filler of the patch PSF (added by the caller,
 here with the fixtures' make_filler); the forced measurement adds w * noise
 to the value modes and the modes of kappa_j * noise to the shear response.
 The measurement is linear in the image, so every term can be checked
-exactly against process_image itself run on the separate pieces.
+exactly against process_image itself run on the separate pieces; the
+covariance of each mode is checked against the scatter over noise
+realizations.  The agreement with the Task is tested in
+test_task_force_consistency.py.
 """
 
 import anacal
 import numpy as np
 import pytest
 
-from ..fixtures import load, make_filler, symmetrized_spectrum
+from ..fixtures import (
+    COSMOS_BUFF,
+    COSMOS_MAG_ZERO,
+    COSMOS_NGRID,
+    COSMOS_NSTAMP,
+    cosmos_centres,
+    cosmos_scene,
+    make_filler,
+    symmetrized_spectrum,
+)
 
 SCALE = 0.2
-MAG_ZERO = 30.0
-NSTAMP, NGRID, BUFF = 10, 64, 15
+MAG_ZERO = COSMOS_MAG_ZERO
+NSTAMP, NGRID, BUFF = COSMOS_NSTAMP, COSMOS_NGRID, COSMOS_BUFF
 C, DELTA = 0.1, 0.05
 SIGMA = 0.52
 
 
 def scene(seed=1, noise_std=0.37):
-    fix = load("fpfs_process_image")
-    psf = np.asarray(fix["psf"], dtype=np.float64)
-    gal = np.asarray(fix["gal"], dtype=np.float64)
+    gal, psf = cosmos_scene()
     var = noise_std**2
     rng = np.random.default_rng(seed)
     eps = rng.normal(0.0, noise_std, gal.shape)
     eps2 = rng.normal(0.0, noise_std, gal.shape)
     noise = rng.normal(0.0, noise_std, gal.shape)
-    centers = np.arange(NSTAMP) * NGRID + NGRID // 2 + BUFF
-    yy, xx = np.meshgrid(centers, centers, indexing="ij")
-    det = np.zeros(
-        NSTAMP * NSTAMP, dtype=[("y", np.float64), ("x", np.float64)]
-    )
-    det["y"] = yy.ravel()
-    det["x"] = xx.ravel()
-    return gal, eps, eps2, noise, psf, var, det
+    return gal, eps, eps2, noise, psf, var, cosmos_centres()
 
 
 def fpfs_klim(cfg, psf):

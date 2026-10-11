@@ -1,39 +1,30 @@
-"""Option-2 (spectral) renoising through anacal.task.Task.process_image.
+"""The renoise Setup of anacal.task.Task.process_image.
 
-The default path (renoise=None) is covered by the other task tests; here
-the spectral path must run end to end on a noisy scene whose noise carries
-the spin-2 filler of the patch PSF, give finite numbers, detect the same
-sources as the rotated-noise path to within the Monte Carlo scatter, follow
-the variance bookkeeping, and reject inconsistent setups.
+Option 1 ("rotate") with a white noise spectrum must reproduce the plain
+rotated-noise path (renoise=None, the code before the noise spectrum
+existed, which doubles the noise variance), and inconsistent setups must
+be rejected.  That the Task's measurement under either mode equals the
+forced FPFS measurement is tested in
+tests/fpfs/test_task_force_consistency.py.
 """
 
 import anacal
 import numpy as np
 import pytest
 
-from ..fixtures import load, make_filler, symmetrized_spectrum
+from ..fixtures import cosmos_scene, symmetrized_spectrum
 
 SCALE = 0.2
-KLIM = 3.1 / SCALE
-C, DELTA = 0.1, 0.05
+KLIM = anacal.task.KLIM_PIX / SCALE
+NOISE_STD = 0.37
 
 
 def make_scene(seed=11):
-    fix = load("fpfs_process_image")
-    psf = np.asarray(fix["psf"], dtype=np.float64)
-    gal = np.asarray(fix["gal"], dtype=np.float64)
-    noise_std = 0.37
-    var = noise_std**2
+    gal, psf = cosmos_scene()
     rng = np.random.default_rng(seed)
-    eps = rng.normal(0.0, noise_std, gal.shape)
-    eps2 = rng.normal(0.0, noise_std, gal.shape)
-    noise = rng.normal(0.0, noise_std, gal.shape).astype(np.float32)
-    img = (gal + eps).astype(np.float32)
-    # the image for the spectral path: its noise carries the filler
-    img_s = (
-        gal + eps + make_filler(eps2, SCALE, var, psf, KLIM, DELTA)
-    ).astype(np.float32)
-    return img, img_s, psf, noise, var
+    img = (gal + rng.normal(0.0, NOISE_STD, gal.shape)).astype(np.float32)
+    noise = rng.normal(0.0, NOISE_STD, gal.shape).astype(np.float32)
+    return img, psf, noise, NOISE_STD**2
 
 
 def make_task(psf):
@@ -59,60 +50,76 @@ def cells_of(img):
     )
 
 
-def test_task_spectral_renoising():
-    img, img_s, psf, noise, var = make_scene()
+def test_rotate_setup_reproduces_plain_path():
+    """A rotate-mode Setup with the white spectrum (noise_corr=None) gives
+    the catalog of the plain path: same detections and every column equal
+    to roundoff (the variances come from a spectrum sum instead of the
+    factor 2, so not bit for bit)."""
+    img, psf, noise, var = make_scene()
     cells = cells_of(img)
-    n = cells[0].nx
-    assert all(c.nx == n and c.ny == n for c in cells)
     task = make_task(psf)
-    cat1 = task.process_image(
+    cat0 = task.process_image(
         img, psf, variance=var, cell_list=cells, noise_array=noise
     )
-    sym = symmetrized_spectrum(n, SCALE, var, psf, KLIM, DELTA)
-    setup = anacal.renoise.Setup(c=C, spectra=[sym], noise_rotated=False)
-    cat2 = task.process_image(
-        img_s,
+    raw = anacal.renoise.make_noise_spectrum(cells[0].nx, SCALE, var, None)
+    setup = anacal.renoise.Setup(
+        spectra=[raw], noise_rotated=True, mode="rotate"
+    )
+    cat1 = task.process_image(
+        img,
         psf,
         variance=var,
         cell_list=cells,
         noise_array=noise,
         renoise=setup,
     )
-    for cat in (cat1, cat2):
-        assert len(cat) > 50
-        for col in ("e1", "de1_dg1", "flux_gauss0", "flux_gauss0_err"):
-            assert np.all(np.isfinite(cat[col]))
-    assert abs(len(cat2) - len(cat1)) < 0.2 * len(cat1), (len(cat1), len(cat2))
-    # flux error: Option 1 doubles the variance, Option 2 scales it by the
-    # variance factor of the symmetrized plus added noise (well below 2
-    # for this nearly round PSF)
-    r = np.median(cat2["flux_gauss0_err"]) / np.median(cat1["flux_gauss0_err"])
-    rk = anacal.renoise.make_renoise_kernels(sym, psf, KLIM, C, 0.0, False)
-    pred = np.sqrt(anacal.renoise.variance_factor(rk, 0.52) / 2.0)
-    np.testing.assert_allclose(r, pred, rtol=0.02)
-    assert pred < 0.85
+    assert len(cat0) >= 90 and len(cat1) == len(cat0)
+    for col in cat0.dtype.names:
+        if cat0[col].dtype.kind == "f":
+            np.testing.assert_allclose(
+                cat1[col], cat0[col], rtol=1e-10, atol=1e-12, err_msg=col
+            )
+        else:
+            assert np.array_equal(cat1[col], cat0[col]), col
 
 
-def test_task_spectral_renoising_errors():
-    img, img_s, psf, noise, var = make_scene()
+def test_renoise_setup_errors():
+    img, psf, noise, var = make_scene()
     cells = cells_of(img)
     n = cells[0].nx
     task = make_task(psf)
-    setup = anacal.renoise.Setup(
-        spectra=[symmetrized_spectrum(n, SCALE, var, psf, KLIM)]
-    )
-    # the spectral mode needs the pure-noise image
-    with pytest.raises(RuntimeError):
-        task.process_image(
-            img_s, psf, variance=var, cell_list=cells, renoise=setup
-        )
+    sym = symmetrized_spectrum(n, SCALE, var, psf, KLIM)
+    raw = anacal.renoise.make_noise_spectrum(n, SCALE, var, None)
+    # any Setup needs the pure-noise image
+    for setup in (
+        anacal.renoise.Setup(spectra=[sym]),
+        anacal.renoise.Setup(spectra=[raw], mode="rotate"),
+    ):
+        with pytest.raises(RuntimeError):
+            task.process_image(
+                img, psf, variance=var, cell_list=cells, renoise=setup
+            )
+    # the spectrum must match the mode
+    for setup in (
+        anacal.renoise.Setup(spectra=[raw], mode="spectral"),
+        anacal.renoise.Setup(spectra=[sym], mode="rotate"),
+    ):
+        with pytest.raises(RuntimeError):
+            task.process_image(
+                img,
+                psf,
+                variance=var,
+                cell_list=cells,
+                noise_array=noise,
+                renoise=setup,
+            )
     # wrong grid
     bad = anacal.renoise.Setup(
         spectra=[symmetrized_spectrum(n + 2, SCALE, var, psf, KLIM)]
     )
     with pytest.raises(RuntimeError):
         task.process_image(
-            img_s,
+            img,
             psf,
             variance=var,
             cell_list=cells,
@@ -120,12 +127,10 @@ def test_task_spectral_renoising_errors():
             renoise=bad,
         )
     # wrong number of bands
-    two = anacal.renoise.Setup(
-        spectra=[symmetrized_spectrum(n, SCALE, var, psf, KLIM)] * 2
-    )
+    two = anacal.renoise.Setup(spectra=[sym] * 2)
     with pytest.raises(RuntimeError):
         task.process_image(
-            img_s,
+            img,
             psf,
             variance=var,
             cell_list=cells,

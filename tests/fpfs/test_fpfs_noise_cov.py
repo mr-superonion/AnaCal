@@ -1,24 +1,22 @@
-import os
+"""The analytic FPFS noise covariance (FpfsTask.prepare_covariance /
+calculate_covariance): a regression against a stored matrix and a
+Monte Carlo check against the scatter of noise-only measurements.
+"""
 
 import anacal
-import fitsio
 import numpy as np
 import numpy.lib.recfunctions as rfn
 
-from ..fixtures import load
+from ..fixtures import load, load_reference
 
 
-def test_noise_covariance():
+def test_covariance_regression():
     variance = 0.22**2.0
     sigma_as = 0.55
     pixel_scale = 0.2
     # pre-rendered sheared Moffat PSF (beta 3.5, fwhm 0.6), 64 x 64
     psf_array = load("fpfs_noise_cov")["psf_moffat35"]
-    test_fname = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "cov_elem.fits",
-    )
-    cov_elem = fitsio.read(test_fname)
+    cov_elem = load_reference("fpfs_noise_cov_elem")
 
     ftask = anacal.fpfs.FpfsTask(
         npix=psf_array.shape[0],
