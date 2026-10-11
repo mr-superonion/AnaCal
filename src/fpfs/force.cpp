@@ -56,7 +56,8 @@ pyExportFpfsForce(py::module_& fpfs) {
             py::arg("n_mask_base_max")=py::none(),
             py::arg("psf_model")=py::none(),
             py::arg("psf_offset_x")=0.0,
-            py::arg("psf_offset_y")=0.0
+            py::arg("psf_offset_y")=0.0,
+            py::arg("renoise")=py::none()
         );
     // n_mask_base sentinel for PSF-invalid sources (always skipped).
     fpfs.attr("PSF_INVALID_MASK_VALUE") =

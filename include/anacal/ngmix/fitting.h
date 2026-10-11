@@ -106,10 +106,10 @@ public:
         this->sigma2 = sigma_arcsec * sigma_arcsec;
         this->sigma_m2 = 1.0 / this->sigma2;
         this->rfac = -0.5 * this->sigma_m2;
-        this->ffac = rfac * (-0.318309886);
+        this->ffac = rfac * (-1.0 / M_PI);
         this->ffac2 = this->ffac * sqrt2 * this->sigma_m2;
         this->ffac3 = this->ffac * 2.0 * this->sigma_m2;
-        this->sigma2_lim = sigma2 * 20;
+        this->sigma2_lim = sigma2 * 49;
         this->r2_lim_stamp = std::pow((this->ss2-1) * scale, 2.0);
     };
 
@@ -440,7 +440,9 @@ public:
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         const std::optional<std::vector<double>>& weights=std::nullopt,
         const std::optional<double>& variance_meas_opt=std::nullopt,
-        const std::optional<double>& n_mask_base_max=std::nullopt
+        const std::optional<double>& n_mask_base_max=std::nullopt,
+        // Option-2 renoising kernels, one per band (null: Option 1)
+        const std::vector<renoise::RenoiseKernels>* rks=nullptr
     ) {
         // PRECONDITION: the band stacks were validated by the caller
         // (Task::process_image or process_cell below) -- validating once
@@ -476,7 +478,8 @@ public:
             this->sigma_arcsec,
             cell,
             w,
-            noise_array
+            noise_array,
+            rks
         );
 
         const std::size_t ng = catalog.size();

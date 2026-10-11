@@ -16,6 +16,11 @@
 
 namespace anacal {
 inline constexpr double min_deconv_ratio = 1e-5;
+// Fourier cutoff of every deconvolution, in 1 / pixel: klim = klim_pix /
+// scale [1 / arcsec].  ONE constant for the detection / measurement Task
+// and the forced FPFS measurement (FpfsConfig.kmax defaults to it), so
+// both see the same modes.
+inline constexpr double klim_pix = 3.1;
 
 // Interleaved (re, im) pair: the layout of std::complex<double> (and of
 // the fftw_complex it replaced), kept as double[2] so buffer element
@@ -189,6 +194,9 @@ public:
 
     void set_f(const std::vector<std::complex<double>>&);
 
+    // data_f += input (half-plane buffer of the same shape)
+    void add_f(const std::vector<std::complex<double>>&);
+
     void filter(const std::vector<std::complex<double>>&);
 
     void deconvolve(const std::vector<std::complex<double>>&, double);
@@ -309,6 +317,8 @@ deconvolve_filter(
 );
 
 
+namespace renoise { struct RenoiseKernels; }
+
 class ImageQ {
 private:
     // Preventing copy (implement these if you need copy semantics)
@@ -363,6 +373,23 @@ public:
     // run with the GIL released (the input stacks are only READ, through
     // unchecked accessors).  ``band`` selects one band of the (possibly
     // 3-D) input stacks; a plain 2-D image uses band == 0.
+    // Minimal-variance renoising (Option 2 of the renoising draft):
+    // the value is image + filler + w * noise, the pixel shear response
+    // D acts on image + filler only, and the g1 / g2 slots receive the
+    // assigned response kappa_j * noise.  ``noise`` is the ONE pure-noise
+    // image per band; the filler is built from its 90-degree-rotated
+    // transform (independent Fourier modes).  Defined in renoise.h.
+    std::vector<math::qnumber>
+    prepare_qnumber_vector_band_spectral(
+        const py::array_t<pixel_t>& img_stack,
+        const py::array_t<double>& psf_stack,
+        ssize_t band,
+        int xcen,
+        int ycen,
+        const py::array_t<pixel_t>& noise_stack,
+        const renoise::RenoiseKernels& rk
+    );
+
     std::vector<math::qnumber>
     prepare_qnumber_vector_band(
         const py::array_t<pixel_t>& img_stack,
@@ -370,8 +397,21 @@ public:
         ssize_t band,
         int xcen,
         int ycen,
-        const std::optional<py::array_t<pixel_t>>& noise_stack=std::nullopt
+        const std::optional<py::array_t<pixel_t>>& noise_stack=std::nullopt,
+        // non-null: Option 2 (needs noise_stack); null: Option 1, the
+        // 90-degree-rotated noise copy
+        const renoise::RenoiseKernels* rk=nullptr
     ) {
+        if (rk != nullptr) {
+            if (!noise_stack.has_value()) {
+                throw std::runtime_error(
+                    "ImageQ Error: spectral renoising needs a noise image"
+                );
+            }
+            return this->prepare_qnumber_vector_band_spectral(
+                img_stack, psf_stack, band, xcen, ycen, *noise_stack, *rk
+            );
+        }
         const std::vector<std::complex<double>> karr =
             img_obj.get_lens_kernel_vec(
                 psf_stack,
@@ -494,10 +534,11 @@ public:
         const py::array_t<double>& psf_array,
         int xcen,
         int ycen,
-        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+        const renoise::RenoiseKernels* rk=nullptr
     ) {
         return this->prepare_qnumber_vector_band(
-            img_array, psf_array, 0, xcen, ycen, noise_array
+            img_array, psf_array, 0, xcen, ycen, noise_array, rk
         );
     };
 
@@ -507,14 +548,16 @@ public:
         const py::array_t<double>& psf_array,
         int xcen,
         int ycen,
-        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+        const renoise::RenoiseKernels* rk=nullptr
     ) {
         auto data = prepare_qnumber_vector(
             img_array,
             psf_array,
             xcen,
             ycen,
-            noise_array
+            noise_array,
+            rk
         );
         return math::qtensor::from_image(
             std::move(data),
@@ -529,7 +572,8 @@ public:
         const py::array_t<double>& psf_array,
         int xcen,
         int ycen,
-        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+        const renoise::RenoiseKernels* rk=nullptr
     ) {
         auto result = py::array_t<double>({5, ny, nx});
         auto r = result.mutable_unchecked<3>();
@@ -539,7 +583,8 @@ public:
             psf_array,
             xcen,
             ycen,
-            noise_array
+            noise_array,
+            rk
         );
         for (ssize_t j = 0, idx=0; j < this->ny; ++j) {
             for (ssize_t i = 0; i < this->nx; ++i, ++idx) {
@@ -725,14 +770,15 @@ prepare_data_cell(
     double sigma_arcsec,
     const geometry::cell & cell,
     const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
-    ssize_t band=0
+    ssize_t band=0,
+    const renoise::RenoiseKernels* rk=nullptr
 ){
     ImageQLease lease(
         cell.nx,
         cell.ny,
         cell.scale,
         sigma_arcsec,
-        3.1 / cell.scale,      // klim = 3.1 / scale (matches
+        klim_pix / cell.scale,  // klim = klim_pix / scale (matches
                                 // gaussian_flux_variance in task.h)
         true                    // us estimate in FFTW
     );
@@ -743,7 +789,8 @@ prepare_data_cell(
         band,
         cell.xcen,
         cell.ycen,
-        noise_array
+        noise_array,
+        rk
     );
 };
 
@@ -856,7 +903,7 @@ inline double get_smoothed_variance(
             img_obj.set_f(pf);
         }
         // Deconvolve the PSF
-        img_obj.deconvolve(parr, 3.1 / scale);
+        img_obj.deconvolve(parr, klim_pix / scale);
     }
     {
         // Convolve Gaussian
@@ -980,9 +1027,17 @@ prepare_data_cell_coadd(
     double sigma_arcsec,
     const geometry::cell & cell,
     const std::vector<double>& w,
-    const std::optional<py::array_t<pixel_t>>& noise_stack=std::nullopt
+    const std::optional<py::array_t<pixel_t>>& noise_stack=std::nullopt,
+    // one set of Option-2 kernels per band (null: Option 1)
+    const std::vector<renoise::RenoiseKernels>* rks=nullptr
 ) {
     const std::size_t nband = w.size();
+    if ((rks != nullptr) && (rks->size() != nband)) {
+        throw std::runtime_error(
+            "anacal Error: " + std::to_string(rks->size()) +
+            " renoise kernel set(s) for " + std::to_string(nband) + " band(s)"
+        );
+    }
     std::vector<math::qnumber> out;
     for (std::size_t b = 0; b < nband; ++b) {
         const ssize_t ib = static_cast<ssize_t>(b);
@@ -992,7 +1047,8 @@ prepare_data_cell_coadd(
             sigma_arcsec,
             cell,
             noise_stack,
-            ib
+            ib,
+            (rks != nullptr) ? &((*rks)[b]) : nullptr
         );
         if (nband == 1) {
             // One band: return it untouched rather than multiplying by a

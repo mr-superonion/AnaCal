@@ -290,7 +290,9 @@ find_peaks_impl(
     const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
     int image_bound=0,
     const std::optional<std::vector<double>>& weights=std::nullopt,
-    const std::optional<double>& multiband_coadd_variance=std::nullopt
+    const std::optional<double>& multiband_coadd_variance=std::nullopt,
+    // Option-2 renoising kernels, one per band (null: Option 1)
+    const std::vector<renoise::RenoiseKernels>* rks=nullptr
 ) {
     // PRECONDITION: the band stacks were validated by the caller
     // (find_peaks below, or Task::process_image) -- validating once per
@@ -319,7 +321,8 @@ find_peaks_impl(
         sigma_arcsec_det,
         cell,
         w,
-        noise_array
+        noise_array,
+        rks
     );
 
     // The caller (Task::process_image) precomputes the detection-scale

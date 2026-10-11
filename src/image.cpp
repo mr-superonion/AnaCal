@@ -593,6 +593,22 @@ Image::irotate90_f() {
 
 
 void
+Image::add_f(
+    const std::vector<std::complex<double>>& input
+) {
+    assert_mode(this->mode & 2);
+    if (static_cast<int>(input.size()) != ky_length * kx_length) {
+        throw std::runtime_error("Error: input buffer shape not correct");
+    }
+    for (int index = 0; index < ky_length * kx_length; ++index) {
+        data_f[index][0] = data_f[index][0] + input[index].real();
+        data_f[index][1] = data_f[index][1] + input[index].imag();
+    }
+    return;
+}
+
+
+void
 Image::add_image_f(
     const py::array_t<std::complex<double>>& image
 ) {
@@ -1217,7 +1233,8 @@ pyExportImage(py::module& m) {
         py::arg("sigma_arcsec"),
         py::arg("cell"),
         py::arg("noise_array")=py::none(),
-        py::arg("band")=0
+        py::arg("band")=0,
+        py::arg("renoise_kernels")=py::none()
     );
     image.def(
         "prepare_data_cell_image", &prepare_data_cell_image,
@@ -1382,7 +1399,8 @@ pyExportImage(py::module& m) {
             py::arg("psf_array"),
             py::arg("xcen"),
             py::arg("ycen"),
-            py::arg("noise_array")=py::none()
+            py::arg("noise_array")=py::none(),
+            py::arg("renoise_kernels")=py::none()
         )
         .def(
             "prepare_qtensor",
@@ -1392,7 +1410,8 @@ pyExportImage(py::module& m) {
             py::arg("psf_array"),
             py::arg("xcen"),
             py::arg("ycen"),
-            py::arg("noise_array")=py::none()
+            py::arg("noise_array")=py::none(),
+            py::arg("renoise_kernels")=py::none()
         );
     image.def(
         "get_smoothed_variance",

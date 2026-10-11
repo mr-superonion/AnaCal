@@ -44,6 +44,7 @@ ext_modules.append(
             "src/geometry.cpp",
             "src/task.cpp",
             "src/psfmodel.cpp",
+            "src/renoise.cpp",
         ],
         include_dirs=include_dirs,
         # Almost all of the implementation lives in these headers; listing

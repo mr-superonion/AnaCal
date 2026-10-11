@@ -22,5 +22,6 @@ namespace anacal {
         geometry::pyExportGeometry(m);
         task::pyExportTask(m);
         psfmodel::pyExportPsfModel(m);
+        renoise::pyExportRenoise(m);
     }
 }

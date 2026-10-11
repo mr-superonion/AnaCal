@@ -65,12 +65,16 @@ pyExportTask(py::module_& m) {
             py::arg("a_ini")=0.2,
             py::arg("do_measure")=true,
             py::arg("do_fpfs")=true,
-            py::arg("n_mask_base_max")=py::none()
+            py::arg("n_mask_base_max")=py::none(),
+            py::arg("renoise")=py::none()
         );
     // Single source of truth for the zeropoint at which the flux-scale
     // thresholds are defined; the Python FPFS path reads it from here rather
     // than duplicating the literal.
     task.attr("THRESHOLD_REF_MAG_ZERO") = Task::THRESHOLD_REF_MAG_ZERO;
+    // the Fourier cutoff of the Task in 1 / pixel (klim = KLIM_PIX / scale);
+    // the forced FPFS measurement defaults to the same one
+    task.attr("KLIM_PIX") = klim_pix;
     task.def(
         "assign_cell_ids",
         [](const py::array_t<table::galRow>& detection,

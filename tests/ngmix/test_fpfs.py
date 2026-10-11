@@ -54,7 +54,7 @@ def test_ngmix_fpfs():
     )
 
     coords = np.array(
-        [(ny / 2.0 , nx / 2.0)],
+        [(ny / 2.0, nx / 2.0)],
         dtype=[
             ("y", "f8"),
             ("x", "f8"),
@@ -68,23 +68,31 @@ def test_ngmix_fpfs():
     )["data"]
 
     np.testing.assert_allclose(
-        src["m00"][0], m00,
-        atol=0.0, rtol=1e-4,
+        src["m00"][0],
+        m00,
+        atol=0.0,
+        rtol=1e-4,
     )
 
     np.testing.assert_allclose(
-        src["m00"][0] + src["m20"][0], trace,
-        atol=0.0, rtol=1e-4,
+        src["m00"][0] + src["m20"][0],
+        trace,
+        atol=0.0,
+        rtol=1e-4,
     )
 
     np.testing.assert_allclose(
-        src["m22c"][0], m22c,
-        atol=0.0, rtol=1e-4,
+        src["m22c"][0],
+        m22c,
+        atol=0.0,
+        rtol=1e-4,
     )
 
     np.testing.assert_allclose(
-        src["m22s"][0], m22s,
-        atol=0.0, rtol=1e-4,
+        src["m22s"][0],
+        m22s,
+        atol=0.0,
+        rtol=1e-4,
     )
 
 

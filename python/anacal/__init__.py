@@ -16,6 +16,7 @@ from ._anacal import (
     model,
     ngmix,
     noise,
+    renoise,
     table,
     task,
 )
@@ -27,6 +28,7 @@ __all__ = [
     "psf",
     "model",
     "noise",
+    "renoise",
     "mask",
     "simulation",
     "utils",

@@ -20,8 +20,10 @@ from ._anacal.fpfs import (
 )
 from ._anacal.fpfs import shapelets2d as _shapelets2d
 from ._anacal.fpfs import shapelets2d_func as _shapelets2d_func
+from ._anacal import renoise as renoise_mod
 from ._anacal.image import Image
 from ._anacal.task import THRESHOLD_REF_MAG_ZERO
+from ._anacal.task import KLIM_PIX as _KLIM_PIX
 from .psf import BasePsf
 
 # Lower bound on the per-kernel flux uncertainty.  A noiseless image gives
@@ -222,6 +224,12 @@ def _measure_kernel_catalog(
     n_mask_base_max=None,
     psf_model=None,
     psf_offset=(0.0, 0.0),
+    renoise_mode="rotate",
+    renoise_c=0.1,
+    renoise_delta=0.05,
+    noise_corr=None,
+    noise_rotated=True,
+    filler_psf=None,
 ):
     """One kernel's finished forced catalog via the C++ ``ForceTask``.
 
@@ -237,10 +245,65 @@ def _measure_kernel_catalog(
         pixel_scale=pixel_scale,
         sigma_shapelets=sigma_shapelets,
         psf_array=psf_array,
+        kmax=fpfs_config.kmax,
         kmax_thres=fpfs_config.kmax_thres,
     )
-    ftask.prepare_covariance(variance=noise_variance)
     klim = 1e10 if ftask.kmax is None else (ftask.kmax / pixel_scale)
+    if renoise_mode not in ("rotate", "spectral"):
+        raise ValueError(
+            f"renoise_mode must be 'rotate' or 'spectral', got {renoise_mode!r}"
+        )
+    renoise = None
+    if klim > 1e9:
+        # no finite Fourier cutoff: the white-noise covariance of the
+        # plain path (image noise plus the rotated copy)
+        ftask.prepare_covariance(variance=noise_variance)
+    else:
+        # The noise spectrum of the patch on the stamp grid, from the
+        # correlation function (white without one).  Option 1 ("rotate")
+        # uses the raw spectrum; for Option 2 ("spectral") the image
+        # carries the spin-2 filler of the patch PSF (added once per
+        # patch, see xlens), so its spectrum is the raw one symmetrized
+        # with that PSF, and the per-PSF kernels (added noise w and
+        # assigned response kappa) are built in C++, once for a constant
+        # PSF or per source for a native model.  The covariance is summed
+        # over the total noise spectrum (image noise plus the rotated copy
+        # or the added noise) with the kernels of the cell PSF.
+        spectrum = renoise_mod.make_noise_spectrum(
+            fpfs_config.npix,
+            pixel_scale,
+            float(noise_variance),
+            None if noise_corr is None else np.ascontiguousarray(
+                noise_corr, dtype=np.float64
+            ),
+        )
+        mode = "rotate"
+        if renoise_mode == "spectral" and noise_array is not None:
+            spectrum = renoise_mod.symmetrize_spectrum(
+                spectrum,
+                np.ascontiguousarray(
+                    psf_array if filler_psf is None else filler_psf,
+                    dtype=np.float64,
+                ),
+                klim,
+                renoise_delta,
+            )
+            mode = "spectral"
+            renoise = renoise_mod.Setup(
+                c=renoise_c,
+                spectra=[spectrum],
+                noise_rotated=noise_rotated,
+                mode=mode,
+            )
+        kernels = renoise_mod.make_renoise_kernels(
+            spectrum, np.ascontiguousarray(psf_array, dtype=np.float64),
+            klim, renoise_c, 0.0, False, noise_rotated, mode,
+        )
+        ftask.prepare_covariance(
+            variance=noise_variance,
+            renoise_kernels=kernels,
+            with_noise_image=noise_array is not None,
+        )
     force = _ForceTask(
         fpfs_config.npix,
         pixel_scale,
@@ -279,6 +342,7 @@ def _measure_kernel_catalog(
         psf_model=psf_model,
         psf_offset_x=float(psf_offset[0]),
         psf_offset_y=float(psf_offset[1]),
+        renoise=renoise,
     )
 
 
@@ -403,6 +467,7 @@ class FpfsTask:
         variance: float,
         psf_pow: NDArray,
         noise_pf: NDArray | None = None,
+        ratio: NDArray | None = None,
     ):
         """Calculate covariance of measurement error for a single PSF.
 
@@ -415,6 +480,9 @@ class FpfsTask:
             psf_pow (NDArray): PSF power spectrum |FFT(psf)|^2,
                 shape ``(npix, npix // 2 + 1)``
             noise_pf (NDArray | None): noise power spectrum [default: None]
+            ratio (NDArray | None): optional multiplier of the deconvolved
+                noise spectrum, half-plane ``(npix, npix // 2 + 1)``
+                (the spectral renoising's S^d_sym / S^d)
 
         Returns:
             NDArray: covariance matrix of shape ``(ncol, ncol)``
@@ -443,6 +511,8 @@ class FpfsTask:
         )
         noise_pf_deconv = img_obj.draw_f().real
         del img_obj
+        if ratio is not None:
+            noise_pf_deconv = noise_pf_deconv * ratio
 
         _w = np.ones(psf_pow.shape) * 2.0
         _w[:, 0] = 1.0
@@ -506,7 +576,11 @@ class FpfsTask:
         return self._rotate_rfft_pow(pf)
 
     def prepare_covariance(
-        self, variance: float, noise_pf: NDArray | None = None
+        self,
+        variance: float,
+        noise_pf: NDArray | None = None,
+        renoise_kernels=None,
+        with_noise_image: bool = True,
     ):
         """Estimate covariance of measurement error.
 
@@ -520,9 +594,38 @@ class FpfsTask:
             variance (float): noise variance per pixel
             noise_pf (NDArray | None): noise power spectrum [default: None]
 
+        With ``renoise_kernels`` (anacal.renoise.RenoiseKernels on the
+        stamp grid, built from the patch noise spectrum) the covariance is
+        summed over the kernels' total noise spectrum instead: image
+        noise plus the rotated copy (mode "rotate") or (1 + c) S^d_sym,
+        the symmetrized image noise plus the added noise (mode
+        "spectral"); with ``with_noise_image=False`` (no pure-noise
+        image) the image noise alone.
+
         Returns:
             NDArray: covariance matrix of shape ``(ncol, ncol)``
         """
+        if renoise_kernels is not None:
+            # relative to the white noise of the raw variance (what the
+            # plain path integrates): the total spectrum of the kernels
+            rk = renoise_kernels
+            sd = np.asarray(rk.Sd0)
+            total = (
+                np.asarray(renoise_mod.total_spectrum(rk))
+                if with_noise_image else np.asarray(rk.Sd)
+            )
+            ratio = np.where(
+                sd > 0, total / np.where(sd > 0, sd, 1.0), 1.0
+            )
+            cov_elems = self.calculate_covariance(
+                variance=variance,
+                psf_pow=self.psf_pow,
+                noise_pf=noise_pf,
+                ratio=ratio,
+            )
+            self.std_modes = np.sqrt(np.diagonal(cov_elems))
+            self.std_m00 = self.std_modes[self.di["m00"]]
+            return cov_elems
         # Covariance from the galaxy image measurement (original PSF)
         cov_elems = self.calculate_covariance(
             variance=variance,
@@ -733,6 +836,13 @@ class FpfsConfig:
     """The threshold used to define the upper limit of k we use in Fourier
     space."""
 
+    kmax: float | None = _KLIM_PIX
+    """Upper limit of k in Fourier space, in 1 / pixel (``klim`` in
+    1 / arcsec is ``kmax / pixel_scale``).  The default is the cutoff of
+    the detection / measurement Task (``anacal.task.KLIM_PIX``), so that
+    both stages measure the same Fourier modes; None estimates it from
+    the PSF with ``kmax_thres`` instead."""
+
     sigma_shapelets1: float = -1
     """Smoothing scale of the first shapelet kernel.  REQUIRED (> 0) for
     shear estimation."""
@@ -797,6 +907,12 @@ def process_image(
     n_mask_base_max: float | None = None,
     psf_model=None,
     psf_offset: tuple = (0.0, 0.0),
+    renoise_mode: str = "rotate",
+    renoise_c: float = 0.1,
+    renoise_delta: float = 0.05,
+    noise_corr: NDArray | None = None,
+    noise_rotated: bool = True,
+    filler_psf: NDArray | None = None,
     **kwargs,
 ):
     """Run the full FPFS measurement pipeline on an exposure.
@@ -830,6 +946,24 @@ def process_image(
             model.  Falls back to *psf_array* when ``None``.
         base_column_name (str | None): Optional prefix prepended to
             every output column name.
+        renoise_mode (str): noise-bias correction with ``noise_array``:
+            ``"rotate"`` (the 90-degree-rotated noise copy, Option 1) or
+            ``"spectral"`` (minimal-variance renoising with the spin-2
+            filler and the assigned response, Option 2).  Must be the
+            same as the detection stage's.
+        renoise_c (float): spectral renoising, added-noise fraction.
+        renoise_delta (float): spectral renoising, smoothing of the
+            spectrum maximum.
+        noise_corr (NDArray | None): the (unrotated) noise correlation
+            function of the patch, for the spectral renoising; None is
+            white noise.
+        noise_rotated (bool): whether ``noise_array`` was drawn from the
+            90-degree-rotated correlation function (xlens convention).
+        filler_psf (NDArray | None): spectral renoising: the PSF the
+            spin-2 filler of the image was built with (the patch PSF);
+            None means ``psf_array``.  The filler itself is added to the
+            image by the caller, once per patch (see
+            ``anacal.renoise.symmetrize_spectrum``).
 
     Returns:
         NDArray: Structured FPFS catalogue.
@@ -909,6 +1043,12 @@ def process_image(
             n_mask_base_max=n_mask_base_max,
             psf_model=psf_model,
             psf_offset=psf_offset,
+            renoise_mode=renoise_mode,
+            renoise_c=renoise_c,
+            renoise_delta=renoise_delta,
+            noise_corr=noise_corr,
+            noise_rotated=noise_rotated,
+            filler_psf=filler_psf,
         )
 
     # One GIL-released C++ pass per kernel (fpfs.ForceTask, structured

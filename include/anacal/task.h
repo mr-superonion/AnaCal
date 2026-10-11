@@ -2,6 +2,7 @@
 #define ANACAL_TASK_H
 
 #include "detector.h"
+#include "renoise.h"
 #include "mask.h"
 
 namespace anacal {
@@ -44,7 +45,7 @@ gaussian_flux_variance_band(
 
     // default klim safety (units: same k-units used by Image/filter)
     if (!std::isfinite(klim) || klim <= 0.0) {
-        klim = 3.1 / pixel_scale;
+        klim = klim_pix / pixel_scale;
     }
 
     // ---- PSF -> Fourier
@@ -153,7 +154,7 @@ gaussian_flux_variance(
 
     // default klim safety (units: same k-units used by Image/filter)
     if (!std::isfinite(klim) || klim <= 0.0) {
-        klim = 3.1 / pixel_scale;
+        klim = klim_pix / pixel_scale;
     }
 
     // ---- PSF → Fourier
@@ -448,7 +449,8 @@ public:
         const geometry::cell & cell,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         const std::optional<std::vector<double>>& weights=std::nullopt,
-        const std::optional<double>& multiband_coadd_variance=std::nullopt
+        const std::optional<double>& multiband_coadd_variance=std::nullopt,
+        const std::vector<renoise::RenoiseKernels>* rks=nullptr
     ) {
         // The impl variant: process_image validated the stacks already
         // and holds the GIL release, so the public wrapper's re-check
@@ -465,7 +467,8 @@ public:
             noise_array,
             this->image_bound,
             weights,
-            multiband_coadd_variance
+            multiband_coadd_variance,
+            rks
         );
         for (table::galNumber& src : catalog) {
             src.decentralize(cell);
@@ -488,7 +491,8 @@ public:
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
         const std::optional<std::vector<double>>& weights=std::nullopt,
         const std::optional<double>& variance_meas=std::nullopt,
-        const std::optional<double>& n_mask_base_max=std::nullopt
+        const std::optional<double>& n_mask_base_max=std::nullopt,
+        const std::vector<renoise::RenoiseKernels>* rks=nullptr
     ) {
         if (rows.empty()) return;
         for (table::galNumber & src : rows) {
@@ -505,7 +509,8 @@ public:
             noise_array,
             weights,
             variance_meas,
-            n_mask_base_max
+            n_mask_base_max,
+            rks
         );
         for (table::galNumber & src : rows) {
             src.decentralize(cell);
@@ -529,7 +534,11 @@ public:
         // measurement (rows kept with default values); internal
         // detections are stamped from mask_array before the check,
         // external catalogs carry their own n_mask_base column.
-        const std::optional<double>& n_mask_base_max=std::nullopt
+        const std::optional<double>& n_mask_base_max=std::nullopt,
+        // Minimal-variance renoising (Option 2): per-band noise spectra
+        // of the patch plus (c, delta).  Null: the rotated-noise
+        // renoising (Option 1), whenever noise_array is given.
+        const renoise::Setup* renoise=nullptr
     ) {
         // From here to the reset() before the output conversion,
         // everything works on C++ containers and READS the input arrays
@@ -551,8 +560,24 @@ public:
         const std::vector<double> variance_in = to_variance_vector(variance);
         check_band_stack(img_array, psf_array, variance_in, noise_array);
 
+        // A renoise Setup carries the noise spectrum of the patch: the
+        // variances are then summed over the actual total noise spectrum
+        // in BOTH modes; the spectral kernels (added noise, assigned
+        // response) are applied to the measurement in Option 2 only.
+        const bool use_spectra = (renoise != nullptr);
+        const bool spectral = use_spectra
+            && (renoise->mode == renoise::Mode::spectral);
+        if (use_spectra && !noise_array.has_value()) {
+            throw std::runtime_error(
+                "anacal Error: renoising with a noise spectrum needs a "
+                "noise image"
+            );
+        }
+        // Option 1 doubles the noise variance everywhere; Option 2's factor
+        // depends on the cell PSF and the smoothing scale and is worked out
+        // per cell below.
         std::vector<double> variance_use = variance_in;
-        if (noise_array.has_value()) {
+        if (noise_array.has_value() && !use_spectra) {
             for (double& v : variance_use) {
                 v = v * 2.0;
             }
@@ -563,9 +588,10 @@ public:
         // the measurement.  Passing them explicitly is what guarantees the two
         // stages see the same coadd.
         auto cell_weights = [&](const py::array_t<double>& psf,
-                                 const geometry::cell & cell) {
+                                 const geometry::cell & cell,
+                                 const std::vector<double>& variance_det) {
             return band_weights(
-                cell.scale, this->sigma_arcsec_det, psf, variance_use
+                cell.scale, this->sigma_arcsec_det, psf, variance_det
             );
         };
 
@@ -614,19 +640,33 @@ public:
         // Flux error of the coadd: each band contributes its own Gaussian
         // flux variance, combined with the same w_b^2 weighting used for
         // the image itself.  One band reduces to the previous expression.
+        // Option 1 (and no correction): white noise of variance_meas;
+        // Option 2: the direct sum over the total noise spectrum
+        // (1 + c) S^d_sym of the cell (renoise::gaussian_flux_variance).
         auto compute_flux_errors = [&](const py::array_t<double>& psf,
-                                       const std::vector<double>& w) {
+                                       const std::vector<double>& w,
+                                       const std::vector<double>& variance_meas,
+                                       const std::vector<renoise::RenoiseKernels>* rks) {
             double var0 = 0.0;
             double var2 = 0.0;
             for (std::size_t b = 0; b < w.size(); ++b) {
                 const ssize_t ib = static_cast<ssize_t>(b);
-                const double ww = w[b] * w[b] * variance_use[b];
-                var0 = var0 + ww * std::max(
+                const double ww = w[b] * w[b];
+                if (rks != nullptr) {
+                    var0 = var0 + ww * renoise::gaussian_flux_variance(
+                        (*rks)[b], 0.0, this->sigma_arcsec
+                    );
+                    var2 = var2 + ww * renoise::gaussian_flux_variance(
+                        (*rks)[b], 0.2, this->sigma_arcsec
+                    );
+                    continue;
+                }
+                var0 = var0 + ww * variance_meas[b] * std::max(
                     0.0, gaussian_flux_variance_band(
                         psf, ib, 0.0, this->sigma_arcsec, this->scale
                     )
                 );
-                var2 = var2 + ww * std::max(
+                var2 = var2 + ww * variance_meas[b] * std::max(
                     0.0, gaussian_flux_variance_band(
                         psf, ib, 0.2, this->sigma_arcsec, this->scale
                     )
@@ -648,7 +688,32 @@ public:
         for (std::size_t ib = 0; ib < ncells; ++ib) {
             const geometry::cell & cell = cell_list[ib];
             const py::array_t<double>& psf = choose_psf(cell, psf_array);
-            const std::vector<double> w = cell_weights(psf, cell);
+            // Option 2: kernels of this cell's PSF and the matching noise
+            // variances at the detection and measurement scales
+            std::vector<renoise::RenoiseKernels> rks;
+            const std::vector<renoise::RenoiseKernels>* rks_ptr = nullptr;
+            std::vector<double> variance_det = variance_use;
+            std::vector<double> variance_meas = variance_use;
+            if (use_spectra) {
+                rks = renoise::make_cell_kernels(
+                    *renoise, psf, klim_pix / cell.scale
+                );
+                if (spectral) {
+                    rks_ptr = &rks;
+                }
+                // equivalent white-noise variances of the smoothed image at
+                // the detection and the measurement scale (the flux errors
+                // are summed over the spectrum directly, see above)
+                for (std::size_t b = 0; b < rks.size(); ++b) {
+                    variance_det[b] = variance_in[b] * renoise::variance_factor(
+                        rks[b], this->sigma_arcsec_det
+                    );
+                    variance_meas[b] = variance_in[b] * renoise::variance_factor(
+                        rks[b], this->sigma_arcsec
+                    );
+                }
+            }
+            const std::vector<double> w = cell_weights(psf, cell, variance_det);
 
             std::vector<table::galNumber> rows;
             if (external) {
@@ -663,7 +728,7 @@ public:
                 rows = detect_cell(
                     img_array,
                     psf,
-                    variance_use,
+                    variance_det,
                     cell,
                     noise_array,
                     w,
@@ -671,9 +736,10 @@ public:
                         cell.scale,
                         this->sigma_arcsec_det,
                         psf,
-                        variance_use,
+                        variance_det,
                         w
-                    )
+                    ),
+                    rks_ptr
                 );
                 for (table::galNumber& src : rows) {
                     src.model.set_axes(
@@ -702,7 +768,9 @@ public:
                 // cut skips.  Leaving them at zero there would turn any
                 // downstream flux/flux_err into 0/0.
                 const std::array<double, 2> cell_flux_errs =
-                    compute_flux_errors(psf, w);
+                    compute_flux_errors(
+                        psf, w, variance_meas, use_spectra ? &rks : nullptr
+                    );
                 for (table::galNumber& src : rows) {
                     src.flux_gauss0_err = cell_flux_errs[0];
                     src.flux_gauss2_err = cell_flux_errs[1];
@@ -711,19 +779,20 @@ public:
                     cell.scale,
                     this->sigma_arcsec,
                     psf,
-                    variance_use,
+                    variance_meas,
                     w
                 );
                 measure_cell(
                     rows,
                     img_array,
                     psf,
-                    variance_use,
+                    variance_meas,
                     cell,
                     noise_array,
                     w,
                     var_meas,
-                    n_mask_base_max
+                    n_mask_base_max,
+                    rks_ptr
                 );
             }
 
