@@ -29,7 +29,6 @@ test = [
     "pytest-timeout>=1.2",
     "nbval",
     "matplotlib",
-    "memory_profiler",
     "psutil",
     "scipy",
 ]
@@ -40,7 +39,6 @@ dev = [
     "pytest-timeout>=1.2",
     "nbval",
     "matplotlib",
-    "memory_profiler",
     "psutil",
     "scipy",
     "black",

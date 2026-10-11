@@ -8,9 +8,8 @@ import os
 import anacal
 import fitsio
 import numpy as np
-from memory_profiler import memory_usage
 
-from .. import mem_used, print_mem
+from .. import mem_used, peak_mem_used, print_mem
 
 data_dir = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -105,16 +104,16 @@ def test_memory():
     initial_memory_usage = mem_used()
     print_mem(initial_memory_usage)
     func()
-    peak_memory_usage = max(memory_usage(proc=(func,)))
-    print("Peak Mem:", peak_memory_usage, "M")
+    peak_memory_usage = peak_mem_used(func)
+    print("Peak Mem:", end=" ")
+    print_mem(peak_memory_usage - initial_memory_usage)
 
     final_memory_usage = mem_used()
     print("Additional Mem:")
     print_mem(final_memory_usage - initial_memory_usage)
     # 1024 x 1024 image, ~3300 sources: measured ~230 MB peak above the
     # baseline and ~50 MB retained (allocator caches), a leak would grow
-    peak_mb = peak_memory_usage - initial_memory_usage / 2**20
-    assert peak_mb < 600, peak_mb
+    assert peak_memory_usage - initial_memory_usage < 600 * 2**20
     assert final_memory_usage - initial_memory_usage < 200 * 2**20
 
 

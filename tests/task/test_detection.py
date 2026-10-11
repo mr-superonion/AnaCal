@@ -7,9 +7,8 @@ import gc
 
 import anacal
 import numpy as np
-from memory_profiler import memory_usage
 
-from .. import mem_used, print_mem
+from .. import mem_used, peak_mem_used, print_mem
 from ..fixtures import load
 
 
@@ -63,8 +62,9 @@ def test_task_detection():
         gc.collect()
         return
 
-    peak_memory_usage = max(memory_usage(proc=(func,)))
-    print("Peak Mem:", peak_memory_usage, "M")
+    peak_memory_usage = peak_mem_used(func)
+    print("Peak Mem:", end=" ")
+    print_mem(peak_memory_usage - initial_memory_usage)
 
     final_memory_usage = mem_used()
     print("Additional Mem:")
