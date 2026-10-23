@@ -323,7 +323,8 @@ def central_correlation(a, b, lmax, w0, w1):
     return out
 
 
-def test_assigned_response_cancels_shear_dependence():
+@pytest.mark.parametrize("c", [0.1, 0.01])
+def test_assigned_response_cancels_shear_dependence(c):
     """The condition of the draft, through the pipeline's own D.
 
     The total noise zeta = eps_s^h + gamma D eps_s^h + n^h + gamma ndot^h,
@@ -339,7 +340,7 @@ def test_assigned_response_cancels_shear_dependence():
     (Gaussian term plus coordinate terms, which make it the noisiest
     estimate here); B is the assigned response.
     """
-    n, var, c, nreal, lmax = 96, 0.4, 0.1, 240, 8
+    n, var, nreal, lmax = 96, 0.4, 240, 8
     w0, w1 = 32, 64
     sxx, syy, sxy = 0.14, 0.09, 0.015
     psf = gauss_psf(n, sxx, syy, sxy)

@@ -86,14 +86,15 @@ def apply(filt, img):
     return out
 
 
-def test_spectral_forced_measurement_terms():
+@pytest.mark.parametrize("c", [C, 0.01])
+def test_spectral_forced_measurement_terms(c):
     gal, eps, eps2, noise, psf, var, det = scene()
     cfg = anacal.fpfs.FpfsConfig(sigma_shapelets1=SIGMA)
     klim, _ = fpfs_klim(cfg, psf)
     c0 = cfg.c0 * 10 ** ((MAG_ZERO - anacal.fpfs.THRESHOLD_REF_MAG_ZERO) / 2.5)
     img_s = gal + eps + make_filler(eps2, SCALE, var, psf, klim, DELTA)
     sym = symmetrized_spectrum(NGRID, SCALE, var, psf, klim, DELTA)
-    rk = anacal.renoise.make_renoise_kernels(sym, psf, klim, C, 0.0, False)
+    rk = anacal.renoise.make_renoise_kernels(sym, psf, klim, c, 0.0, False)
 
     got = run(
         cfg,
@@ -103,7 +104,7 @@ def test_spectral_forced_measurement_terms():
         var,
         noise=noise,
         renoise_mode="spectral",
-        renoise_c=C,
+        renoise_c=c,
         renoise_delta=DELTA,
         noise_rotated=False,
     )
