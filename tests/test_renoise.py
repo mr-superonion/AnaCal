@@ -324,7 +324,8 @@ def central_correlation(a, b, lmax, w0, w1):
 
 
 @pytest.mark.parametrize("c", [0.1, 0.01])
-def test_assigned_response_cancels_shear_dependence(c):
+@pytest.mark.parametrize("comp", [1, 2])
+def test_assigned_response_cancels_shear_dependence(comp, c):
     """The condition of the draft, through the pipeline's own D.
 
     The total noise zeta = eps_s^h + gamma D eps_s^h + n^h + gamma ndot^h,
@@ -339,10 +340,18 @@ def test_assigned_response_cancels_shear_dependence(c):
     A is the sign test of the whole construction against the pipeline's D
     (Gaussian term plus coordinate terms, which make it the noisiest
     estimate here); B is the assigned response.
+
+    ``comp`` runs the identity for both shear components: D_1 with
+    kappa_1 / a_sym1 and D_2 with kappa_2 / a_sym2.  For comp = 2 the
+    PSF anisotropy is rotated onto the diagonal (sxy) so that the spin-2
+    part driving a_sym2 is as strong as the x/y one was for comp = 1.
     """
     n, var, nreal, lmax = 96, 0.4, 240, 8
     w0, w1 = 32, 64
-    sxx, syy, sxy = 0.14, 0.09, 0.015
+    if comp == 1:
+        sxx, syy, sxy = 0.14, 0.09, 0.015
+    else:
+        sxx, syy, sxy = 0.115, 0.115, 0.025
     psf = gauss_psf(n, sxx, syy, sxy)
     ns = anacal.renoise.make_noise_spectrum(n, SCALE, var)
     rk = anacal.renoise.make_renoise_kernels(ns, psf, KLIM, c, 0.05)
@@ -370,9 +379,10 @@ def test_assigned_response_cancels_shear_dependence(c):
         eps2 = rng.normal(0.0, np.sqrt(var), (n, n))
         eps1 = rng.normal(0.0, np.sqrt(var), (n, n))
         qs = smooth(eps + apply(rk.g, eps2))  # symmetrized image noise
-        v_s, d_s = qs[0], qs[1]  # eps_s^h and D eps_s^h
+        v_s, d_s = qs[0], qs[comp]  # eps_s^h and D_comp eps_s^h
         v_n = smooth(apply(rk.w, eps1))[0]  # n^h
-        v_dn = smooth(apply(rk.kappa1, eps1))[0]  # ndot^h
+        kappa = rk.kappa1 if comp == 1 else rk.kappa2
+        v_dn = smooth(apply(kappa, eps1))[0]  # ndot^h
         a = sym_corr(v_s, d_s)
         b = sym_corr(v_n, v_dn)
         A += a
@@ -386,8 +396,9 @@ def test_assigned_response_cancels_shear_dependence(c):
     # prediction: the inverse transform of S^h_sym a_sym
     k1, k2 = kgrid(n)
     h2 = np.exp(-(k1**2 + k2**2) * SIGMA_H**2)
+    a_sym = rk.a_sym1 if comp == 1 else rk.a_sym2
     xi = np.fft.irfft2(
-        h2 * rk.Sd_sym * rk.a_sym1, s=(n, n)
+        h2 * rk.Sd_sym * a_sym, s=(n, n)
     )  # lag (0, 0) at [0, 0]
     pred = np.empty_like(A)
     for dy in range(-lmax, lmax + 1):
