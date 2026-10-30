@@ -1,6 +1,10 @@
 #ifndef ANACAL_MATH_POOLING_H
 #define ANACAL_MATH_POOLING_H
 
+#include "../stdafx.h"
+#include "qnumber.h"
+#include "tensor.h"
+
 namespace anacal {
 namespace math {
 
@@ -75,6 +79,213 @@ namespace math {
             double t2 = t * t;
             return (30 * t2 - 60 * t + 30) * t2;
         });
+    }
+
+
+    // ------------------------------------------------------------------
+    // Pooling layers of a network on [C, H, W] qnumber tensors
+    // ------------------------------------------------------------------
+
+    namespace detail {
+        inline std::size_t pool_extent(
+            std::size_t n, std::size_t k, std::size_t stride,
+            std::size_t padding
+        ) {
+            if (k == 0 || stride == 0 || n + 2 * padding < k) {
+                throw std::invalid_argument("pooling: invalid kernel");
+            }
+            return (n + 2 * padding - k) / stride + 1;
+        }
+
+        inline void check_chw(const qtensor& x, const char* name) {
+            if (x.ndim() != 3) {
+                throw std::invalid_argument(
+                    std::string(name) + ": input must be [C, H, W]"
+                );
+            }
+        }
+    }
+
+    // torch.nn.MaxPool2d (stride 0 = kernel size, padding with -inf):
+    // the output is the qnumber of the window's largest value, so its
+    // tangents are those of the arg-max pixel (the first one on ties)
+    inline qtensor max_pool2d(
+        const qtensor& x, std::size_t k, std::size_t stride = 0,
+        std::size_t padding = 0
+    ) {
+        detail::check_chw(x, "max_pool2d");
+        if (stride == 0) stride = k;
+        if (2 * padding > k) {
+            throw std::invalid_argument(
+                "max_pool2d: padding must be at most half the kernel"
+            );
+        }
+        const qtensor xc = contiguous(x);
+        const std::size_t c = xc.shape()[0];
+        const std::size_t h = xc.shape()[1], w = xc.shape()[2];
+        const std::size_t ho = detail::pool_extent(h, k, stride, padding);
+        const std::size_t wo = detail::pool_extent(w, k, stride, padding);
+        qtensor out({c, ho, wo});
+        const qnumber* src = xc.data();
+        qnumber* dst = out.data();
+        const long pad = static_cast<long>(padding);
+        for (std::size_t ic = 0; ic < c; ++ic) {
+            const qnumber* in = src + ic * h * w;
+            for (std::size_t oy = 0; oy < ho; ++oy) {
+                for (std::size_t ox = 0; ox < wo; ++ox) {
+                    const qnumber* best = nullptr;
+                    for (std::size_t ky = 0; ky < k; ++ky) {
+                        const long iy = static_cast<long>(oy * stride + ky) - pad;
+                        if (iy < 0 || iy >= static_cast<long>(h)) continue;
+                        for (std::size_t kx = 0; kx < k; ++kx) {
+                            const long ix =
+                                static_cast<long>(ox * stride + kx) - pad;
+                            if (ix < 0 || ix >= static_cast<long>(w)) continue;
+                            const qnumber* q = in + iy * w + ix;
+                            if (best == nullptr || q->v > best->v) best = q;
+                        }
+                    }
+                    dst[(ic * ho + oy) * wo + ox] = *best;
+                }
+            }
+        }
+        return out;
+    }
+
+    // torch.nn.AvgPool2d (stride 0 = kernel size, zero padding counted in
+    // the mean when count_include_pad)
+    inline qtensor avg_pool2d(
+        const qtensor& x, std::size_t k, std::size_t stride = 0,
+        std::size_t padding = 0, bool count_include_pad = true
+    ) {
+        detail::check_chw(x, "avg_pool2d");
+        if (stride == 0) stride = k;
+        if (2 * padding > k) {
+            throw std::invalid_argument(
+                "avg_pool2d: padding must be at most half the kernel"
+            );
+        }
+        const qtensor xc = contiguous(x);
+        const std::size_t c = xc.shape()[0];
+        const std::size_t h = xc.shape()[1], w = xc.shape()[2];
+        const std::size_t ho = detail::pool_extent(h, k, stride, padding);
+        const std::size_t wo = detail::pool_extent(w, k, stride, padding);
+        qtensor out({c, ho, wo});
+        const qnumber* src = xc.data();
+        qnumber* dst = out.data();
+        const long pad = static_cast<long>(padding);
+        for (std::size_t ic = 0; ic < c; ++ic) {
+            const qnumber* in = src + ic * h * w;
+            for (std::size_t oy = 0; oy < ho; ++oy) {
+                for (std::size_t ox = 0; ox < wo; ++ox) {
+                    qnumber acc;
+                    std::size_t count = 0;
+                    for (std::size_t ky = 0; ky < k; ++ky) {
+                        const long iy = static_cast<long>(oy * stride + ky) - pad;
+                        for (std::size_t kx = 0; kx < k; ++kx) {
+                            const long ix =
+                                static_cast<long>(ox * stride + kx) - pad;
+                            // PyTorch counts padded cells, not cells past
+                            // the padding (impossible with 2 padding <= k)
+                            if (iy < 0 || iy >= static_cast<long>(h)
+                                || ix < 0 || ix >= static_cast<long>(w)) {
+                                if (count_include_pad) ++count;
+                                continue;
+                            }
+                            acc = acc + in[iy * w + ix];
+                            ++count;
+                        }
+                    }
+                    dst[(ic * ho + oy) * wo + ox] =
+                        acc / static_cast<double>(count);
+                }
+            }
+        }
+        return out;
+    }
+
+    // torch.nn.AdaptiveAvgPool2d((oh, ow)): bin i covers
+    // [floor(i n / o), ceil((i + 1) n / o))
+    inline qtensor adaptive_avg_pool2d(
+        const qtensor& x, std::size_t oh, std::size_t ow
+    ) {
+        detail::check_chw(x, "adaptive_avg_pool2d");
+        if (oh == 0 || ow == 0) {
+            throw std::invalid_argument("adaptive_avg_pool2d: zero output");
+        }
+        const qtensor xc = contiguous(x);
+        const std::size_t c = xc.shape()[0];
+        const std::size_t h = xc.shape()[1], w = xc.shape()[2];
+        qtensor out({c, oh, ow});
+        const qnumber* src = xc.data();
+        qnumber* dst = out.data();
+        for (std::size_t ic = 0; ic < c; ++ic) {
+            const qnumber* in = src + ic * h * w;
+            for (std::size_t oy = 0; oy < oh; ++oy) {
+                const std::size_t y0 = (oy * h) / oh;
+                const std::size_t y1 = ((oy + 1) * h + oh - 1) / oh;
+                for (std::size_t ox = 0; ox < ow; ++ox) {
+                    const std::size_t x0 = (ox * w) / ow;
+                    const std::size_t x1 = ((ox + 1) * w + ow - 1) / ow;
+                    qnumber acc;
+                    for (std::size_t iy = y0; iy < y1; ++iy) {
+                        for (std::size_t ix = x0; ix < x1; ++ix) {
+                            acc = acc + in[iy * w + ix];
+                        }
+                    }
+                    dst[(ic * oh + oy) * ow + ox] =
+                        acc / static_cast<double>((y1 - y0) * (x1 - x0));
+                }
+            }
+        }
+        return out;
+    }
+
+    // Weighted global average pool: [C, H, W] -> [C],
+    // sum_p x[c, p] w[p] / sum_p w[p] (sum_p x[c, p] w[p] without
+    // normalize), with a fixed (image-independent) weight map w [H, W];
+    // uniform weights give the global average pool
+    inline qtensor weighted_avg_pool(
+        const qtensor& x, const std::vector<double>& weight,
+        bool normalize = true
+    ) {
+        detail::check_chw(x, "weighted_avg_pool");
+        const qtensor xc = contiguous(x);
+        const std::size_t c = xc.shape()[0];
+        const std::size_t npix = xc.shape()[1] * xc.shape()[2];
+        if (weight.size() != npix) {
+            throw std::invalid_argument(
+                "weighted_avg_pool: weight must have H * W elements"
+            );
+        }
+        double wsum = 1.0;
+        if (normalize) {
+            wsum = 0.0;
+            for (double a : weight) wsum += a;
+            if (wsum == 0.0) {
+                throw std::invalid_argument("weighted_avg_pool: zero weight");
+            }
+        }
+        qtensor out({c});
+        const qnumber* src = xc.data();
+        qnumber* dst = out.data();
+        for (std::size_t ic = 0; ic < c; ++ic) {
+            qnumber acc;
+            const qnumber* in = src + ic * npix;
+            for (std::size_t i = 0; i < npix; ++i) {
+                axpy(acc, weight[i], in[i]);
+            }
+            dst[ic] = acc / wsum;
+        }
+        return out;
+    }
+
+    // torch.nn.AdaptiveAvgPool2d(1) followed by a flatten: [C, H, W] -> [C]
+    inline qtensor global_avg_pool(const qtensor& x) {
+        detail::check_chw(x, "global_avg_pool");
+        return weighted_avg_pool(
+            x, std::vector<double>(x.shape()[1] * x.shape()[2], 1.0), true
+        );
     }
 
 }

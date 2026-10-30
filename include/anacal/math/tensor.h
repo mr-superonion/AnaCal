@@ -376,6 +376,62 @@ private:
     }
 };
 
+// A contiguous tensor with the elements of x (x itself, sharing its
+// storage, when it already is contiguous).
+inline qtensor contiguous(const qtensor& x) {
+    if (x.is_contiguous()) {
+        return x;
+    }
+    return qtensor::from_vector(x.to_vector(), x.shape());
+}
+
+// Element-wise f(x) into a new contiguous tensor of the same shape.
+template <typename F>
+inline qtensor elementwise(const qtensor& x, F f) {
+    const qtensor xc = contiguous(x);
+    qtensor out(xc.shape());
+    const qnumber* src = xc.data();
+    qnumber* dst = out.data();
+    const std::size_t n = xc.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        dst[i] = f(src[i]);
+    }
+    return out;
+}
+
+// a + s * b for tensors of the same shape (the residual connection).
+inline qtensor add(const qtensor& a, const qtensor& b, double s = 1.0) {
+    if (a.shape() != b.shape()) {
+        throw std::invalid_argument("add: shape mismatch");
+    }
+    const qtensor ac = contiguous(a);
+    const qtensor bc = contiguous(b);
+    qtensor out(ac.shape());
+    const qnumber* pa = ac.data();
+    const qnumber* pb = bc.data();
+    qnumber* po = out.data();
+    const std::size_t n = ac.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        po[i] = pa[i] + s * pb[i];
+    }
+    return out;
+}
+
+// x * s with a qnumber s (product rule on every element), e.g. the
+// division of an image by its measured brightness: mul(x, 1.0 / norm)
+inline qtensor mul(const qtensor& x, const qnumber& s) {
+    return elementwise(x, [&s](const qnumber& q) { return q * s; });
+}
+
+// y += a * x on all five components (the inner loop of the layers).
+inline void axpy(qnumber& y, double a, const qnumber& x) {
+    y.v += a * x.v;
+    y.g1 += a * x.g1;
+    y.g2 += a * x.g2;
+    y.x1 += a * x.x1;
+    y.x2 += a * x.x2;
+}
+
 } // namespace math
 } // namespace anacal
 
