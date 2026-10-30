@@ -1233,6 +1233,7 @@ pyExportImage(py::module& m) {
         py::arg("sigma_arcsec"),
         py::arg("cell"),
         py::arg("noise_array")=py::none(),
+        py::arg("noise2_array")=py::none(),
         py::arg("band")=0,
         py::arg("renoise_kernels")=py::none()
     );
@@ -1400,6 +1401,7 @@ pyExportImage(py::module& m) {
             py::arg("xcen"),
             py::arg("ycen"),
             py::arg("noise_array")=py::none(),
+            py::arg("noise2_array")=py::none(),
             py::arg("renoise_kernels")=py::none()
         )
         .def(
@@ -1411,6 +1413,7 @@ pyExportImage(py::module& m) {
             py::arg("xcen"),
             py::arg("ycen"),
             py::arg("noise_array")=py::none(),
+            py::arg("noise2_array")=py::none(),
             py::arg("renoise_kernels")=py::none()
         );
     image.def(

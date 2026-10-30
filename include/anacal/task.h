@@ -448,6 +448,7 @@ public:
         const std::vector<double>& variance,
         const geometry::cell & cell,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+        const std::optional<py::array_t<pixel_t>>& noise2_array=std::nullopt,
         const std::optional<std::vector<double>>& weights=std::nullopt,
         const std::optional<double>& multiband_coadd_variance=std::nullopt,
         const std::vector<renoise::RenoiseKernels>* rks=nullptr
@@ -465,6 +466,7 @@ public:
             this->omega_v,
             cell,
             noise_array,
+            noise2_array,
             this->image_bound,
             weights,
             multiband_coadd_variance,
@@ -489,6 +491,7 @@ public:
         const std::vector<double>& variance,
         const geometry::cell & cell,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+        const std::optional<py::array_t<pixel_t>>& noise2_array=std::nullopt,
         const std::optional<std::vector<double>>& weights=std::nullopt,
         const std::optional<double>& variance_meas=std::nullopt,
         const std::optional<double>& n_mask_base_max=std::nullopt,
@@ -507,6 +510,7 @@ public:
             variance,
             cell,
             noise_array,
+            noise2_array,
             weights,
             variance_meas,
             n_mask_base_max,
@@ -526,6 +530,10 @@ public:
         const std::vector<geometry::cell>& cell_list,
         const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+        // second, independent noise realization eps'' (same correlation
+        // properties as the image noise): the spectral renoising builds
+        // the spin-2 filler from it, in Fourier space, per cell
+        const std::optional<py::array_t<pixel_t>>& noise2_array=std::nullopt,
         const std::optional<py::array_t<uint8_t>>& mask_array=std::nullopt,
         double a_ini=0.2,
         bool do_measure=true,
@@ -558,12 +566,15 @@ public:
         // combined into one qimage after each band's PSF has been removed --
         // see prepare_data_cell_coadd in image.h.
         const std::vector<double> variance_in = to_variance_vector(variance);
-        check_band_stack(img_array, psf_array, variance_in, noise_array);
+        check_band_stack(
+            img_array, psf_array, variance_in, noise_array, noise2_array
+        );
 
         // A renoise Setup carries the noise spectrum of the patch: the
         // variances are then summed over the actual total noise spectrum
-        // in BOTH modes; the spectral kernels (added noise, assigned
-        // response) are applied to the measurement in Option 2 only.
+        // in BOTH modes; the spectral kernels (filler, added noise,
+        // assigned response) are applied to the measurement in Option 2
+        // only.
         const bool use_spectra = (renoise != nullptr);
         const bool spectral = use_spectra
             && (renoise->mode == renoise::Mode::spectral);
@@ -571,6 +582,12 @@ public:
             throw std::runtime_error(
                 "anacal Error: renoising with a noise spectrum needs a "
                 "noise image"
+            );
+        }
+        if (spectral && !noise2_array.has_value()) {
+            throw std::runtime_error(
+                "anacal Error: spectral renoising needs a second noise "
+                "image (the filler realization eps'')"
             );
         }
         // Option 1 doubles the noise variance everywhere; Option 2's factor
@@ -731,6 +748,7 @@ public:
                     variance_det,
                     cell,
                     noise_array,
+                    noise2_array,
                     w,
                     coadd_smoothed_variance(
                         cell.scale,
@@ -789,6 +807,7 @@ public:
                     variance_meas,
                     cell,
                     noise_array,
+                    noise2_array,
                     w,
                     var_meas,
                     n_mask_base_max,

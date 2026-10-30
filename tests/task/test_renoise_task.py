@@ -90,32 +90,45 @@ def test_renoise_setup_errors():
     task = make_task(psf)
     sym = symmetrized_spectrum(n, SCALE, var, psf, KLIM)
     raw = anacal.renoise.make_noise_spectrum(n, SCALE, var, None)
+    noise2 = np.zeros_like(noise)
     # any Setup needs the pure-noise image
     for setup in (
-        anacal.renoise.Setup(spectra=[sym]),
+        anacal.renoise.Setup(spectra=[raw]),
         anacal.renoise.Setup(spectra=[raw], mode="rotate"),
     ):
         with pytest.raises(RuntimeError):
             task.process_image(
                 img, psf, variance=var, cell_list=cells, renoise=setup
             )
-    # the spectrum must match the mode
+    # the spectral mode also needs the second realization eps''
+    with pytest.raises(RuntimeError, match="second noise"):
+        task.process_image(
+            img,
+            psf,
+            variance=var,
+            cell_list=cells,
+            noise_array=noise,
+            renoise=anacal.renoise.Setup(spectra=[raw], mode="spectral"),
+        )
+    # both modes take the RAW spectrum (the symmetrization is per cell);
+    # a pre-symmetrized one is refused
     for setup in (
-        anacal.renoise.Setup(spectra=[raw], mode="spectral"),
+        anacal.renoise.Setup(spectra=[sym], mode="spectral"),
         anacal.renoise.Setup(spectra=[sym], mode="rotate"),
     ):
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError, match="raw noise spectrum"):
             task.process_image(
                 img,
                 psf,
                 variance=var,
                 cell_list=cells,
                 noise_array=noise,
+                noise2_array=noise2,
                 renoise=setup,
             )
     # wrong grid
     bad = anacal.renoise.Setup(
-        spectra=[symmetrized_spectrum(n + 2, SCALE, var, psf, KLIM)]
+        spectra=[anacal.renoise.make_noise_spectrum(n + 2, SCALE, var, None)]
     )
     with pytest.raises(RuntimeError):
         task.process_image(
@@ -124,10 +137,11 @@ def test_renoise_setup_errors():
             variance=var,
             cell_list=cells,
             noise_array=noise,
+            noise2_array=noise2,
             renoise=bad,
         )
     # wrong number of bands
-    two = anacal.renoise.Setup(spectra=[sym] * 2)
+    two = anacal.renoise.Setup(spectra=[raw] * 2)
     with pytest.raises(RuntimeError):
         task.process_image(
             img,
@@ -135,5 +149,6 @@ def test_renoise_setup_errors():
             variance=var,
             cell_list=cells,
             noise_array=noise,
+            noise2_array=noise2,
             renoise=two,
         )

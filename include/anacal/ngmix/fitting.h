@@ -438,6 +438,7 @@ public:
         const std::vector<double>& variance,
         const geometry::cell & cell,
         const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+        const std::optional<py::array_t<pixel_t>>& noise2_array=std::nullopt,
         const std::optional<std::vector<double>>& weights=std::nullopt,
         const std::optional<double>& variance_meas_opt=std::nullopt,
         const std::optional<double>& n_mask_base_max=std::nullopt,
@@ -479,6 +480,7 @@ public:
             cell,
             w,
             noise_array,
+            noise2_array,
             rks
         );
 
@@ -685,6 +687,7 @@ public:
             variance_vec,
             bb,
             noise_array,
+            std::nullopt,
             std::nullopt,
             std::nullopt,
             n_mask_base_max

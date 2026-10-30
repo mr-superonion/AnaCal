@@ -197,14 +197,14 @@ def test_kernels_elliptical_gaussian_psf(delta):
     np.testing.assert_allclose(rot(rk.a_sym1)[ok], -rk.a_sym1[ok], atol=1e-9)
     np.testing.assert_allclose(rot(rk.a_sym2)[ok], -rk.a_sym2[ok], atol=1e-9)
     # the filler raises S^d to S^d_sym, and the kernels are consistent
-    assert np.all(rk.g >= 0)
+    assert np.all(rk.rho >= 0)
     np.testing.assert_allclose(
-        (rk.Sd * (1 + rk.g**2))[ok], rk.Sd_sym[ok], rtol=1e-10
+        (rk.Sd * (1 + rk.rho**2))[ok], rk.Sd_sym[ok], rtol=1e-10
     )
     ratio = rk.Sd_sym[ok] / rk.Sd[ok]  # S^d > 0 inside the band
-    np.testing.assert_allclose((rk.w**2)[ok], c * ratio)
+    np.testing.assert_allclose((rk.eta0**2)[ok], c * ratio)
     np.testing.assert_allclose(
-        rk.kappa1[ok],
+        rk.tau1[ok],
         -np.sqrt(ratio) * rk.a_sym1[ok] / (2 * np.sqrt(c)),
     )
     if delta == 0.0:
@@ -238,8 +238,8 @@ def test_round_psf_needs_no_filler():
     # |p(k)|^2 and |p(R k)|^2 of a sampled round Gaussian agree to FFT
     # roundoff, ~1e-11 relative just above the deconvolution floor; g is
     # the square root of that difference
-    assert rk.g[ok].max() < 1e-4
-    np.testing.assert_allclose(rk.w[ok], np.sqrt(0.1), rtol=1e-9)
+    assert rk.rho[ok].max() < 1e-4
+    np.testing.assert_allclose(rk.eta0[ok], np.sqrt(0.1), rtol=1e-9)
     np.testing.assert_allclose(rk.Sd_sym[ok], rk.Sd[ok], rtol=1e-9)
 
 
@@ -277,7 +277,7 @@ def test_filler_removes_spin2_of_reconvolved_noise():
         v0 = imq.prepare_qnumber_image(
             eps.astype(np.float32), psf, n // 2, n // 2
         )[0]
-        img = eps + apply(rk.g, eps2)
+        img = eps + apply(rk.rho, eps2)
         v1 = imq.prepare_qnumber_image(
             img.astype(np.float32), psf, n // 2, n // 2
         )[0]
@@ -342,7 +342,7 @@ def test_assigned_response_cancels_shear_dependence(comp, c):
     estimate here); B is the assigned response.
 
     ``comp`` runs the identity for both shear components: D_1 with
-    kappa_1 / a_sym1 and D_2 with kappa_2 / a_sym2.  For comp = 2 the
+    tau_1 / a_sym1 and D_2 with tau_2 / a_sym2.  For comp = 2 the
     PSF anisotropy is rotated onto the diagonal (sxy) so that the spin-2
     part driving a_sym2 is as strong as the x/y one was for comp = 1.
     """
@@ -378,11 +378,11 @@ def test_assigned_response_cancels_shear_dependence(comp, c):
         eps = rng.normal(0.0, np.sqrt(var), (n, n))
         eps2 = rng.normal(0.0, np.sqrt(var), (n, n))
         eps1 = rng.normal(0.0, np.sqrt(var), (n, n))
-        qs = smooth(eps + apply(rk.g, eps2))  # symmetrized image noise
+        qs = smooth(eps + apply(rk.rho, eps2))  # symmetrized image noise
         v_s, d_s = qs[0], qs[comp]  # eps_s^h and D_comp eps_s^h
-        v_n = smooth(apply(rk.w, eps1))[0]  # n^h
-        kappa = rk.kappa1 if comp == 1 else rk.kappa2
-        v_dn = smooth(apply(kappa, eps1))[0]  # ndot^h
+        v_n = smooth(apply(rk.eta0, eps1))[0]  # n^h
+        tau = rk.tau1 if comp == 1 else rk.tau2
+        v_dn = smooth(apply(tau, eps1))[0]  # ndot^h
         a = sym_corr(v_s, d_s)
         b = sym_corr(v_n, v_dn)
         A += a
@@ -426,8 +426,8 @@ def test_assigned_response_cancels_shear_dependence(comp, c):
 # ---------------------------------------------------------------------------
 # Option 2 inside the qnumber image (ImageQ.prepare_qnumber_image with
 # renoise_kernels): the image already carries the filler; from the one
-# pure-noise image come the added noise w * noise in the value slot and
-# the assigned response kappa_j * noise in the g_j slots.  Option 1 only
+# pure-noise image come the added noise eta0 * noise in the value slot and
+# the assigned response tau_j * noise in the g_j slots.  Option 1 only
 # changes the variance bookkeeping (total_spectrum).
 # ---------------------------------------------------------------------------
 
@@ -438,10 +438,12 @@ def make_imq(n):
     )
 
 
-def qimage(imq, img, psf, n, noise=None, rk=None):
+def qimage(imq, img, psf, n, noise=None, noise2=None, rk=None):
     kw = {}
     if noise is not None:
         kw["noise_array"] = noise.astype(np.float32)
+    if noise2 is not None:
+        kw["noise2_array"] = noise2.astype(np.float32)
     if rk is not None:
         kw["renoise_kernels"] = rk
     return imq.prepare_qnumber_image(
@@ -450,37 +452,41 @@ def qimage(imq, img, psf, n, noise=None, rk=None):
 
 
 def test_spectral_mode_reduces_to_plain_pipeline_without_noise():
-    """With a zero noise image the added noise and the assigned response
-    vanish, so every slot equals the plain (no renoising) pipeline bit for
-    bit; the kernels need a noise image and a matching grid."""
+    """With zero noise images the filler, the added noise and the assigned
+    response vanish, so every slot equals the plain (no renoising)
+    pipeline bit for bit; the kernels need both noise images and a
+    matching grid."""
     n, var = 64, 0.4
     psf = gauss_psf(n, 0.14, 0.09, 0.015)
-    sym = symmetrized_spectrum(n, SCALE, var, psf, KLIM)
-    rk = anacal.renoise.make_renoise_kernels(sym, psf, KLIM, 0.1, 0.0, False)
+    ns = anacal.renoise.make_noise_spectrum(n, SCALE, var)
+    rk = anacal.renoise.make_renoise_kernels(ns, psf, KLIM, 0.1, 0.05, True)
     rng = np.random.default_rng(3)
     img = rng.normal(0.0, 1.0, (n, n))
     imq = make_imq(n)
+    zero = np.zeros((n, n))
     plain = qimage(imq, img, psf, n)
-    spec = qimage(imq, img, psf, n, noise=np.zeros((n, n)), rk=rk)
+    spec = qimage(imq, img, psf, n, noise=zero, noise2=zero, rk=rk)
     assert np.array_equal(plain, spec)
     with pytest.raises(RuntimeError):
         qimage(imq, img, psf, n, rk=rk)
+    with pytest.raises(RuntimeError):
+        qimage(imq, img, psf, n, noise=zero, rk=rk)
     rk32 = anacal.renoise.make_renoise_kernels(
-        symmetrized_spectrum(32, SCALE, var, psf, KLIM),
+        anacal.renoise.make_noise_spectrum(32, SCALE, var),
         psf,
         KLIM,
         0.1,
-        0.0,
-        False,
+        0.05,
+        True,
     )
     with pytest.raises(RuntimeError):
-        qimage(imq, img, psf, n, noise=np.zeros((n, n)), rk=rk32)
+        qimage(imq, img, psf, n, noise=zero, noise2=zero, rk=rk32)
 
 
 def test_symmetrized_spectrum():
     """symmetrize_spectrum: S_s = S S^d_sym / S^d for the given PSF, exactly
     90-degree symmetric after deconvolution, with the shear derivatives of
-    the chain rule (a_sym + (k d) ln |p|^2), the filler filter g, and the
+    the chain rule (a_sym + (k d) ln |p|^2), the filler filter rho, and the
     raw spectrum kept for the pure-noise image."""
     n, var = 64, 0.4
     psf = gauss_psf(n, 0.14, 0.09, 0.015)
@@ -493,7 +499,7 @@ def test_symmetrized_spectrum():
         sym.S[ok], var * rk.Sd_sym[ok] / rk.Sd[ok], rtol=1e-12
     )
     np.testing.assert_allclose(sym.S_raw, ns.S)
-    np.testing.assert_allclose(sym.g[ok], rk.g[ok])
+    np.testing.assert_allclose(sym.rho[ok], rk.rho[ok])
     np.testing.assert_allclose(
         sym.dS1[ok], (sym.S * (rk.a_sym1 + rk.ap1))[ok], rtol=1e-12, atol=1e-14
     )
@@ -512,62 +518,68 @@ def test_symmetrized_spectrum():
         np.ascontiguousarray(a)
     )  # noqa: E731
     np.testing.assert_allclose(rot(rk2.Sd)[ok], rk2.Sd[ok], rtol=1e-12)
-    # added noise: w^2 S_raw = c S_s (|p|^2 cancels), kappa = -a w / 2c
+    # added noise: eta0^2 S_raw = c S_s (|p|^2 cancels), tau = -a eta0 / 2c
     np.testing.assert_allclose(
-        (rk2.w**2 * sym.S_raw)[ok], (0.1 * sym.S)[ok], rtol=1e-12
+        (rk2.eta0**2 * sym.S_raw)[ok], (0.1 * sym.S)[ok], rtol=1e-12
     )
     np.testing.assert_allclose(
-        rk2.kappa1[ok], (-rk2.a_sym1 * rk2.w / 0.2)[ok], rtol=1e-12, atol=1e-14
+        rk2.tau1[ok], (-rk2.a_sym1 * rk2.eta0 / 0.2)[ok], rtol=1e-12, atol=1e-14
     )
     # a pure-noise image drawn from the rotated correlation (xlens): the
     # white case is unchanged, a correlated one gets sqrt(S / S_R)
     rk3 = anacal.renoise.make_renoise_kernels(
         sym, psf, KLIM, 0.1, 0.0, False, True
     )
-    np.testing.assert_allclose(rk3.w, rk2.w)
+    np.testing.assert_allclose(rk3.eta0, rk2.eta0)
     with pytest.raises(ValueError):
         anacal.renoise.symmetrize_spectrum(sym, psf, KLIM, 0.05)
 
 
 def test_spectral_mode_terms():
     """Each term of the spectral mode against the pipeline's own primitives:
-        v  = plain(image).v  + plain(w * noise).v
-        g1 = plain(image).g1 + plain(kappa1 * noise).v
-        g2 = plain(image).g2 + plain(kappa2 * noise).v
-        x1 = plain(image).x1,  x2 = plain(image).x2
-    (``w * noise`` the numpy filter of the stamp: the pipeline's transform
-    differs from numpy's by a phase that commutes with a real filter)."""
+        v  = plain(image + rho * noise2).v  + plain(eta0 * noise).v
+        g1 = plain(image + rho * noise2).g1 + plain(tau1 * noise).v
+        g2 = plain(image + rho * noise2).g2 + plain(tau2 * noise).v
+        x1 = plain(image + rho * noise2).x1,  x2 likewise
+    -- the filler rho * noise2, applied in Fourier space, plays the role of
+    image noise (every pixel-response slot sees it), while the added
+    noise and the assigned responses are filters of noise (``eta0 * noise``
+    the numpy filter of the stamp: the pipeline's transform differs from
+    numpy's by a phase that commutes with a real filter)."""
     n, var = 64, 0.4
     psf = gauss_psf(n, 0.14, 0.09, 0.015)
-    sym = symmetrized_spectrum(n, SCALE, var, psf, KLIM)
-    rk = anacal.renoise.make_renoise_kernels(sym, psf, KLIM, 0.1, 0.0, False)
+    ns = anacal.renoise.make_noise_spectrum(n, SCALE, var)
+    rk = anacal.renoise.make_renoise_kernels(ns, psf, KLIM, 0.1, 0.05, True)
     rng = np.random.default_rng(5)
     img = rng.normal(0.0, 1.0, (n, n))
     eps = rng.normal(0.0, np.sqrt(var), (n, n)).astype(np.float32)
+    eps2 = rng.normal(0.0, np.sqrt(var), (n, n)).astype(np.float32)
     imq = make_imq(n)
     e64 = eps.astype(np.float64)
-    expect = qimage(imq, img, psf, n)
-    expect[0] += qimage(imq, apply(rk.w, e64), psf, n)[0]
-    expect[1] += qimage(imq, apply(rk.kappa1, e64), psf, n)[0]
-    expect[2] += qimage(imq, apply(rk.kappa2, e64), psf, n)[0]
-    got = qimage(imq, img, psf, n, noise=eps, rk=rk)
+    e264 = eps2.astype(np.float64)
+    expect = qimage(imq, img + apply(rk.rho, e264), psf, n)
+    expect[0] += qimage(imq, apply(rk.eta0, e64), psf, n)[0]
+    expect[1] += qimage(imq, apply(rk.tau1, e64), psf, n)[0]
+    expect[2] += qimage(imq, apply(rk.tau2, e64), psf, n)[0]
+    got = qimage(imq, img, psf, n, noise=eps, noise2=eps2, rk=rk)
     scale = np.abs(expect).max()
     np.testing.assert_allclose(got, expect, atol=2e-6 * scale, rtol=0)
 
 
 def test_spectral_mode_noise_statistics():
-    """Monte Carlo of pure noise through the spectral mode, on an image
-    whose noise carries the spin-2 filler of the same PSF: the value slot
-    has the symmetrized spectrum (1 + c) h^2 S^d_s (variance_factor gives
-    its variance relative to the plain smoothed white noise, the sector
-    ratio is 1), and the first-order shear derivative of its correlation
-    function, <v (g1 slot)> symmetrized, vanishes -- while it does not for
-    the plain pipeline on the raw image noise."""
+    """Monte Carlo of pure noise through the spectral mode (the filler
+    rho * eps2 applied in Fourier space from the second realization): the
+    value slot has the symmetrized spectrum (1 + c) h^2 S^d_s
+    (variance_factor gives its variance relative to the plain smoothed
+    white noise, the sector ratio is 1), and the first-order shear
+    derivative of its correlation function, <v (g1 slot)> symmetrized,
+    vanishes -- while it does not for the plain pipeline on the raw
+    image noise."""
     n, var, c, nreal, lmax = 96, 0.4, 0.1, 300, 6
     w0, w1 = 32, 64
     psf = gauss_psf(n, 0.14, 0.09, 0.015)
-    sym = symmetrized_spectrum(n, SCALE, var, psf, KLIM)
-    rk = anacal.renoise.make_renoise_kernels(sym, psf, KLIM, c, 0.0, False)
+    ns = anacal.renoise.make_noise_spectrum(n, SCALE, var)
+    rk = anacal.renoise.make_renoise_kernels(ns, psf, KLIM, c, 0.05, True)
     imq = make_imq(n)
     rng = np.random.default_rng(17)
 
@@ -586,8 +598,7 @@ def test_spectral_mode_noise_statistics():
         eps = rng.normal(0.0, np.sqrt(var), (n, n))
         eps2 = rng.normal(0.0, np.sqrt(var), (n, n))
         eps1 = rng.normal(0.0, np.sqrt(var), (n, n))
-        eps_s = eps + apply(sym.g, eps2)  # the image noise with the filler
-        q = qimage(imq, eps_s, psf, n, noise=eps1, rk=rk)
+        q = qimage(imq, eps, psf, n, noise=eps1, noise2=eps2, rk=rk)
         qp = qimage(imq, eps, psf, n)
         P += np.abs(np.fft.rfft2(q[0])) ** 2 / n**2
         P_plain += np.abs(np.fft.rfft2(qp[0])) ** 2 / n**2
@@ -645,13 +656,45 @@ def test_rotate_mode_total_spectrum():
     )
     total = anacal.renoise.total_spectrum(rk)
     np.testing.assert_allclose(total, np.asarray(rk.Sd) + np.asarray(rk.Sd_rot))
-    # the mode check of the Setup
+    # BOTH modes take the raw spectrum; a pre-symmetrized one is refused
     sym = anacal.renoise.symmetrize_spectrum(ns, psf, KLIM, 0.05)
-    with pytest.raises(RuntimeError, match="raw noise spectrum"):
-        anacal.renoise.make_cell_kernels(
-            anacal.renoise.Setup(spectra=[sym], mode="rotate"), psf, KLIM
+    for mode in ("rotate", "spectral"):
+        with pytest.raises(RuntimeError, match="raw noise spectrum"):
+            anacal.renoise.make_cell_kernels(
+                anacal.renoise.Setup(spectra=[sym], mode=mode), psf, KLIM
+            )
+
+
+def test_cell_kernels_symmetrize_per_cell():
+    """make_cell_kernels symmetrizes the Setup's RAW spectrum with each
+    cell's own PSF: the kernels equal make_renoise_kernels(raw, cell_psf,
+    symmetrize=True) for that PSF, and two cells with different PSFs get
+    different, individually 90-degree-symmetric S^d_sym."""
+    n, var, c, delta = 64, 0.4, 0.1, 0.05
+    ns = anacal.renoise.make_noise_spectrum(n, SCALE, var)
+    setup = anacal.renoise.Setup(
+        c=c, spectra=[ns], noise_rotated=True, mode="spectral", delta=delta
+    )
+    ok = inband(n)
+    rot = lambda a: anacal.renoise.rotate90(  # noqa: E731
+        np.ascontiguousarray(a)
+    )
+    psfs = [gauss_psf(n, 0.14, 0.09, 0.015), gauss_psf(n, 0.10, 0.13, -0.02)]
+    kernels = []
+    for psf in psfs:
+        (rk,) = anacal.renoise.make_cell_kernels(setup, psf, KLIM)
+        ref = anacal.renoise.make_renoise_kernels(
+            ns, psf, KLIM, c, delta, True, True
         )
-    with pytest.raises(RuntimeError, match="symmetrized"):
-        anacal.renoise.make_cell_kernels(
-            anacal.renoise.Setup(spectra=[ns], mode="spectral"), psf, KLIM
+        for name in ("Sd", "Sd_sym", "a_sym1", "a_sym2", "rho", "eta0", "tau1", "tau2"):
+            np.testing.assert_allclose(
+                np.asarray(getattr(rk, name)), np.asarray(getattr(ref, name))
+            )
+        # each cell's symmetrized spectrum is symmetric for ITS OWN psf
+        np.testing.assert_allclose(
+            rot(rk.Sd_sym)[ok], np.asarray(rk.Sd_sym)[ok], rtol=1e-10
         )
+        kernels.append(rk)
+    # ... and the two cells genuinely differ
+    d = np.abs(np.asarray(kernels[0].Sd_sym) - np.asarray(kernels[1].Sd_sym))
+    assert d[ok].max() > 1e-3 * np.asarray(kernels[0].Sd_sym)[ok].max()

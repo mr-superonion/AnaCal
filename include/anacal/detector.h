@@ -288,6 +288,7 @@ find_peaks_impl(
     double omega_v,
     const geometry::cell & cell,
     const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+    const std::optional<py::array_t<pixel_t>>& noise2_array=std::nullopt,
     int image_bound=0,
     const std::optional<std::vector<double>>& weights=std::nullopt,
     const std::optional<double>& multiband_coadd_variance=std::nullopt,
@@ -322,6 +323,7 @@ find_peaks_impl(
         cell,
         w,
         noise_array,
+        noise2_array,
         rks
     );
 
@@ -385,6 +387,7 @@ find_peaks(
         omega_v,
         cell,
         noise_array,
+        std::nullopt,
         image_bound,
         weights,
         multiband_coadd_variance

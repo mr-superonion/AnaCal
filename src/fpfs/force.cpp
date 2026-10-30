@@ -52,6 +52,7 @@ pyExportFpfsForce(py::module_& fpfs) {
             py::arg("std_m00"),
             py::arg("out_dtype"),
             py::arg("noise_array")=py::none(),
+            py::arg("noise2_array")=py::none(),
             py::arg("n_mask_base")=py::none(),
             py::arg("n_mask_base_max")=py::none(),
             py::arg("psf_model")=py::none(),

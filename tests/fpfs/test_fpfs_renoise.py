@@ -1,9 +1,10 @@
 """Spectral renoising (Option 2) in the forced FPFS measurement
 (anacal.fpfs.process_image -> ForceTask with renoise_mode="spectral").
 
-The image carries the spin-2 filler of the patch PSF (added by the caller,
-here with the fixtures' make_filler); the forced measurement adds w * noise
-to the value modes and the modes of kappa_j * noise to the shear response.
+All three kernels are applied in Fourier space per stamp: the spin-2
+filler rho * noise2 (from the second, independent realization eps'') joins
+the image modes for the value AND the analytic shear response, the added
+noise eta0 * noise joins the value, and kappa_j * noise the shear response.
 The measurement is linear in the image, so every term can be checked
 exactly against process_image itself run on the separate pieces; the
 covariance of each mode is checked against the scatter over noise
@@ -22,8 +23,6 @@ from ..fixtures import (
     COSMOS_NSTAMP,
     cosmos_centres,
     cosmos_scene,
-    make_filler,
-    symmetrized_spectrum,
 )
 
 SCALE = 0.2
@@ -92,34 +91,45 @@ def test_spectral_forced_measurement_terms(c):
     cfg = anacal.fpfs.FpfsConfig(sigma_shapelets1=SIGMA)
     klim, _ = fpfs_klim(cfg, psf)
     c0 = cfg.c0 * 10 ** ((MAG_ZERO - anacal.fpfs.THRESHOLD_REF_MAG_ZERO) / 2.5)
-    img_s = gal + eps + make_filler(eps2, SCALE, var, psf, klim, DELTA)
-    sym = symmetrized_spectrum(NGRID, SCALE, var, psf, klim, DELTA)
-    rk = anacal.renoise.make_renoise_kernels(sym, psf, klim, c, 0.0, False)
+    img = gal + eps
+    ns = anacal.renoise.make_noise_spectrum(NGRID, SCALE, var)
+    rk = anacal.renoise.make_renoise_kernels(ns, psf, klim, c, DELTA, True)
 
     got = run(
         cfg,
-        img_s,
+        img,
         psf,
         det,
         var,
         noise=noise,
+        noise2_array=np.asarray(eps2, dtype=np.float32),
         renoise_mode="spectral",
         renoise_c=c,
         renoise_delta=DELTA,
         noise_rotated=False,
     )
-    base = run(cfg, img_s, psf, det, var)
-    cn = run(cfg, apply(rk.w, noise), psf, det, var)
-    ck1 = run(cfg, apply(rk.kappa1, noise), psf, det, var)
-    ck2 = run(cfg, apply(rk.kappa2, noise), psf, det, var)
+    base = run(cfg, img, psf, det, var)
+    # the filler: measured like image, so it contributes to the values
+    # AND (through the analytic response) to the shear responses
+    cphi = run(cfg, apply(rk.rho, eps2), psf, det, var)
+    cn = run(cfg, apply(rk.eta0, noise), psf, det, var)
+    ck1 = run(cfg, apply(rk.tau1, noise), psf, det, var)
+    ck2 = run(cfg, apply(rk.tau2, noise), psf, det, var)
 
     k = "fpfs1"
     modes = ("m00", "m20", "m22c", "m22s", "m42c", "m42s")
-    val = {m: base[f"{k}_{m}"] + cn[f"{k}_{m}"] for m in modes}
+    val = {
+        m: base[f"{k}_{m}"] + cphi[f"{k}_{m}"] + cn[f"{k}_{m}"]
+        for m in modes
+    }
     dg = {}
     for m in modes:
-        dg[f"d{m}_dg1"] = base[f"{k}_d{m}_dg1"] + ck1[f"{k}_{m}"]
-        dg[f"d{m}_dg2"] = base[f"{k}_d{m}_dg2"] + ck2[f"{k}_{m}"]
+        dg[f"d{m}_dg1"] = (
+            base[f"{k}_d{m}_dg1"] + cphi[f"{k}_d{m}_dg1"] + ck1[f"{k}_{m}"]
+        )
+        dg[f"d{m}_dg2"] = (
+            base[f"{k}_d{m}_dg2"] + cphi[f"{k}_d{m}_dg2"] + ck2[f"{k}_{m}"]
+        )
     denom = val["m00"] + c0
 
     def close(a, b):
@@ -144,7 +154,7 @@ def test_spectral_forced_measurement_terms(c):
         dg["dm42c_dg1"] / denom - dg["dm00_dg1"] * val["m42c"] / denom**2,
     )
     # the flux error is the (1 + c) S^d_s covariance, below the rotated one
-    rot = run(cfg, gal + eps, psf, det, var, noise=noise)
+    rot = run(cfg, img, psf, det, var, noise=noise)
     r = got[f"flux_{k}_err"][0] / rot[f"flux_{k}_err"][0]
     _, ftask = fpfs_klim(cfg, psf)
     ftask.prepare_covariance(variance=var, renoise_kernels=rk)
@@ -158,35 +168,31 @@ def test_spectral_forced_measurement_terms(c):
 def test_spectral_forced_measurement_scatter():
     """The measured scatter of m00 over noise realizations matches the
     covariance of each mode: no correction, rotated noise (x2) and
-    spectral ((1 + c) S^d_s with the filler in the image)."""
+    spectral ((1 + c) S^d_s, the filler applied in Fourier space)."""
     cfg = anacal.fpfs.FpfsConfig(sigma_shapelets1=SIGMA)
     gal, _, _, _, psf, var, det = scene()
-    klim, _ = fpfs_klim(cfg, psf)
     rng = np.random.default_rng(5)
     sd = np.sqrt(var)
+    spec_kw = dict(
+        renoise_mode="spectral",
+        renoise_c=C,
+        renoise_delta=DELTA,
+        noise_rotated=False,
+    )
     samples = {"rotate": [], "spectral": [], "none": []}
     for _ in range(12):
         eps = rng.normal(0.0, sd, gal.shape)
-        eps2 = rng.normal(0.0, sd, gal.shape)
+        eps2 = rng.normal(0.0, sd, gal.shape).astype(np.float32)
         noise = rng.normal(0.0, sd, gal.shape)
         img = gal + eps
-        img_s = img + make_filler(eps2, SCALE, var, psf, klim, DELTA)
         samples["none"].append(run(cfg, img, psf, det, var)["fpfs1_m00"])
         samples["rotate"].append(
             run(cfg, img, psf, det, var, noise=noise)["fpfs1_m00"]
         )
         samples["spectral"].append(
             run(
-                cfg,
-                img_s,
-                psf,
-                det,
-                var,
-                noise=noise,
-                renoise_mode="spectral",
-                renoise_c=C,
-                renoise_delta=DELTA,
-                noise_rotated=False,
+                cfg, img, psf, det, var,
+                noise=noise, noise2_array=eps2, **spec_kw,
             )["fpfs1_m00"]
         )
     truth = run(cfg, gal, psf, det, var)["fpfs1_m00"]
@@ -197,16 +203,8 @@ def test_spectral_forced_measurement_scatter():
     )
     err_spec = (
         run(
-            cfg,
-            img_s,
-            psf,
-            det,
-            var,
-            noise=noise,
-            renoise_mode="spectral",
-            renoise_c=C,
-            renoise_delta=DELTA,
-            noise_rotated=False,
+            cfg, img, psf, det, var,
+            noise=noise, noise2_array=eps2, **spec_kw,
         )["flux_fpfs1_err"][0]
         / fac
     )
@@ -219,10 +217,16 @@ def test_spectral_forced_measurement_scatter():
 
 
 def test_spectral_forced_measurement_errors():
-    gal, eps, _, noise, psf, var, det = scene()
+    gal, eps, eps2, noise, psf, var, det = scene()
     cfg = anacal.fpfs.FpfsConfig(sigma_shapelets1=SIGMA)
     with pytest.raises(ValueError):
         run(cfg, gal + eps, psf, det, var, noise=noise, renoise_mode="other")
+    # spectral with a noise image needs the second realization eps''
+    with pytest.raises(ValueError):
+        run(
+            cfg, gal + eps, psf, det, var, noise=noise,
+            renoise_mode="spectral",
+        )
     # without a noise image the mode is irrelevant: plain measurement
     a = run(cfg, gal + eps, psf, det, var, renoise_mode="spectral")
     b = run(cfg, gal + eps, psf, det, var)

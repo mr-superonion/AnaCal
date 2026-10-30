@@ -61,6 +61,7 @@ pyExportTask(py::module_& m) {
             py::arg("cell_list"),
             py::arg("detection")=py::none(),
             py::arg("noise_array")=py::none(),
+            py::arg("noise2_array")=py::none(),
             py::arg("mask_array")=py::none(),
             py::arg("a_ini")=0.2,
             py::arg("do_measure")=true,

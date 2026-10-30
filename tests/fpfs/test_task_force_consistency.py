@@ -38,7 +38,7 @@ import anacal
 import numpy as np
 import pytest
 
-from ..fixtures import cosmos_scene, load, make_filler, symmetrized_spectrum
+from ..fixtures import cosmos_scene, load
 
 SCALE = 0.2
 KLIM = anacal.task.KLIM_PIX / SCALE
@@ -146,13 +146,14 @@ def _task_detection(centres):
 
 
 def _noisy_image(mode, gal, psf, rng, std, n_spec):
-    """The image, the pure-noise image, the Task's renoise Setup and the
-    forced measurement's keyword arguments of one mode.  ``n_spec`` is
-    the cell size the Setup's spectrum is built on; the correlation of
-    the ``rotate_corr`` mode is returned as well."""
+    """The image, the pure-noise image eps', the second realization eps''
+    (spectral only), the Task's renoise Setup and the forced
+    measurement's keyword arguments of one mode.  ``n_spec`` is the cell
+    size the Setup's spectrum is built on; the correlation of the
+    ``rotate_corr`` mode is returned as well."""
     var = std**2
     img = gal.copy()
-    noise, corr, renoise, fp_kw = None, None, None, {}
+    noise, noise2, corr, renoise, fp_kw = None, None, None, None, {}
     if mode == "rotate_corr":
         # correlated image noise; the pure noise drawn from the rotated
         # correlation (xlens convention, noise_rotated=True)
@@ -175,22 +176,24 @@ def _noisy_image(mode, gal, psf, rng, std, n_spec):
             renoise_mode="rotate", noise_corr=corr, noise_rotated=True
         )
     if mode == "spectral":
-        eps2 = rng.normal(0.0, std, gal.shape)
-        img = img + make_filler(eps2, SCALE, var, psf, KLIM, RENOISE_DELTA)
-        sym = symmetrized_spectrum(
-            n_spec, SCALE, var, psf, KLIM, RENOISE_DELTA
-        )
+        # the second realization eps'': the spin-2 filler rho * eps'' is
+        # applied in Fourier space, by the Task per cell and by the
+        # forced measurement per stamp (the tiles align, so both see
+        # the same window of eps'')
+        noise2 = rng.normal(0.0, std, gal.shape).astype(np.float32)
+        raw = anacal.renoise.make_noise_spectrum(n_spec, SCALE, var)
         renoise = anacal.renoise.Setup(
-            c=RENOISE_C, spectra=[sym], noise_rotated=False, mode="spectral"
+            c=RENOISE_C, spectra=[raw], noise_rotated=False,
+            mode="spectral", delta=RENOISE_DELTA,
         )
         fp_kw = dict(
             renoise_mode="spectral",
             renoise_c=RENOISE_C,
             renoise_delta=RENOISE_DELTA,
             noise_rotated=False,
-            filler_psf=psf,
+            noise2_array=noise2,
         )
-    return img.astype(np.float32), noise, corr, renoise, fp_kw
+    return img.astype(np.float32), noise, noise2, corr, renoise, fp_kw
 
 
 def _make_task(sigma_arcsec, snr_peak_min, stamp_size):
@@ -280,7 +283,7 @@ def _run_tiled(mode, seed=7):
     rng = np.random.default_rng(seed)
     gal, centres = _render_galaxies(psf, rng)
     var = NOISE_STD**2
-    img, noise, corr, renoise, fp_kw = _noisy_image(
+    img, noise, noise2, corr, renoise, fp_kw = _noisy_image(
         mode, gal, psf, rng, NOISE_STD, STAMP
     )
     task = _make_task(SIGMA_ARCSEC, snr_peak_min=5.0, stamp_size=32)
@@ -297,6 +300,7 @@ def _run_tiled(mode, seed=7):
         cell_list=cells,
         detection=_task_detection(centres),
         noise_array=noise,
+        noise2_array=noise2,
         renoise=renoise,
     )
     assert len(cat) == NTILE**2
@@ -353,7 +357,7 @@ def _run_detection(mode, seed=3):
     )
     n = cells[0].nx
     assert all((c.nx == n) and (c.ny == n) for c in cells)
-    img, noise, _, renoise, fp_kw = _noisy_image(
+    img, noise, noise2, _, renoise, fp_kw = _noisy_image(
         mode, gal, psf, rng, DET_NOISE_STD, n
     )
     task = _make_task(DET_SIGMA_ARCSEC, snr_peak_min=8.0, stamp_size=64)
@@ -363,6 +367,7 @@ def _run_detection(mode, seed=3):
         variance=var,
         cell_list=cells,
         noise_array=noise,
+        noise2_array=noise2,
         renoise=renoise,
     )
     # the scene holds 100 galaxies (S/N ~ 10 - 100 at this noise level)

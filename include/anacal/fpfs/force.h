@@ -151,17 +151,22 @@ namespace anacal {
     // happens downstream.  Field order is fixed by FpfsCatRow.
     // Option-2 (spectral renoising) noise filters from the deconvolved
     // data filter fg = chi / p (nky x nkx x 12, contiguous): 36 columns
-    // [w, kappa1, kappa2] * fg applied to the transform of the pure-noise
-    // cutout (the image itself already carries the spin-2 filler).  The
-    // kernels are half-plane (n, n / 2 + 1) arrays on the cutout grid, so
-    // their layout is that of fg.
+    // [eta0, tau1, tau2] * fg applied to the transform of the pure-noise
+    // cutout (the image itself already carries the per-cell spin-2
+    // filler, built from an independent noise realization).  The kernels
+    // are half-plane (n, n / 2 + 1) arrays on the cutout grid, so their
+    // layout is that of fg.
     inline void
     spectral_noise_filters(
         const std::complex<double>* fg,
         int nky,
         int nkx,
         const renoise::RenoiseKernels& rk,
-        std::vector<std::complex<double>>& add
+        std::vector<std::complex<double>>& add,
+        // the filler filter rho * fg, applied to the transform of the
+        // SECOND noise realization eps'' (the filler is applied in
+        // Fourier space; the image itself carries no filler)
+        std::vector<std::complex<double>>& addrho
     ) {
         if ((rk.n != nky) || (renoise::half_width(rk.n) != nkx)) {
             throw std::runtime_error(
@@ -172,19 +177,22 @@ namespace anacal {
         }
         const std::size_t nf = static_cast<std::size_t>(nky) * nkx;
         add.resize(nf * 36);
+        addrho.resize(nf * 12);
         for (std::size_t idx = 0; idx < nf; ++idx) {
             const std::complex<double>* f = fg + idx * 12;
             std::complex<double>* a = add.data() + idx * 36;
+            std::complex<double>* ar = addrho.data() + idx * 12;
             for (int c = 0; c < 12; ++c) {
-                a[c] = f[c] * rk.w[idx];
-                a[12 + c] = f[c] * rk.kappa1[idx];
-                a[24 + c] = f[c] * rk.kappa2[idx];
+                a[c] = f[c] * rk.eta0[idx];
+                a[12 + c] = f[c] * rk.tau1[idx];
+                a[24 + c] = f[c] * rk.tau2[idx];
+                ar[c] = f[c] * rk.rho[idx];
             }
         }
         return;
     };
 
-    // The assigned response: the moments of kappa_j * noise enter the
+    // The assigned response: the moments of tau_j * noise enter the
     // shear derivatives of the modes directly.
     inline void
     add_assigned_response(
@@ -245,6 +253,10 @@ namespace anacal {
             double std_m00,
             const py::object& out_dtype,
             const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+            // second, independent noise realization eps'' (spectral
+            // renoising): the spin-2 filler rho * eps'' is applied in
+            // Fourier space per stamp; the image carries no filler
+            const std::optional<py::array_t<pixel_t>>& noise2_array=std::nullopt,
             // Per-source mask flags + threshold: sources with
             // n_mask_base > n_mask_base_max are SKIPPED -- their output
             // rows are zero-filled, keeping the catalog row-aligned
@@ -340,6 +352,12 @@ namespace anacal {
                         "FPFS Error: spectral renoising needs a noise image"
                     );
                 }
+                if (!noise2_array.has_value()) {
+                    throw std::runtime_error(
+                        "FPFS Error: spectral renoising needs a second "
+                        "noise image (the filler realization eps'')"
+                    );
+                }
                 if (renoise->spectra.size() != 1) {
                     throw std::runtime_error(
                         "FPFS Error: the renoise setup must hold exactly one "
@@ -353,10 +371,18 @@ namespace anacal {
                         " grid but the stamp is " + std::to_string(npix)
                     );
                 }
+                if (renoise->spectra[0].symmetrized) {
+                    throw std::runtime_error(
+                        "FPFS Error: the renoise setup needs the raw "
+                        "noise spectrum (make_noise_spectrum); the "
+                        "symmetrization is per PSF, here"
+                    );
+                }
             }
             // Option-2 filters for the constant PSF (per source with a
             // native PSF model, below)
             std::vector<std::complex<double>> fimg_add;
+            std::vector<std::complex<double>> fimg_rho;
 
             // Constant-PSF filters: data filter from the PSF, noise
             // filter from the PSF rotated 90 degrees in Fourier space.
@@ -383,13 +409,16 @@ namespace anacal {
                     );
                 }
                 if (spectral) {
+                    // symmetrize the raw spectrum with THIS PSF; the
+                    // filler filter rho * fg acts on the eps'' stamp
                     const renoise::RenoiseKernels rk =
                         renoise::make_renoise_kernels(
                             renoise->spectra[0], psf_array, klim,
-                            renoise->c, 0.0, false, renoise->noise_rotated
+                            renoise->c, renoise->delta, true,
+                            renoise->noise_rotated
                         );
                     spectral_noise_filters(
-                        fimg_g.data(), nky, nkx, rk, fimg_add
+                        fimg_g.data(), nky, nkx, rk, fimg_add, fimg_rho
                     );
                 }
             }
@@ -524,7 +553,8 @@ namespace anacal {
                         }
                         if (spectral) {
                             // kernels of THIS source's PSF (three
-                            // stamp-sized transforms)
+                            // stamp-sized transforms), the raw spectrum
+                            // symmetrized with it
                             const double* ps = psf_scratch.data();
                             const renoise::RenoiseKernels rk =
                                 renoise::make_renoise_kernels_impl(
@@ -533,11 +563,11 @@ namespace anacal {
                                         return ps[jj * npix + ii];
                                     },
                                     npix, npix, klim,
-                                    renoise->c, 0.0, false,
+                                    renoise->c, renoise->delta, true,
                                     renoise->noise_rotated
                                 );
                             spectral_noise_filters(
-                                fg, nky, nkx, rk, fimg_add
+                                fg, nky, nkx, rk, fimg_add, fimg_rho
                             );
                         }
                     }
@@ -549,16 +579,25 @@ namespace anacal {
                     FpfsShapelets x = xg;
                     FpfsShapeletsResponse dgr;
                     if (spectral) {
-                        // value: image (with the patch filler) + added
-                        // noise; response: the analytic response of the
-                        // image plus the assigned response of the noise
+                        // filler: rho * eps'' in Fourier space -- it plays
+                        // the role of image noise, so its modes join the
+                        // image's for the value AND the analytic response
+                        FpfsShapelets xphi;
+                        this->measure_at(
+                            img_obj, *noise2_array, fimg_rho.data(),
+                            det_r(j).y, det_r(j).x, xphi
+                        );
+                        // value: image + filler + added noise; response:
+                        // the analytic response of image + filler plus
+                        // the assigned response of the noise
                         FpfsShapelets xw, xk1, xk2;
                         this->measure_noise_spectral(
                             img_obj, *noise_array, fimg_add.data(),
                             det_r(j).y, det_r(j).x, xw, xk1, xk2
                         );
-                        x = xg + xw;
-                        dgr = measure_shapelets_dg(xg);
+                        const FpfsShapelets xs = xg + xphi;
+                        x = xs + xw;
+                        dgr = measure_shapelets_dg(xs);
                         add_assigned_response(dgr, xk1, xk2);
                     } else {
                         std::optional<FpfsShapelets> yn = std::nullopt;

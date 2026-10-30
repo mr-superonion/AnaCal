@@ -20,12 +20,14 @@
 //     function (or a constant for white noise).
 //   * RenoiseKernels -- per PSF: the deconvolved spectrum S^d = S / |p|^2,
 //     its 90-degree-symmetrized version S^d_sym (a smooth maximum of
-//     S^d(k) and S^d(Rk)), the filler filter g that raises the image
-//     noise to S^d_sym, the amplitude w = sqrt(c S^d_sym / S^d) of the
-//     added noise and the assigned-response filters kappa_1, kappa_2 =
+//     S^d(k) and S^d(Rk)), the filler filter rho that raises the image
+//     noise to S^d_sym, the amplitude eta0 = sqrt(c S^d_sym / S^d) of
+//     the added noise and the assigned-response filters tau_1, tau_2 =
 //     -sqrt(S^d_sym / S^d) a_sym / (2 sqrt c), where a_sym is the shear
-//     derivative of ln S^d_sym.  The smoothing Gaussian h cancels from
-//     all of them, so one set serves detection and measurement.
+//     derivative of ln S^d_sym (the draft's rho, eta_0 and tau_j, up to
+//     the common h / p factor the noise buffers carry).  The smoothing
+//     Gaussian h cancels from all of them, so one set serves detection
+//     and measurement.
 //
 // All k-derivatives are exact on the grid: d/dk_j F[f] = -i F[x_j f], so
 // the derivative of S comes from the transforms of x_j C and that of
@@ -97,7 +99,7 @@ struct NoiseSpectrum {
     std::vector<double> dS2;    // (k1 d/dk2 + k2 d/dk1) S
     std::vector<double> S_raw;    // raw noise spectrum (= S until symmetrized)
     std::vector<double> S_raw_R;  // S_raw(R k)
-    std::vector<double> g;        // filler filter (set by symmetrize_spectrum)
+    std::vector<double> rho;      // filler filter (set by symmetrize_spectrum)
 };
 
 // Forward r2c transform of a real array placed with its centre pixel
@@ -218,14 +220,20 @@ struct RenoiseKernels {
     double scale = 0.0, klim = 0.0, c = 0.0, delta = 0.0;
     // half-plane arrays; zero outside |k| < klim and on the Nyquist row
     // and column (where S^d_sym is set to S^d)
+    // The three kernels in the draft's notation -- rho (the filler
+    // filter on eps''), eta_0 (the added noise on eps') and tau_j (the
+    // assigned responses on eps') -- stored WITHOUT the common
+    // deconvolution-plus-resmoothing factor h / p, which the pipeline's
+    // noise buffers already carry: the full Fourier kernels are
+    // rho * (h / p), eta_0 = eta0 * (h / p) and tau_j = tau_j * (h / p).
     std::vector<double> Sd;        // S / |p_eff|^2
     std::vector<double> Sd_sym;    // smooth max of S^d(k), S^d(R k)
     std::vector<double> a_sym1;    // (k1 d1 - k2 d2) ln S^d_sym
     std::vector<double> a_sym2;    // (k1 d2 + k2 d1) ln S^d_sym
-    std::vector<double> g;         // filler filter, sqrt(S^d_sym / S^d - 1)
-    std::vector<double> w;         // sqrt(c S^d_sym / S^d)
-    std::vector<double> kappa1;    // -sqrt(S^d_sym / S^d) a_sym1 / (2 sqrt c)
-    std::vector<double> kappa2;    // -sqrt(S^d_sym / S^d) a_sym2 / (2 sqrt c)
+    std::vector<double> rho;       // filler filter, sqrt(S^d_sym / S^d - 1)
+    std::vector<double> eta0;      // sqrt(c S^d_sym / S^d)
+    std::vector<double> tau1;      // -sqrt(S^d_sym / S^d) a_sym1 / (2 sqrt c)
+    std::vector<double> tau2;      // -sqrt(S^d_sym / S^d) a_sym2 / (2 sqrt c)
     std::vector<double> ap1;       // (k1 d1 - k2 d2) ln |p|^2
     std::vector<double> ap2;       // (k1 d2 + k2 d1) ln |p|^2
     std::vector<double> Sd0;       // variance / |p_eff|^2 (white reference)
@@ -235,8 +243,8 @@ struct RenoiseKernels {
     std::vector<double> Sd_rot;
     Mode mode = Mode::spectral;
     // the pure-noise image has spectrum S_raw(R k) (xlens draws it from
-    // the 90-degree-rotated correlation) instead of S_raw(k): w and
-    // kappa_j carry the matching sqrt(S_raw / S_raw_R)
+    // the 90-degree-rotated correlation) instead of S_raw(k): eta0 and
+    // tau_j carry the matching sqrt(S_raw / S_raw_R)
     bool noise_rotated = false;
 };
 
@@ -356,10 +364,10 @@ make_renoise_kernels_impl(
     rk.Sd_sym.assign(npix, 0.0);
     rk.a_sym1.assign(npix, 0.0);
     rk.a_sym2.assign(npix, 0.0);
-    rk.g.assign(npix, 0.0);
-    rk.w.assign(npix, 0.0);
-    rk.kappa1.assign(npix, 0.0);
-    rk.kappa2.assign(npix, 0.0);
+    rk.rho.assign(npix, 0.0);
+    rk.eta0.assign(npix, 0.0);
+    rk.tau1.assign(npix, 0.0);
+    rk.tau2.assign(npix, 0.0);
     const std::vector<double>& S_src = noise_rotated ? ns.S_raw_R : ns.S_raw;
     const std::vector<double> pabs2_R = rotate90_even(pabs2, n);
     for (std::size_t idx = 0; idx < npix; ++idx) {
@@ -399,14 +407,14 @@ make_renoise_kernels_impl(
         if (!(s > 0.0)) {
             continue;
         }
-        rk.g[idx] = std::sqrt(std::max(ssym / s - 1.0, 0.0));
-        // added noise w * noise with spectrum c S^d_sym |p|^2, from a
+        rk.rho[idx] = std::sqrt(std::max(ssym / s - 1.0, 0.0));
+        // added noise eta0 * eps' with spectrum c S^d_sym |p|^2, from a
         // pure-noise realization of spectrum S_src
         const double src = S_src[idx];
         if (src > 0.0) {
-            rk.w[idx] = std::sqrt(c * ssym * pabs2[idx] / src);
-            rk.kappa1[idx] = -rk.a_sym1[idx] * rk.w[idx] / (2.0 * c);
-            rk.kappa2[idx] = -rk.a_sym2[idx] * rk.w[idx] / (2.0 * c);
+            rk.eta0[idx] = std::sqrt(c * ssym * pabs2[idx] / src);
+            rk.tau1[idx] = -rk.a_sym1[idx] * rk.eta0[idx] / (2.0 * c);
+            rk.tau2[idx] = -rk.a_sym2[idx] * rk.eta0[idx] / (2.0 * c);
         }
     }
     return rk;
@@ -476,12 +484,14 @@ make_renoise_kernels(
     );
 }
 
-// The spectrum of the image noise AFTER the spin-2 filler of the patch:
-// S_s = S S^d_sym / S^d for the patch PSF (the filler g * noise'' with
-// g = sqrt(S^d_sym / S^d - 1) is added to the image once per patch and
-// band, see xlens).  The shear derivatives follow from the chain rule,
-// (k d) ln S_s = a_sym + (k d) ln |p|^2.  S_raw keeps the spectrum of the
-// pure-noise realizations.  ``g`` is the filler filter on this grid.
+// Reference / diagnostic: the spectrum of the image noise AFTER the
+// spin-2 filler of the given PSF, S_s = S S^d_sym / S^d (the filler is
+// g * noise'' with g = sqrt(S^d_sym / S^d - 1)).  The shear derivatives
+// follow from the chain rule, (k d) ln S_s = a_sym + (k d) ln |p|^2.
+// S_raw keeps the spectrum of the pure-noise realizations; ``g`` is the
+// filler filter on this grid.  The pipeline no longer feeds symmetrized
+// spectra to the kernels -- make_cell_kernels symmetrizes per cell --
+// but this function remains the closed-form cross-check of that step.
 inline NoiseSpectrum
 symmetrize_spectrum(
     const NoiseSpectrum& ns,
@@ -499,7 +509,7 @@ symmetrize_spectrum(
     );
     NoiseSpectrum out = ns;
     out.symmetrized = true;
-    out.g = rk.g;
+    out.rho = rk.rho;
     const std::size_t npix = ns.S.size();
     for (std::size_t idx = 0; idx < npix; ++idx) {
         if (!(rk.Sd[idx] > 0.0)) {
@@ -605,15 +615,21 @@ gaussian_flux_variance(
     return (var > 0.0) ? var : 0.0;
 }
 
-// Everything the Task needs to run Option 2 on one patch: the noise
+// Everything the Task needs to run Option 2 on one patch: the RAW noise
 // spectrum of every band (from the patch correlation function, on the
-// cell grid) and the two parameters.  Absent (nullptr) means Option 1.
+// cell grid) and the parameters.  The symmetrization happens per cell,
+// with each cell's own PSF (make_cell_kernels), and the spin-2 filler
+// rho * eps'' is applied in Fourier space per cell from the second noise
+// realization the caller provides (noise2_array).  Absent (nullptr)
+// means Option 1.
 struct Setup {
     Mode mode = Mode::spectral;
     double c = 0.1;
+    // smoothing of the 90-degree maximum (equation fill of the draft);
+    // must match the delta the per-cell filler was built with
+    double delta = 0.01;
     bool noise_rotated = true;
-    // one per band, on the cell grid, SYMMETRIZED with the patch PSF
-    // (symmetrize_spectrum) when the image carries the filler
+    // one per band, on the cell grid, raw (make_noise_spectrum)
     std::vector<NoiseSpectrum> spectra;
 };
 
@@ -634,23 +650,22 @@ make_cell_kernels(
     }
     std::vector<RenoiseKernels> out;
     out.reserve(nband);
+    const bool spectral = (setup.mode == Mode::spectral);
     for (ssize_t b = 0; b < nband; ++b) {
-        // the spectrum as given: no filler is applied inside anacal
-        // (Option 2 needs the spectrum of the image WITH the filler,
-        // Option 1 the raw one)
-        const bool want_sym = (setup.mode == Mode::spectral);
-        if (setup.spectra[b].symmetrized != want_sym) {
+        // both modes take the raw spectrum; the spectral mode
+        // symmetrizes it HERE, with this cell's PSF -- consistent with
+        // the per-cell filler the image carries
+        if (setup.spectra[b].symmetrized) {
             throw std::runtime_error(
-                want_sym
-                ? "anacal Error: spectral renoising needs the symmetrized "
-                  "noise spectrum (symmetrize_spectrum)"
-                : "anacal Error: the rotate mode needs the raw noise "
-                  "spectrum (make_noise_spectrum)"
+                "anacal Error: the renoise setup needs the raw noise "
+                "spectrum (make_noise_spectrum); the symmetrization is "
+                "per cell, with the cell PSF"
             );
         }
         out.push_back(make_renoise_kernels(
-            setup.spectra[b], psf_stack, b, klim, setup.c, 0.0,
-            false, setup.noise_rotated, setup.mode
+            setup.spectra[b], psf_stack, b, klim, setup.c,
+            spectral ? setup.delta : 0.0, spectral,
+            setup.noise_rotated, setup.mode
         ));
     }
     return out;
@@ -658,14 +673,17 @@ make_cell_kernels(
 
 } // namespace renoise
 
-// Option 2 in the qnumber image.  The image already carries the spin-2
-// filler (added per patch, see symmetrize_spectrum).  Fourier buffers
-// (half plane, karr the deconvolution-plus-resmoothing kernel h / p of
-// this band):
-//   D-buffer  fd = karr F[image]
-//   kn = karr F[noise]            (the one pure-noise image)
-//   value     fv = fd + w kn      (added noise)
-//   g_j slot += F^-1[kappa_j kn]  (assigned response)
+// Option 2 in the qnumber image.  All three renoising kernels are
+// applied in Fourier space, on this cell's grid: the spin-2 filler
+// rho * eps'' (from the second, independent noise realization) joins the
+// D-buffer, so the pixel shear response acts on image + filler exactly
+// as on image noise; the added noise and the assigned responses are
+// filters of the first realization eps'.  Fourier buffers (half plane,
+// karr the deconvolution-plus-resmoothing kernel h / p of this band):
+//   D-buffer  fd = karr (F[image] + rho F[noise2])   (image + filler)
+//   kn = karr F[noise]             (the pure-noise image eps')
+//   value     fv = fd + eta0 kn    (added noise)
+//   g_j slot += F^-1[tau_j kn]     (assigned response)
 // The pixel shear response (G1, G2, X1, X2 filters and the coordinate
 // terms) acts on fd only.
 inline std::vector<math::qnumber>
@@ -676,6 +694,7 @@ ImageQ::prepare_qnumber_vector_band_spectral(
     int xcen,
     int ycen,
     const py::array_t<pixel_t>& noise_stack,
+    const py::array_t<pixel_t>& noise2_stack,
     const renoise::RenoiseKernels& rk
 ) {
     if ((rk.n != this->nx) || (rk.n != this->ny)) {
@@ -698,7 +717,17 @@ ImageQ::prepare_qnumber_vector_band_spectral(
     img_obj.set_r_band(img_stack, band, xcen, ycen, false);
     img_obj.fft();
     img_obj.filter(karr);
-    const std::vector<std::complex<double>> fd = img_obj.draw_f_vec();
+    std::vector<std::complex<double>> fd = img_obj.draw_f_vec();
+
+    // filler: rho * eps'' plays the role of image noise, so it joins the
+    // D-buffer before any shear-response filter is applied
+    img_obj.set_r_band(noise2_stack, band, xcen, ycen, false);
+    img_obj.fft();
+    img_obj.filter(karr);
+    const std::vector<std::complex<double>> kn2 = img_obj.draw_f_vec();
+    for (std::size_t idx = 0; idx < nf; ++idx) {
+        fd[idx] += rk.rho[idx] * kn2[idx];
+    }
 
     // noise
     img_obj.set_r_band(noise_stack, band, xcen, ycen, false);
@@ -708,9 +737,9 @@ ImageQ::prepare_qnumber_vector_band_spectral(
 
     std::vector<std::complex<double>> fv(nf), fk1(nf), fk2(nf);
     for (std::size_t idx = 0; idx < nf; ++idx) {
-        fv[idx] = fd[idx] + rk.w[idx] * kn[idx];
-        fk1[idx] = rk.kappa1[idx] * kn[idx];
-        fk2[idx] = rk.kappa2[idx] * kn[idx];
+        fv[idx] = fd[idx] + rk.eta0[idx] * kn[idx];
+        fk1[idx] = rk.tau1[idx] * kn[idx];
+        fk2[idx] = rk.tau2[idx] * kn[idx];
     }
 
     const ssize_t npix = static_cast<ssize_t>(this->ny) * this->nx;

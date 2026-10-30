@@ -41,7 +41,7 @@ def symmetrized_spectrum(n, scale, variance, psf, klim, delta=0.05, corr=None):
 
 
 def make_filler(eps2, scale, variance, psf, klim, delta=0.05, corr=None):
-    """The spin-2 filler g * eps2 of an image whose noise realization is
+    """The spin-2 filler rho * eps2 of an image whose noise realization is
     ``eps2`` (any shape): g from the symmetrized spectrum on the smallest
     even square grid holding the image, applied by FFT and cropped."""
     ny, nx = eps2.shape
@@ -50,7 +50,7 @@ def make_filler(eps2, scale, variance, psf, klim, delta=0.05, corr=None):
     sym = symmetrized_spectrum(n, scale, variance, psf, klim, delta, corr)
     pad = np.zeros((n, n))
     pad[:ny, :nx] = eps2
-    out = np.fft.irfft2(np.fft.rfft2(pad) * sym.g, s=(n, n))
+    out = np.fft.irfft2(np.fft.rfft2(pad) * sym.rho, s=(n, n))
     return out[:ny, :nx]
 
 

@@ -212,6 +212,7 @@ def _measure_kernel_catalog(
     pixel_scale,
     gal_array,
     noise_array,
+    noise2_array,
     detection,
     psf_object,
     psf_array,
@@ -226,10 +227,9 @@ def _measure_kernel_catalog(
     psf_offset=(0.0, 0.0),
     renoise_mode="rotate",
     renoise_c=0.1,
-    renoise_delta=0.05,
+    renoise_delta=0.01,
     noise_corr=None,
     noise_rotated=True,
-    filler_psf=None,
 ):
     """One kernel's finished forced catalog via the C++ ``ForceTask``.
 
@@ -259,16 +259,16 @@ def _measure_kernel_catalog(
         # plain path (image noise plus the rotated copy)
         ftask.prepare_covariance(variance=noise_variance)
     else:
-        # The noise spectrum of the patch on the stamp grid, from the
-        # correlation function (white without one).  Option 1 ("rotate")
-        # uses the raw spectrum; for Option 2 ("spectral") the image
-        # carries the spin-2 filler of the patch PSF (added once per
-        # patch, see xlens), so its spectrum is the raw one symmetrized
-        # with that PSF, and the per-PSF kernels (added noise w and
-        # assigned response kappa) are built in C++, once for a constant
-        # PSF or per source for a native model.  The covariance is summed
-        # over the total noise spectrum (image noise plus the rotated copy
-        # or the added noise) with the kernels of the cell PSF.
+        # The RAW noise spectrum of the patch on the stamp grid, from the
+        # correlation function (white without one), in BOTH modes.  For
+        # Option 2 ("spectral") the per-PSF kernels symmetrize this raw
+        # spectrum in C++ -- once for a constant PSF or per source for a
+        # native model -- and ForceTask applies all three kernels in
+        # Fourier space per stamp: the spin-2 filler g on the second
+        # realization noise2_array, the added noise eta_0 and the assigned
+        # responses tau_j on noise_array.  The covariance is summed over
+        # the total noise spectrum (image noise plus the rotated copy or
+        # the symmetrized spectrum plus the added noise).
         spectrum = renoise_mod.make_noise_spectrum(
             fpfs_config.npix,
             pixel_scale,
@@ -279,25 +279,24 @@ def _measure_kernel_catalog(
         )
         mode = "rotate"
         if renoise_mode == "spectral" and noise_array is not None:
-            spectrum = renoise_mod.symmetrize_spectrum(
-                spectrum,
-                np.ascontiguousarray(
-                    psf_array if filler_psf is None else filler_psf,
-                    dtype=np.float64,
-                ),
-                klim,
-                renoise_delta,
-            )
+            if noise2_array is None:
+                raise ValueError(
+                    "spectral renoising needs a second noise realization "
+                    "(noise2_array): the spin-2 filler is built from it"
+                )
             mode = "spectral"
             renoise = renoise_mod.Setup(
                 c=renoise_c,
                 spectra=[spectrum],
                 noise_rotated=noise_rotated,
                 mode=mode,
+                delta=renoise_delta,
             )
+        spectral = mode == "spectral"
         kernels = renoise_mod.make_renoise_kernels(
             spectrum, np.ascontiguousarray(psf_array, dtype=np.float64),
-            klim, renoise_c, 0.0, False, noise_rotated, mode,
+            klim, renoise_c, renoise_delta if spectral else 0.0,
+            spectral, noise_rotated, mode,
         )
         ftask.prepare_covariance(
             variance=noise_variance,
@@ -337,6 +336,11 @@ def _measure_kernel_catalog(
         std_m00=float(ftask.std_m00),
         out_dtype=_catalog_dtype(kernel, base_column_name),
         noise_array=noise_array,
+        noise2_array=(
+            None if renoise is None else np.asarray(
+                noise2_array, dtype=np.float32
+            )
+        ),
         n_mask_base=eff_mask,
         n_mask_base_max=n_mask_base_max,
         psf_model=psf_model,
@@ -899,6 +903,7 @@ def process_image(
     gal_array: NDArray,
     psf_array: NDArray,
     noise_array: NDArray | None = None,
+    noise2_array: NDArray | None = None,
     mask_array: NDArray | None = None,
     detection: NDArray | None = None,
     psf_object: BasePsf | None | NDArray = None,
@@ -909,10 +914,9 @@ def process_image(
     psf_offset: tuple = (0.0, 0.0),
     renoise_mode: str = "rotate",
     renoise_c: float = 0.1,
-    renoise_delta: float = 0.05,
+    renoise_delta: float = 0.01,
     noise_corr: NDArray | None = None,
     noise_rotated: bool = True,
-    filler_psf: NDArray | None = None,
     **kwargs,
 ):
     """Run the full FPFS measurement pipeline on an exposure.
@@ -937,6 +941,10 @@ def process_image(
             ``FpfsTask``.
         noise_array (NDArray | None): Pure noise array for noise-bias
             subtraction.
+        noise2_array (NDArray | None): second, independent noise
+            realization eps'' with the same correlation properties
+            (spectral renoising only): the spin-2 filler rho * eps'' is
+            applied in Fourier space per stamp.
         mask_array (NDArray | None): Mask array (1 for masked pixels).
         detection (NDArray): Pre-computed detection catalogue with
             ``('y', 'x')`` columns (pixel positions), e.g. converted from
@@ -959,11 +967,8 @@ def process_image(
             white noise.
         noise_rotated (bool): whether ``noise_array`` was drawn from the
             90-degree-rotated correlation function (xlens convention).
-        filler_psf (NDArray | None): spectral renoising: the PSF the
-            spin-2 filler of the image was built with (the patch PSF);
-            None means ``psf_array``.  The filler itself is added to the
-            image by the caller, once per patch (see
-            ``anacal.renoise.symmetrize_spectrum``).
+            ``noise2_array`` is never rotated: the filler must carry the
+            image noise's own correlation.
 
     Returns:
         NDArray: Structured FPFS catalogue.
@@ -1031,6 +1036,7 @@ def process_image(
             pixel_scale=pixel_scale,
             gal_array=gal_array,
             noise_array=noise_array,
+            noise2_array=noise2_array,
             detection=detection,
             psf_object=psf_object,
             psf_array=psf_array,
@@ -1048,7 +1054,6 @@ def process_image(
             renoise_delta=renoise_delta,
             noise_corr=noise_corr,
             noise_rotated=noise_rotated,
-            filler_psf=filler_psf,
         )
 
     # One GIL-released C++ pass per kernel (fpfs.ForceTask, structured

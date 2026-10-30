@@ -48,9 +48,9 @@ void
 pyExportRenoise(py::module_& m) {
     py::module_ rn = m.def_submodule(
         "renoise",
-        "minimal-variance renoising: noise spectrum, spin-2 symmetrization "
-        "and the added-noise / assigned-response kernels (rfft half-plane "
-        "layout (n, n/2 + 1), as numpy.fft.rfft2)"
+        "low-variance spectral renoising: noise spectrum, per-PSF spin-2 "
+        "symmetrization and the added-noise / assigned-response kernels "
+        "(rfft half-plane layout (n, n/2 + 1), as numpy.fft.rfft2)"
     );
 
     py::class_<NoiseSpectrum>(rn, "NoiseSpectrum")
@@ -62,13 +62,13 @@ pyExportRenoise(py::module_& m) {
         .def_property_readonly("S_raw", [](const NoiseSpectrum& s) {
             return half_plane_array(s.S_raw, s.n);
         })
-        .def_property_readonly("g", [](const NoiseSpectrum& s) {
+        .def_property_readonly("rho", [](const NoiseSpectrum& s) {
             if (!s.symmetrized) {
                 throw std::runtime_error(
-                    "g is only defined for a symmetrized spectrum"
+                    "rho is only defined for a symmetrized spectrum"
                 );
             }
-            return half_plane_array(s.g, s.n);
+            return half_plane_array(s.rho, s.n);
         })
         .def_property_readonly("S", [](const NoiseSpectrum& s) {
             return half_plane_array(s.S, s.n);
@@ -119,17 +119,17 @@ pyExportRenoise(py::module_& m) {
         .def_property_readonly("a_sym2", [](const RenoiseKernels& k) {
             return half_plane_array(k.a_sym2, k.n);
         })
-        .def_property_readonly("g", [](const RenoiseKernels& k) {
-            return half_plane_array(k.g, k.n);
+        .def_property_readonly("rho", [](const RenoiseKernels& k) {
+            return half_plane_array(k.rho, k.n);
         })
-        .def_property_readonly("w", [](const RenoiseKernels& k) {
-            return half_plane_array(k.w, k.n);
+        .def_property_readonly("eta0", [](const RenoiseKernels& k) {
+            return half_plane_array(k.eta0, k.n);
         })
-        .def_property_readonly("kappa1", [](const RenoiseKernels& k) {
-            return half_plane_array(k.kappa1, k.n);
+        .def_property_readonly("tau1", [](const RenoiseKernels& k) {
+            return half_plane_array(k.tau1, k.n);
         })
-        .def_property_readonly("kappa2", [](const RenoiseKernels& k) {
-            return half_plane_array(k.kappa2, k.n);
+        .def_property_readonly("tau2", [](const RenoiseKernels& k) {
+            return half_plane_array(k.tau2, k.n);
         })
         .def_property_readonly("ap1", [](const RenoiseKernels& k) {
             return half_plane_array(k.ap1, k.n);
@@ -148,7 +148,7 @@ pyExportRenoise(py::module_& m) {
         "S_raw keeps the pure-noise spectrum and g is the filler filter "
         "on this grid.",
         py::arg("noise_spectrum"), py::arg("psf"), py::arg("klim"),
-        py::arg("delta") = 0.05
+        py::arg("delta") = 0.01
     );
 
     rn.def("make_renoise_kernels",
@@ -160,17 +160,17 @@ pyExportRenoise(py::module_& m) {
                 mode_from_string(mode)
             );
         },
-        "Per-PSF kernels of the minimal-variance renoising: the "
+        "Per-PSF kernels of the low-variance spectral renoising: the "
         "deconvolved spectrum S^d, its 90-degree-symmetrized smooth "
         "maximum S^d_sym, the shear derivatives a_sym1 / a_sym2 of "
-        "ln S^d_sym, the filler filter g = sqrt(S^d_sym / S^d - 1), the "
-        "added-noise amplitude w = sqrt(c S^d_sym / S^d) and the "
-        "assigned-response filters kappa_j = -sqrt(S^d_sym / S^d) "
+        "ln S^d_sym, the filler filter rho = sqrt(S^d_sym / S^d - 1), the "
+        "added-noise amplitude eta0 = sqrt(c S^d_sym / S^d) and the "
+        "assigned-response filters tau_j = -sqrt(S^d_sym / S^d) "
         "a_symj / (2 sqrt c).  psf is centred on pixel (npsf // 2, npsf "
         "// 2); everything is zero beyond klim and on the Nyquist row and "
         "column.",
         py::arg("noise_spectrum"), py::arg("psf"), py::arg("klim"),
-        py::arg("c") = 0.1, py::arg("delta") = 0.05,
+        py::arg("c") = 0.1, py::arg("delta") = 0.01,
         py::arg("symmetrize") = true, py::arg("noise_rotated") = false,
         py::arg("mode") = "spectral"
     );
@@ -202,31 +202,36 @@ pyExportRenoise(py::module_& m) {
         .def(py::init([](double c,
                          const std::vector<NoiseSpectrum>& spectra,
                          bool noise_rotated,
-                         const std::string& mode) {
+                         const std::string& mode,
+                         double delta) {
                 Setup s;
                 s.c = c;
+                s.delta = delta;
                 s.spectra = spectra;
                 s.noise_rotated = noise_rotated;
                 s.mode = mode_from_string(mode);
                 return s;
             }),
-            "Noise spectra of one patch for the renoising: one "
-            "NoiseSpectrum per band on the cell grid -- the raw one "
-            "(make_noise_spectrum) for mode 'rotate', the one symmetrized "
-            "with the patch PSF for mode 'spectral' (the image carries the "
-            "filler) -- the added-noise fraction c (spectral), and whether "
-            "the pure-noise image was drawn from the 90-degree-rotated "
-            "correlation (xlens convention).  The Task sums the noise "
-            "variances over the total spectrum in either mode.",
+            "Noise spectra of one patch for the renoising: one RAW "
+            "NoiseSpectrum per band on the cell grid (make_noise_spectrum "
+            "in BOTH modes; the spectral mode symmetrizes per cell with "
+            "the cell PSF, matching the per-cell filler the image "
+            "carries), the added-noise fraction c and the smooth-maximum "
+            "delta (spectral), and whether the pure-noise image was drawn "
+            "from the 90-degree-rotated correlation (xlens convention).  "
+            "The Task sums the noise variances over the total spectrum "
+            "in either mode.",
             py::arg("c") = 0.1,
             py::arg("spectra") = std::vector<NoiseSpectrum>{},
             py::arg("noise_rotated") = true,
-            py::arg("mode") = "spectral"
+            py::arg("mode") = "spectral",
+            py::arg("delta") = 0.01
         )
         .def_property_readonly("mode", [](const Setup& s) {
             return std::string(s.mode == Mode::rotate ? "rotate" : "spectral");
         })
         .def_readwrite("c", &Setup::c)
+        .def_readwrite("delta", &Setup::delta)
         .def_readwrite("noise_rotated", &Setup::noise_rotated)
         .def_property_readonly("nband", [](const Setup& s) {
             return s.spectra.size();
