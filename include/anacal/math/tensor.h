@@ -12,52 +12,68 @@
 #include <utility>
 #include <vector>
 
+// Tensor of qnumber_t<T, NT>, stored as a structure of arrays: one plane
+// of T per component (v, g1, g2[, x1, x2]), all planes sharing the shape,
+// the strides and the offset.  Every network layer is then a loop over
+// contiguous planes (which vectorises), and the convolution kernel reads
+// the planes directly.  Views (reshape, slice, select) share the storage.
+
 namespace anacal {
 namespace math {
 
-class qtensor {
+template <typename T, int NT>
+class qtensor_t {
 public:
     using size_type = std::size_t;
+    using value_type = T;
+    using qnumber_type = qnumber_t<T, NT>;
+    static constexpr int ntangent = NT;
+    static constexpr int ncomp = NT + 1;
 
-    qtensor()
-        : data_(std::make_shared<std::vector<math::qnumber>>()) {}
+    qtensor_t()
+        : data_(std::make_shared<std::vector<T>>()), plane_(0) {}
 
-    explicit qtensor(const std::vector<size_type>& shape)
-        : data_(std::make_shared<std::vector<math::qnumber>>(compute_size(shape))),
-          shape_(shape),
-          strides_(compute_contiguous_strides(shape)),
-          offset_(0) {}
-
-    qtensor(
-        const std::vector<size_type>& shape,
-        const math::qnumber& fill_value
-    )
-        : data_(std::make_shared<std::vector<math::qnumber>>(
-              compute_size(shape), fill_value
+    explicit qtensor_t(const std::vector<size_type>& shape)
+        : data_(std::make_shared<std::vector<T>>(
+              static_cast<size_type>(ncomp) * compute_size(shape), T(0)
           )),
+          plane_(compute_size(shape)),
           shape_(shape),
           strides_(compute_contiguous_strides(shape)),
           offset_(0) {}
 
-    qtensor(const qtensor&) = default;
-    qtensor(qtensor&&) noexcept = default;
-    qtensor& operator=(const qtensor&) = default;
-    qtensor& operator=(qtensor&&) noexcept = default;
-    ~qtensor() = default;
-
-    static qtensor from_shape(const std::vector<size_type>& shape) {
-        return qtensor(shape);
-    }
-
-    static qtensor from_shape(
+    qtensor_t(
         const std::vector<size_type>& shape,
-        const math::qnumber& fill_value
-    ) {
-        return qtensor(shape, fill_value);
+        const qnumber_type& fill_value
+    )
+        : qtensor_t(shape) {
+        for (int c = 0; c < ncomp; ++c) {
+            std::fill(
+                data_->begin() + c * plane_, data_->begin() + (c + 1) * plane_,
+                fill_value.comp(c)
+            );
+        }
     }
 
-    static qtensor from_vector(
-        std::vector<math::qnumber>&& data,
+    qtensor_t(const qtensor_t&) = default;
+    qtensor_t(qtensor_t&&) noexcept = default;
+    qtensor_t& operator=(const qtensor_t&) = default;
+    qtensor_t& operator=(qtensor_t&&) noexcept = default;
+    ~qtensor_t() = default;
+
+    static qtensor_t from_shape(const std::vector<size_type>& shape) {
+        return qtensor_t(shape);
+    }
+
+    static qtensor_t from_shape(
+        const std::vector<size_type>& shape,
+        const qnumber_type& fill_value
+    ) {
+        return qtensor_t(shape, fill_value);
+    }
+
+    static qtensor_t from_vector(
+        const std::vector<qnumber_type>& data,
         const std::vector<size_type>& shape
     ) {
         const size_type expected = compute_size(shape);
@@ -67,43 +83,29 @@ public:
                << " elements but received " << data.size();
             throw std::invalid_argument(ss.str());
         }
-        auto storage = std::make_shared<std::vector<math::qnumber>>(
-            std::move(data)
-        );
-        return qtensor(
-            std::move(storage),
-            shape,
-            compute_contiguous_strides(shape),
-            0
-        );
+        qtensor_t out(shape);
+        for (int c = 0; c < ncomp; ++c) {
+            T* p = out.plane(c);
+            for (size_type i = 0; i < expected; ++i) {
+                p[i] = data[i].comp(c);
+            }
+        }
+        return out;
     }
 
-    static qtensor from_vector(
-        const std::vector<math::qnumber>& data,
+    static qtensor_t from_vector(
+        std::vector<qnumber_type>&& data,
         const std::vector<size_type>& shape
     ) {
-        const size_type expected = compute_size(shape);
-        if (data.size() != expected) {
-            std::ostringstream ss;
-            ss << "qtensor::from_vector expects " << expected
-               << " elements but received " << data.size();
-            throw std::invalid_argument(ss.str());
-        }
-        auto storage = std::make_shared<std::vector<math::qnumber>>(data);
-        return qtensor(
-            std::move(storage),
-            shape,
-            compute_contiguous_strides(shape),
-            0
-        );
+        return from_vector(static_cast<const std::vector<qnumber_type>&>(data), shape);
     }
 
-    static qtensor from_image(
-        std::vector<math::qnumber>&& data,
+    static qtensor_t from_image(
+        std::vector<qnumber_type>&& data,
         size_type height,
         size_type width
     ) {
-        return from_vector(std::move(data), {height, width});
+        return from_vector(data, {height, width});
     }
 
     size_type ndim() const noexcept { return shape_.size(); }
@@ -116,66 +118,36 @@ public:
 
     bool empty() const noexcept { return size() == 0; }
 
-    math::qnumber& at(const std::vector<size_type>& indices) {
-        if (indices.size() != shape_.size()) {
-            throw std::out_of_range("index dimensionality mismatch");
+    // One element, gathered from the planes.
+    qnumber_type at(const std::vector<size_type>& indices) const {
+        const size_type index = linear_index(indices);
+        qnumber_type q;
+        for (int c = 0; c < ncomp; ++c) {
+            q.comp(c) = (*data_)[c * plane_ + index];
         }
-        size_type index = offset_;
-        for (size_type dim = 0; dim < indices.size(); ++dim) {
-            if (indices[dim] >= shape_[dim]) {
-                throw std::out_of_range("index out of bounds");
-            }
-            index += indices[dim] * strides_[dim];
-        }
-        return (*data_)[index];
+        return q;
     }
 
-    const math::qnumber& at(const std::vector<size_type>& indices) const {
-        if (indices.size() != shape_.size()) {
-            throw std::out_of_range("index dimensionality mismatch");
+    void set(const std::vector<size_type>& indices, const qnumber_type& value) {
+        const size_type index = linear_index(indices);
+        for (int c = 0; c < ncomp; ++c) {
+            (*data_)[c * plane_ + index] = value.comp(c);
         }
-        size_type index = offset_;
-        for (size_type dim = 0; dim < indices.size(); ++dim) {
-            if (indices[dim] >= shape_[dim]) {
-                throw std::out_of_range("index out of bounds");
-            }
-            index += indices[dim] * strides_[dim];
-        }
-        return (*data_)[index];
     }
 
-    math::qnumber& operator[](size_type index) {
+    // Plane c (component order v, g1, g2, x1, x2) of a contiguous tensor.
+    T* plane(int c) {
         if (!is_contiguous()) {
-            throw std::runtime_error("operator[] requires contiguous storage");
+            throw std::runtime_error("plane() requires contiguous storage");
         }
-        if (index >= size()) {
-            throw std::out_of_range("index out of bounds");
-        }
-        return (*data_)[offset_ + index];
+        return data_->data() + c * plane_ + offset_;
     }
 
-    const math::qnumber& operator[](size_type index) const {
+    const T* plane(int c) const {
         if (!is_contiguous()) {
-            throw std::runtime_error("operator[] requires contiguous storage");
+            throw std::runtime_error("plane() requires contiguous storage");
         }
-        if (index >= size()) {
-            throw std::out_of_range("index out of bounds");
-        }
-        return (*data_)[offset_ + index];
-    }
-
-    math::qnumber* data() {
-        if (!is_contiguous()) {
-            throw std::runtime_error("data() requires contiguous storage");
-        }
-        return data_->data() + offset_;
-    }
-
-    const math::qnumber* data() const {
-        if (!is_contiguous()) {
-            throw std::runtime_error("data() requires contiguous storage");
-        }
-        return data_->data() + offset_;
+        return data_->data() + c * plane_ + offset_;
     }
 
     bool is_contiguous() const noexcept {
@@ -193,22 +165,19 @@ public:
         return true;
     }
 
-    qtensor reshape(const std::vector<size_type>& new_shape) const {
+    qtensor_t reshape(const std::vector<size_type>& new_shape) const {
         if (!is_contiguous()) {
             throw std::runtime_error("reshape requires contiguous storage");
         }
         if (compute_size(new_shape) != size()) {
             throw std::invalid_argument("reshape size mismatch");
         }
-        return qtensor(
-            data_,
-            new_shape,
-            compute_contiguous_strides(new_shape),
-            offset_
+        return qtensor_t(
+            data_, plane_, new_shape, compute_contiguous_strides(new_shape), offset_
         );
     }
 
-    qtensor slice(
+    qtensor_t slice(
         size_type dim,
         size_type start,
         size_type stop,
@@ -228,10 +197,10 @@ public:
         new_shape[dim] = new_extent;
         new_strides[dim] *= step;
         size_type new_offset = offset_ + start * strides_[dim];
-        return qtensor(data_, new_shape, new_strides, new_offset);
+        return qtensor_t(data_, plane_, new_shape, new_strides, new_offset);
     }
 
-    qtensor select(size_type dim, size_type index) const {
+    qtensor_t select(size_type dim, size_type index) const {
         if (dim >= shape_.size()) {
             throw std::out_of_range("select dimension out of bounds");
         }
@@ -250,10 +219,10 @@ public:
             new_strides.push_back(strides_[i]);
         }
         size_type new_offset = offset_ + index * strides_[dim];
-        return qtensor(data_, new_shape, new_strides, new_offset);
+        return qtensor_t(data_, plane_, new_shape, new_strides, new_offset);
     }
 
-    qtensor view(
+    qtensor_t view(
         const std::vector<size_type>& new_shape,
         const std::vector<size_type>& new_strides,
         size_type offset
@@ -261,7 +230,7 @@ public:
         if (new_shape.size() != new_strides.size()) {
             throw std::invalid_argument("shape and stride dimensionality mismatch");
         }
-        qtensor view_tensor(data_, new_shape, new_strides, offset_ + offset);
+        qtensor_t view_tensor(data_, plane_, new_shape, new_strides, offset_ + offset);
         const size_type total = view_tensor.size();
         if (total == 0) {
             return view_tensor;
@@ -273,39 +242,126 @@ public:
             }
             max_index += (new_shape[i] - 1) * new_strides[i];
         }
-        if (max_index >= view_tensor.data_->size()) {
+        if (max_index >= plane_) {
             throw std::out_of_range("view exceeds underlying storage");
         }
         return view_tensor;
     }
 
-    std::vector<math::qnumber> to_vector() const {
-        std::vector<math::qnumber> result(size());
+    // The elements in row-major order (any layout).
+    std::vector<qnumber_type> to_vector() const {
+        std::vector<qnumber_type> result(size());
         if (result.empty()) {
             return result;
         }
         size_type out_index = 0;
-        copy_recursive(0, offset_, result, out_index);
+        for_each_index([&](size_type src) {
+            qnumber_type& q = result[out_index++];
+            for (int c = 0; c < ncomp; ++c) {
+                q.comp(c) = (*data_)[c * plane_ + src];
+            }
+        });
         return result;
     }
 
+    // A contiguous copy (any layout) -- the planes of the result are the
+    // elements in row-major order.
+    qtensor_t copy() const {
+        qtensor_t out(shape_);
+        size_type out_index = 0;
+        for_each_index([&](size_type src) {
+            for (int c = 0; c < ncomp; ++c) {
+                (*out.data_)[c * out.plane_ + out_index] = (*data_)[c * plane_ + src];
+            }
+            ++out_index;
+        });
+        return out;
+    }
+
+    // The same elements in another scalar type / number of tangents:
+    // dropped position tangents are lost, added ones are zero.
+    template <typename T2, int NT2>
+    qtensor_t<T2, NT2> convert() const {
+        qtensor_t<T2, NT2> out(shape_);
+        const int nc = std::min(ncomp, qtensor_t<T2, NT2>::ncomp);
+        size_type out_index = 0;
+        for_each_index([&](size_type src) {
+            for (int c = 0; c < nc; ++c) {
+                out.plane(c)[out_index] = static_cast<T2>((*data_)[c * plane_ + src]);
+            }
+            ++out_index;
+        });
+        return out;
+    }
+
 private:
-    std::shared_ptr<std::vector<math::qnumber>> data_;
+    std::shared_ptr<std::vector<T>> data_;
+    size_type plane_ = 0;  // elements per component plane in the storage
     std::vector<size_type> shape_;
     std::vector<size_type> strides_;
     size_type offset_ = 0;
 
-    qtensor(
-        std::shared_ptr<std::vector<math::qnumber>> data,
+    qtensor_t(
+        std::shared_ptr<std::vector<T>> data,
+        size_type plane,
         std::vector<size_type> shape,
         std::vector<size_type> strides,
         size_type offset
     )
         : data_(std::move(data)),
+          plane_(plane),
           shape_(std::move(shape)),
           strides_(std::move(strides)),
           offset_(offset) {
         check_shape_product(shape_);
+    }
+
+    size_type linear_index(const std::vector<size_type>& indices) const {
+        if (indices.size() != shape_.size()) {
+            throw std::out_of_range("index dimensionality mismatch");
+        }
+        size_type index = offset_;
+        for (size_type dim = 0; dim < indices.size(); ++dim) {
+            if (indices[dim] >= shape_[dim]) {
+                throw std::out_of_range("index out of bounds");
+            }
+            index += indices[dim] * strides_[dim];
+        }
+        return index;
+    }
+
+    // f(linear index within a plane) over the elements in row-major order
+    template <typename F>
+    void for_each_index(F f) const {
+        if (size() == 0) {
+            return;
+        }
+        if (is_contiguous()) {
+            const size_type n = size();
+            for (size_type i = 0; i < n; ++i) {
+                f(offset_ + i);
+            }
+            return;
+        }
+        std::vector<size_type> idx(shape_.size(), 0);
+        size_type lin = offset_;
+        const size_type nd = shape_.size();
+        while (true) {
+            f(lin);
+            std::ptrdiff_t d = static_cast<std::ptrdiff_t>(nd) - 1;
+            for (; d >= 0; --d) {
+                const size_type ud = static_cast<size_type>(d);
+                lin += strides_[ud];
+                if (++idx[ud] < shape_[ud]) {
+                    break;
+                }
+                lin -= strides_[ud] * shape_[ud];
+                idx[ud] = 0;
+            }
+            if (d < 0) {
+                break;
+            }
+        }
     }
 
     static std::vector<size_type>
@@ -346,90 +402,111 @@ private:
         if (required == 0) {
             return;
         }
-        const size_type max_possible = data_->size();
-        if (offset_ + required > max_possible) {
+        if (offset_ + required > plane_) {
             throw std::out_of_range("qtensor view exceeds storage bounds");
-        }
-    }
-
-    void copy_recursive(
-        size_type dim,
-        size_type base_offset,
-        std::vector<math::qnumber>& out,
-        size_type& out_index
-    ) const {
-        if (dim == shape_.size()) {
-            if (out_index >= out.size()) {
-                throw std::out_of_range("copy_recursive overflow");
-            }
-            out[out_index++] = (*data_)[base_offset];
-            return;
-        }
-        const size_type extent = shape_[dim];
-        if (extent == 0) {
-            return;
-        }
-        const size_type stride = strides_[dim];
-        for (size_type i = 0; i < extent; ++i) {
-            copy_recursive(dim + 1, base_offset + i * stride, out, out_index);
         }
     }
 };
 
+// The Task's tensor: double, four tangents.
+using qtensor = qtensor_t<double, 4>;
+
 // A contiguous tensor with the elements of x (x itself, sharing its
 // storage, when it already is contiguous).
-inline qtensor contiguous(const qtensor& x) {
+template <typename T, int NT>
+inline qtensor_t<T, NT> contiguous(const qtensor_t<T, NT>& x) {
     if (x.is_contiguous()) {
         return x;
     }
-    return qtensor::from_vector(x.to_vector(), x.shape());
+    return x.copy();
 }
 
-// Element-wise f(x) into a new contiguous tensor of the same shape.
-template <typename F>
-inline qtensor elementwise(const qtensor& x, F f) {
-    const qtensor xc = contiguous(x);
-    qtensor out(xc.shape());
-    const qnumber* src = xc.data();
-    qnumber* dst = out.data();
+// Element-wise chain rule: f(v, fv, dfv) sets the value fv and the
+// derivative dfv at v; the tangent planes are scaled by dfv.
+template <typename T, int NT, typename F>
+inline qtensor_t<T, NT> elementwise_chain(const qtensor_t<T, NT>& x, F f) {
+    const qtensor_t<T, NT> xc = contiguous(x);
+    qtensor_t<T, NT> out(xc.shape());
     const std::size_t n = xc.size();
+    const T* v = xc.plane(0);
+    T* ov = out.plane(0);
+    std::vector<T> d(n);
     for (std::size_t i = 0; i < n; ++i) {
-        dst[i] = f(src[i]);
+        T fv, dfv;
+        f(v[i], fv, dfv);
+        ov[i] = fv;
+        d[i] = dfv;
+    }
+    for (int c = 1; c < qtensor_t<T, NT>::ncomp; ++c) {
+        const T* t = xc.plane(c);
+        T* o = out.plane(c);
+        for (std::size_t i = 0; i < n; ++i) {
+            o[i] = d[i] * t[i];
+        }
     }
     return out;
 }
 
 // a + s * b for tensors of the same shape (the residual connection).
-inline qtensor add(const qtensor& a, const qtensor& b, double s = 1.0) {
+template <typename T, int NT>
+inline qtensor_t<T, NT> add(
+    const qtensor_t<T, NT>& a, const qtensor_t<T, NT>& b, double s = 1.0
+) {
     if (a.shape() != b.shape()) {
         throw std::invalid_argument("add: shape mismatch");
     }
-    const qtensor ac = contiguous(a);
-    const qtensor bc = contiguous(b);
-    qtensor out(ac.shape());
-    const qnumber* pa = ac.data();
-    const qnumber* pb = bc.data();
-    qnumber* po = out.data();
+    const qtensor_t<T, NT> ac = contiguous(a);
+    const qtensor_t<T, NT> bc = contiguous(b);
+    qtensor_t<T, NT> out(ac.shape());
     const std::size_t n = ac.size();
-    for (std::size_t i = 0; i < n; ++i) {
-        po[i] = pa[i] + s * pb[i];
+    const T sc = static_cast<T>(s);
+    for (int c = 0; c < qtensor_t<T, NT>::ncomp; ++c) {
+        const T* pa = ac.plane(c);
+        const T* pb = bc.plane(c);
+        T* po = out.plane(c);
+        for (std::size_t i = 0; i < n; ++i) {
+            po[i] = pa[i] + sc * pb[i];
+        }
     }
     return out;
 }
 
 // x * s with a qnumber s (product rule on every element), e.g. the
 // division of an image by its measured brightness: mul(x, 1.0 / norm)
-inline qtensor mul(const qtensor& x, const qnumber& s) {
-    return elementwise(x, [&s](const qnumber& q) { return q * s; });
+template <typename T, int NT>
+inline qtensor_t<T, NT> mul(
+    const qtensor_t<T, NT>& x, const qnumber_t<T, NT>& s
+) {
+    const qtensor_t<T, NT> xc = contiguous(x);
+    qtensor_t<T, NT> out(xc.shape());
+    const std::size_t n = xc.size();
+    const T* v = xc.plane(0);
+    T* ov = out.plane(0);
+    for (std::size_t i = 0; i < n; ++i) {
+        ov[i] = v[i] * s.v;
+    }
+    for (int c = 1; c < qtensor_t<T, NT>::ncomp; ++c) {
+        const T* t = xc.plane(c);
+        T* o = out.plane(c);
+        const T sc = s.comp(c);
+        for (std::size_t i = 0; i < n; ++i) {
+            o[i] = t[i] * s.v + v[i] * sc;
+        }
+    }
+    return out;
 }
 
-// y += a * x on all five components (the inner loop of the layers).
-inline void axpy(qnumber& y, double a, const qnumber& x) {
-    y.v += a * x.v;
-    y.g1 += a * x.g1;
-    y.g2 += a * x.g2;
-    y.x1 += a * x.x1;
-    y.x2 += a * x.x2;
+// y += a * x on all components (the inner loop of scalar reductions).
+template <typename T, int NT>
+inline void axpy(qnumber_t<T, NT>& y, double a, const qnumber_t<T, NT>& x) {
+    const T s = static_cast<T>(a);
+    y.v += s * x.v;
+    y.g1 += s * x.g1;
+    y.g2 += s * x.g2;
+    if constexpr (NT == 4) {
+        y.x1 += s * x.x1;
+        y.x2 += s * x.x2;
+    }
 }
 
 } // namespace math

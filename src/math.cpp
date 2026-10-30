@@ -18,241 +18,473 @@ std::size_t dim(const darray& a, py::ssize_t i) {
     return static_cast<std::size_t>(a.shape(i));
 }
 
-// [..., 5] numpy array <-> qtensor of shape [...]
-qtensor qtensor_from_array(const darray& a) {
-    if (a.ndim() < 2 || a.shape(a.ndim() - 1) != 5) {
+// The four tensor types: scalar float / double, 2 or 4 tangents.  The
+// Python names say the scalar and the number of tangents; the plain
+// ``qtensor`` is the Task's (double, 4 tangents).
+template <typename T, int NT>
+struct tensor_name;
+template <> struct tensor_name<double, 4> {
+    static constexpr const char* tensor = "qtensor";
+    static constexpr const char* number = "qnumber";
+};
+template <> struct tensor_name<double, 2> {
+    static constexpr const char* tensor = "qtensor2";
+    static constexpr const char* number = "qnumber2";
+};
+template <> struct tensor_name<float, 4> {
+    static constexpr const char* tensor = "qtensorf";
+    static constexpr const char* number = "qnumberf";
+};
+template <> struct tensor_name<float, 2> {
+    static constexpr const char* tensor = "qtensor2f";
+    static constexpr const char* number = "qnumber2f";
+};
+
+template <typename T>
+const char* dtype_name() {
+    return std::is_same<T, float>::value ? "float32" : "float64";
+}
+
+// [..., ncomp] numpy array <-> qtensor of shape [...]
+template <typename T, int NT>
+qtensor_t<T, NT> qtensor_from_array(
+    const py::array_t<T, py::array::c_style | py::array::forcecast>& a
+) {
+    constexpr int nc = qtensor_t<T, NT>::ncomp;
+    if (a.ndim() < 2 || a.shape(a.ndim() - 1) != nc) {
         throw std::invalid_argument(
-            "qtensor.from_array expects an array [..., 5]"
+            std::string(tensor_name<T, NT>::tensor)
+            + ".from_array expects an array [..., " + std::to_string(nc) + "]"
         );
     }
     std::vector<std::size_t> shape;
     for (py::ssize_t i = 0; i + 1 < a.ndim(); ++i) {
-        shape.push_back(dim(a, i));
+        shape.push_back(static_cast<std::size_t>(a.shape(i)));
     }
-    const std::size_t n = static_cast<std::size_t>(a.size() / 5);
-    std::vector<qnumber> data(n);
-    const double* p = a.data();
-    for (std::size_t i = 0; i < n; ++i) {
-        data[i] = qnumber(
-            p[5 * i], p[5 * i + 1], p[5 * i + 2], p[5 * i + 3], p[5 * i + 4]
-        );
-    }
-    return qtensor::from_vector(std::move(data), shape);
-}
-
-py::array_t<double> qtensor_to_array(const qtensor& x) {
-    std::vector<py::ssize_t> shape(x.shape().begin(), x.shape().end());
-    shape.push_back(5);
-    py::array_t<double> out(shape);
-    double* p = out.mutable_data();
-    const std::vector<qnumber> data = x.to_vector();
-    for (std::size_t i = 0; i < data.size(); ++i) {
-        p[5 * i] = data[i].v;
-        p[5 * i + 1] = data[i].g1;
-        p[5 * i + 2] = data[i].g2;
-        p[5 * i + 3] = data[i].x1;
-        p[5 * i + 4] = data[i].x2;
+    qtensor_t<T, NT> out(shape);
+    const std::size_t n = static_cast<std::size_t>(a.size() / nc);
+    const T* p = a.data();
+    for (int c = 0; c < nc; ++c) {
+        T* plane = out.plane(c);
+        for (std::size_t i = 0; i < n; ++i) {
+            plane[i] = p[nc * i + c];
+        }
     }
     return out;
 }
 
-// Network layers on qtensors (activation.h, conv.h, norm.h, pooling.h,
-// transform.h).  Weights are numpy arrays in PyTorch's layout, e.g.
-// Conv2d(m.weight.detach().double().numpy(), m.bias...).
-void export_nn(py::module_& math) {
-    using opt = std::optional<darray>;
+template <typename T, int NT>
+py::array_t<T> qtensor_to_array(const qtensor_t<T, NT>& x) {
+    constexpr int nc = qtensor_t<T, NT>::ncomp;
+    const qtensor_t<T, NT> xc = contiguous(x);
+    std::vector<py::ssize_t> shape(xc.shape().begin(), xc.shape().end());
+    shape.push_back(nc);
+    py::array_t<T> out(shape);
+    T* p = out.mutable_data();
+    const std::size_t n = xc.size();
+    for (int c = 0; c < nc; ++c) {
+        const T* plane = xc.plane(c);
+        for (std::size_t i = 0; i < n; ++i) {
+            p[nc * i + c] = plane[i];
+        }
+    }
+    return out;
+}
 
-    // activations (qnumber and qtensor overloads)
-    math.def("relu", py::overload_cast<const qnumber&>(&relu), py::arg("x"));
-    math.def("relu", py::overload_cast<const qtensor&>(&relu), py::arg("x"));
+// x converted to the tensor type named by (dtype, tangents), as a Python
+// object (the four types are distinct Python classes)
+template <typename T, int NT>
+py::object qtensor_astype(
+    const qtensor_t<T, NT>& x, const std::string& dtype, int tangents
+) {
+    const bool f32 = (dtype == "float32" || dtype == "float");
+    const bool f64 = (dtype == "float64" || dtype == "double");
+    if (!f32 && !f64) {
+        throw std::invalid_argument("astype: dtype must be float32 or float64");
+    }
+    if (tangents != 2 && tangents != 4) {
+        throw std::invalid_argument("astype: tangents must be 2 or 4");
+    }
+    if (f64 && tangents == 4) return py::cast(x.template convert<double, 4>());
+    if (f64) return py::cast(x.template convert<double, 2>());
+    if (tangents == 4) return py::cast(x.template convert<float, 4>());
+    return py::cast(x.template convert<float, 2>());
+}
+
+// The non-default qnumber types get the arithmetic and the array access;
+// the default ``qnumber`` keeps its full historical binding below.
+template <typename T, int NT>
+void bind_qnumber_small(py::module_& math) {
+    using Q = qnumber_t<T, NT>;
+    constexpr int nc = Q::ncomp;
+    auto cls = py::class_<Q>(math, tensor_name<T, NT>::number)
+        .def(py::init<>())
+        .def(py::init<T>(), py::arg("v"))
+        .def(py::init<T, T, T>(), py::arg("v"), py::arg("g1"), py::arg("g2"))
+        .def(
+            py::init([](const std::array<T, nc>& data) { return Q(data); }),
+            py::arg("data")
+        )
+        .def_readwrite("v", &Q::v)
+        .def_readwrite("g1", &Q::g1)
+        .def_readwrite("g2", &Q::g2)
+        .def("to_array", &Q::to_array, "the components (v, g1, g2[, x1, x2])")
+        .def("__repr__", [](const Q& q) {
+            std::ostringstream ss;
+            ss << "<" << tensor_name<T, NT>::number << " " << q << ">";
+            return ss.str();
+        })
+        .def(-py::self)
+        .def(py::self + py::self)
+        .def(py::self - py::self)
+        .def(py::self * py::self)
+        .def(py::self / py::self)
+        .def(py::self + double())
+        .def(double() + py::self)
+        .def(py::self - double())
+        .def(double() - py::self)
+        .def(py::self * double())
+        .def(double() * py::self)
+        .def(py::self / double())
+        .def(double() / py::self);
+    if constexpr (NT == 4) {
+        cls.def_readwrite("x1", &Q::x1).def_readwrite("x2", &Q::x2);
+        cls.def(
+            py::init<T, T, T, T, T>(), py::arg("v"), py::arg("g1"),
+            py::arg("g2"), py::arg("x1"), py::arg("x2")
+        );
+    }
+}
+
+template <typename T, int NT>
+void bind_qtensor(py::module_& math) {
+    using Tensor = qtensor_t<T, NT>;
+    using Q = qnumber_t<T, NT>;
+    using size_type = typename Tensor::size_type;
+    using tarray = py::array_t<T, py::array::c_style | py::array::forcecast>;
+    constexpr int nc = Tensor::ncomp;
+    const std::string doc_arr = std::string("[..., ") + std::to_string(nc)
+        + "] array of " + dtype_name<T>() + " in the order (v, g1, g2"
+        + (NT == 4 ? ", x1, x2)" : ")");
+    py::class_<Tensor>(math, tensor_name<T, NT>::tensor)
+        .def(py::init<>())
+        .def(py::init<const std::vector<size_type>&>())
+        .def(py::init<const std::vector<size_type>&, const Q&>())
+        .def_static(
+            "from_flat",
+            [](std::vector<Q> data, const std::vector<size_type>& shape) {
+                return Tensor::from_vector(std::move(data), shape);
+            },
+            py::arg("data"), py::arg("shape"),
+            "Create a tensor from a flat buffer of qnumbers"
+        )
+        .def_static(
+            "from_image",
+            [](std::vector<Q> data, size_type height, size_type width) {
+                return Tensor::from_image(std::move(data), height, width);
+            },
+            py::arg("data"), py::arg("height"), py::arg("width"),
+            "Create a tensor from ImageQ output"
+        )
+        .def_property_readonly(
+            "shape", [](const Tensor& self) { return self.shape(); },
+            "Tensor shape expressed as a tuple of dimension lengths"
+        )
+        .def_property_readonly(
+            "strides", [](const Tensor& self) { return self.strides(); },
+            "Tensor strides in units of qnumbers"
+        )
+        .def_property_readonly(
+            "ndim", [](const Tensor& self) { return self.ndim(); },
+            "Number of tensor dimensions"
+        )
+        .def_property_readonly_static(
+            "dtype", [](py::object) { return dtype_name<T>(); }
+        )
+        .def_property_readonly_static(
+            "tangents", [](py::object) { return NT; }
+        )
+        .def("size", &Tensor::size, "Total number of qnumbers")
+        .def("empty", &Tensor::empty, "Return True if the tensor is empty")
+        .def(
+            "is_contiguous", &Tensor::is_contiguous,
+            "Return True if the tensor uses contiguous storage"
+        )
+        .def(
+            "reshape", &Tensor::reshape, py::arg("shape"),
+            "Return a reshaped view of the tensor"
+        )
+        .def(
+            "slice", &Tensor::slice, py::arg("dim"), py::arg("start"),
+            py::arg("stop"), py::arg("step") = 1,
+            "Return a view defined by slicing a single dimension"
+        )
+        .def(
+            "select", &Tensor::select, py::arg("dim"), py::arg("index"),
+            "Return a view with a dimension fixed to a single index"
+        )
+        .def(
+            "get",
+            [](const Tensor& self, const std::vector<size_type>& indices) {
+                return self.at(indices);
+            },
+            py::arg("indices"),
+            "Access a single qnumber using multidimensional indices"
+        )
+        .def(
+            "set",
+            [](Tensor& self, const std::vector<size_type>& indices, const Q& value) {
+                self.set(indices, value);
+            },
+            py::arg("indices"), py::arg("value"),
+            "Assign a qnumber using multidimensional indices"
+        )
+        .def(
+            "to_list", &Tensor::to_vector,
+            "Return a flat list of qnumbers in row-major order"
+        )
+        .def_static(
+            "from_array",
+            [](const tarray& a) { return qtensor_from_array<T, NT>(a); },
+            py::arg("array"),
+            ("tensor of shape [...] from a " + doc_arr
+             + ".  The [5, H, W] output of ImageQ.prepare_qnumber_image "
+               "becomes a one-channel [1, H, W] tensor with "
+               "np.moveaxis(q, 0, -1)[None]").c_str()
+        )
+        .def(
+            "to_array", &qtensor_to_array<T, NT>,
+            ("Return the numpy " + doc_arr).c_str()
+        )
+        .def(
+            "astype", &qtensor_astype<T, NT>,
+            py::arg("dtype") = "float32", py::arg("tangents") = 2,
+            "The same elements as another tensor type: dtype float32 / "
+            "float64, 2 tangents (v, g1, g2: a stamp measured about a fixed "
+            "centre) or 4 (with the position tangents x1, x2: a cell).  "
+            "Dropped tangents are lost, added ones are zero."
+        );
+}
+
+// Network layers on qtensors (activation.h, conv.h, norm.h, pooling.h,
+// transform.h) for one tensor type.  Weights are numpy arrays in
+// PyTorch's layout, e.g. Conv2d(m.weight.detach().double().numpy(), ...).
+template <typename T, int NT>
+void bind_nn_functions(py::module_& math) {
+    using Tensor = qtensor_t<T, NT>;
+    using Q = qnumber_t<T, NT>;
+    math.def("relu", py::overload_cast<const Q&>(&relu<T, NT>), py::arg("x"));
+    math.def("relu", py::overload_cast<const Tensor&>(&relu<T, NT>), py::arg("x"));
     math.def(
-        "leaky_relu", py::overload_cast<const qnumber&, double>(&leaky_relu),
+        "leaky_relu", py::overload_cast<const Q&, double>(&leaky_relu<T, NT>),
         py::arg("x"), py::arg("slope") = 0.01
     );
     math.def(
-        "leaky_relu", py::overload_cast<const qtensor&, double>(&leaky_relu),
+        "leaky_relu", py::overload_cast<const Tensor&, double>(&leaky_relu<T, NT>),
         py::arg("x"), py::arg("slope") = 0.01
     );
+    math.def("sigmoid", py::overload_cast<const Q&>(&sigmoid<T, NT>), py::arg("x"));
+    math.def("sigmoid", py::overload_cast<const Tensor&>(&sigmoid<T, NT>), py::arg("x"));
+    math.def("silu", py::overload_cast<const Q&>(&silu<T, NT>), py::arg("x"));
+    math.def("silu", py::overload_cast<const Tensor&>(&silu<T, NT>), py::arg("x"));
+    math.def("tanh", py::overload_cast<const Q&>(&tanh<T, NT>), py::arg("x"));
+    math.def("tanh", py::overload_cast<const Tensor&>(&tanh<T, NT>), py::arg("x"));
     math.def(
-        "sigmoid", py::overload_cast<const qnumber&>(&sigmoid), py::arg("x")
-    );
-    math.def(
-        "sigmoid", py::overload_cast<const qtensor&>(&sigmoid), py::arg("x")
-    );
-    math.def("silu", py::overload_cast<const qnumber&>(&silu), py::arg("x"));
-    math.def("silu", py::overload_cast<const qtensor&>(&silu), py::arg("x"));
-    math.def("tanh", py::overload_cast<const qnumber&>(&tanh), py::arg("x"));
-    math.def("tanh", py::overload_cast<const qtensor&>(&tanh), py::arg("x"));
-    math.def(
-        "gelu", py::overload_cast<const qnumber&, bool>(&gelu),
+        "gelu", py::overload_cast<const Q&, bool>(&gelu<T, NT>),
         py::arg("x"), py::arg("tanh_approx") = false,
         "torch.nn.GELU (exact erf, or approximate='tanh')"
     );
     math.def(
-        "gelu", py::overload_cast<const qtensor&, bool>(&gelu),
+        "gelu", py::overload_cast<const Tensor&, bool>(&gelu<T, NT>),
         py::arg("x"), py::arg("tanh_approx") = false
     );
     math.def(
-        "softplus",
-        py::overload_cast<const qnumber&, double, double>(&softplus),
+        "softplus", py::overload_cast<const Q&, double, double>(&softplus<T, NT>),
         py::arg("x"), py::arg("beta") = 1.0, py::arg("threshold") = 20.0
     );
     math.def(
         "softplus",
-        py::overload_cast<const qtensor&, double, double>(&softplus),
+        py::overload_cast<const Tensor&, double, double>(&softplus<T, NT>),
         py::arg("x"), py::arg("beta") = 1.0, py::arg("threshold") = 20.0
     );
     math.def(
-        "softmax", &softmax, py::arg("x"), "softmax over the last dimension"
+        "softmax", &softmax<T, NT>, py::arg("x"),
+        "softmax over the last dimension"
     );
     math.def(
-        "add", &add, py::arg("a"), py::arg("b"), py::arg("scale") = 1.0,
+        "add", &add<T, NT>, py::arg("a"), py::arg("b"), py::arg("scale") = 1.0,
         "a + scale * b (residual connection)"
     );
     math.def(
-        "mul", &mul, py::arg("x"), py::arg("s"),
+        "mul", &mul<T, NT>, py::arg("x"), py::arg("s"),
         "x * s for a qnumber s (product rule on every element)"
     );
 
-    py::class_<Conv2d>(math, "Conv2d")
-        .def(
-            py::init([](const darray& weight, const opt& bias,
-                        std::size_t stride, std::size_t padding,
-                        std::size_t dilation) {
-                if (weight.ndim() != 4) {
-                    throw std::invalid_argument(
-                        "Conv2d weight must be [out, in, kh, kw]"
-                    );
-                }
-                return Conv2d(
-                    dim(weight, 1), dim(weight, 0), dim(weight, 2),
-                    dim(weight, 3), to_vec(weight), to_vec(bias),
-                    stride, padding, dilation
-                );
-            }),
-            py::arg("weight"), py::arg("bias") = py::none(),
-            py::arg("stride") = 1, py::arg("padding") = 0,
-            py::arg("dilation") = 1,
-            "torch.nn.Conv2d on one sample [C_in, H, W] (zero padding)"
-        )
-        .def("forward", &Conv2d::forward, py::arg("x"))
-        .def("__call__", &Conv2d::forward, py::arg("x"))
-        .def_readonly("in_channels", &Conv2d::in_channels)
-        .def_readonly("out_channels", &Conv2d::out_channels);
-
-    py::class_<Linear>(math, "Linear")
-        .def(
-            py::init([](const darray& weight, const opt& bias) {
-                if (weight.ndim() != 2) {
-                    throw std::invalid_argument(
-                        "Linear weight must be [out, in]"
-                    );
-                }
-                return Linear(
-                    dim(weight, 1), dim(weight, 0), to_vec(weight),
-                    to_vec(bias)
-                );
-            }),
-            py::arg("weight"), py::arg("bias") = py::none(),
-            "torch.nn.Linear over the last dimension"
-        )
-        .def("forward", &Linear::forward, py::arg("x"))
-        .def("__call__", &Linear::forward, py::arg("x"))
-        .def_readonly("in_features", &Linear::in_features)
-        .def_readonly("out_features", &Linear::out_features);
-
-    py::class_<LayerNorm>(math, "LayerNorm")
-        .def(
-            py::init([](std::size_t features, const opt& weight,
-                        const opt& bias, double eps) {
-                return LayerNorm(features, to_vec(weight), to_vec(bias), eps);
-            }),
-            py::arg("features"), py::arg("weight") = py::none(),
-            py::arg("bias") = py::none(), py::arg("eps") = 1e-5,
-            "torch.nn.LayerNorm over the last dimension"
-        )
-        .def("forward", &LayerNorm::forward, py::arg("x"))
-        .def("__call__", &LayerNorm::forward, py::arg("x"));
-
-    py::class_<ChannelLayerNorm2d>(math, "ChannelLayerNorm2d")
-        .def(
-            py::init([](std::size_t channels, const opt& weight,
-                        const opt& bias, double eps) {
-                return ChannelLayerNorm2d(
-                    channels, to_vec(weight), to_vec(bias), eps
-                );
-            }),
-            py::arg("channels"), py::arg("weight") = py::none(),
-            py::arg("bias") = py::none(), py::arg("eps") = 1e-5,
-            "layer norm over the channels of [C, H, W] at each pixel"
-        )
-        .def("forward", &ChannelLayerNorm2d::forward, py::arg("x"))
-        .def("__call__", &ChannelLayerNorm2d::forward, py::arg("x"));
-
-    py::class_<BatchNorm2d>(math, "BatchNorm2d")
-        .def(
-            py::init([](const darray& running_mean, const darray& running_var,
-                        const opt& weight, const opt& bias, double eps) {
-                return BatchNorm2d(
-                    static_cast<std::size_t>(running_mean.size()),
-                    to_vec(running_mean), to_vec(running_var),
-                    to_vec(weight), to_vec(bias), eps
-                );
-            }),
-            py::arg("running_mean"), py::arg("running_var"),
-            py::arg("weight") = py::none(), py::arg("bias") = py::none(),
-            py::arg("eps") = 1e-5,
-            "torch.nn.BatchNorm2d in eval mode"
-        )
-        .def("forward", &BatchNorm2d::forward, py::arg("x"))
-        .def("__call__", &BatchNorm2d::forward, py::arg("x"));
-
     // pooling
     math.def(
-        "max_pool2d", &max_pool2d, py::arg("x"), py::arg("kernel_size"),
+        "max_pool2d", &max_pool2d<T, NT>, py::arg("x"), py::arg("kernel_size"),
         py::arg("stride") = 0, py::arg("padding") = 0,
         "torch.nn.MaxPool2d (stride 0 = kernel_size)"
     );
     math.def(
-        "avg_pool2d", &avg_pool2d, py::arg("x"), py::arg("kernel_size"),
+        "avg_pool2d", &avg_pool2d<T, NT>, py::arg("x"), py::arg("kernel_size"),
         py::arg("stride") = 0, py::arg("padding") = 0,
         py::arg("count_include_pad") = true,
         "torch.nn.AvgPool2d (stride 0 = kernel_size)"
     );
     math.def(
-        "adaptive_avg_pool2d", &adaptive_avg_pool2d, py::arg("x"),
+        "adaptive_avg_pool2d", &adaptive_avg_pool2d<T, NT>, py::arg("x"),
         py::arg("out_h"), py::arg("out_w"), "torch.nn.AdaptiveAvgPool2d"
     );
     math.def(
         "weighted_avg_pool",
-        [](const qtensor& x, const darray& weight, bool normalize) {
+        [](const Tensor& x, const darray& weight, bool normalize) {
             return weighted_avg_pool(x, to_vec(weight), normalize);
         },
         py::arg("x"), py::arg("weight"), py::arg("normalize") = true,
         "[C, H, W] -> [C]: sum x w / sum w with a fixed weight map [H, W]"
     );
     math.def(
-        "global_avg_pool", &global_avg_pool, py::arg("x"),
+        "global_avg_pool", &global_avg_pool<T, NT>, py::arg("x"),
         "[C, H, W] -> [C] mean over the pixels"
     );
 
     // pixel rearrangements
     math.def(
-        "rot90", &rot90, py::arg("x"), py::arg("k") = 1,
+        "rot90", &rot90<T, NT>, py::arg("x"), py::arg("k") = 1,
         "torch.rot90(x, k, dims=(-2, -1))"
     );
     math.def(
-        "flip", &flip, py::arg("x"), py::arg("dim"),
+        "flip", &flip<T, NT>, py::arg("x"), py::arg("dim"),
         "torch.flip(x, [dim]) for dim 1 (rows) or 2 (columns)"
     );
     math.def(
-        "crop2d", &crop2d, py::arg("x"), py::arg("y0"), py::arg("x0"),
+        "crop2d", &crop2d<T, NT>, py::arg("x"), py::arg("y0"), py::arg("x0"),
         py::arg("h"), py::arg("w"), "x[:, y0:y0 + h, x0:x0 + w]"
     );
     math.def(
-        "pad2d", &pad2d, py::arg("x"), py::arg("padding"),
+        "pad2d", &pad2d<T, NT>, py::arg("x"), py::arg("padding"),
         py::arg("mode") = "constant",
         "F.pad(x, (p, p, p, p), mode) for constant (zero) or replicate"
+    );
+}
+
+// forward / __call__ of a layer for one tensor type
+template <typename Layer, typename T, int NT>
+void bind_forward(py::class_<Layer>& cls) {
+    cls.def(
+        "forward", &Layer::template forward<T, NT>, py::arg("x")
+    );
+    cls.def(
+        "__call__", &Layer::template forward<T, NT>, py::arg("x")
+    );
+}
+
+template <typename Layer>
+void bind_forwards(py::class_<Layer>& cls) {
+    bind_forward<Layer, double, 4>(cls);
+    bind_forward<Layer, double, 2>(cls);
+    bind_forward<Layer, float, 4>(cls);
+    bind_forward<Layer, float, 2>(cls);
+}
+
+void export_nn(py::module_& math) {
+    using opt = std::optional<darray>;
+
+    bind_nn_functions<double, 4>(math);
+    bind_nn_functions<double, 2>(math);
+    bind_nn_functions<float, 4>(math);
+    bind_nn_functions<float, 2>(math);
+
+    py::class_<Conv2d> conv(math, "Conv2d");
+    conv.def(
+        py::init([](const darray& weight, const opt& bias,
+                    std::size_t stride, std::size_t padding,
+                    std::size_t dilation) {
+            if (weight.ndim() != 4) {
+                throw std::invalid_argument(
+                    "Conv2d weight must be [out, in, kh, kw]"
+                );
+            }
+            return Conv2d(
+                dim(weight, 1), dim(weight, 0), dim(weight, 2),
+                dim(weight, 3), to_vec(weight), to_vec(bias),
+                stride, padding, dilation
+            );
+        }),
+        py::arg("weight"), py::arg("bias") = py::none(),
+        py::arg("stride") = 1, py::arg("padding") = 0,
+        py::arg("dilation") = 1,
+        "torch.nn.Conv2d on one sample [C_in, H, W] (zero padding); "
+        "stride 1 / dilation 1 run the blocked SIMD kernel"
+    );
+    conv.def_readonly("in_channels", &Conv2d::in_channels);
+    conv.def_readonly("out_channels", &Conv2d::out_channels);
+    bind_forwards(conv);
+
+    py::class_<Linear> linear(math, "Linear");
+    linear.def(
+        py::init([](const darray& weight, const opt& bias) {
+            if (weight.ndim() != 2) {
+                throw std::invalid_argument("Linear weight must be [out, in]");
+            }
+            return Linear(
+                dim(weight, 1), dim(weight, 0), to_vec(weight), to_vec(bias)
+            );
+        }),
+        py::arg("weight"), py::arg("bias") = py::none(),
+        "torch.nn.Linear over the last dimension"
+    );
+    linear.def_readonly("in_features", &Linear::in_features);
+    linear.def_readonly("out_features", &Linear::out_features);
+    bind_forwards(linear);
+
+    py::class_<LayerNorm> lnorm(math, "LayerNorm");
+    lnorm.def(
+        py::init([](std::size_t features, const opt& weight,
+                    const opt& bias, double eps) {
+            return LayerNorm(features, to_vec(weight), to_vec(bias), eps);
+        }),
+        py::arg("features"), py::arg("weight") = py::none(),
+        py::arg("bias") = py::none(), py::arg("eps") = 1e-5,
+        "torch.nn.LayerNorm over the last dimension"
+    );
+    bind_forwards(lnorm);
+
+    py::class_<ChannelLayerNorm2d> cnorm(math, "ChannelLayerNorm2d");
+    cnorm.def(
+        py::init([](std::size_t channels, const opt& weight,
+                    const opt& bias, double eps) {
+            return ChannelLayerNorm2d(
+                channels, to_vec(weight), to_vec(bias), eps
+            );
+        }),
+        py::arg("channels"), py::arg("weight") = py::none(),
+        py::arg("bias") = py::none(), py::arg("eps") = 1e-5,
+        "layer norm over the channels of [C, H, W] at each pixel"
+    );
+    bind_forwards(cnorm);
+
+    py::class_<BatchNorm2d> bnorm(math, "BatchNorm2d");
+    bnorm.def(
+        py::init([](const darray& running_mean, const darray& running_var,
+                    const opt& weight, const opt& bias, double eps) {
+            return BatchNorm2d(
+                static_cast<std::size_t>(running_mean.size()),
+                to_vec(running_mean), to_vec(running_var),
+                to_vec(weight), to_vec(bias), eps
+            );
+        }),
+        py::arg("running_mean"), py::arg("running_var"),
+        py::arg("weight") = py::none(), py::arg("bias") = py::none(),
+        py::arg("eps") = 1e-5,
+        "torch.nn.BatchNorm2d in eval mode"
+    );
+    bind_forwards(bnorm);
+
+    math.def(
+        "cpu_has_avx2_fma", &conv_detail::cpu_has_avx2_fma,
+        "whether the convolution runs its AVX2 + FMA kernel on this CPU"
     );
 }
 
@@ -314,122 +546,17 @@ void export_nn(py::module_& math) {
             .def(double() * py::self)
             .def(py::self / double())
             .def(double() / py::self);
-        math.def("exp", &exp, "Compute the exponential of a qnumber");
-        math.def("pow", &pow, "Compute the exponential of a qnumber");
+        math.def("exp", &exp<double, 4>, "Compute the exponential of a qnumber");
+        math.def("pow", &pow<double, 4>, "Compute the exponential of a qnumber");
 
-        using size_type = qtensor::size_type;
-        py::class_<qtensor>(math, "qtensor")
-            .def(py::init<>())
-            .def(py::init<const std::vector<size_type>&>())
-            .def(py::init<const std::vector<size_type>&, const qnumber&>())
-            .def_static(
-                "from_flat",
-                [](std::vector<qnumber> data,
-                   const std::vector<size_type>& shape) {
-                    return qtensor::from_vector(std::move(data), shape);
-                },
-                py::arg("data"),
-                py::arg("shape"),
-                "Create a qtensor from a flat buffer of qnumbers"
-            )
-            .def_static(
-                "from_image",
-                [](std::vector<qnumber> data,
-                   size_type height,
-                   size_type width) {
-                    return qtensor::from_image(
-                        std::move(data),
-                        height,
-                        width
-                    );
-                },
-                py::arg("data"),
-                py::arg("height"),
-                py::arg("width"),
-                "Create a qtensor from ImageQ output"
-            )
-            .def_property_readonly(
-                "shape",
-                [](const qtensor& self) { return self.shape(); },
-                "Tensor shape expressed as a tuple of dimension lengths"
-            )
-            .def_property_readonly(
-                "strides",
-                [](const qtensor& self) { return self.strides(); },
-                "Tensor strides in units of qnumbers"
-            )
-            .def_property_readonly(
-                "ndim",
-                [](const qtensor& self) { return self.ndim(); },
-                "Number of tensor dimensions"
-            )
-            .def("size", &qtensor::size, "Total number of qnumbers")
-            .def("empty", &qtensor::empty, "Return True if the tensor is empty")
-            .def(
-                "is_contiguous",
-                &qtensor::is_contiguous,
-                "Return True if the tensor uses contiguous storage"
-            )
-            .def(
-                "reshape",
-                &qtensor::reshape,
-                py::arg("shape"),
-                "Return a reshaped view of the tensor"
-            )
-            .def(
-                "slice",
-                &qtensor::slice,
-                py::arg("dim"),
-                py::arg("start"),
-                py::arg("stop"),
-                py::arg("step") = 1,
-                "Return a view defined by slicing a single dimension"
-            )
-            .def(
-                "select",
-                &qtensor::select,
-                py::arg("dim"),
-                py::arg("index"),
-                "Return a view with a dimension fixed to a single index"
-            )
-            .def(
-                "get",
-                [](const qtensor& self, const std::vector<size_type>& indices) {
-                    return self.at(indices);
-                },
-                py::arg("indices"),
-                "Access a single qnumber using multidimensional indices"
-            )
-            .def(
-                "set",
-                [](qtensor& self,
-                   const std::vector<size_type>& indices,
-                   const qnumber& value) {
-                    self.at(indices) = value;
-                },
-                py::arg("indices"),
-                py::arg("value"),
-                "Assign a qnumber using multidimensional indices"
-            )
-            .def(
-                "to_list",
-                &qtensor::to_vector,
-                "Return a flat list of qnumbers in row-major order"
-            )
-            .def_static(
-                "from_array",
-                &qtensor_from_array,
-                py::arg("array"),
-                "qtensor of shape [...] from a float array [..., 5] in the "
-                "order (v, g1, g2, x1, x2).  The [5, H, W] output of "
-                "ImageQ.prepare_qnumber_image becomes a one-channel "
-                "[1, H, W] tensor with np.moveaxis(q, 0, -1)[None]"
-            )
-            .def(
-                "to_array",
-                &qtensor_to_array,
-                "Return the numpy array [..., 5] (v, g1, g2, x1, x2)"
-            );
+        bind_qnumber_small<double, 2>(math);
+        bind_qnumber_small<float, 4>(math);
+        bind_qnumber_small<float, 2>(math);
+
+        bind_qtensor<double, 4>(math);
+        bind_qtensor<double, 2>(math);
+        bind_qtensor<float, 4>(math);
+        bind_qtensor<float, 2>(math);
 
         py::class_<qmatrix<6, 6>>(math, "qmatrix6")
             .def(py::init<>())

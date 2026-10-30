@@ -15,25 +15,107 @@ namespace anacal {
 namespace math {
 
 namespace detail {
-// Normalise n values spaced by stride in place: (x - mean) / sqrt(var +
-// eps), with the biased variance as in PyTorch.
-inline void normalize_strided(
-    qnumber* x, std::size_t n, std::size_t stride, double eps
+// Normalise G groups of n elements in place, (x - mean) / sqrt(var + eps)
+// with the biased variance as in PyTorch.  Element i of group g sits at
+// plane index g * stride_group + i * stride_elem; the loops run over the
+// groups innermost, so a group stride of 1 (the per-pixel channel norm)
+// vectorises.  Tangents: with m_k = mean of t_k and
+// dvar_k = 2 mean((v - m)(t_k - m_k)),
+//   y_k = (t_k - m_k) inv + (v - m) (-1/2) inv^3 dvar_k.
+template <typename T, int NT>
+inline void normalize_groups(
+    qtensor_t<T, NT>& x, std::size_t G, std::size_t n,
+    std::size_t stride_group, std::size_t stride_elem, double eps
 ) {
-    qnumber mean;
+    constexpr int NC = qtensor_t<T, NT>::ncomp;
+    std::vector<T> mean(G, T(0)), inv(G);
+    std::vector<std::array<T, NC>> dstat(G);  // [0]: var, [k]: dvar_k
+    for (auto& a : dstat) a.fill(T(0));
+    T* v = x.plane(0);
     for (std::size_t i = 0; i < n; ++i) {
-        mean = mean + x[i * stride];
+        for (std::size_t g = 0; g < G; ++g) {
+            mean[g] += v[g * stride_group + i * stride_elem];
+        }
     }
-    mean = mean / static_cast<double>(n);
-    qnumber var;
-    for (std::size_t i = 0; i < n; ++i) {
-        const qnumber d = x[i * stride] - mean;
-        var = var + d * d;
+    const T invn = T(1) / static_cast<T>(n);
+    for (std::size_t g = 0; g < G; ++g) {
+        mean[g] *= invn;
     }
-    var = var / static_cast<double>(n);
-    const qnumber inv = 1.0 / sqrt(var + eps);
+    // tangent means
+    std::vector<std::array<T, NC>> tmean(G);
+    for (auto& a : tmean) a.fill(T(0));
+    for (int c = 1; c < NC; ++c) {
+        const T* t = x.plane(c);
+        for (std::size_t i = 0; i < n; ++i) {
+            for (std::size_t g = 0; g < G; ++g) {
+                tmean[g][c] += t[g * stride_group + i * stride_elem];
+            }
+        }
+        for (std::size_t g = 0; g < G; ++g) {
+            tmean[g][c] *= invn;
+        }
+    }
+    // variance and its tangents
     for (std::size_t i = 0; i < n; ++i) {
-        x[i * stride] = (x[i * stride] - mean) * inv;
+        for (std::size_t g = 0; g < G; ++g) {
+            const T d = v[g * stride_group + i * stride_elem] - mean[g];
+            dstat[g][0] += d * d;
+        }
+    }
+    for (int c = 1; c < NC; ++c) {
+        const T* t = x.plane(c);
+        for (std::size_t i = 0; i < n; ++i) {
+            for (std::size_t g = 0; g < G; ++g) {
+                const std::size_t idx = g * stride_group + i * stride_elem;
+                dstat[g][c] += T(2) * (v[idx] - mean[g]) * (t[idx] - tmean[g][c]);
+            }
+        }
+    }
+    for (std::size_t g = 0; g < G; ++g) {
+        const T var = dstat[g][0] * invn;
+        inv[g] = T(1) / std::sqrt(var + T(eps));
+        for (int c = 1; c < NC; ++c) {
+            // d inv = -1/2 inv^3 dvar
+            dstat[g][c] = T(-0.5) * inv[g] * inv[g] * inv[g] * (dstat[g][c] * invn);
+        }
+    }
+    // apply: tangents first (they need the un-normalised value)
+    for (int c = 1; c < NC; ++c) {
+        T* t = x.plane(c);
+        for (std::size_t i = 0; i < n; ++i) {
+            for (std::size_t g = 0; g < G; ++g) {
+                const std::size_t idx = g * stride_group + i * stride_elem;
+                t[idx] = (t[idx] - tmean[g][c]) * inv[g] + (v[idx] - mean[g]) * dstat[g][c];
+            }
+        }
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+        for (std::size_t g = 0; g < G; ++g) {
+            const std::size_t idx = g * stride_group + i * stride_elem;
+            v[idx] = (v[idx] - mean[g]) * inv[g];
+        }
+    }
+}
+
+// x = x * a + b with constants a, b on the elements plane index
+// g * stride_group + i * stride_elem (i fixed): an affine map of one
+// feature / channel i across the G groups.
+template <typename T, int NT>
+inline void affine_feature(
+    qtensor_t<T, NT>& x, std::size_t G, std::size_t stride_group,
+    std::size_t base, double a, double b
+) {
+    constexpr int NC = qtensor_t<T, NT>::ncomp;
+    const T ta = static_cast<T>(a), tb = static_cast<T>(b);
+    T* v = x.plane(0);
+    for (std::size_t g = 0; g < G; ++g) {
+        v[base + g * stride_group] = v[base + g * stride_group] * ta + tb;
+    }
+    for (int c = 1; c < NC; ++c) {
+        T* t = x.plane(c);
+        for (std::size_t g = 0; g < G; ++g) {
+            t[base + g * stride_group] *= ta;
+        }
     }
 }
 } // namespace detail
@@ -63,25 +145,22 @@ struct LayerNorm {
         }
     }
 
-    qtensor forward(const qtensor& x) const {
+    template <typename T, int NT>
+    qtensor_t<T, NT> forward(const qtensor_t<T, NT>& x) const {
         if (x.ndim() == 0 || x.shape().back() != features) {
             throw std::invalid_argument(
                 "LayerNorm: last dimension must be features"
             );
         }
-        qtensor out = qtensor::from_vector(x.to_vector(), x.shape());
-        qnumber* p = out.data();
+        qtensor_t<T, NT> out = x.copy();
         const std::size_t rows = out.size() / features;
-        for (std::size_t r = 0; r < rows; ++r) {
-            qnumber* row = p + r * features;
-            detail::normalize_strided(row, features, 1, eps);
+        detail::normalize_groups(out, rows, features, features, 1, eps);
+        if (!weight.empty() || !bias.empty()) {
             for (std::size_t i = 0; i < features; ++i) {
-                if (!weight.empty()) {
-                    row[i] = row[i] * weight[i];
-                }
-                if (!bias.empty()) {
-                    row[i] = row[i] + bias[i];
-                }
+                detail::affine_feature(
+                    out, rows, features, i,
+                    weight.empty() ? 1.0 : weight[i], bias.empty() ? 0.0 : bias[i]
+                );
             }
         }
         return out;
@@ -119,26 +198,22 @@ struct ChannelLayerNorm2d {
         }
     }
 
-    qtensor forward(const qtensor& x) const {
+    template <typename T, int NT>
+    qtensor_t<T, NT> forward(const qtensor_t<T, NT>& x) const {
         if (x.ndim() != 3 || x.shape()[0] != channels) {
             throw std::invalid_argument(
                 "ChannelLayerNorm2d: input must be [channels, H, W]"
             );
         }
-        qtensor out = qtensor::from_vector(x.to_vector(), x.shape());
-        qnumber* p = out.data();
+        qtensor_t<T, NT> out = x.copy();
         const std::size_t npix = x.shape()[1] * x.shape()[2];
-        for (std::size_t i = 0; i < npix; ++i) {
-            detail::normalize_strided(p + i, channels, npix, eps);
-        }
+        detail::normalize_groups(out, npix, channels, 1, npix, eps);
         if (!weight.empty() || !bias.empty()) {
             for (std::size_t c = 0; c < channels; ++c) {
-                qnumber* plane = p + c * npix;
-                const double a = weight.empty() ? 1.0 : weight[c];
-                const double b = bias.empty() ? 0.0 : bias[c];
-                for (std::size_t i = 0; i < npix; ++i) {
-                    plane[i] = plane[i] * a + b;
-                }
+                detail::affine_feature(
+                    out, npix, 1, c * npix,
+                    weight.empty() ? 1.0 : weight[c], bias.empty() ? 0.0 : bias[c]
+                );
             }
         }
         return out;
@@ -177,20 +252,17 @@ struct BatchNorm2d {
         }
     }
 
-    qtensor forward(const qtensor& x) const {
+    template <typename T, int NT>
+    qtensor_t<T, NT> forward(const qtensor_t<T, NT>& x) const {
         if (x.ndim() != 3 || x.shape()[0] != channels) {
             throw std::invalid_argument(
                 "BatchNorm2d: input must be [channels, H, W]"
             );
         }
-        qtensor out = qtensor::from_vector(x.to_vector(), x.shape());
-        qnumber* p = out.data();
+        qtensor_t<T, NT> out = x.copy();
         const std::size_t npix = x.shape()[1] * x.shape()[2];
         for (std::size_t c = 0; c < channels; ++c) {
-            qnumber* plane = p + c * npix;
-            for (std::size_t i = 0; i < npix; ++i) {
-                plane[i] = plane[i] * scale[c] + shift[c];
-            }
+            detail::affine_feature(out, npix, 1, c * npix, scale[c], shift[c]);
         }
         return out;
     }

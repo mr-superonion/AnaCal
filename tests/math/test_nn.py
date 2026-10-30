@@ -395,3 +395,131 @@ def test_d4_shape_network_matches_torch():
     np.testing.assert_allclose(got, want, rtol=1e-10, atol=1e-13)
     # a nonzero response in every slot, so the comparison is not vacuous
     assert np.all(np.abs(want[:, 1:]) > 1e-6)
+
+
+# ---------------------------------------------------------------------------
+# The four tensor types: scalar float / double, 2 or 4 tangents.  The same
+# layers run on all of them; the float results agree with PyTorch's float64
+# forward mode to single precision, the 2-tangent types carry (v, g1, g2).
+# ---------------------------------------------------------------------------
+
+TYPES = [
+    (math.qtensor, 1e-11, 1e-12),
+    (math.qtensor2, 1e-11, 1e-12),
+    (math.qtensorf, 2e-4, 1e-5),
+    (math.qtensor2f, 2e-4, 1e-5),
+]
+
+
+def test_tensor_types_astype_roundtrip():
+    arr = qarray((2, 3, 4), seed=11)
+    q = math.qtensor.from_array(arr)
+    assert math.qtensor.dtype == "float64" and math.qtensor.tangents == 4
+    assert math.qtensor2f.dtype == "float32" and math.qtensor2f.tangents == 2
+    q2 = q.astype("float64", 2)
+    assert isinstance(q2, math.qtensor2)
+    np.testing.assert_array_equal(q2.to_array(), arr[..., :3])
+    qf = q.astype("float32", 4)
+    assert isinstance(qf, math.qtensorf) and qf.to_array().dtype == np.float32
+    np.testing.assert_allclose(qf.to_array(), arr, rtol=1e-6)
+    back = qf.astype("float64", 4)
+    assert isinstance(back, math.qtensor)
+    # a dropped position tangent comes back as zero
+    z = q2.astype("float64", 4).to_array()
+    np.testing.assert_array_equal(z[..., 3:], 0.0)
+    np.testing.assert_array_equal(z[..., :3], arr[..., :3])
+    # the element access returns the matching qnumber type
+    assert isinstance(q2.get([0, 1, 2]), math.qnumber2)
+    np.testing.assert_array_equal(q2.get([0, 1, 2]).to_array(), arr[0, 1, 2, :3])
+
+
+@pytest.mark.parametrize("cls, rtol, atol", TYPES)
+def test_conv2d_types(cls, rtol, atol):
+    rng = np.random.default_rng(12)
+    cin, cout = 3, 6
+    w = rng.normal(size=(cout, cin, 3, 3))
+    b = rng.normal(size=cout)
+    conv = math.Conv2d(w, b, padding=1)
+    arr = qarray((cin, 13, 11), seed=13)
+    nc = cls.tangents + 1
+    got = conv(cls.from_array(arr[..., :nc])).to_array()
+    want = reference(
+        lambda x: F.conv2d(x[None], t(w), t(b), padding=1)[0], arr
+    )[..., :nc]
+    np.testing.assert_allclose(got, want, rtol=rtol, atol=atol)
+
+
+@pytest.mark.parametrize("cls, rtol, atol", TYPES)
+def test_channel_layer_norm_types(cls, rtol, atol):
+    rng = np.random.default_rng(14)
+    c = 5
+    w = 1.0 + 0.1 * rng.normal(size=(1, c, 1, 1))
+    b = 0.1 * rng.normal(size=(1, c, 1, 1))
+    norm = math.ChannelLayerNorm2d(c, w, b)
+    arr = qarray((c, 6, 7), seed=15)
+    nc = cls.tangents + 1
+
+    def ref(x):
+        mean = x.mean(dim=0, keepdim=True)
+        var = (x - mean).pow(2).mean(dim=0, keepdim=True)
+        return (x - mean) * torch.rsqrt(var + 1e-5) * t(w[0]) + t(b[0])
+
+    got = norm(cls.from_array(arr[..., :nc])).to_array()
+    want = reference(ref, arr)[..., :nc]
+    np.testing.assert_allclose(got, want, rtol=rtol, atol=atol)
+
+
+@pytest.mark.parametrize("cls, rtol, atol", TYPES)
+def test_d4_shape_network_types(cls, rtol, atol):
+    n = 16
+    blocks, heads = make_weights()
+    wnorm, wpool = gaussian_weight(n, 4.0), gaussian_weight(n, 3.0)
+    rng = np.random.default_rng(22)
+    y, x = np.mgrid[:n, :n] - (n - 1) / 2.0
+    arr = rng.normal(0.0, 0.02, (n, n, 5))
+    arr[..., 0] += 0.3 * np.exp(-((x - 0.6) ** 2 / 6.0 + (y + 0.4) ** 2 / 4.0))
+    nc = cls.tangents + 1
+    q = cls.from_array(arr[None, ..., :nc])
+    got = anacal_net_typed(q, blocks, heads, wnorm, wpool)
+    want = reference(
+        lambda img: torch_net(img, blocks, heads, wnorm, wpool), arr
+    )[:, :nc]
+    np.testing.assert_allclose(got, want, rtol=rtol, atol=atol)
+
+
+def anacal_net_typed(q, blocks, heads, wnorm, wpool, res=0.1):
+    """anacal_net for any tensor type: the pooled orbit mean is rebuilt
+    with the input's class."""
+    cls = type(q)
+    m = math.weighted_avg_pool(q, wnorm, normalize=False).get([0]) * 100.0
+    norm = 1.0 + math.softplus(m - 1.0, 10.0, 20.0)
+    x = math.mul(q, 1.0 / norm)
+    convs = [
+        (math.Conv2d(b["conv_w"], b["conv_b"], padding=1),
+         math.ChannelLayerNorm2d(b["conv_w"].shape[0], b["norm_w"],
+                                 b["norm_b"]),
+         None if b["skip_w"] is None else math.Conv2d(b["skip_w"]))
+        for b in blocks
+    ]
+    orbit = [math.rot90(x, k) for k in range(4)]
+    orbit += [math.flip(o, 1) for o in orbit]
+    feats = []
+    for g in orbit:
+        f = g
+        for conv, norm2d, skip in convs:
+            resid = f if skip is None else skip(f)
+            f = math.add(math.gelu(norm2d(conv(f))), resid, res)
+        feats.append(f)
+    inv = [math.rot90(feats[k], -k) for k in range(4)]
+    inv += [math.rot90(math.flip(feats[4 + k], 1), -k) for k in range(4)]
+    lins = {k: [math.Linear(w) for w in ws] for k, ws in heads.items()}
+    out = []
+    for key, signs in (("e1", SIGNS_E1), ("e2", SIGNS_E2)):
+        fm = sum(s * f.to_array().astype(np.float64) for s, f in zip(signs, inv)) / 8.0
+        v = math.weighted_avg_pool(cls.from_array(fm), wpool)
+        for i, lin in enumerate(lins[key]):
+            v = lin(v)
+            if i < len(lins[key]) - 1:
+                v = math.tanh(v)
+        out.append(v.to_array())
+    return np.concatenate(out)
