@@ -388,6 +388,107 @@ void bind_forwards(py::class_<Layer>& cls) {
     bind_forward<Layer, float, 2>(cls);
 }
 
+
+// The fused D4 shape-network runner, one class per scalar type; measure()
+// accepts the 2- and the 4-tangent stamp of that scalar.
+template <typename T>
+void bind_d4net(py::module_& math, const char* name) {
+    using Net = D4ShapeNet<T>;
+    using Block = typename Net::Block;
+    auto tovec = [](const darray& a) {
+        return std::vector<T>(a.data(), a.data() + a.size());
+    };
+    py::class_<Net>(math, name)
+        .def(
+            py::init([tovec](const std::vector<py::tuple>& blocks,
+                             const std::vector<darray>& head_e1,
+                             const std::vector<darray>& head_e2,
+                             const darray& wnorm, const darray& wpool,
+                             double res, double eps) {
+                std::vector<Block> blks;
+                for (const py::tuple& t : blocks) {
+                    if (t.size() != 5) {
+                        throw std::invalid_argument(
+                            "block = (conv_w [co, ci, 3, 3], conv_b, norm_w, norm_b, skip_w or None)"
+                        );
+                    }
+                    const darray w = t[0].cast<darray>();
+                    if (w.ndim() != 4 || w.shape(2) != 3 || w.shape(3) != 3) {
+                        throw std::invalid_argument("conv_w must be [co, ci, 3, 3]");
+                    }
+                    Block b;
+                    b.cout = dim(w, 0);
+                    b.cin = dim(w, 1);
+                    b.w = tovec(w);
+                    b.b = tovec(t[1].cast<darray>());
+                    b.nw = tovec(t[2].cast<darray>());
+                    b.nb = tovec(t[3].cast<darray>());
+                    if (!t[4].is_none()) {
+                        b.skip = tovec(t[4].cast<darray>());
+                    }
+                    blks.push_back(std::move(b));
+                }
+                if (head_e1.size() != 4 || head_e2.size() != 4) {
+                    throw std::invalid_argument("heads: 4 weight matrices [out, in] each");
+                }
+                std::vector<std::size_t> dims;
+                dims.push_back(dim(head_e1[0], 1));
+                for (const darray& h : head_e1) dims.push_back(dim(h, 0));
+                std::vector<std::vector<T>> h1, h2;
+                for (const darray& h : head_e1) h1.push_back(tovec(h));
+                for (const darray& h : head_e2) h2.push_back(tovec(h));
+                if (wnorm.ndim() != 2 || wnorm.shape(0) != wnorm.shape(1)) {
+                    throw std::invalid_argument("wnorm must be [n, n]");
+                }
+                const std::size_t n = dim(wnorm, 0);
+                return Net(
+                    std::move(blks), std::move(h1), std::move(h2), std::move(dims),
+                    tovec(wnorm), tovec(wpool), n, static_cast<T>(res), static_cast<T>(eps)
+                );
+            }),
+            py::arg("blocks"), py::arg("head_e1"), py::arg("head_e2"),
+            py::arg("wnorm"), py::arg("wpool"), py::arg("res") = 0.1,
+            py::arg("eps") = 1e-5,
+            "Forward8_fixW_CNN from its weights: blocks = [(conv_w, conv_b, "
+            "norm_w, norm_b, skip_w | None), ...], the two heads as 4 linear "
+            "weights each, the brightness and pooling weight maps [n, n]"
+        )
+        .def_property_readonly("uses_avx2", &Net::uses_avx2)
+        .def("set_profile", &Net::set_profile, py::arg("on"))
+        .def("profile", [](const Net& net) {
+            static const char* names[9] = {
+                "orbit", "conv_direct", "wino_prepare", "wino_gemm",
+                "wino_output", "skip", "epilogue", "accumulate", "heads"
+            };
+            py::dict d;
+            const auto p = net.profile();
+            for (int i = 0; i < 9; ++i) d[names[i]] = p[i];
+            return d;
+        }, "accumulated stage times in seconds (after set_profile(True))")
+        .def(
+            "measure",
+            [](Net& net, const qtensor_t<T, 2>& stamp) {
+                const auto r = net.template measure<2>(stamp);
+                py::array_t<T> out({2, 3});
+                std::copy(r.begin(), r.end(), out.mutable_data());
+                return out;
+            },
+            py::arg("stamp"),
+            "(e1, e2) x (v, g1, g2) of a [1, n, n] stamp with two tangents"
+        )
+        .def(
+            "measure",
+            [](Net& net, const qtensor_t<T, 4>& stamp) {
+                const auto r = net.template measure<4>(stamp);
+                py::array_t<T> out({2, 5});
+                std::copy(r.begin(), r.end(), out.mutable_data());
+                return out;
+            },
+            py::arg("stamp"),
+            "(e1, e2) x (v, g1, g2, x1, x2) of a [1, n, n] stamp with four tangents"
+        );
+}
+
 void export_nn(py::module_& math) {
     using opt = std::optional<darray>;
 
@@ -481,6 +582,9 @@ void export_nn(py::module_& math) {
         "torch.nn.BatchNorm2d in eval mode"
     );
     bind_forwards(bnorm);
+
+    bind_d4net<float>(math, "D4ShapeNet32");
+    bind_d4net<double>(math, "D4ShapeNet64");
 
     math.def(
         "cpu_has_avx2_fma", &conv_detail::cpu_has_avx2_fma,

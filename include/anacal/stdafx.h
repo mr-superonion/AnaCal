@@ -4,6 +4,7 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 #include <memory>
+#include <chrono>
 #include <complex>
 #include <tuple>
 #include <cmath>

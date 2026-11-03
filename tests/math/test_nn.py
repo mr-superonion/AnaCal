@@ -430,7 +430,9 @@ def test_tensor_types_astype_roundtrip():
     np.testing.assert_array_equal(z[..., :3], arr[..., :3])
     # the element access returns the matching qnumber type
     assert isinstance(q2.get([0, 1, 2]), math.qnumber2)
-    np.testing.assert_array_equal(q2.get([0, 1, 2]).to_array(), arr[0, 1, 2, :3])
+    np.testing.assert_array_equal(
+        q2.get([0, 1, 2]).to_array(), arr[0, 1, 2, :3]
+    )
 
 
 @pytest.mark.parametrize("cls, rtol, atol", TYPES)
@@ -515,7 +517,9 @@ def anacal_net_typed(q, blocks, heads, wnorm, wpool, res=0.1):
     lins = {k: [math.Linear(w) for w in ws] for k, ws in heads.items()}
     out = []
     for key, signs in (("e1", SIGNS_E1), ("e2", SIGNS_E2)):
-        fm = sum(s * f.to_array().astype(np.float64) for s, f in zip(signs, inv)) / 8.0
+        fm = sum(
+            s * f.to_array().astype(np.float64) for s, f in zip(signs, inv)
+        ) / 8.0
         v = math.weighted_avg_pool(cls.from_array(fm), wpool)
         for i, lin in enumerate(lins[key]):
             v = lin(v)

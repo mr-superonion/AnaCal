@@ -10,6 +10,7 @@
 #include "math/conv.h"
 #include "math/norm.h"
 #include "math/transform.h"
+#include "math/d4net.h"
 #include <pybind11/operators.h>
 
 namespace anacal {
