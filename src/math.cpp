@@ -468,7 +468,12 @@ void bind_d4net(py::module_& math, const char* name) {
         .def(
             "measure",
             [](Net& net, const qtensor_t<T, 2>& stamp) {
-                const auto r = net.template measure<2>(stamp);
+                std::array<T, 6> r;
+                {
+                    // the runner touches only its own buffers and the stamp
+                    py::gil_scoped_release release;
+                    r = net.template measure<2>(stamp);
+                }
                 py::array_t<T> out({2, 3});
                 std::copy(r.begin(), r.end(), out.mutable_data());
                 return out;
@@ -479,7 +484,11 @@ void bind_d4net(py::module_& math, const char* name) {
         .def(
             "measure",
             [](Net& net, const qtensor_t<T, 4>& stamp) {
-                const auto r = net.template measure<4>(stamp);
+                std::array<T, 10> r;
+                {
+                    py::gil_scoped_release release;
+                    r = net.template measure<4>(stamp);
+                }
                 py::array_t<T> out({2, 5});
                 std::copy(r.begin(), r.end(), out.mutable_data());
                 return out;
