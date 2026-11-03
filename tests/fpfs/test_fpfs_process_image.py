@@ -56,3 +56,50 @@ def test_grid_psf_matches_constant_psf():
     print("native per-source time: ", t2 - t1)
     assert len(out1) == len(detection)
     assert np.all(out1 == out2)
+
+
+def test_grid_psf_matches_constant_psf_spectral():
+    """Spectral renoising: the per-source-PSF path must also equal the
+    constant-PSF path bit for bit, because the renoise kernels (rho,
+    eta_0, tau_j) are built once per call from the per-cell psf_array;
+    only the deconvolution filter chi / p is per source."""
+    noise_std = 0.37
+    noise_seed = 1
+    pixel_scale = 0.2
+    fpfs_config = anacal.fpfs.FpfsConfig(
+        sigma_shapelets1=0.52,
+        sigma_shapelets2=0.45,
+    )
+    gal_array, psf_array = cosmos_scene()
+    rng = np.random.RandomState(noise_seed)
+    gal_array = gal_array + rng.normal(scale=noise_std, size=gal_array.shape)
+    noise_array = np.random.RandomState(noise_seed + 10**6).normal(
+        scale=noise_std, size=gal_array.shape
+    )
+    noise2_array = np.random.RandomState(noise_seed + 2 * 10**6).normal(
+        scale=noise_std, size=gal_array.shape
+    )
+    detection = cosmos_centres()
+    kwargs = dict(
+        fpfs_config=fpfs_config,
+        mag_zero=30.0,
+        gal_array=gal_array,
+        psf_array=psf_array,
+        pixel_scale=pixel_scale,
+        noise_variance=max(noise_std**2, 0.23),
+        noise_array=noise_array,
+        noise2_array=noise2_array,
+        detection=detection,
+        renoise_mode="spectral",
+    )
+    out1 = anacal.fpfs.process_image(**kwargs)
+    grid_model = anacal.psf.GridPsfModel(
+        stamps=np.ascontiguousarray(
+            psf_array[None, None, :, :], dtype=np.float64
+        ),
+        dx=float(gal_array.shape[1]),
+        dy=float(gal_array.shape[0]),
+    )
+    out2 = anacal.fpfs.process_image(psf_model=grid_model, **kwargs)
+    assert len(out1) == len(detection)
+    assert np.all(out1 == out2)

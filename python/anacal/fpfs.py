@@ -261,14 +261,18 @@ def _measure_kernel_catalog(
     else:
         # The RAW noise spectrum of the patch on the stamp grid, from the
         # correlation function (white without one), in BOTH modes.  For
-        # Option 2 ("spectral") the per-PSF kernels symmetrize this raw
-        # spectrum in C++ -- once for a constant PSF or per source for a
-        # native model -- and ForceTask applies all three kernels in
-        # Fourier space per stamp: the spin-2 filler g on the second
-        # realization noise2_array, the added noise eta_0 and the assigned
-        # responses tau_j on noise_array.  The covariance is summed over
-        # the total noise spectrum (image noise plus the rotated copy or
-        # the symmetrized spectrum plus the added noise).
+        # Option 2 ("spectral") the kernels symmetrize this raw spectrum
+        # in C++ ONCE per call, with the per-cell ``psf_array`` (the same
+        # PSF the detection stage used), for the constant-PSF and the
+        # native per-source-PSF paths alike: the renoising fields are one
+        # fixed realization shared with detection, so only the
+        # deconvolution filter chi / p follows the source PSF.  ForceTask
+        # applies all three kernels in Fourier space per stamp: the
+        # spin-2 filler rho on the second realization noise2_array, the
+        # added noise eta_0 and the assigned responses tau_j on
+        # noise_array.  The covariance is summed over the total noise
+        # spectrum (image noise plus the rotated copy or the symmetrized
+        # spectrum plus the added noise).
         spectrum = renoise_mod.make_noise_spectrum(
             fpfs_config.npix,
             pixel_scale,

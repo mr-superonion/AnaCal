@@ -152,10 +152,12 @@ namespace anacal {
     // Option-2 (spectral renoising) noise filters from the deconvolved
     // data filter fg = chi / p (nky x nkx x 12, contiguous): 36 columns
     // [eta0, tau1, tau2] * fg applied to the transform of the pure-noise
-    // cutout (the image itself already carries the per-cell spin-2
-    // filler, built from an independent noise realization).  The kernels
-    // are half-plane (n, n / 2 + 1) arrays on the cutout grid, so their
-    // layout is that of fg.
+    // cutout eps', plus the filler filter rho * fg applied to the
+    // transform of the second realization eps''.  The kernels are those
+    // of the CELL (symmetrized once per call with the per-cell PSF,
+    // shared with the detection stage); fg alone follows the source
+    // PSF.  They are half-plane (n, n / 2 + 1) arrays on the cutout
+    // grid, so their layout is that of fg.
     inline void
     spectral_noise_filters(
         const std::complex<double>* fg,
@@ -375,14 +377,36 @@ namespace anacal {
                     throw std::runtime_error(
                         "FPFS Error: the renoise setup needs the raw "
                         "noise spectrum (make_noise_spectrum); the "
-                        "symmetrization is per PSF, here"
+                        "symmetrization is per cell, here"
                     );
                 }
             }
-            // Option-2 filters for the constant PSF (per source with a
-            // native PSF model, below)
+            // Option-2 combined filters [eta0, tau1, tau2] * fg and
+            // rho * fg.  With a constant PSF they are formed once,
+            // before the loop; with a native per-source PSF model only
+            // this recombination with the per-source fg = chi / p runs
+            // inside the loop -- a multiplication pass, no kernel
+            // construction (the kernels are rk_cell, fixed per call).
             std::vector<std::complex<double>> fimg_add;
             std::vector<std::complex<double>> fimg_rho;
+
+            // Spectral kernels of the CELL, built ONCE per call: the raw
+            // spectrum is symmetrized with the per-cell ``psf_array`` --
+            // the same PSF the detection stage used -- for the
+            // constant-PSF and the per-source-PSF paths alike.  The
+            // renoising fields rho * eps'' and eta_0 * eps' are part of
+            // the image (one realization, the cell's), so their kernels
+            // must not follow the source PSF; only the deconvolution
+            // filter fg = chi / p is per source, exactly as for the
+            // data pixels.
+            renoise::RenoiseKernels rk_cell;
+            if (spectral) {
+                rk_cell = renoise::make_renoise_kernels(
+                    renoise->spectra[0], psf_array, klim,
+                    renoise->c, renoise->delta, true,
+                    renoise->noise_rotated
+                );
+            }
 
             // Constant-PSF filters: data filter from the PSF, noise
             // filter from the PSF rotated 90 degrees in Fourier space.
@@ -409,16 +433,9 @@ namespace anacal {
                     );
                 }
                 if (spectral) {
-                    // symmetrize the raw spectrum with THIS PSF; the
-                    // filler filter rho * fg acts on the eps'' stamp
-                    const renoise::RenoiseKernels rk =
-                        renoise::make_renoise_kernels(
-                            renoise->spectra[0], psf_array, klim,
-                            renoise->c, renoise->delta, true,
-                            renoise->noise_rotated
-                        );
+                    // the filler filter rho * fg acts on the eps'' stamp
                     spectral_noise_filters(
-                        fimg_g.data(), nky, nkx, rk, fimg_add, fimg_rho
+                        fimg_g.data(), nky, nkx, rk_cell, fimg_add, fimg_rho
                     );
                 }
             }
@@ -552,22 +569,14 @@ namespace anacal {
                             fn = scratch_n.data();
                         }
                         if (spectral) {
-                            // kernels of THIS source's PSF (three
-                            // stamp-sized transforms), the raw spectrum
-                            // symmetrized with it
-                            const double* ps = psf_scratch.data();
-                            const renoise::RenoiseKernels rk =
-                                renoise::make_renoise_kernels_impl(
-                                    renoise->spectra[0],
-                                    [&](int jj, int ii) {
-                                        return ps[jj * npix + ii];
-                                    },
-                                    npix, npix, klim,
-                                    renoise->c, renoise->delta, true,
-                                    renoise->noise_rotated
-                                );
+                            // per-cell kernels, per-source deconvolution:
+                            // the noise fields are one fixed realization
+                            // shared with the detection stage, so the
+                            // kernels stay those of the cell (rk_cell,
+                            // built once above) and only the filter
+                            // fg = chi / p follows this source's PSF
                             spectral_noise_filters(
-                                fg, nky, nkx, rk, fimg_add, fimg_rho
+                                fg, nky, nkx, rk_cell, fimg_add, fimg_rho
                             );
                         }
                     }
