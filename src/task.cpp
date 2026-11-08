@@ -68,6 +68,31 @@ pyExportTask(py::module_& m) {
             py::arg("do_fpfs")=true,
             py::arg("n_mask_base_max")=py::none(),
             py::arg("renoise")=py::none()
+        )
+        .def("process_image_bands", &Task::process_image_bands,
+            "process_image, returning (catalog, band_catalogs): the "
+            "catalog of process_image and, per band of the stack, the "
+            "forced single-band measurement of its rows (Gaussian fluxes "
+            "with their shear responses and errors, FPFS moments) at this "
+            "Task's sigma_arcsec, row-aligned with the catalog.  "
+            "Bit-identical to calling process_image on each band's image "
+            "with detection=catalog, but the bands are taken from the "
+            "qimages the coadd measurement already prepared instead of "
+            "being deconvolved and re-smoothed again.  For a plain image "
+            "the list holds one catalog.",
+            py::arg("img_array"),
+            py::arg("psf_array"),
+            py::arg("variance"),
+            py::arg("cell_list"),
+            py::arg("detection")=py::none(),
+            py::arg("noise_array")=py::none(),
+            py::arg("noise2_array")=py::none(),
+            py::arg("mask_array")=py::none(),
+            py::arg("a_ini")=0.2,
+            py::arg("do_measure")=true,
+            py::arg("do_fpfs")=true,
+            py::arg("n_mask_base_max")=py::none(),
+            py::arg("renoise")=py::none()
         );
     // Single source of truth for the zeropoint at which the flux-scale
     // thresholds are defined; the Python FPFS path reads it from here rather

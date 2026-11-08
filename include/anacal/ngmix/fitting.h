@@ -484,8 +484,6 @@ public:
             rks
         );
 
-        const std::size_t ng = catalog.size();
-
         // Task::process_image precomputes both coadd variances once per
         // cell; the stand-alone process_cell below derives them here.
         double variance_meas = variance_meas_opt.has_value()
@@ -497,6 +495,33 @@ public:
                 variance,
                 w
             );
+        process_cell_data(
+            catalog, data, variance_meas, prior, num_epochs, cell,
+            n_mask_base_max, this->do_fpfs
+        );
+        return;
+    };
+
+    // The measurement proper, on a PREPARED cell: ``data`` is the
+    // deconvolved, re-smoothed (and band-combined) qimage of the cell at
+    // this fitter's sigma_arcsec and ``variance_meas`` its white-noise
+    // equivalent variance.  Split from process_cell_impl so that
+    // Task::process_image_bands can run it once on the coadd and once
+    // per band on the band qimages the coadd was built from, without
+    // preparing any of them twice.
+    inline void
+    process_cell_data(
+        std::vector<table::galNumber>& catalog,
+        const std::vector<math::qnumber>& data,
+        double variance_meas,
+        const modelPrior & prior,
+        int num_epochs,
+        const geometry::cell & cell,
+        const std::optional<double>& n_mask_base_max,
+        bool do_fpfs
+    ) {
+        const std::size_t ng = catalog.size();
+
         // Sources on heavily masked pixels are SKIPPED, not dropped:
         // their rows stay in the catalog with default measurement
         // values, flagged by their n_mask_base column.
@@ -635,7 +660,7 @@ public:
             // detection (detector::measure_pixel), or stated by the
             // caller for a forced catalog; the FPFS size cut that used
             // to multiply into it here has been removed.
-            if (this->do_fpfs) {
+            if (do_fpfs) {
                 this->measure_fpfs(
                     data, src, cell
                 );

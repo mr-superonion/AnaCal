@@ -522,43 +522,165 @@ public:
         return;
     };
 
-    inline py::array_t<table::galRow>
-    process_image(
+    // Gaussian flux variances (sigma_kernel 0 and 0.2) of ONE band at the
+    // measurement scale: Option 1 (and no correction) white noise of
+    // variance_meas through the band's PSF; Option 2 the direct sum over
+    // the band's total noise spectrum (renoise::gaussian_flux_variance).
+    inline std::array<double, 2>
+    flux_variances_band(
+        const py::array_t<double>& psf,
+        ssize_t band,
+        double variance_meas,
+        const renoise::RenoiseKernels* rk
+    ) const {
+        std::array<double, 2> out{};
+        if (rk != nullptr) {
+            out[0] = renoise::gaussian_flux_variance(
+                *rk, 0.0, this->sigma_arcsec
+            );
+            out[1] = renoise::gaussian_flux_variance(
+                *rk, 0.2, this->sigma_arcsec
+            );
+            return out;
+        }
+        out[0] = variance_meas * std::max(
+            0.0, gaussian_flux_variance_band(
+                psf, band, 0.0, this->sigma_arcsec, this->scale
+            )
+        );
+        out[1] = variance_meas * std::max(
+            0.0, gaussian_flux_variance_band(
+                psf, band, 0.2, this->sigma_arcsec, this->scale
+            )
+        );
+        return out;
+    };
+
+    // Measure the sources a cell owns on the band coadd AND on every band
+    // alone.  The coadd measurement is measure_cell's, bit for bit; the
+    // per-band one is the forced single-band measurement of the coadd
+    // catalog -- what Task(sigma).process_image(band image, detection=
+    // coadd catalog) returns for the Gaussian fluxes -- taken from the
+    // band qimages the coadd was summed from instead of preparing each
+    // band a second time.  ``band_rows[b]`` receives the band-b rows in
+    // the order of ``rows``.
+    inline void
+    measure_cell_bands(
+        std::vector<table::galNumber>& rows,
+        std::vector<std::vector<table::galNumber>>& band_rows,
+        const py::array_t<pixel_t>& img_array,
+        const py::array_t<double>& psf_array,
+        const std::vector<double>& variance_meas,
+        const geometry::cell & cell,
+        const std::optional<py::array_t<pixel_t>>& noise_array,
+        const std::optional<py::array_t<pixel_t>>& noise2_array,
+        const std::vector<double>& w,
+        double var_meas,
+        const std::optional<double>& n_mask_base_max,
+        // kernels applied to the measurement (spectral mode only) ...
+        const std::vector<renoise::RenoiseKernels>* rks,
+        // ... and the kernels whose spectra the flux errors are summed
+        // over (whenever a renoise Setup is given, in both modes)
+        const std::vector<renoise::RenoiseKernels>* rks_err
+    ) {
+        const std::size_t nband = w.size();
+        band_rows.assign(nband, {});
+        if (rows.empty()) return;
+        std::vector<std::vector<math::qnumber>> band_data;
+        const std::vector<math::qnumber> data = prepare_data_cell_coadd(
+            img_array,
+            psf_array,
+            this->sigma_arcsec,
+            cell,
+            w,
+            noise_array,
+            noise2_array,
+            rks,
+            &band_data
+        );
+        for (table::galNumber & src : rows) {
+            src.centralize(cell);
+        }
+        this->fitter.process_cell_data(
+            rows, data, var_meas, this->prior, this->num_epochs, cell,
+            n_mask_base_max, this->fitter.do_fpfs
+        );
+        for (table::galNumber & src : rows) {
+            src.decentralize(cell);
+        }
+        for (std::size_t b = 0; b < nband; ++b) {
+            const ssize_t ib = static_cast<ssize_t>(b);
+            std::vector<table::galNumber>& brows = band_rows[b];
+            brows.reserve(rows.size());
+            // The forced path starts from the EXPORTED catalog, which
+            // carries the model and the detection columns but not the
+            // fit state (initialized, convergence); the same round trip
+            // here keeps the two paths identical.
+            for (const table::galNumber & src : rows) {
+                table::galNumber g;
+                g.from_row(src.to_row());
+                g.cell_id = src.cell_id;
+                brows.push_back(g);
+            }
+            const std::array<double, 2> var_b = flux_variances_band(
+                psf_array, ib, variance_meas[b],
+                (rks_err != nullptr) ? &((*rks_err)[b]) : nullptr
+            );
+            const double err0 = std::sqrt(var_b[0]);
+            const double err2 = std::sqrt(var_b[1]);
+            for (table::galNumber & g : brows) {
+                g.flux_gauss0_err = err0;
+                g.flux_gauss2_err = err2;
+                g.centralize(cell);
+            }
+            // the single band's own smoothed variance (its coadd of one)
+            const double var_meas_b = get_smoothed_variance(
+                cell.scale, this->sigma_arcsec, psf_array, ib,
+                variance_meas[b]
+            );
+            this->fitter.process_cell_data(
+                brows, band_data[b], var_meas_b, this->prior,
+                this->num_epochs, cell, n_mask_base_max,
+                this->fitter.do_fpfs
+            );
+            for (table::galNumber & g : brows) {
+                g.decentralize(cell);
+            }
+        }
+        return;
+    };
+
+    // The detection + measurement of process_image on C++ containers.
+    // ``band_catalogs`` (optional) receives, per band of the stack, the
+    // forced single-band measurement of every row of the returned
+    // catalog, row-aligned with it (see measure_cell_bands).
+    inline std::vector<table::galNumber>
+    process_image_impl(
         const py::array_t<pixel_t>& img_array,
         const py::array_t<double>& psf_array,
         const varianceArg& variance,
         const std::vector<geometry::cell>& cell_list,
-        const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
-        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
-        // second, independent noise realization eps'' (same correlation
-        // properties as the image noise): the spectral renoising builds
-        // the spin-2 filler from it, in Fourier space, per cell
-        const std::optional<py::array_t<pixel_t>>& noise2_array=std::nullopt,
-        const std::optional<py::array_t<uint8_t>>& mask_array=std::nullopt,
-        double a_ini=0.2,
-        bool do_measure=true,
-        bool do_fpfs=true,
-        // Sources whose n_mask_base exceeds this are SKIPPED by the
-        // measurement (rows kept with default values); internal
-        // detections are stamped from mask_array before the check,
-        // external catalogs carry their own n_mask_base column.
-        const std::optional<double>& n_mask_base_max=std::nullopt,
-        // Minimal-variance renoising (Option 2): per-band noise spectra
-        // of the patch plus (c, delta).  Null: the rotated-noise
-        // renoising (Option 1), whenever noise_array is given.
-        const renoise::Setup* renoise=nullptr
+        const std::optional<py::array_t<table::galRow>>& detection,
+        const std::optional<py::array_t<pixel_t>>& noise_array,
+        const std::optional<py::array_t<pixel_t>>& noise2_array,
+        const std::optional<py::array_t<uint8_t>>& mask_array,
+        double a_ini,
+        bool do_measure,
+        bool do_fpfs,
+        const std::optional<double>& n_mask_base_max,
+        const renoise::Setup* renoise,
+        std::vector<std::vector<table::galNumber>>* band_catalogs
     ) {
-        // From here to the reset() before the output conversion,
-        // everything works on C++ containers and READS the input arrays
-        // through unchecked accessors only -- the prologue below (variance
-        // normalization, band-stack validation, weights lambda, detection
-        // conversion) is pure C++ plus GIL-free ndim/shape struct reads,
-        // and validation errors unwind safely through the release -- so the
-        // GIL is dropped for the whole call; this is what lets callers
-        // thread over cells.  (The FFT engine is lock-free: see
-        // image.h.)
-        std::optional<ScopedGilRelease> release_for_cells;
-        release_for_cells.emplace();
+        // Everything here works on C++ containers and READS the input
+        // arrays through unchecked accessors only -- the prologue below
+        // (variance normalization, band-stack validation, weights lambda,
+        // detection conversion) is pure C++ plus GIL-free ndim/shape
+        // struct reads, and validation errors unwind safely through the
+        // release -- so the GIL is dropped for the whole call; this is
+        // what lets callers thread over cells.  (The FFT engine is
+        // lock-free: see image.h.)  The callers convert the result to
+        // numpy after the release has ended.
+        ScopedGilRelease release_for_cells;
 
         // ``img_array`` may be a plain (ny, nx) image or an
         // (nband, ny, nx) stack; ``psf_array`` and ``noise_array`` follow it,
@@ -669,31 +791,27 @@ public:
             for (std::size_t b = 0; b < w.size(); ++b) {
                 const ssize_t ib = static_cast<ssize_t>(b);
                 const double ww = w[b] * w[b];
-                if (rks != nullptr) {
-                    var0 = var0 + ww * renoise::gaussian_flux_variance(
-                        (*rks)[b], 0.0, this->sigma_arcsec
-                    );
-                    var2 = var2 + ww * renoise::gaussian_flux_variance(
-                        (*rks)[b], 0.2, this->sigma_arcsec
-                    );
-                    continue;
-                }
-                var0 = var0 + ww * variance_meas[b] * std::max(
-                    0.0, gaussian_flux_variance_band(
-                        psf, ib, 0.0, this->sigma_arcsec, this->scale
-                    )
+                const std::array<double, 2> vb = flux_variances_band(
+                    psf, ib, variance_meas[b],
+                    (rks != nullptr) ? &((*rks)[b]) : nullptr
                 );
-                var2 = var2 + ww * variance_meas[b] * std::max(
-                    0.0, gaussian_flux_variance_band(
-                        psf, ib, 0.2, this->sigma_arcsec, this->scale
-                    )
-                );
+                var0 = var0 + ww * vb[0];
+                var2 = var2 + ww * vb[1];
             }
             std::array<double, 2> errs{};
             errs[0] = std::sqrt(var0);
             errs[1] = std::sqrt(var2);
             return errs;
         };
+        const std::size_t nband = variance_in.size();
+        if (band_catalogs != nullptr) {
+            band_catalogs->assign(nband, {});
+            if (external) {
+                for (std::vector<table::galNumber>& bc : *band_catalogs) {
+                    bc.resize(catalog.size());
+                }
+            }
+        }
 
         // ONE loop over cells.  Each iteration computes what its cell
         // needs (band weights and coadd variances run an FFT pipeline per
@@ -705,6 +823,8 @@ public:
         for (std::size_t ib = 0; ib < ncells; ++ib) {
             const geometry::cell & cell = cell_list[ib];
             const py::array_t<double>& psf = choose_psf(cell, psf_array);
+            // per band, this cell's rows measured on that band alone
+            std::vector<std::vector<table::galNumber>> cell_band_rows;
             // Option 2: kernels of this cell's PSF and the matching noise
             // variances at the detection and measurement scales
             std::vector<renoise::RenoiseKernels> rks;
@@ -800,40 +920,140 @@ public:
                     variance_meas,
                     w
                 );
-                measure_cell(
-                    rows,
-                    img_array,
-                    psf,
-                    variance_meas,
-                    cell,
-                    noise_array,
-                    noise2_array,
-                    w,
-                    var_meas,
-                    n_mask_base_max,
-                    rks_ptr
-                );
+                if (band_catalogs == nullptr) {
+                    measure_cell(
+                        rows,
+                        img_array,
+                        psf,
+                        variance_meas,
+                        cell,
+                        noise_array,
+                        noise2_array,
+                        w,
+                        var_meas,
+                        n_mask_base_max,
+                        rks_ptr
+                    );
+                } else {
+                    measure_cell_bands(
+                        rows,
+                        cell_band_rows,
+                        img_array,
+                        psf,
+                        variance_meas,
+                        cell,
+                        noise_array,
+                        noise2_array,
+                        w,
+                        var_meas,
+                        n_mask_base_max,
+                        rks_ptr,
+                        use_spectra ? &rks : nullptr
+                    );
+                }
+            } else if (band_catalogs != nullptr) {
+                // nothing measured: the bands carry the rows as they are
+                cell_band_rows.assign(nband, rows);
             }
 
             if (external) {
                 // Scatter the measured rows back so the output keeps the
                 // input row order.
                 for (std::size_t k = 0; k < rows_of[ib].size(); ++k) {
+                    if (band_catalogs != nullptr) {
+                        for (std::size_t b = 0; b < nband; ++b) {
+                            (*band_catalogs)[b][rows_of[ib][k]] =
+                                std::move(cell_band_rows[b][k]);
+                        }
+                    }
                     catalog[rows_of[ib][k]] = std::move(rows[k]);
                 }
             } else {
+                if (band_catalogs != nullptr) {
+                    for (std::size_t b = 0; b < nband; ++b) {
+                        std::vector<table::galNumber>& bc = (*band_catalogs)[b];
+                        bc.reserve(bc.size() + rows.size());
+                        for (table::galNumber& src : cell_band_rows[b]) {
+                            bc.push_back(std::move(src));
+                        }
+                    }
+                }
                 catalog.reserve(catalog.size() + rows.size());
                 for (table::galNumber& src : rows) {
                     catalog.push_back(std::move(src));
                 }
             }
         }
+        return catalog;
+    };
 
-        // Reacquire the GIL: the output conversion below allocates a
-        // numpy array.
-        release_for_cells.reset();
-
+    inline py::array_t<table::galRow>
+    process_image(
+        const py::array_t<pixel_t>& img_array,
+        const py::array_t<double>& psf_array,
+        const varianceArg& variance,
+        const std::vector<geometry::cell>& cell_list,
+        const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+        // second, independent noise realization eps'' (same correlation
+        // properties as the image noise): the spectral renoising builds
+        // the spin-2 filler from it, in Fourier space, per cell
+        const std::optional<py::array_t<pixel_t>>& noise2_array=std::nullopt,
+        const std::optional<py::array_t<uint8_t>>& mask_array=std::nullopt,
+        double a_ini=0.2,
+        bool do_measure=true,
+        bool do_fpfs=true,
+        // Sources whose n_mask_base exceeds this are SKIPPED by the
+        // measurement (rows kept with default values); internal
+        // detections are stamped from mask_array before the check,
+        // external catalogs carry their own n_mask_base column.
+        const std::optional<double>& n_mask_base_max=std::nullopt,
+        // Minimal-variance renoising (Option 2): per-band noise spectra
+        // of the patch plus (c, delta).  Null: the rotated-noise
+        // renoising (Option 1), whenever noise_array is given.
+        const renoise::Setup* renoise=nullptr
+    ) {
+        const std::vector<table::galNumber> catalog = process_image_impl(
+            img_array, psf_array, variance, cell_list, detection,
+            noise_array, noise2_array, mask_array, a_ini, do_measure,
+            do_fpfs, n_mask_base_max, renoise, nullptr
+        );
         return table::objlist_to_array(catalog);
+    };
+
+    // process_image plus, per band of the stack, the forced single-band
+    // measurement of the returned catalog (Gaussian fluxes and their
+    // errors at this Task's sigma_arcsec), row-aligned with it.  For a
+    // plain image the list holds one catalog.  Returns (catalog, [band
+    // catalogs]).
+    inline std::pair<py::array_t<table::galRow>, std::vector<py::array_t<table::galRow>>>
+    process_image_bands(
+        const py::array_t<pixel_t>& img_array,
+        const py::array_t<double>& psf_array,
+        const varianceArg& variance,
+        const std::vector<geometry::cell>& cell_list,
+        const std::optional<py::array_t<table::galRow>>& detection=std::nullopt,
+        const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+        const std::optional<py::array_t<pixel_t>>& noise2_array=std::nullopt,
+        const std::optional<py::array_t<uint8_t>>& mask_array=std::nullopt,
+        double a_ini=0.2,
+        bool do_measure=true,
+        bool do_fpfs=true,
+        const std::optional<double>& n_mask_base_max=std::nullopt,
+        const renoise::Setup* renoise=nullptr
+    ) {
+        std::vector<std::vector<table::galNumber>> band_catalogs;
+        const std::vector<table::galNumber> catalog = process_image_impl(
+            img_array, psf_array, variance, cell_list, detection,
+            noise_array, noise2_array, mask_array, a_ini, do_measure,
+            do_fpfs, n_mask_base_max, renoise, &band_catalogs
+        );
+        std::vector<py::array_t<table::galRow>> bands;
+        bands.reserve(band_catalogs.size());
+        for (const std::vector<table::galNumber>& bc : band_catalogs) {
+            bands.push_back(table::objlist_to_array(bc));
+        }
+        return {table::objlist_to_array(catalog), std::move(bands)};
     };
 };
 
