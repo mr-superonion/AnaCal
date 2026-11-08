@@ -5,7 +5,6 @@ sigma_shapelets = sigma_arcsec sqrt 2), source by source:
 
     values     fpfs_m0 = m00, fpfs_m2 = m00 + m20, fpfs_e1 = e1, fpfs_e2 = e2
     responses  d fpfs_m0 / dg, d fpfs_m2 / dg, d fpfs_e / dg  (both components)
-    flux       flux_gauss0 = flux_fpfs1 and flux_gauss0_err = flux_fpfs1_err
 
 for a noiseless image, a noisy image without correction, the rotated-noise
 correction (Option 1) on white and on correlated noise, and the spectral
@@ -264,17 +263,6 @@ def _assert_consistent(cat, fp):
         np.testing.assert_allclose(
             cat[a], fp[f"{k}_{b}"] + fp[f"{k}_{c}"], rtol=1e-5, atol=1e-6
         )
-    # Gaussian flux: the Task's aperture flux at sigma_arcsec is the
-    # forced m00 converted to flux, and its error is the forced flux error
-    # in every mode (both summed over the actual noise spectrum: image
-    # noise alone, plus the rotated copy, or (1 + c) times the symmetrized
-    # spectrum)
-    np.testing.assert_allclose(
-        cat["flux_gauss0"], fp[f"flux_{k}"], rtol=1e-10
-    )
-    np.testing.assert_allclose(
-        cat["flux_gauss0_err"], fp[f"flux_{k}_err"], rtol=1e-6
-    )
 
 
 # ---------------------------------------------- tiled scene, input centres

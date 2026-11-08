@@ -578,43 +578,6 @@ variance_factor(const RenoiseKernels& rk, double sigma_arcsec) {
     return num / den;
 }
 
-// Variance of a Gaussian aperture flux (kernel sigma_kernel on top of the
-// smoothing sigma_smooth, the flux of gaussian_flux_variance_band in
-// task.h) under the total noise of Option 2, (1 + c) S^d_sym: the direct
-// sum of the aperture's Fourier window over the deconvolved spectrum,
-// with the normalisation of gaussian_flux_variance_band (which is the
-// same sum over the white reference S^d_0 = variance / |p|^2).
-inline double
-gaussian_flux_variance(
-    const RenoiseKernels& rk,
-    double sigma_kernel,
-    double sigma_smooth
-) {
-    const int n = rk.n;
-    const int kxl = half_width(n);
-    const double dk = 2.0 * M_PI / (n * rk.scale);
-    const double s2 = sigma_kernel * sigma_kernel
-        + 2.0 * sigma_smooth * sigma_smooth;
-    double sum = 0.0;
-    for (int j = 0; j < n; ++j) {
-        const double k2 = ((j < n / 2) ? j : j - n) * dk;
-        for (int i = 0; i < kxl; ++i) {
-            const double k1 = i * dk;
-            const std::size_t idx = static_cast<std::size_t>(j) * kxl + i;
-            const double wgt = (i == 0 || i == n / 2) ? 1.0 : 2.0;
-            sum += wgt * std::exp(-(k1 * k1 + k2 * k2) * s2)
-                * total_spectrum_at(rk, idx);
-        }
-    }
-    const double sigma_pix = std::sqrt(
-        sigma_kernel * sigma_kernel + sigma_smooth * sigma_smooth
-    ) / rk.scale;
-    const double ff = 4.0 * M_PI * sigma_pix * sigma_pix;
-    const double var = sum * ff * ff
-        / (static_cast<double>(n) * static_cast<double>(n));
-    return (var > 0.0) ? var : 0.0;
-}
-
 // Everything the Task needs to run Option 2 on one patch: the RAW noise
 // spectrum of every band (from the patch correlation function, on the
 // cell grid) and the parameters.  The symmetrization happens per cell,

@@ -187,16 +187,13 @@ def test_extra_bands_deepen_the_detection_image():
         )
     assert std[0] > std[1] > std[2]
 
-    # Same sources, no noise: the flux is unchanged but its error shrinks as
-    # bands are added.
+    # Same sources, no noise: the flux is unchanged as bands are added.
     clean = np.repeat(make_image(psf_obj, 23.5)[None, :, :], 3, axis=0)
-    errs, fluxes = [], []
+    fluxes = []
     for nband in (1, 2, 3):
         cat = run(clean[:nband], psfs[:nband], variances[:nband])
         assert len(cat) == NGAL * NGAL
-        errs.append(float(cat["flux_gauss0_err"][0]))
-        fluxes.append(float(np.mean(cat["flux_gauss0"])))
-    assert errs[0] > errs[1] > errs[2]
+        fluxes.append(float(np.mean(cat["flux"])))
     np.testing.assert_allclose(fluxes[1:], fluxes[0], rtol=1e-10)
 
     # And faint sources that a single band misses are picked up by three.

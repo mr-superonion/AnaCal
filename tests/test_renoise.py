@@ -646,14 +646,6 @@ def test_rotate_mode_total_spectrum():
     np.testing.assert_allclose(
         anacal.renoise.variance_factor(rk, SIGMA_H), 2.0, rtol=1e-12
     )
-    ref = anacal.task.gaussian_flux_variance(
-        psf_array=psf, sigma_kernel=0.0, sigma_smooth=SIGMA_H,
-        pixel_scale=SCALE, klim=KLIM,
-    )
-    np.testing.assert_allclose(
-        anacal.renoise.gaussian_flux_variance(rk, 0.0, SIGMA_H),
-        2.0 * var * ref, rtol=1e-10,
-    )
     total = anacal.renoise.total_spectrum(rk)
     np.testing.assert_allclose(total, np.asarray(rk.Sd) + np.asarray(rk.Sd_rot))
     # BOTH modes take the raw spectrum; a pre-symmetrized one is refused

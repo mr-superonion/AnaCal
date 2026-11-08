@@ -4,7 +4,7 @@ import numpy as np
 # Update this when adding fields to galRow (table.h): the struct, to_row,
 # from_row and the PYBIND11_NUMPY_DTYPE registration must all be extended
 # together, and the round-trip below is what catches a missed one.
-N_COLUMNS = 90  # 89 - wdet (5) - a1/a2/t (15) + mxx/myy/mxy (15) + n_epochs
+N_COLUMNS = 78  # 90 - flux_gauss0/2 (2 x 5) - flux_gauss0/2_err (2)
 
 # Derived columns: to_row computes e1/e2 from a1/a2/t via model.get_shape(),
 # and from_row does not store them, so they do not round-trip arbitrary

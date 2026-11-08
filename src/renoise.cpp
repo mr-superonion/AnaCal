@@ -192,12 +192,6 @@ pyExportRenoise(py::module_& m) {
         py::arg("kernels"), py::arg("sigma_arcsec")
     );
 
-    rn.def("gaussian_flux_variance", &gaussian_flux_variance,
-        "Variance of the Gaussian aperture flux (anacal.task's "
-        "gaussian_flux_variance) under the total noise of the kernels",
-        py::arg("kernels"), py::arg("sigma_kernel"), py::arg("sigma_smooth")
-    );
-
     py::class_<Setup>(rn, "Setup")
         .def(py::init([](double c,
                          const std::vector<NoiseSpectrum>& spectra,

@@ -234,19 +234,6 @@ public:
     };
 
     inline void
-    measure_gaussian_fluxes(
-        const std::vector<math::qnumber> & data,
-        table::galNumber & src,
-        const geometry::cell & cell
-    ) const {
-        const double sigma0_2 = this->sigma2 + 0 * 0;
-        const double sigma2_2 = this->sigma2 + 0.2 * 0.2;
-        src.flux_gauss0 = measure_flux(sigma0_2, cell, data, src.model);
-        src.flux_gauss2 = measure_flux(sigma2_2, cell, data, src.model);
-        return;
-    };
-
-    inline void
     measure_fpfs(
         const std::vector<math::qnumber> & data,
         table::galNumber & src,
@@ -383,51 +370,6 @@ public:
         return;
     };
 
-    inline math::qnumber
-    measure_flux(
-        double sigma_meas2,
-        const geometry::cell & cell,
-        const std::vector<math::qnumber> & data,
-        const NgmixGaussian & model
-    ) const {
-        math::qnumber m0, norm;
-        double dd = 1.0 / sigma_meas2;
-
-        const StampBounds bb = model.get_stamp_bounds(cell, fit_radius_arcsec / cell.scale);
-        for (int j = bb.j_min; (j < bb.j_max); ++j) {
-            if (!cell.ymsk[j]) continue;
-            int jj = j * cell.nx;
-            // Same as initialize_shape: full qnumber subtraction keeps the
-            // centroid's shear response in the aperture weight, matching
-            // get_fpfs_moments (rmodel.h).
-            math::qnumber ys = cell.yvs[j] - model.x2;
-            math::qnumber y2 = math::pow(ys, 2);
-            for (int i = bb.i_min; (i < bb.i_max); ++i) {
-                if (!cell.xmsk[i]) continue;
-                math::qnumber xs = cell.xvs[i] - model.x1;
-                math::qnumber x2 = math::pow(xs, 2);
-                math::qnumber r2 = (x2 + y2) * dd;
-                if (bb.has_point(i, j)) {
-                    math::qnumber w = math::exp(-0.5 * r2);
-                    math::qnumber f = w * data[jj + i];
-                    norm = norm + w * w;
-                    m0 = m0 + f;
-                }
-            }
-        }
-
-        if (norm.v > 0.0) {
-            math::qnumber flux = m0 * (2.0 * M_PI * sigma_meas2);
-            flux = flux / norm;
-            double scale2 = cell.scale * cell.scale;
-            flux = flux / scale2;
-            return flux;
-        }
-
-        return math::qnumber(0.0);
-    };
-
-
     inline void
     process_cell_impl(
         std::vector<table::galNumber>& catalog,
@@ -495,31 +437,6 @@ public:
                 variance,
                 w
             );
-        process_cell_data(
-            catalog, data, variance_meas, prior, num_epochs, cell,
-            n_mask_base_max, this->do_fpfs
-        );
-        return;
-    };
-
-    // The measurement proper, on a PREPARED cell: ``data`` is the
-    // deconvolved, re-smoothed (and band-combined) qimage of the cell at
-    // this fitter's sigma_arcsec and ``variance_meas`` its white-noise
-    // equivalent variance.  Split from process_cell_impl so that
-    // Task::process_image_bands can run it once on the coadd and once
-    // per band on the band qimages the coadd was built from, without
-    // preparing any of them twice.
-    inline void
-    process_cell_data(
-        std::vector<table::galNumber>& catalog,
-        const std::vector<math::qnumber>& data,
-        double variance_meas,
-        const modelPrior & prior,
-        int num_epochs,
-        const geometry::cell & cell,
-        const std::optional<double>& n_mask_base_max,
-        bool do_fpfs
-    ) {
         const std::size_t ng = catalog.size();
 
         // Sources on heavily masked pixels are SKIPPED, not dropped:
@@ -653,14 +570,11 @@ public:
         for (std::size_t i=0; i<ng; ++i) {
             table::galNumber & src = catalog[i];
             if (src.n_mask_base > mvmax) continue;
-            this->measure_gaussian_fluxes(
-                data, src, cell
-            );
             // The measurement does NOT set wsel.  It is fixed at
             // detection (detector::measure_pixel), or stated by the
             // caller for a forced catalog; the FPFS size cut that used
             // to multiply into it here has been removed.
-            if (do_fpfs) {
+            if (this->do_fpfs) {
                 this->measure_fpfs(
                     data, src, cell
                 );

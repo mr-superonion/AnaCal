@@ -69,18 +69,6 @@ struct galRow{
     float n_mask_base;
     float n_mask_discontinuity;
     bool is_primary;
-    double flux_gauss0;
-    double dflux_gauss0_dg1;
-    double dflux_gauss0_dg2;
-    double dflux_gauss0_dj1;
-    double dflux_gauss0_dj2;
-    double flux_gauss2;
-    double dflux_gauss2_dg1;
-    double dflux_gauss2_dg2;
-    double dflux_gauss2_dj1;
-    double dflux_gauss2_dj2;
-    double flux_gauss0_err;
-    double flux_gauss2_err;
     double fpfs_e1;
     double fpfs_de1_dg1;
     double fpfs_de1_dg2;
@@ -149,10 +137,6 @@ struct galNumber {
     math::qnumber fpfs_e2;
     math::qnumber fpfs_m0;
     math::qnumber fpfs_m2;
-    math::qnumber flux_gauss0 = math::qnumber(0.0);
-    math::qnumber flux_gauss2 = math::qnumber(0.0);
-    double flux_gauss0_err = 0.0;
-    double flux_gauss2_err = 0.0;
     double ra = 0.0;
     double dec = 0.0;
     double x1_det, x2_det;
@@ -187,8 +171,6 @@ struct galNumber {
         this->fpfs_e2.shift_reference(dx1, dx2);
         this->fpfs_m0.shift_reference(dx1, dx2);
         this->fpfs_m2.shift_reference(dx1, dx2);
-        this->flux_gauss0.shift_reference(dx1, dx2);
-        this->flux_gauss2.shift_reference(dx1, dx2);
     };
 
     inline void
@@ -247,10 +229,6 @@ struct galNumber {
         row.n_mask_base = n_mask_base;
         row.n_mask_discontinuity = n_mask_discontinuity;
         row.is_primary = is_primary;
-        ANACAL_ROW_PUT_Q(flux_gauss0, dflux_gauss0, flux_gauss0);
-        ANACAL_ROW_PUT_Q(flux_gauss2, dflux_gauss2, flux_gauss2);
-        row.flux_gauss0_err = flux_gauss0_err;
-        row.flux_gauss2_err = flux_gauss2_err;
         ANACAL_ROW_PUT_Q(fpfs_e1, fpfs_de1, fpfs_e1);
         ANACAL_ROW_PUT_Q(fpfs_e2, fpfs_de2, fpfs_e2);
         ANACAL_ROW_PUT_Q(fpfs_m0, fpfs_dm0, fpfs_m0);
@@ -278,10 +256,6 @@ struct galNumber {
         n_mask_base = row.n_mask_base;
         n_mask_discontinuity = row.n_mask_discontinuity;
         is_primary = row.is_primary;
-        ANACAL_ROW_GET_Q(flux_gauss0, dflux_gauss0, flux_gauss0);
-        ANACAL_ROW_GET_Q(flux_gauss2, dflux_gauss2, flux_gauss2);
-        flux_gauss0_err = row.flux_gauss0_err;
-        flux_gauss2_err = row.flux_gauss2_err;
         ANACAL_ROW_GET_Q(fpfs_e1, fpfs_de1, fpfs_e1);
         ANACAL_ROW_GET_Q(fpfs_e2, fpfs_de2, fpfs_e2);
         ANACAL_ROW_GET_Q(fpfs_m0, fpfs_dm0, fpfs_m0);

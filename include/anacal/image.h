@@ -804,8 +804,7 @@ prepare_data_cell(
         cell.ny,
         cell.scale,
         sigma_arcsec,
-        klim_pix / cell.scale,  // klim = klim_pix / scale (matches
-                                // gaussian_flux_variance in task.h)
+        klim_pix / cell.scale,  // klim = klim_pix / scale
         true                    // us estimate in FFTW
     );
     ImageQ& img_obj = lease.get();
@@ -1046,9 +1045,7 @@ coadd_smoothed_variance(
 
 // The coadded qimage for one cell.  Bands are accumulated one at a time, so
 // only two qimages are ever held at once (about 5 MB for a 250 x 250 cell)
-// rather than one per band -- unless ``bands_out`` is given, which then
-// receives every band's own qimage (the terms of the sum, unweighted) so
-// a caller can measure the bands separately without preparing them again.
+// rather than one per band.
 inline std::vector<math::qnumber>
 prepare_data_cell_coadd(
     const py::array_t<pixel_t>& img_stack,
@@ -1059,8 +1056,7 @@ prepare_data_cell_coadd(
     const std::optional<py::array_t<pixel_t>>& noise_stack=std::nullopt,
     const std::optional<py::array_t<pixel_t>>& noise2_stack=std::nullopt,
     // one set of Option-2 kernels per band (null: Option 1)
-    const std::vector<renoise::RenoiseKernels>* rks=nullptr,
-    std::vector<std::vector<math::qnumber>>* bands_out=nullptr
+    const std::vector<renoise::RenoiseKernels>* rks=nullptr
 ) {
     const std::size_t nband = w.size();
     if ((rks != nullptr) && (rks->size() != nband)) {
@@ -1068,10 +1064,6 @@ prepare_data_cell_coadd(
             "anacal Error: " + std::to_string(rks->size()) +
             " renoise kernel set(s) for " + std::to_string(nband) + " band(s)"
         );
-    }
-    if (bands_out != nullptr) {
-        bands_out->clear();
-        bands_out->reserve(nband);
     }
     std::vector<math::qnumber> out;
     for (std::size_t b = 0; b < nband; ++b) {
@@ -1090,13 +1082,7 @@ prepare_data_cell_coadd(
             // One band: return it untouched rather than multiplying by a
             // weight that is exactly 1.0, so the result is bit-identical to
             // the single-band call.
-            if (bands_out != nullptr) {
-                bands_out->push_back(data);
-            }
             return data;
-        }
-        if (bands_out != nullptr) {
-            bands_out->push_back(data);
         }
         if (b == 0) {
             out = std::move(data);
