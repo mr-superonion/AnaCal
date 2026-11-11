@@ -17,8 +17,8 @@ namespace anacal {
 
     // One finished catalog row for a single shapelet kernel: the
     // FpfsShape fields, then the columns the Python assembly used to
-    // append (m00_err and the Gaussian-aperture flux family), in the
-    // same order.  Kept a flat all-double standard-layout struct so the
+    // append (m00_err and the shapelet flux family: flux, dflux_dg,
+    // flux_err, s2n, ds2n_dg), in the same order.  Kept a flat all-double standard-layout struct so the
     // FpfsShape prefix can be filled with one memcpy and the numpy
     // dtype is a plain packed f8 record.
     struct FpfsCatRow {
