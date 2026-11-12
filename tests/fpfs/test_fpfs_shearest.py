@@ -98,3 +98,88 @@ def do_test(scale, seed, rcut, gcomp):
 def test_shear_estimation(seed):
     do_test(0.2, seed, 32, "g1")
     return
+
+
+def _fit_catalog(gal_array, psf_array, coords, scale, sigma_shapelets):
+    """The detector's Gaussian fit at the given centres (force_center):
+    the intrinsic covariance and its shear response, which set the
+    adaptive kernel's size."""
+    nrot = len(coords)
+    x1 = np.array([c[1] for c in coords], dtype=np.float64) * scale
+    x2 = np.array([c[0] for c in coords], dtype=np.float64) * scale
+    det = anacal.table.make_catalog_empty(x1, x2)
+    det["x1"], det["x2"] = x1, x2
+    det["x1_det"], det["x2_det"] = x1, x2
+    task = anacal.task.Task(
+        scale=scale,
+        sigma_arcsec=sigma_shapelets / np.sqrt(2.0),
+        snr_peak_min=5.0,
+        omega_f=0.218,
+        omega_v=0.011,
+        stamp_size=ngrid,
+        num_epochs=20,
+        force_center=True,
+        fpfs_c0=0.0,
+    )
+    cells = anacal.geometry.get_cell_list(
+        img_nx=gal_array.shape[1], img_ny=gal_array.shape[0],
+        cell_nx=ngrid, cell_ny=ngrid, cell_overlap=0, scale=scale,
+    )
+    cat = task.process_image(
+        np.asarray(gal_array, dtype=np.float32), psf_array,
+        variance=1e-4, cell_list=cells, detection=det,
+    )
+    assert len(cat) == nrot
+    cat = cat[np.argsort(cat["x1_det"])]
+    out = np.zeros(
+        nrot,
+        dtype=[("y", "f8"), ("x", "f8")]
+        + [(c, "f8") for c in anacal.fpfs.ADAPTIVE_FIT_COLUMNS],
+    )
+    out["y"] = cat["x2_det"] / scale
+    out["x"] = cat["x1_det"] / scale
+    for c in anacal.fpfs.ADAPTIVE_FIT_COLUMNS:
+        out[c] = cat[c]
+    return out
+
+
+@pytest.mark.parametrize("seed", [12, 23, 42])
+def test_shear_estimation_adaptive(seed):
+    """The ring test on the adaptive kernels afpfs1 and afpfs2 (kernel
+    ratio 1.5): the same 12 rotated copies, each measured with its own
+    kernel size from the Gaussian fit.  The size changes with the
+    shear, and only with that term in the response does the estimator
+    meet the fixed kernel's accuracy."""
+    scale, rcut, g1 = 0.2, 32, -0.02
+    sigma_shapelets = 0.53
+    gal_array, psf_array, coords = simulate_gal_psf(
+        scale, seed, rcut, "g1", 12
+    )
+    det = _fit_catalog(gal_array, psf_array, coords, scale, sigma_shapelets)
+    cfg = anacal.fpfs.FpfsConfig(
+        sigma_shapelets1=sigma_shapelets, adaptive_sigma=True,
+        adaptive_fpfs_kernel_ratio=1.5, shape_order=4, c0=4.0,
+    )
+    kw = dict(
+        fpfs_config=cfg, mag_zero=mag_zero, gal_array=gal_array,
+        psf_array=psf_array, pixel_scale=scale, noise_variance=1e-4,
+    )
+    out = anacal.fpfs.process_image(detection=det, **kw)
+    # Without the size's shear response the ring test must fail
+    det0 = det.copy()
+    for c in ("dmxx_dg1", "dmxx_dg2", "dmyy_dg1", "dmyy_dg2"):
+        det0[c] = 0.0
+    out0 = anacal.fpfs.process_image(detection=det0, **kw)
+    assert np.all(out["afpfs2_sigma"] > out["afpfs1_sigma"])
+    for k in ("afpfs1", "afpfs2"):
+        assert np.all(out[f"{k}_sigma"] > sigma_shapelets)
+        assert np.any(out[f"{k}_dsigma_dg1"] != 0.0)
+        # The 2nd and 4th order shear estimators
+        g1_e = np.average(out[f"{k}_e1"]) / np.average(out[f"{k}_de1_dg1"])
+        g1_q = np.average(out[f"{k}_q1"]) / np.average(out[f"{k}_dq1_dg1"])
+        assert np.abs(g1_e - g1) < 3e-5, k
+        assert np.abs(g1_q - g1) < 3e-5, k
+        assert np.all(out0[f"{k}_dsigma_dg1"] == 0.0)
+        g1_0 = np.average(out0[f"{k}_e1"]) / np.average(out0[f"{k}_de1_dg1"])
+        assert np.abs(g1_0 - g1) > 3e-5, k
+    return

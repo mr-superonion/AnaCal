@@ -1,6 +1,7 @@
 #ifndef ANACAL_FPFS_FORCE_H
 #define ANACAL_FPFS_FORCE_H
 
+#include <algorithm>
 #include <cstring>
 
 #include "../psfmodel.h"
@@ -230,6 +231,64 @@ namespace anacal {
         return;
     };
 
+    // One finished row of the ADAPTIVE kernel ("afpfs"): the FpfsCatRow
+    // fields, then the per-source kernel size and its shear response.
+    struct AfpfsCatRow {
+        FpfsCatRow base;
+        double sigma;
+        double dsigma_dg1;
+        double dsigma_dg2;
+    };
+    static_assert(
+        std::is_standard_layout<AfpfsCatRow>::value &&
+        offsetof(AfpfsCatRow, sigma) == sizeof(FpfsCatRow),
+        "AfpfsCatRow must start with the FpfsCatRow fields"
+    );
+
+    // Per-source kernel sizes of the adaptive measurement, on a grid of
+    // kernel sizes uniform in log sigma.  The shapelet basis is
+    // tabulated at the nodes, ``table`` (n_nodes, nky, nkx, ncol); a
+    // source is measured with the four nodes around its size and its
+    // modes are the Catmull-Rom cubic through them (C1 in sigma, so the
+    // size derivative has no jumps where a node is crossed).  That
+    // derivative is the slope of the interpolant, so the shear response
+    // through dsigma/dg is exactly the derivative of the estimator that
+    // is evaluated.  Sizes must lie in [grid[1], grid[n_nodes - 2]].
+    inline constexpr int adaptive_nst = 4;
+    struct AdaptiveKernel {
+        const std::complex<double>* table;
+        int n_nodes;             // >= 4
+        const double* grid;      // node sizes, increasing [arcsec]
+        const double* std_grid;  // std_m00 at the nodes
+        const double* sig;       // per-source kernel size [arcsec]
+        const double* dsig1;     // and its shear response
+        const double* dsig2;
+    };
+
+    // Catmull-Rom weights on [0, 1] for the nodes (k-1, k, k+1, k+2)
+    // around the interval [k, k+1], and their t-derivatives.
+    inline void
+    catmull_rom(double t, double* w, double* dw) {
+        const double t2 = t * t;
+        const double t3 = t2 * t;
+        w[0] = 0.5 * (-t + 2.0 * t2 - t3);
+        w[1] = 0.5 * (2.0 - 5.0 * t2 + 3.0 * t3);
+        w[2] = 0.5 * (t + 4.0 * t2 - 3.0 * t3);
+        w[3] = 0.5 * (-t2 + t3);
+        dw[0] = 0.5 * (-1.0 + 4.0 * t - 3.0 * t2);
+        dw[1] = 0.5 * (-10.0 * t + 9.0 * t2);
+        dw[2] = 0.5 * (1.0 + 8.0 * t - 9.0 * t2);
+        dw[3] = 0.5 * (-2.0 * t + 3.0 * t2);
+        return;
+    };
+
+    // Modes measured with one (interpolated) kernel and their derivative
+    // with respect to the kernel size (zero for a fixed kernel).
+    struct ModesDs {
+        FpfsShapelets v;
+        FpfsShapelets ds;
+    };
+
     class ForceTask {
     private:
         ForceTask(const ForceTask&) = delete;
@@ -259,6 +318,8 @@ namespace anacal {
             this->fft_ratio = 1.0 / scale / scale;
         };
 
+        // Fixed kernel: ``filter_image`` is the (nky, nkx, ncol) basis
+        // of the kernel ``sigma_arcsec``.
         py::array
         process_image(
             const py::array_t<pixel_t>& gal_array,
@@ -303,9 +364,136 @@ namespace anacal {
                     "FPFS Error: Input filter image must be 3-dimensional."
                 );
             }
-            const int nky = static_cast<int>(filter_image.shape(0));
-            const int nkx = static_cast<int>(filter_image.shape(1));
-            const int ncol = static_cast<int>(filter_image.shape(2));
+            return this->run(
+                &filter_image, nullptr,
+                gal_array, psf_array, det, std_m00, out_dtype,
+                noise_array, noise2_array, n_mask_base, n_mask_base_max,
+                psf_model, psf_offset_x, psf_offset_y, renoise
+            );
+        };
+
+        // Adaptive kernel ("afpfs"): every source is measured with its
+        // own kernel size ``sigma`` (with shear response dsigma_dg),
+        // interpolated (Catmull-Rom cubic in log sigma) on the
+        // tabulated basis ``filter_table`` (n_nodes, nky, nkx, ncol)
+        // over the node sizes ``sigma_grid`` (uniform in log);
+        // ``std_m00_grid`` is the mode-noise scalar at the nodes.  The
+        // output rows are AfpfsCatRow (the FpfsCatRow fields, then
+        // sigma, dsigma_dg1, dsigma_dg2); see adaptive_catalog_columns.
+        // Sizes outside [grid[1], grid[n_nodes - 2]] are measured at
+        // that bound (the Python side keeps them inside with smooth
+        // clamps).
+        py::array
+        process_image_adaptive(
+            const py::array_t<pixel_t>& gal_array,
+            const py::array_t<double>& psf_array,
+            const py::array_t<std::complex<double>, py::array::c_style>&
+                filter_table,
+            const py::array_t<double, py::array::c_style>& sigma_grid,
+            const py::array_t<double, py::array::c_style>& std_m00_grid,
+            const py::array_t<double, py::array::c_style>& sigma,
+            const py::array_t<double, py::array::c_style>& dsigma_dg1,
+            const py::array_t<double, py::array::c_style>& dsigma_dg2,
+            const py::array_t<Position>& det,
+            const py::object& out_dtype,
+            const std::optional<py::array_t<pixel_t>>& noise_array=std::nullopt,
+            const std::optional<py::array_t<pixel_t>>& noise2_array=std::nullopt,
+            const std::optional<
+                py::array_t<float, py::array::c_style>
+            >& n_mask_base=std::nullopt,
+            const std::optional<double>& n_mask_base_max=std::nullopt,
+            const std::shared_ptr<psfmodel::PerSourcePsf>& psf_model=nullptr,
+            double psf_offset_x=0.0,
+            double psf_offset_y=0.0,
+            const renoise::Setup* renoise=nullptr
+        ) {
+            if (filter_table.ndim() != 4) {
+                throw std::runtime_error(
+                    "FPFS Error: filter_table must be "
+                    "(n_nodes, nky, nkx, ncol)."
+                );
+            }
+            const int n_nodes = static_cast<int>(filter_table.shape(0));
+            if (n_nodes < adaptive_nst) {
+                throw std::runtime_error(
+                    "FPFS Error: filter_table needs at least four nodes."
+                );
+            }
+            if ((sigma_grid.ndim() != 1) ||
+                (sigma_grid.shape(0) != n_nodes) ||
+                (std_m00_grid.ndim() != 1) ||
+                (std_m00_grid.shape(0) != n_nodes)) {
+                throw std::runtime_error(
+                    "FPFS Error: sigma_grid and std_m00_grid must hold "
+                    "one value per node."
+                );
+            }
+            const ssize_t nrow = det.shape(0);
+            if ((sigma.ndim() != 1) || (sigma.shape(0) != nrow) ||
+                (dsigma_dg1.ndim() != 1) || (dsigma_dg1.shape(0) != nrow) ||
+                (dsigma_dg2.ndim() != 1) || (dsigma_dg2.shape(0) != nrow)) {
+                throw std::runtime_error(
+                    "FPFS Error: sigma, dsigma_dg1, dsigma_dg2 must hold "
+                    "one value per source."
+                );
+            }
+            const double* grid = sigma_grid.data();
+            for (int i = 0; i + 1 < n_nodes; ++i) {
+                if (!(grid[i + 1] > grid[i])) {
+                    throw std::runtime_error(
+                        "FPFS Error: sigma_grid must increase strictly."
+                    );
+                }
+            }
+            if ((grid[0] <= 0) || (grid[n_nodes - 1] > 5.0)) {
+                throw std::runtime_error(
+                    "FPFS Error: sigma_grid must lie in (0, 5] arcsec."
+                );
+            }
+            AdaptiveKernel ad{
+                filter_table.data(), n_nodes, grid, std_m00_grid.data(),
+                sigma.data(), dsigma_dg1.data(), dsigma_dg2.data()
+            };
+            return this->run(
+                &filter_table, &ad,
+                gal_array, psf_array, det, 0.0, out_dtype,
+                noise_array, noise2_array, n_mask_base, n_mask_base_max,
+                psf_model, psf_offset_x, psf_offset_y, renoise
+            );
+        };
+
+    private:
+        // The measurement proper, shared by the fixed and the adaptive
+        // kernel.  ``filt`` is the basis array: (nky, nkx, ncol) for a
+        // fixed kernel, (n_nodes, nky, nkx, ncol) with ``ad`` set.
+        py::array
+        run(
+            const py::array* filt,
+            const AdaptiveKernel* ad,
+            const py::array_t<pixel_t>& gal_array,
+            const py::array_t<double>& psf_array,
+            const py::array_t<Position>& det,
+            double std_m00,
+            const py::object& out_dtype,
+            const std::optional<py::array_t<pixel_t>>& noise_array,
+            const std::optional<py::array_t<pixel_t>>& noise2_array,
+            const std::optional<
+                py::array_t<float, py::array::c_style>
+            >& n_mask_base,
+            const std::optional<double>& n_mask_base_max,
+            const std::shared_ptr<psfmodel::PerSourcePsf>& psf_model,
+            double psf_offset_x,
+            double psf_offset_y,
+            const renoise::Setup* renoise
+        ) {
+            const bool adaptive = (ad != nullptr);
+            // nst stacks of ncol modes per source: the adaptive kernel
+            // measures the four nodes around the source's size
+            const int nst = adaptive ? adaptive_nst : 1;
+            const int d0 = adaptive ? 1 : 0;
+            const int nky = static_cast<int>(filt->shape(d0));
+            const int nkx = static_cast<int>(filt->shape(d0 + 1));
+            const int ncol = static_cast<int>(filt->shape(d0 + 2));
             if ((ncol != 9) && (ncol != 12)) {
                 throw std::runtime_error(
                     "FPFS Error: expected the 9-mode (through m44) or "
@@ -315,6 +503,9 @@ namespace anacal {
             // 4th-order estimator available only with m60, m64c, m64s
             const bool fourth_order = (ncol == 12);
             constexpr double qnan = std::numeric_limits<double>::quiet_NaN();
+            const std::size_t nf = static_cast<std::size_t>(nky) * nkx;
+            // one stack of ncol filter columns
+            const std::size_t stack = nf * static_cast<std::size_t>(ncol);
             // Per-source PSFs come exclusively from ``psf_model``
             // (drawn natively inside the loop below); everything else
             // shares the single 2-D ``psf_array`` stamp.
@@ -343,23 +534,26 @@ namespace anacal {
                     "FPFS Error: n_mask_base must hold one value per source."
                 );
             }
-            if (native_psf &&
-                !(filter_image.flags() & py::array::c_style)) {
+            if ((native_psf || adaptive) &&
+                !(filt->flags() & py::array::c_style)) {
                 throw std::runtime_error(
                     "FPFS Error: filter image must be C-contiguous."
                 );
             }
 
             // The caller supplies the FINAL column names; only the packed
-            // all-f8 layout of FpfsCatRow is fixed here.
+            // all-f8 layout of FpfsCatRow / AfpfsCatRow is fixed here.
             const py::dtype dt = py::dtype::from_args(out_dtype);
-            if (dt.itemsize() != static_cast<ssize_t>(sizeof(FpfsCatRow))) {
+            const ssize_t row_size = adaptive
+                ? static_cast<ssize_t>(sizeof(AfpfsCatRow))
+                : static_cast<ssize_t>(sizeof(FpfsCatRow));
+            if (dt.itemsize() != row_size) {
                 throw std::runtime_error(
                     "FPFS Error: out_dtype does not match the catalog row."
                 );
             }
             py::array out(dt, nrow);
-            FpfsCatRow* rows = static_cast<FpfsCatRow*>(out.mutable_data());
+            char* rows = static_cast<char*>(out.mutable_data());
 
             ImageLease lease(npix, npix, scale, true);
             Image& img_obj = lease.get();
@@ -399,13 +593,14 @@ namespace anacal {
                 }
             }
             // Option-2 combined filters [eta0, tau1, tau2] * fg and
-            // rho * fg.  With a constant PSF they are formed once,
-            // before the loop; with a native per-source PSF model only
-            // this recombination with the per-source fg = chi / p runs
-            // inside the loop -- a multiplication pass, no kernel
-            // construction (the kernels are rk_cell, fixed per call).
-            std::vector<std::complex<double>> fimg_add;
-            std::vector<std::complex<double>> fimg_rho;
+            // rho * fg.  With a constant PSF and a fixed kernel they are
+            // formed once, before the loop; with a native per-source PSF
+            // model or the adaptive kernel only this recombination with
+            // the per-source fg = chi / p runs inside the loop -- a
+            // multiplication pass, no kernel construction (the kernels
+            // are rk_cell, fixed per call).
+            std::vector<std::complex<double>> fimg_add[adaptive_nst];
+            std::vector<std::complex<double>> fimg_rho[adaptive_nst];
 
             // Spectral kernels of the CELL, built ONCE per call: the raw
             // spectrum is symmetrized with the per-cell ``psf_array`` --
@@ -430,10 +625,20 @@ namespace anacal {
             // ONE transform serves both -- draw_f() has already copied
             // the result out, so rotate90_f() can turn the buffer into
             // the rotated version in place.  (For a per-source PSF the
-            // filters are rebuilt inside the loop instead.)
+            // filters are rebuilt inside the loop instead.)  With the
+            // adaptive kernel every interval's pair of stacks is
+            // deconvolved once, into fg_table / fn_table.
             py::array_t<std::complex<double>> fimg_g;
             py::array_t<std::complex<double>> fimg_n;
-            if (!native_psf) {
+            std::vector<std::complex<double>> fg_table;
+            std::vector<std::complex<double>> fn_table;
+            const std::complex<double>* filt_ptr =
+                static_cast<const std::complex<double>*>(filt->data());
+            if (!native_psf && !adaptive) {
+                const py::array_t<std::complex<double>> filter_image =
+                    py::reinterpret_borrow<
+                        py::array_t<std::complex<double>>
+                    >(*filt);
                 img_obj.set_r(psf_array, false);
                 img_obj.fft();
                 const py::array_t<std::complex<double>> parr =
@@ -453,24 +658,59 @@ namespace anacal {
                     // the filler filter rho * fg acts on the eps'' stamp
                     spectral_noise_filters(
                         fimg_g.data(), nky, nkx, ncol, rk_cell,
-                        fimg_add, fimg_rho
+                        fimg_add[0], fimg_rho[0]
                     );
                 }
+            } else if (!native_psf && adaptive) {
+                // every node's stack deconvolved once per call
+                img_obj.set_r(psf_array, false);
+                img_obj.fft();
+                const std::vector<std::complex<double>> parr =
+                    img_obj.draw_f_vec();
+                std::vector<std::complex<double>> parr_n;
+                if (has_noise && !spectral) {
+                    img_obj.rotate90_f();
+                    parr_n = img_obj.draw_f_vec();
+                }
+                std::vector<std::complex<double>> scratch;
+                const std::size_t nn = static_cast<std::size_t>(ad->n_nodes);
+                fg_table.resize(nn * stack);
+                if (has_noise && !spectral) {
+                    fn_table.resize(nn * stack);
+                }
+                for (std::size_t k = 0; k < nn; ++k) {
+                    const std::complex<double>* src = filt_ptr + k * stack;
+                    deconvolve_filter_into(
+                        src, parr, scale, klim, nky, nkx, ncol, scratch
+                    );
+                    std::copy(
+                        scratch.begin(), scratch.end(),
+                        fg_table.begin() + k * stack
+                    );
+                    if (has_noise && !spectral) {
+                        deconvolve_filter_into(
+                            src, parr_n, scale, klim, nky, nkx, ncol, scratch
+                        );
+                        std::copy(
+                            scratch.begin(), scratch.end(),
+                            fn_table.begin() + k * stack
+                        );
+                    }
+                }
             }
-            const std::complex<double>* filt_ptr =
-                native_psf ? filter_image.data() : nullptr;
             const std::complex<double>* fg_ptr =
-                native_psf ? nullptr : fimg_g.data();
+                (native_psf || adaptive) ? nullptr : fimg_g.data();
             const std::complex<double>* fn_ptr =
-                (!native_psf && has_noise) ? fimg_n.data() : nullptr;
+                (!native_psf && !adaptive && has_noise) ? fimg_n.data()
+                                                        : nullptr;
 
             auto det_r = det.unchecked<1>();
 
             // Same arithmetic as the Python assembly: flux and its
             // responses use the vectorized m00_to_flux (multiply by the
             // unit-flux factor), flux_err the scalar overload.
-            const double factor = m00_to_flux(1.0, this->sigma_arcsec);
-            const double flux_err = std::max(
+            const double factor0 = m00_to_flux(1.0, this->sigma_arcsec);
+            const double flux_err0 = std::max(
                 m00_to_flux(std_m00, this->sigma_arcsec), flux_err_min
             );
 
@@ -495,8 +735,8 @@ namespace anacal {
                     n_mask_base.has_value() ? n_mask_base->data() : nullptr;
                 const float mvmax = do_mask_cut
                     ? static_cast<float>(*n_mask_base_max) : 0.0f;
-                std::vector<std::complex<double>> scratch_g;
-                std::vector<std::complex<double>> scratch_n;
+                std::vector<std::complex<double>> scratch_g[adaptive_nst];
+                std::vector<std::complex<double>> scratch_n[adaptive_nst];
                 std::vector<double> psf_scratch;
                 if (native_psf) {
                     psf_scratch.resize(
@@ -504,6 +744,7 @@ namespace anacal {
                     );
                 }
                 for (ssize_t j = 0; j < nrow; ++j) {
+                    char* row_ptr = rows + j * row_size;
                     // Skip conditions.  Zero-filled rows keep the
                     // catalog aligned with the input positions.
                     //
@@ -523,11 +764,65 @@ namespace anacal {
                     if (mv_ptr != nullptr &&
                         (mv_ptr[j] >= psfmodel::psf_invalid_mask_value ||
                          (do_mask_cut && mv_ptr[j] > mvmax))) {
-                        rows[j] = FpfsCatRow{};
+                        std::memset(row_ptr, 0, row_size);
                         continue;
                     }
-                    const std::complex<double>* fg = fg_ptr;
-                    const std::complex<double>* fn = fn_ptr;
+                    // The adaptive kernel: the interval [k0, k0 + 1]
+                    // holding this source's size, its position t in
+                    // log sigma, and d(t)/d(sigma) for the size
+                    // derivative of the interpolant.
+                    int k0 = 1;
+                    double t = 0.0, dscale = 0.0;
+                    double sig_j = this->sigma_arcsec;
+                    double dsig1 = 0.0, dsig2 = 0.0;
+                    if (adaptive) {
+                        sig_j = ad->sig[j];
+                        dsig1 = ad->dsig1[j];
+                        dsig2 = ad->dsig2[j];
+                        const double* g = ad->grid;
+                        const int nn = ad->n_nodes;
+                        const double lo = g[1];
+                        const double hi = g[nn - 2];
+                        double s_use = sig_j;
+                        if (!(s_use > lo)) {
+                            s_use = lo;
+                        } else if (!(s_use < hi)) {
+                            s_use = hi;
+                        }
+                        k0 = static_cast<int>(
+                            std::upper_bound(g + 1, g + nn - 1, s_use) - g
+                        ) - 1;
+                        if (k0 > nn - 3) {
+                            k0 = nn - 3;
+                        }
+                        const double h = std::log(g[k0 + 1] / g[k0]);
+                        t = std::log(s_use / g[k0]) / h;
+                        dscale = 1.0 / (h * s_use);
+                    }
+                    // the nst filter stacks of this source (nodes
+                    // k0 - 1 .. k0 + 2 for the adaptive kernel)
+                    const std::complex<double>* fg[adaptive_nst] = {
+                        fg_ptr, nullptr, nullptr, nullptr
+                    };
+                    const std::complex<double>* fn[adaptive_nst] = {
+                        fn_ptr, nullptr, nullptr, nullptr
+                    };
+                    const std::complex<double>* fsrc[adaptive_nst] = {
+                        filt_ptr, nullptr, nullptr, nullptr
+                    };
+                    if (adaptive) {
+                        for (int k = 0; k < nst; ++k) {
+                            const std::size_t node =
+                                static_cast<std::size_t>(k0 - 1 + k);
+                            fsrc[k] = filt_ptr + node * stack;
+                            if (!native_psf) {
+                                fg[k] = fg_table.data() + node * stack;
+                                if (has_noise && !spectral) {
+                                    fn[k] = fn_table.data() + node * stack;
+                                }
+                            }
+                        }
+                    }
                     if (native_psf) {
                         // Draw the per-source PSF inside the released
                         // loop -- no Python per-galaxy drawing.  A
@@ -561,7 +856,7 @@ namespace anacal {
                                 mv_mut[j] =
                                     psfmodel::psf_invalid_mask_value;
                             }
-                            rows[j] = FpfsCatRow{};
+                            std::memset(row_ptr, 0, row_size);
                             continue;
                         }
                         img_obj.set_r_raw(
@@ -570,75 +865,115 @@ namespace anacal {
                         img_obj.fft();
                         const std::vector<std::complex<double>> parr =
                             img_obj.draw_f_vec();
-                        deconvolve_filter_into(
-                            filt_ptr, parr, scale, klim,
-                            nky, nkx, ncol, scratch_g
-                        );
-                        fg = scratch_g.data();
+                        for (int k = 0; k < nst; ++k) {
+                            deconvolve_filter_into(
+                                fsrc[k], parr, scale, klim,
+                                nky, nkx, ncol, scratch_g[k]
+                            );
+                            fg[k] = scratch_g[k].data();
+                        }
                         if (has_noise && !spectral) {
                             // same transform as above, rotated in place
                             img_obj.rotate90_f();
                             const std::vector<std::complex<double>> parr_n =
                                 img_obj.draw_f_vec();
-                            deconvolve_filter_into(
-                                filt_ptr, parr_n, scale, klim,
-                                nky, nkx, ncol, scratch_n
-                            );
-                            fn = scratch_n.data();
+                            for (int k = 0; k < nst; ++k) {
+                                deconvolve_filter_into(
+                                    fsrc[k], parr_n, scale, klim,
+                                    nky, nkx, ncol, scratch_n[k]
+                                );
+                                fn[k] = scratch_n[k].data();
+                            }
                         }
-                        if (spectral) {
+                    }
+                    const std::complex<double>* fadd[adaptive_nst] = {
+                        nullptr, nullptr, nullptr, nullptr
+                    };
+                    const std::complex<double>* frho[adaptive_nst] = {
+                        nullptr, nullptr, nullptr, nullptr
+                    };
+                    if (spectral) {
+                        if (native_psf || adaptive) {
                             // per-cell kernels, per-source deconvolution:
                             // the noise fields are one fixed realization
                             // shared with the detection stage, so the
                             // kernels stay those of the cell (rk_cell,
                             // built once above) and only the filter
                             // fg = chi / p follows this source's PSF
-                            spectral_noise_filters(
-                                fg, nky, nkx, ncol, rk_cell,
-                                fimg_add, fimg_rho
-                            );
+                            // (and, adaptive, its kernel size)
+                            for (int k = 0; k < nst; ++k) {
+                                spectral_noise_filters(
+                                    fg[k], nky, nkx, ncol, rk_cell,
+                                    fimg_add[k], fimg_rho[k]
+                                );
+                            }
+                        }
+                        for (int k = 0; k < nst; ++k) {
+                            fadd[k] = fimg_add[k].data();
+                            frho[k] = fimg_rho[k].data();
                         }
                     }
-                    FpfsShapelets xg;
-                    this->measure_at(
-                        img_obj, gal_array, fg, ncol,
-                        det_r(j).y, det_r(j).x, xg
+                    const ModesDs xg = this->measure_at(
+                        img_obj, gal_array, fg, ncol, nst, t, dscale,
+                        det_r(j).y, det_r(j).x
                     );
-                    FpfsShapelets x = xg;
+                    FpfsShapelets x = xg.v;
+                    FpfsShapelets dxds = xg.ds;
                     FpfsShapeletsResponse dgr;
                     if (spectral) {
                         // filler: rho * eps'' in Fourier space -- it plays
                         // the role of image noise, so its modes join the
                         // image's for the value AND the analytic response
-                        FpfsShapelets xphi;
-                        this->measure_at(
-                            img_obj, *noise2_array, fimg_rho.data(), ncol,
-                            det_r(j).y, det_r(j).x, xphi
+                        const ModesDs xphi = this->measure_at(
+                            img_obj, *noise2_array, frho,
+                            ncol, nst, t, dscale,
+                            det_r(j).y, det_r(j).x
                         );
                         // value: image + filler + added noise; response:
                         // the analytic response of image + filler plus
                         // the assigned response of the noise
-                        FpfsShapelets xw, xk1, xk2;
+                        ModesDs xw, xk1, xk2;
                         this->measure_noise_spectral(
-                            img_obj, *noise_array, fimg_add.data(), ncol,
+                            img_obj, *noise_array, fadd,
+                            ncol, nst, t, dscale,
                             det_r(j).y, det_r(j).x, xw, xk1, xk2
                         );
-                        const FpfsShapelets xs = xg + xphi;
-                        x = xs + xw;
+                        const FpfsShapelets xs = xg.v + xphi.v;
+                        x = xs + xw.v;
+                        dxds = xg.ds + xphi.ds + xw.ds;
                         dgr = measure_shapelets_dg(xs);
-                        add_assigned_response(dgr, xk1, xk2);
+                        add_assigned_response(dgr, xk1.v, xk2.v);
                     } else {
                         std::optional<FpfsShapelets> yn = std::nullopt;
                         if (has_noise) {
-                            FpfsShapelets xn;
-                            this->measure_at(
-                                img_obj, *noise_array, fn, ncol,
-                                det_r(j).y, det_r(j).x, xn
+                            const ModesDs xn = this->measure_at(
+                                img_obj, *noise_array, fn,
+                                ncol, nst, t, dscale,
+                                det_r(j).y, det_r(j).x
                             );
-                            x = xg + xn;
-                            yn = xn;
+                            x = xg.v + xn.v;
+                            dxds = xg.ds + xn.ds;
+                            yn = xn.v;
                         }
                         dgr = measure_shapelets_dg(x, yn);
+                    }
+                    if (adaptive) {
+                        // the kernel size moves with the shear: the
+                        // measured value's derivative along sigma times
+                        // dsigma/dg, for every mode that carries a
+                        // response
+                        dgr.dm00_dg1 += dxds.m00 * dsig1;
+                        dgr.dm00_dg2 += dxds.m00 * dsig2;
+                        dgr.dm20_dg1 += dxds.m20 * dsig1;
+                        dgr.dm20_dg2 += dxds.m20 * dsig2;
+                        dgr.dm22c_dg1 += dxds.m22c * dsig1;
+                        dgr.dm22c_dg2 += dxds.m22c * dsig2;
+                        dgr.dm22s_dg1 += dxds.m22s * dsig1;
+                        dgr.dm22s_dg2 += dxds.m22s * dsig2;
+                        dgr.dm42c_dg1 += dxds.m42c * dsig1;
+                        dgr.dm42c_dg2 += dxds.m42c * dsig2;
+                        dgr.dm42s_dg1 += dxds.m42s * dsig1;
+                        dgr.dm42s_dg2 += dxds.m42s * dsig2;
                     }
                     if (!fourth_order) {
                         // dm42/dg needs m60 and m64, which the 9-mode
@@ -652,7 +987,7 @@ namespace anacal {
                     const FpfsShape sh = measure_fpfs_shape(
                         this->c0, x, dgr
                     );
-                    FpfsCatRow& row = rows[j];
+                    FpfsCatRow& row = *reinterpret_cast<FpfsCatRow*>(row_ptr);
                     std::memcpy(&row, &sh, sizeof(FpfsShape));
                     if (!fourth_order) {
                         // dq*_dg* are already NaN through dgr; q itself
@@ -662,35 +997,112 @@ namespace anacal {
                         row.q1 = qnan;
                         row.q2 = qnan;
                     }
-                    row.m00_err = std_m00;
-                    row.flux = sh.m00 * factor;
-                    row.dflux_dg1 = sh.dm00_dg1 * factor;
-                    row.dflux_dg2 = sh.dm00_dg2 * factor;
-                    row.flux_err = flux_err;
-                    row.s2n = row.flux / flux_err;
-                    row.ds2n_dg1 = row.dflux_dg1 / flux_err;
-                    row.ds2n_dg2 = row.dflux_dg2 / flux_err;
+                    if (!adaptive) {
+                        row.m00_err = std_m00;
+                        row.flux = sh.m00 * factor0;
+                        row.dflux_dg1 = sh.dm00_dg1 * factor0;
+                        row.dflux_dg2 = sh.dm00_dg2 * factor0;
+                        row.flux_err = flux_err0;
+                        row.s2n = row.flux / flux_err0;
+                        row.ds2n_dg1 = row.dflux_dg1 / flux_err0;
+                        row.ds2n_dg2 = row.dflux_dg2 / flux_err0;
+                    } else {
+                        // the flux factor 2 pi sigma^2 and the mode
+                        // noise follow the source's kernel size, so both
+                        // carry a dsigma/dg term
+                        const double factor = m00_to_flux(1.0, sig_j);
+                        const double dfactor = 4.0 * M_PI * sig_j;
+                        const double* sg = ad->std_grid + (k0 - 1);
+                        double cw[adaptive_nst], cdw[adaptive_nst];
+                        catmull_rom(t, cw, cdw);
+                        double std_j = 0.0, dstd_ds = 0.0;
+                        for (int k = 0; k < adaptive_nst; ++k) {
+                            std_j += cw[k] * sg[k];
+                            dstd_ds += cdw[k] * sg[k];
+                        }
+                        dstd_ds *= dscale;
+                        const double ferr_raw = m00_to_flux(std_j, sig_j);
+                        const bool floored = !(ferr_raw > flux_err_min);
+                        const double ferr = floored ? flux_err_min : ferr_raw;
+                        const double dferr_ds = floored
+                            ? 0.0 : (dstd_ds * factor + std_j * dfactor);
+                        row.m00_err = std_j;
+                        row.flux = sh.m00 * factor;
+                        row.dflux_dg1 =
+                            sh.dm00_dg1 * factor + sh.m00 * dfactor * dsig1;
+                        row.dflux_dg2 =
+                            sh.dm00_dg2 * factor + sh.m00 * dfactor * dsig2;
+                        row.flux_err = ferr;
+                        row.s2n = row.flux / ferr;
+                        row.ds2n_dg1 = row.dflux_dg1 / ferr
+                            - row.flux * dferr_ds * dsig1 / (ferr * ferr);
+                        row.ds2n_dg2 = row.dflux_dg2 / ferr
+                            - row.flux * dferr_ds * dsig2 / (ferr * ferr);
+                        AfpfsCatRow& arow =
+                            *reinterpret_cast<AfpfsCatRow*>(row_ptr);
+                        arow.sigma = sig_j;
+                        arow.dsigma_dg1 = dsig1;
+                        arow.dsigma_dg2 = dsig2;
+                    }
                 }
             }
             return out;
         };
 
-    private:
-        // One source's ``ncol`` (9 or 12) shapelet modes at (y, x): the
-        // same operations as the loop body of FpfsImage::measure_source.
-        // ``fimg`` is a contiguous (nky, nkx, ncol) deconvolved filter
-        // buffer.  The modes fill the FIRST ncol fields of FpfsShapelets
-        // (the field order is that of the basis); with 9 modes the
-        // m60, m64c, m64s slots are zero.
-        inline void
+        // Combine nst stacks of ncol measured modes (``buf + k * stride``
+        // for stack k) into the interpolated modes and their kernel-size
+        // derivative.  The modes fill the FIRST ncol fields of
+        // FpfsShapelets (the field order is that of the basis); with 9
+        // modes the m60, m64c, m64s slots are zero.  One stack (fixed
+        // kernel): the value is the stack itself and the derivative is
+        // zero.  Four stacks (adaptive kernel): the Catmull-Rom cubic
+        // at t through the four nodes, and its slope times ``dscale`` =
+        // dt / dsigma.
+        static inline ModesDs
+        combine_stacks(
+            const double* buf, int stride, int ncol, int nst,
+            double t, double dscale
+        ) {
+            ModesDs out;
+            out.v = FpfsShapelets{};
+            out.ds = FpfsShapelets{};
+            double* v = reinterpret_cast<double*>(&out.v);
+            if (nst == 1) {
+                std::memcpy(v, buf, sizeof(double) * ncol);
+                return out;
+            }
+            double* ds = reinterpret_cast<double*>(&out.ds);
+            double w[adaptive_nst], dw[adaptive_nst];
+            catmull_rom(t, w, dw);
+            for (int k = 0; k < adaptive_nst; ++k) {
+                const double* b = buf + k * stride;
+                for (int i = 0; i < ncol; ++i) {
+                    v[i] += w[k] * b[i];
+                    ds[i] += dw[k] * b[i];
+                }
+            }
+            for (int i = 0; i < ncol; ++i) {
+                ds[i] *= dscale;
+            }
+            return out;
+        };
+
+        // One source's modes at (y, x) through nst filters of ncol
+        // columns each (one transform of the cutout, nst filter
+        // passes): the same operations as the loop body of
+        // FpfsImage::measure_source.  Each ``fimg[k]`` is a contiguous
+        // (nky, nkx, ncol) deconvolved filter buffer.
+        inline ModesDs
         measure_at(
             Image& img_obj,
             const py::array_t<pixel_t>& gal_array,
-            const std::complex<double>* fimg,
+            const std::complex<double>* const* fimg,
             int ncol,
+            int nst,
+            double t,
+            double dscale,
             double y,
-            double x,
-            FpfsShapelets& modes
+            double x
         ) const {
             const int y_index = static_cast<int>(std::round(y));
             const int x_index = static_cast<int>(std::round(x));
@@ -698,28 +1110,34 @@ namespace anacal {
             const double dx = x - x_index;
             img_obj.set_r(gal_array, x_index, y_index, false);
             img_obj.fft();
-            modes = FpfsShapelets{};
-            double* mm = reinterpret_cast<double*>(&modes);
-            img_obj.measure_into_raw(fimg, ncol, dy, dx, mm);
-            for (int i = 0; i < ncol; ++i) {
+            double mm[12 * adaptive_nst];
+            for (int k = 0; k < nst; ++k) {
+                img_obj.measure_into_raw(fimg[k], ncol, dy, dx, mm + k * ncol);
+            }
+            for (int i = 0; i < ncol * nst; ++i) {
                 mm[i] *= this->fft_ratio;
             }
+            return combine_stacks(mm, ncol, ncol, nst, t, dscale);
         };
 
         // Option-2 noise moments of one source from ONE transform of the
         // pure-noise cutout: the added noise and the two assigned
-        // responses (3 * ncol modes), same operations as measure_at.
+        // responses (3 ncol modes per filter stack), same operations as
+        // measure_at.
         inline void
         measure_noise_spectral(
             Image& img_obj,
             const py::array_t<pixel_t>& noise_array,
-            const std::complex<double>* add,
+            const std::complex<double>* const* add,
             int ncol,
+            int nst,
+            double t,
+            double dscale,
             double y,
             double x,
-            FpfsShapelets& xw,
-            FpfsShapelets& xk1,
-            FpfsShapelets& xk2
+            ModesDs& xw,
+            ModesDs& xk1,
+            ModesDs& xk2
         ) const {
             const int y_index = static_cast<int>(std::round(y));
             const int x_index = static_cast<int>(std::round(x));
@@ -727,18 +1145,17 @@ namespace anacal {
             const double dx = x - x_index;
             img_obj.set_r(noise_array, x_index, y_index, false);
             img_obj.fft();
-            double ma[36];
-            img_obj.measure_into_raw(add, 3 * ncol, dy, dx, ma);
-            for (int i = 0; i < 3 * ncol; ++i) {
+            const int n3 = 3 * ncol;
+            double ma[36 * adaptive_nst];
+            for (int k = 0; k < nst; ++k) {
+                img_obj.measure_into_raw(add[k], n3, dy, dx, ma + k * n3);
+            }
+            for (int i = 0; i < n3 * nst; ++i) {
                 ma[i] *= this->fft_ratio;
             }
-            const std::size_t nb = sizeof(double) * ncol;
-            xw = FpfsShapelets{};
-            xk1 = FpfsShapelets{};
-            xk2 = FpfsShapelets{};
-            std::memcpy(&xw, ma, nb);
-            std::memcpy(&xk1, ma + ncol, nb);
-            std::memcpy(&xk2, ma + 2 * ncol, nb);
+            xw = combine_stacks(ma, n3, ncol, nst, t, dscale);
+            xk1 = combine_stacks(ma + ncol, n3, ncol, nst, t, dscale);
+            xk2 = combine_stacks(ma + 2 * ncol, n3, ncol, nst, t, dscale);
             return;
         };
     };

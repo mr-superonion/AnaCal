@@ -9,6 +9,7 @@ from ._anacal.fpfs import ForceTask as _ForceTask
 from ._anacal.fpfs import (
     FpfsImage,
 )
+from ._anacal.fpfs import adaptive_catalog_columns as _adaptive_columns
 from ._anacal.fpfs import catalog_columns as _catalog_columns
 from ._anacal.fpfs import gauss_kernel_rfft as _gauss_kernel_rfft
 from ._anacal.fpfs import get_kmax as _get_kmax
@@ -61,7 +62,121 @@ def shapelet_norder(shape_order: int) -> int:
         ) from None
 
 
-@lru_cache(maxsize=16)
+# ---------------------------------------------------------------------
+# Adaptive kernel ("afpfs1"): every source is measured with its own
+# kernel size, derived from the detector's Gaussian fit.
+# ---------------------------------------------------------------------
+ADAPTIVE_KERNEL = "afpfs1"
+# the second adaptive kernel, measured when adaptive_fpfs_kernel_ratio
+# >= ADAPTIVE_RATIO_MIN: sigma^2 = floor^2 + ratio^2 T / 2
+ADAPTIVE_KERNEL2 = "afpfs2"
+ADAPTIVE_RATIO_MIN = 1.1
+# detection-catalog columns the adaptive kernel size is built from (the
+# intrinsic covariance of the Gaussian fit, arcsec^2, with its shear
+# response; see table.h galRow)
+ADAPTIVE_FIT_COLUMNS = (
+    "mxx", "myy", "dmxx_dg1", "dmxx_dg2", "dmyy_dg1", "dmyy_dg2"
+)
+# relative width of the smooth clamps of the size map (in sigma^2)
+_ADAPTIVE_CLAMP_EPS = 0.02
+
+
+def _smooth_max(y, lo, eps):
+    """``lo`` for y << lo, ``y`` for y >> lo, C-infinity in between;
+    returns the value and d/dy (ngmix rmodel.h smooth_max)."""
+    d = y - lo
+    r = np.sqrt(d * d + eps * eps)
+    return lo + 0.5 * (d + r), 0.5 * (1.0 + d / r)
+
+
+def _smooth_min(y, hi, eps):
+    """``y`` for y << hi, ``hi`` for y >> hi; value and d/dy."""
+    d = y - hi
+    r = np.sqrt(d * d + eps * eps)
+    return hi + 0.5 * (d - r), 0.5 * (1.0 - d / r)
+
+
+def adaptive_sigma(
+    mxx, myy, dmxx_dg1, dmxx_dg2, dmyy_dg1, dmyy_dg2,
+    sigma_floor: float, sigma_max: float, ratio: float = 1.0,
+):
+    """Per-source kernel size of the adaptive measurement.
+
+    sigma^2 = sigma_floor^2 + ratio^2 T / 2 with T = mxx + myy the trace
+    of the fit's intrinsic (pre-seeing) covariance, i.e. the galaxy's
+    own variance along one axis (times ``ratio``^2; 1 for afpfs1, the
+    configured ``adaptive_fpfs_kernel_ratio`` for afpfs2) is added to
+    the kernel's in quadrature.  A smooth floor at ``sigma_floor`` and a
+    smooth cap at ``sigma_max`` keep sigma inside (sigma_floor,
+    sigma_max) with a derivative everywhere, so the shear response
+    dsigma/dg (from the fit's dmxx_dg, dmyy_dg) is that of the size
+    actually used.
+
+    Returns:
+        tuple[NDArray, NDArray, NDArray]: ``(sigma, dsigma_dg1,
+        dsigma_dg2)`` in arcsec.
+    """
+    s0sq = float(sigma_floor) ** 2
+    smsq = float(sigma_max) ** 2
+    half = 0.5 * float(ratio) ** 2
+    f64 = np.float64
+    tt = np.asarray(mxx, dtype=f64) + np.asarray(myy, dtype=f64)
+    y = s0sq + half * tt
+    dy1 = half * (np.asarray(dmxx_dg1, f64) + np.asarray(dmyy_dg1, f64))
+    dy2 = half * (np.asarray(dmxx_dg2, f64) + np.asarray(dmyy_dg2, f64))
+    # cap first, floor last: the floor is then strict (the cap's clamp
+    # lowers every value by eps^2 / (4 |y - cap|), which must not push a
+    # small source below the floor node of the basis table)
+    eps = _ADAPTIVE_CLAMP_EPS * s0sq
+    y, d = _smooth_min(y, smsq, eps)
+    dy1, dy2 = dy1 * d, dy2 * d
+    y, d = _smooth_max(y, s0sq, eps)
+    dy1, dy2 = dy1 * d, dy2 * d
+    sigma = np.sqrt(y)
+    return sigma, dy1 / (2.0 * sigma), dy2 / (2.0 * sigma)
+
+
+def adaptive_sigma_grid(sigma_floor: float, sigma_max: float, step: float):
+    """Node sizes of the adaptive basis table: geometric (uniform in
+    log sigma) with relative spacing ``step``, one node below
+    ``sigma_floor`` (= node 1) and nodes through and one beyond
+    ``sigma_max``, so every size in [sigma_floor, sigma_max] has the
+    four nodes its cubic interpolant needs."""
+    if not sigma_max > sigma_floor > 0:
+        raise ValueError(
+            "adaptive kernel: need 0 < sigma_floor < sigma_max, got "
+            f"{sigma_floor!r}, {sigma_max!r}"
+        )
+    if not 0 < step < 1:
+        raise ValueError(f"adaptive_grid_step must be in (0, 1), got {step!r}")
+    n_int = int(np.ceil(np.log(sigma_max / sigma_floor) / np.log1p(step)))
+    return float(sigma_floor) * (1.0 + step) ** np.arange(-1, n_int + 2)
+
+
+@lru_cache(maxsize=8)
+def _adaptive_table(
+    norder: int, npix: int, pixel_scale: float, kmax: float, grid: tuple
+):
+    """Tabulated basis of the adaptive kernel over the size grid.
+
+    Returns ``(table, b00)``: the (n_nodes, nky, nkx, ncol) C-contiguous
+    stack of the node bases (what ForceTask.process_image_adaptive
+    interpolates on) and the tuple of the nodes' m00 basis functions
+    (for the mode-noise table).
+    """
+    bases = [
+        _fpfs_bases(norder, npix, float(pixel_scale / sig), kmax)
+        for sig in grid
+    ]
+    table = np.ascontiguousarray(
+        np.stack([b[1] for b in bases], axis=0), dtype=np.complex128
+    )
+    table.setflags(write=False)
+    b00 = tuple(b[0][0] for b in bases)
+    return table, b00
+
+
+@lru_cache(maxsize=256)
 def _fpfs_bases(norder: int, npix: int, sigma: float, kmax: float):
     """Shapelet basis for :class:`FpfsTask`, cached across constructions.
 
@@ -221,19 +336,36 @@ _FLUX_PHOTOZ_TEMPLATE = {
 
 
 @lru_cache(maxsize=64)
-def _catalog_dtype(kernel: str, base_column_name: str | None):
+def _catalog_dtype(
+    kernel: str, base_column_name: str | None, adaptive: bool = False
+):
     """FINAL output dtype for one kernel's forced catalog.
 
     Built once per (kernel, band prefix) from the canonical C++ field
-    order (``catalog_columns``), with the kernel token and band prefix
-    already applied -- ForceTask writes straight into it, so the catalog
-    is born with the right column names.
+    order (``catalog_columns``, or ``adaptive_catalog_columns`` for the
+    adaptive kernel: the same fields plus sigma, dsigma_dg1,
+    dsigma_dg2), with the kernel token and band prefix already applied
+    -- ForceTask writes straight into it, so the catalog is born with
+    the right column names.
     """
-    mapping = _kernel_rename_map(_catalog_columns, kernel)
+    columns = _adaptive_columns if adaptive else _catalog_columns
+    mapping = _kernel_rename_map(columns, kernel)
     prefix = base_column_name or ""
-    return np.dtype(
-        [(prefix + mapping[name], "<f8") for name in _catalog_columns]
-    )
+    return np.dtype([(prefix + mapping[name], "<f8") for name in columns])
+
+
+_POSITION_DTYPE = np.dtype([("y", np.float64), ("x", np.float64)])
+
+
+def _positions(detection):
+    """The ('y', 'x') record array ForceTask takes: the detection
+    itself when it has exactly those fields, else a copy of them."""
+    if detection.dtype == _POSITION_DTYPE:
+        return detection
+    det = np.zeros(len(detection), dtype=_POSITION_DTYPE)
+    det["y"] = detection["y"]
+    det["x"] = detection["x"]
+    return det
 
 
 def _measure_kernel_catalog(
@@ -260,6 +392,8 @@ def _measure_kernel_catalog(
     renoise_delta=0.01,
     noise_corr=None,
     noise_rotated=True,
+    adaptive=False,
+    adaptive_ratio=1.0,
 ):
     """One kernel's finished forced catalog via the C++ ``ForceTask``.
 
@@ -269,6 +403,12 @@ def _measure_kernel_catalog(
     single C++ pass over the sources with the GIL released, writing
     finished rows straight into the final dtype.  Row values are
     bit-identical to the original numpy assembly.
+
+    With ``adaptive`` the kernel size is per source (``sigma_shapelets``
+    is then the floor of the size map, ``adaptive_ratio`` its ratio, see
+    :func:`adaptive_sigma`): the basis is tabulated on a size grid, the
+    mode-noise scalar is tabulated at the same nodes, and ``detection``
+    must carry the fit columns ``ADAPTIVE_FIT_COLUMNS``.
     """
     ftask = FpfsTask(
         npix=fpfs_config.npix,
@@ -345,6 +485,40 @@ def _measure_kernel_catalog(
         klim,
         fpfs_c0,
     )
+    if adaptive:
+        missing = [
+            c for c in ADAPTIVE_FIT_COLUMNS
+            if c not in (detection.dtype.names or ())
+        ]
+        if missing:
+            raise ValueError(
+                "adaptive kernel: the detection catalog lacks the fit "
+                f"columns {missing}"
+            )
+        sigma_max = fpfs_config.adaptive_sigma_max
+        if sigma_max <= 0:
+            sigma_max = 3.0 * sigma_shapelets
+        if sigma_max > 3.0:
+            raise ValueError("adaptive_sigma_max should be < 3 arcsec")
+        grid = adaptive_sigma_grid(
+            sigma_shapelets, sigma_max, fpfs_config.adaptive_grid_step
+        )
+        table, b00 = _adaptive_table(
+            ftask.norder, fpfs_config.npix, float(pixel_scale),
+            float(ftask.kmax), tuple(float(g) for g in grid),
+        )
+        std_grid = ftask.m00_std_grid(
+            b00,
+            variance=noise_variance,
+            renoise_kernels=None if klim > 1e9 else kernels,
+            with_noise_image=noise_array is not None,
+        )
+        sig, dsig1, dsig2 = adaptive_sigma(
+            detection["mxx"], detection["myy"],
+            detection["dmxx_dg1"], detection["dmxx_dg2"],
+            detection["dmyy_dg1"], detection["dmyy_dg2"],
+            sigma_shapelets, sigma_max, adaptive_ratio,
+        )
     if psf_model is not None:
         # Per-source PSFs are drawn NATIVELY inside the C++ ForceTask
         # loop (psf.PerSourcePsf); psf_array is the per-cell /
@@ -363,13 +537,11 @@ def _measure_kernel_catalog(
         None if n_mask_base is None
         else np.ascontiguousarray(n_mask_base, dtype=np.float32)
     )
-    return force.process_image(
+    common = dict(
         gal_array=gal_array,
         psf_array=psf_use,
-        filter_image=ftask.bfunc_use,
-        det=detection,
-        std_m00=float(ftask.std_m00),
-        out_dtype=_catalog_dtype(kernel, base_column_name),
+        det=_positions(detection),
+        out_dtype=_catalog_dtype(kernel, base_column_name, adaptive),
         noise_array=noise_array,
         noise2_array=(
             None if renoise is None else np.asarray(
@@ -382,6 +554,21 @@ def _measure_kernel_catalog(
         psf_offset_x=float(psf_offset[0]),
         psf_offset_y=float(psf_offset[1]),
         renoise=renoise,
+    )
+    if adaptive:
+        return force.process_image_adaptive(
+            filter_table=table,
+            sigma_grid=np.ascontiguousarray(grid, dtype=np.float64),
+            std_m00_grid=np.ascontiguousarray(std_grid, dtype=np.float64),
+            sigma=np.ascontiguousarray(sig, dtype=np.float64),
+            dsigma_dg1=np.ascontiguousarray(dsig1, dtype=np.float64),
+            dsigma_dg2=np.ascontiguousarray(dsig2, dtype=np.float64),
+            **common,
+        )
+    return force.process_image(
+        filter_image=ftask.bfunc_use,
+        std_m00=float(ftask.std_m00),
+        **common,
     )
 
 
@@ -573,6 +760,87 @@ class FpfsTask:
             / self.pixel_scale**4.0
         )
         return cov_elems
+
+    def _noise_weight(
+        self,
+        variance: float,
+        psf_pow: NDArray,
+        noise_pf: NDArray | None = None,
+        ratio: NDArray | None = None,
+    ) -> NDArray:
+        """The deconvolved noise power times the half-plane weights,
+        as :meth:`calculate_covariance` forms it: the covariance of two
+        modes a, b is ``sum(a * weight * conj(b)).real / scale^4``."""
+        if noise_pf is not None:
+            if noise_pf.shape == (self.npix, self.npix // 2 + 1):
+                noise_pf = np.array(noise_pf, dtype=np.float64)
+            elif noise_pf.shape == (self.npix, self.npix):
+                noise_pf = np.fft.ifftshift(noise_pf)
+                noise_pf = np.array(
+                    noise_pf[:, : self.npix // 2 + 1], dtype=np.float64
+                )
+            else:
+                raise ValueError("noise power not in correct shape")
+        else:
+            ss = (self.npix, self.npix // 2 + 1)
+            noise_pf = np.ones(ss)
+        norm_factor = variance * self.npix**2.0 / noise_pf[0, 0]
+        noise_pf = noise_pf * norm_factor
+
+        img_obj = Image(nx=self.npix, ny=self.npix, scale=self.pixel_scale)
+        img_obj.set_f(noise_pf)
+        img_obj.deconvolve(
+            psf_image=psf_pow,
+            klim=self.kmax / self.pixel_scale,
+        )
+        noise_pf_deconv = img_obj.draw_f().real
+        del img_obj
+        if ratio is not None:
+            noise_pf_deconv = noise_pf_deconv * ratio
+        _w = np.ones(psf_pow.shape) * 2.0
+        _w[:, 0] = 1.0
+        _w[:, -1] = 1.0
+        return _w * noise_pf_deconv
+
+    def m00_std_grid(
+        self,
+        b00_list,
+        variance: float,
+        noise_pf: NDArray | None = None,
+        renoise_kernels=None,
+        with_noise_image: bool = True,
+    ) -> NDArray:
+        """Mode-noise scalar ``std_m00`` for a list of m00 basis
+        functions (the nodes of the adaptive kernel's size grid), over
+        the same total noise spectrum :meth:`prepare_covariance` uses
+        with the same arguments.  The basis of this task is not used.
+        """
+        if renoise_kernels is not None:
+            rk = renoise_kernels
+            sd = np.asarray(rk.Sd0)
+            total = (
+                np.asarray(renoise_mod.total_spectrum(rk))
+                if with_noise_image else np.asarray(rk.Sd)
+            )
+            ratio = np.where(
+                sd > 0, total / np.where(sd > 0, sd, 1.0), 1.0
+            )
+            weight = self._noise_weight(
+                variance, self.psf_pow, noise_pf, ratio
+            )
+        else:
+            weight = self._noise_weight(variance, self.psf_pow, noise_pf)
+            noise_pf_rot = (
+                None if noise_pf is None else self._rotate_noise_pf(noise_pf)
+            )
+            weight = weight + self._noise_weight(
+                variance, self._rotate_rfft_pow(self.psf_pow), noise_pf_rot
+            )
+        out = np.empty(len(b00_list), dtype=np.float64)
+        for i, b00 in enumerate(b00_list):
+            var00 = np.sum(b00 * weight * np.conjugate(b00)).real
+            out[i] = np.sqrt(var00 / self.pixel_scale**4.0)
+        return out
 
     def _rotate_rfft_pow(self, pf: NDArray) -> NDArray:
         """Rotate a power spectrum in rfft format 90 degrees CW around DC.
@@ -902,6 +1170,36 @@ class FpfsConfig:
     """Weighting parameter for m00 for ellipticity definition (flux scale,
     at THRESHOLD_REF_MAG_ZERO)."""
 
+    adaptive_sigma: bool = False
+    """Also measure the adaptive kernel ``afpfs1``: every source with its
+    own kernel size sigma^2 = floor^2 + T / 2, T the trace of the
+    detector's fitted intrinsic covariance (``mxx + myy`` of the
+    detection catalog, which must then carry ``ADAPTIVE_FIT_COLUMNS``),
+    with the shear response of the size folded into every response.
+    Its columns are those of the fixed kernels plus ``sigma``,
+    ``dsigma_dg1``, ``dsigma_dg2``.  The fixed kernels fpfs1 (and
+    fpfs2) are measured regardless."""
+
+    adaptive_fpfs_kernel_ratio: float = 1.0
+    """Second adaptive kernel ``afpfs2``, measured when this is >=
+    ADAPTIVE_RATIO_MIN (1.1) and ``adaptive_sigma`` is on, with
+    sigma^2 = floor^2 + ratio^2 T / 2 (same floor, cap and grid as
+    afpfs1).  Below 1.1 no afpfs2 is measured."""
+
+    adaptive_sigma_floor: float = -1
+    """Floor of the adaptive kernel size [arcsec]; <= 0 uses
+    ``sigma_shapelets1``."""
+
+    adaptive_sigma_max: float = -1
+    """Cap of the adaptive kernel size [arcsec] (smooth); <= 0 uses
+    three times the floor.  Must stay below 3 arcsec."""
+
+    adaptive_grid_step: float = 0.02
+    """Relative spacing of the size grid the adaptive basis is tabulated
+    on; a source's modes are the cubic (Catmull-Rom, in log size)
+    through the four nodes around its size, with the interpolant's
+    slope as their size derivative."""
+
     shape_order: int = SHAPE_ORDER_DEFAULT
     """Order of the shear estimator: 2 measures the 9 shapelet modes
     through m44, enough for e = m22 / (m00 + c0) with its response and
@@ -1026,7 +1324,11 @@ def process_image(
         NDArray: Structured FPFS catalogue (``catalog_columns`` per
         kernel, same layout for both ``fpfs_config.shape_order``; at
         order 2 the 4th-order estimator columns ``q1``, ``q2``,
-        ``dq*_dg*`` and ``dm42*_dg*`` are NaN).
+        ``dq*_dg*`` and ``dm42*_dg*`` are NaN).  With
+        ``fpfs_config.adaptive_sigma`` the ``afpfs1`` kernel's columns
+        (``adaptive_catalog_columns``) follow those of the fixed
+        kernels, then ``afpfs2``'s when ``adaptive_fpfs_kernel_ratio``
+        >= 1.1.
     """
     # The flux-scale ellipticity weight c0 is defined at
     # THRESHOLD_REF_MAG_ZERO -- the fixed AB nanojansky zeropoint that the
@@ -1060,8 +1362,12 @@ def process_image(
             "pass its positions as a structured array with ('y', 'x') "
             "columns."
         )
-    if detection.dtype.names != ("y", "x"):
-        raise ValueError("detection has wrong column names")
+    names = detection.dtype.names or ()
+    if ("y" not in names) or ("x" not in names):
+        raise ValueError(
+            "detection needs ('y', 'x') pixel columns (plus the fit "
+            "columns ADAPTIVE_FIT_COLUMNS for the adaptive kernel)"
+        )
     if n_mask_base is not None:
         if len(n_mask_base) != len(detection):
             raise ValueError(
@@ -1086,7 +1392,7 @@ def process_image(
         )
     shapelet_norder(fpfs_config.shape_order)
 
-    def measure(sigma_shapelets, kernel):
+    def measure(sigma_shapelets, kernel, adaptive=False, ratio=1.0):
         return _measure_kernel_catalog(
             fpfs_config=fpfs_config,
             pixel_scale=pixel_scale,
@@ -1110,6 +1416,8 @@ def process_image(
             renoise_delta=renoise_delta,
             noise_corr=noise_corr,
             noise_rotated=noise_rotated,
+            adaptive=adaptive,
+            adaptive_ratio=ratio,
         )
 
     # One GIL-released C++ pass per kernel (fpfs.ForceTask, structured
@@ -1119,6 +1427,21 @@ def process_image(
     out_list = [measure(fpfs_config.sigma_shapelets1, "fpfs1")]
     if fpfs_config.sigma_shapelets2 > 0:
         out_list.append(measure(fpfs_config.sigma_shapelets2, "fpfs2"))
+    ratio = fpfs_config.adaptive_fpfs_kernel_ratio
+    if (ratio >= ADAPTIVE_RATIO_MIN) and not fpfs_config.adaptive_sigma:
+        raise ValueError(
+            "adaptive_fpfs_kernel_ratio >= 1.1 asks for the afpfs2 kernel, "
+            "which needs adaptive_sigma=True"
+        )
+    if fpfs_config.adaptive_sigma:
+        floor = fpfs_config.adaptive_sigma_floor
+        if floor <= 0:
+            floor = fpfs_config.sigma_shapelets1
+        out_list.append(measure(floor, ADAPTIVE_KERNEL, adaptive=True))
+        if ratio >= ADAPTIVE_RATIO_MIN:
+            out_list.append(
+                measure(floor, ADAPTIVE_KERNEL2, adaptive=True, ratio=ratio)
+            )
 
     # A single kernel needs no merge; two kernels keep the original rfn
     # merge (values and column order are unchanged either way).
