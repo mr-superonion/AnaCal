@@ -40,8 +40,10 @@ pyExportFpfsForce(py::module_& fpfs) {
         )
         .def("process_image", &ForceTask::process_image,
             "Measure the finished per-kernel catalog at the given "
-            "positions.  psf_array is one (ny, nx) stamp or an "
-            "(nsrc, ny, nx) stack of pre-drawn per-source stamps; "
+            "positions.  psf_array is one (ny, nx) stamp (per-source "
+            "PSFs come through psf_model); filter_image holds 9 modes "
+            "(through m44: 2nd-order estimator, q and its responses "
+            "NaN) or 12 modes (through m64: 4th-order estimator too); "
             "std_m00 is the mode-noise scalar from "
             "FpfsTask.prepare_covariance; out_dtype carries the final "
             "column names (see catalog_columns for the field order).",

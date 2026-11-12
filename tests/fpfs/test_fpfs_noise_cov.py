@@ -18,12 +18,14 @@ def test_covariance_regression():
     psf_array = load("fpfs_noise_cov")["psf_moffat35"]
     cov_elem = load_reference("fpfs_noise_cov_elem")
 
+    # the stored matrix is the 12 x 12 (shape_order=4) covariance
     ftask = anacal.fpfs.FpfsTask(
         npix=psf_array.shape[0],
         psf_array=psf_array,
         pixel_scale=pixel_scale,
         sigma_shapelets=sigma_as,
         kmax_thres=1e-20,
+        shape_order=4,
     )
     cov_elem2 = ftask.calculate_covariance(
         variance=variance,

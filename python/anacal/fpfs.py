@@ -32,7 +32,33 @@ from .psf import BasePsf
 FLUX_ERR_MIN = 1e-8
 
 
-norder_shapelets = 6
+# Shear-estimator order -> highest shapelet order of the basis.  The
+# 2nd-order estimator e = m22 / (m00 + c0) needs m40 and m44 for de/dg
+# and m42 for the trace-size response dm20/dg = -sqrt(6) m42, so its
+# basis runs through m44 (9 modes); the 4th-order estimator
+# q = m42 / (m00 + c0) needs m60 and m64 for dq/dg, so its basis runs
+# through m64 (12 modes).
+SHAPE_ORDER_DEFAULT = 2
+_SHAPELET_NORDER = {2: 4, 4: 6}
+
+
+def shapelet_norder(shape_order: int) -> int:
+    """Highest shapelet order of the basis for a shear-estimator order.
+
+    Args:
+        shape_order (int): 2 (e, with the trace-size response) or 4
+            (e and q).
+
+    Returns:
+        int: ``norder`` for :func:`shapelets2d`: 4 (9 modes through
+        m44) or 6 (12 modes through m64).
+    """
+    try:
+        return _SHAPELET_NORDER[int(shape_order)]
+    except (KeyError, ValueError, TypeError):
+        raise ValueError(
+            f"shape_order must be 2 or 4, got {shape_order!r}"
+        ) from None
 
 
 @lru_cache(maxsize=16)
@@ -96,7 +122,10 @@ def shapelets2d(norder: int, npix: int, sigma: float, kmax: float):
     M44 (real & imag), M60, M64c, M64s.
 
     Args:
-        norder (int): Maximum shapelet order.  Must be 2, 4, or 6.
+        norder (int): Maximum shapelet order.  Must be 2, 4, or 6: the
+            first 4, 9 or all 12 modes of the list above.  Shear
+            estimation needs 4 (2nd-order estimator) or 6 (4th-order
+            estimator too); see :func:`shapelet_norder`.
         npix (int): Number of pixels along each axis of the square grid.
         sigma (float): Gaussian kernel scale in Fourier-space units.
         kmax (float): Truncation radius in Fourier space.
@@ -127,6 +156,7 @@ def shapelets2d(norder: int, npix: int, sigma: float, kmax: float):
         return np.array(chi)[0:9], name_s[0:9]
     elif norder == 2:
         return np.array(chi)[0:4], name_s[0:4]
+    raise ValueError(f"norder must be 2, 4 or 6, got {norder!r}")
 
 
 def get_kmax(
@@ -247,6 +277,7 @@ def _measure_kernel_catalog(
         psf_array=psf_array,
         kmax=fpfs_config.kmax,
         kmax_thres=fpfs_config.kmax_thres,
+        shape_order=fpfs_config.shape_order,
     )
     klim = 1e10 if ftask.kmax is None else (ftask.kmax / pixel_scale)
     if renoise_mode not in ("rotate", "spectral"):
@@ -394,6 +425,11 @@ class FpfsTask:
             deconvolved image by the same amount.  Defaults to a delta
             function at that pixel.
         kmax_thres (float): Threshold for automatic ``kmax`` estimation.
+        shape_order (int): Order of the shear estimator the basis must
+            serve: 2 measures the 9 modes through m44 (e and its
+            response, the trace-size response dm20/dg), 4 the 12 modes
+            through m64 (q and its response as well).  See
+            :func:`shapelet_norder`.
     """
 
     def __init__(
@@ -405,8 +441,11 @@ class FpfsTask:
         kmax: float | None = None,
         psf_array: NDArray | None = None,
         kmax_thres: float = 1e-20,
+        shape_order: int = SHAPE_ORDER_DEFAULT,
     ) -> None:
         self.npix = npix
+        self.shape_order = int(shape_order)
+        self.norder = shapelet_norder(shape_order)
 
         self.sigma_shapelets = sigma_shapelets
         if self.sigma_shapelets > 3.0:
@@ -457,7 +496,7 @@ class FpfsTask:
         """Prepare the FPFS shapelet bases (cached, see _fpfs_bases)."""
 
         self.bfunc, self.bfunc_use, snames = _fpfs_bases(
-            norder_shapelets,
+            self.norder,
             self.npix,
             float(self.sigmaf),
             float(self.kmax),
@@ -863,6 +902,15 @@ class FpfsConfig:
     """Weighting parameter for m00 for ellipticity definition (flux scale,
     at THRESHOLD_REF_MAG_ZERO)."""
 
+    shape_order: int = SHAPE_ORDER_DEFAULT
+    """Order of the shear estimator: 2 measures the 9 shapelet modes
+    through m44, enough for e = m22 / (m00 + c0) with its response and
+    for the trace-size response dm20/dg = -sqrt(6) m42; the 4th-order
+    columns q1, q2, dq*_dg* and dm42*_dg* are then NaN (m42c/s
+    themselves are measured).  4 measures the 12 modes through m64 and
+    fills q = m42 / (m00 + c0) and its response too.  The catalog
+    columns are the same either way."""
+
 
 def _rename_linear_fields(
     arr: np.ndarray,
@@ -975,7 +1023,10 @@ def process_image(
             image noise's own correlation.
 
     Returns:
-        NDArray: Structured FPFS catalogue.
+        NDArray: Structured FPFS catalogue (``catalog_columns`` per
+        kernel, same layout for both ``fpfs_config.shape_order``; at
+        order 2 the 4th-order estimator columns ``q1``, ``q2``,
+        ``dq*_dg*`` and ``dm42*_dg*`` are NaN).
     """
     # The flux-scale ellipticity weight c0 is defined at
     # THRESHOLD_REF_MAG_ZERO -- the fixed AB nanojansky zeropoint that the
@@ -1033,6 +1084,7 @@ def process_image(
             "sigma_shapelets1 must be set (> 0): it is the measurement "
             "kernel required for shear estimation."
         )
+    shapelet_norder(fpfs_config.shape_order)
 
     def measure(sigma_shapelets, kernel):
         return _measure_kernel_catalog(

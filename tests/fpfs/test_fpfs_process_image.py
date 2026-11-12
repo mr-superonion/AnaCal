@@ -1,6 +1,8 @@
 """anacal.fpfs.process_image on the noisy COSMOS scene: the native
 per-source PSF path (a GridPsfModel holding one stamp) must equal the
-constant-PSF path bit for bit.
+constant-PSF path bit for bit, and the 2nd-order estimator
+(shape_order=2, 9 modes) must reproduce the 4th-order run's shared
+columns bit for bit with the q family NaN.
 """
 
 import time
@@ -18,6 +20,7 @@ def test_grid_psf_matches_constant_psf():
     fpfs_config = anacal.fpfs.FpfsConfig(
         sigma_shapelets1=0.52,  # The first measurement scale
         sigma_shapelets2=0.45,  # The second measurement scale
+        shape_order=4,
     )
     gal_array, psf_array = cosmos_scene()
     gal_array = gal_array + np.random.RandomState(noise_seed).normal(
@@ -56,6 +59,26 @@ def test_grid_psf_matches_constant_psf():
     print("native per-source time: ", t2 - t1)
     assert len(out1) == len(detection)
     assert np.all(out1 == out2)
+
+    # shape_order=2 (the default): the 9 modes through m44 are the same
+    # sums as in the 12-mode run, so every column outside the 4th-order
+    # family is bit-identical; q and its responses are NaN
+    kwargs["fpfs_config"] = anacal.fpfs.FpfsConfig(
+        sigma_shapelets1=0.52, sigma_shapelets2=0.45
+    )
+    assert kwargs["fpfs_config"].shape_order == 2
+    t2 = time.time()
+    out3 = anacal.fpfs.process_image(**kwargs)
+    print("shape_order=2 time: ", time.time() - t2)
+    assert out3.dtype == out1.dtype
+    nan_tail = ("q1", "q2", "dq1_dg1", "dq1_dg2", "dq2_dg1", "dq2_dg2",
+                "dm42c_dg1", "dm42c_dg2", "dm42s_dg1", "dm42s_dg2")
+    for name in out1.dtype.names:
+        if name.split("_", 1)[1] in nan_tail:
+            assert np.all(np.isnan(out3[name])), name
+            assert np.all(np.isfinite(out1[name])), name
+        else:
+            assert np.all(out3[name] == out1[name]), name
 
 
 def test_grid_psf_matches_constant_psf_spectral():
@@ -102,4 +125,7 @@ def test_grid_psf_matches_constant_psf_spectral():
     )
     out2 = anacal.fpfs.process_image(psf_model=grid_model, **kwargs)
     assert len(out1) == len(detection)
-    assert np.all(out1 == out2)
+    # default shape_order=2: the q family is NaN in both, so compare per
+    # column (assert_array_equal is exact and treats NaN as equal)
+    for name in out1.dtype.names:
+        np.testing.assert_array_equal(out1[name], out2[name], err_msg=name)

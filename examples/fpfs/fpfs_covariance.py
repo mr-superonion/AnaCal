@@ -19,8 +19,6 @@ ftask = anacal.fpfs.FpfsTask(
     psf_array=psf_array,
     pixel_scale=pixel_scale,
     sigma_shapelets=0.5374011,
-    do_detection=True,
-    noise_variance=noise_variance,
 )
 
 cov_matrix = ftask.prepare_covariance(variance=noise_variance)

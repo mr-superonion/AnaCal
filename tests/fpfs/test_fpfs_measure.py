@@ -51,11 +51,13 @@ def test_forced_measurement_regression():
     sigma_shapelets = 0.53
     std = 0.2
 
+    # the stored basis and modes are the 12-mode (shape_order=4) set
     ftask = anacal.fpfs.FpfsTask(
         npix=64,
         pixel_scale=scale,
         sigma_shapelets=sigma_shapelets,
         psf_array=psf_array,
+        shape_order=4,
     )
 
     det1 = make_detection(gal_array, psf_array, scale, std**2.0)

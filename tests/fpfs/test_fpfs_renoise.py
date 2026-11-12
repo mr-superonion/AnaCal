@@ -88,7 +88,9 @@ def apply(filt, img):
 @pytest.mark.parametrize("c", [C, 0.01])
 def test_spectral_forced_measurement_terms(c):
     gal, eps, eps2, noise, psf, var, det = scene()
-    cfg = anacal.fpfs.FpfsConfig(sigma_shapelets1=SIGMA)
+    # shape_order=4: the check below includes the q response (the other
+    # spectral tests run at the default order 2, the 9-mode path)
+    cfg = anacal.fpfs.FpfsConfig(sigma_shapelets1=SIGMA, shape_order=4)
     klim, _ = fpfs_klim(cfg, psf)
     c0 = cfg.c0 * 10 ** ((MAG_ZERO - anacal.fpfs.THRESHOLD_REF_MAG_ZERO) / 2.5)
     img = gal + eps
@@ -228,6 +230,12 @@ def test_spectral_forced_measurement_errors():
             renoise_mode="spectral",
         )
     # without a noise image the mode is irrelevant: plain measurement
+    # (per column: the q family is NaN at the default shape_order=2)
     a = run(cfg, gal + eps, psf, det, var, renoise_mode="spectral")
     b = run(cfg, gal + eps, psf, det, var)
-    assert np.array_equal(a, b)
+    for name in a.dtype.names:
+        np.testing.assert_array_equal(a[name], b[name], err_msg=name)
+    # only the 2nd- and 4th-order estimators exist
+    cfg3 = anacal.fpfs.FpfsConfig(sigma_shapelets1=SIGMA, shape_order=3)
+    with pytest.raises(ValueError, match="shape_order"):
+        run(cfg3, gal + eps, psf, det, var)

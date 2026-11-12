@@ -18,9 +18,12 @@ namespace anacal {
     // One finished catalog row for a single shapelet kernel: the
     // FpfsShape fields, then the columns the Python assembly used to
     // append (m00_err and the shapelet flux family: flux, dflux_dg,
-    // flux_err, s2n, ds2n_dg), in the same order.  Kept a flat all-double standard-layout struct so the
-    // FpfsShape prefix can be filled with one memcpy and the numpy
-    // dtype is a plain packed f8 record.
+    // flux_err, s2n, ds2n_dg), in the same order.  Kept a flat
+    // all-double standard-layout struct so the FpfsShape prefix can be
+    // filled with one memcpy and the numpy dtype is a plain packed f8
+    // record.  The layout is the same for both shape orders (see
+    // ForceTask): with the 9-mode basis the 4th-order estimator q and
+    // its responses (q1, q2, dq*_dg*, dm42*_dg*) are NaN.
     struct FpfsCatRow {
         double e1;
         double de1_dg1;
@@ -149,9 +152,17 @@ namespace anacal {
     // packed all-float64 numpy dtype whose fields are the final column
     // names (kernel token and band prefix included), so no rename ever
     // happens downstream.  Field order is fixed by FpfsCatRow.
+    //
+    // The shape order is set by the filter stack: 9 modes (through
+    // M44: m00, m20, m22c/s, m40, m42c/s, m44c/s) give the 2nd-order
+    // estimator e = m22 / (m00 + c0) with its full response and the
+    // trace-size response dm20/dg = -sqrt(6) m42, while q and its
+    // responses are NaN; 12 modes (plus m60, m64c/s) add the 4th-order
+    // estimator q = m42 / (m00 + c0) and its response.  The 9 measured
+    // modes are identical between the two.
     // Option-2 (spectral renoising) noise filters from the deconvolved
-    // data filter fg = chi / p (nky x nkx x 12, contiguous): 36 columns
-    // [eta0, tau1, tau2] * fg applied to the transform of the pure-noise
+    // data filter fg = chi / p (nky x nkx x ncol, contiguous): 3 * ncol
+    // columns [eta0, tau1, tau2] * fg applied to the transform of the pure-noise
     // cutout eps', plus the filler filter rho * fg applied to the
     // transform of the second realization eps''.  The kernels are those
     // of the CELL (symmetrized once per call with the per-cell PSF,
@@ -163,6 +174,7 @@ namespace anacal {
         const std::complex<double>* fg,
         int nky,
         int nkx,
+        int ncol,
         const renoise::RenoiseKernels& rk,
         std::vector<std::complex<double>>& add,
         // the filler filter rho * fg, applied to the transform of the
@@ -178,16 +190,17 @@ namespace anacal {
             );
         }
         const std::size_t nf = static_cast<std::size_t>(nky) * nkx;
-        add.resize(nf * 36);
-        addrho.resize(nf * 12);
+        const std::size_t nc = static_cast<std::size_t>(ncol);
+        add.resize(nf * 3 * nc);
+        addrho.resize(nf * nc);
         for (std::size_t idx = 0; idx < nf; ++idx) {
-            const std::complex<double>* f = fg + idx * 12;
-            std::complex<double>* a = add.data() + idx * 36;
-            std::complex<double>* ar = addrho.data() + idx * 12;
-            for (int c = 0; c < 12; ++c) {
+            const std::complex<double>* f = fg + idx * nc;
+            std::complex<double>* a = add.data() + idx * 3 * nc;
+            std::complex<double>* ar = addrho.data() + idx * nc;
+            for (std::size_t c = 0; c < nc; ++c) {
                 a[c] = f[c] * rk.eta0[idx];
-                a[12 + c] = f[c] * rk.tau1[idx];
-                a[24 + c] = f[c] * rk.tau2[idx];
+                a[nc + c] = f[c] * rk.tau1[idx];
+                a[2 * nc + c] = f[c] * rk.tau2[idx];
                 ar[c] = f[c] * rk.rho[idx];
             }
         }
@@ -293,11 +306,15 @@ namespace anacal {
             const int nky = static_cast<int>(filter_image.shape(0));
             const int nkx = static_cast<int>(filter_image.shape(1));
             const int ncol = static_cast<int>(filter_image.shape(2));
-            if (ncol != 12) {
+            if ((ncol != 9) && (ncol != 12)) {
                 throw std::runtime_error(
-                    "FPFS Error: expected the 12-mode shapelet basis."
+                    "FPFS Error: expected the 9-mode (through m44) or "
+                    "12-mode (through m64) shapelet basis."
                 );
             }
+            // 4th-order estimator available only with m60, m64c, m64s
+            const bool fourth_order = (ncol == 12);
+            constexpr double qnan = std::numeric_limits<double>::quiet_NaN();
             // Per-source PSFs come exclusively from ``psf_model``
             // (drawn natively inside the loop below); everything else
             // shares the single 2-D ``psf_array`` stamp.
@@ -435,7 +452,8 @@ namespace anacal {
                 if (spectral) {
                     // the filler filter rho * fg acts on the eps'' stamp
                     spectral_noise_filters(
-                        fimg_g.data(), nky, nkx, rk_cell, fimg_add, fimg_rho
+                        fimg_g.data(), nky, nkx, ncol, rk_cell,
+                        fimg_add, fimg_rho
                     );
                 }
             }
@@ -576,13 +594,14 @@ namespace anacal {
                             // built once above) and only the filter
                             // fg = chi / p follows this source's PSF
                             spectral_noise_filters(
-                                fg, nky, nkx, rk_cell, fimg_add, fimg_rho
+                                fg, nky, nkx, ncol, rk_cell,
+                                fimg_add, fimg_rho
                             );
                         }
                     }
                     FpfsShapelets xg;
                     this->measure_at(
-                        img_obj, gal_array, fg,
+                        img_obj, gal_array, fg, ncol,
                         det_r(j).y, det_r(j).x, xg
                     );
                     FpfsShapelets x = xg;
@@ -593,7 +612,7 @@ namespace anacal {
                         // image's for the value AND the analytic response
                         FpfsShapelets xphi;
                         this->measure_at(
-                            img_obj, *noise2_array, fimg_rho.data(),
+                            img_obj, *noise2_array, fimg_rho.data(), ncol,
                             det_r(j).y, det_r(j).x, xphi
                         );
                         // value: image + filler + added noise; response:
@@ -601,7 +620,7 @@ namespace anacal {
                         // the assigned response of the noise
                         FpfsShapelets xw, xk1, xk2;
                         this->measure_noise_spectral(
-                            img_obj, *noise_array, fimg_add.data(),
+                            img_obj, *noise_array, fimg_add.data(), ncol,
                             det_r(j).y, det_r(j).x, xw, xk1, xk2
                         );
                         const FpfsShapelets xs = xg + xphi;
@@ -613,7 +632,7 @@ namespace anacal {
                         if (has_noise) {
                             FpfsShapelets xn;
                             this->measure_at(
-                                img_obj, *noise_array, fn,
+                                img_obj, *noise_array, fn, ncol,
                                 det_r(j).y, det_r(j).x, xn
                             );
                             x = xg + xn;
@@ -621,11 +640,28 @@ namespace anacal {
                         }
                         dgr = measure_shapelets_dg(x, yn);
                     }
+                    if (!fourth_order) {
+                        // dm42/dg needs m60 and m64, which the 9-mode
+                        // basis does not measure (their slots are zero):
+                        // the 4th-order response is undefined, not zero.
+                        dgr.dm42c_dg1 = qnan;
+                        dgr.dm42c_dg2 = qnan;
+                        dgr.dm42s_dg1 = qnan;
+                        dgr.dm42s_dg2 = qnan;
+                    }
                     const FpfsShape sh = measure_fpfs_shape(
                         this->c0, x, dgr
                     );
                     FpfsCatRow& row = rows[j];
                     std::memcpy(&row, &sh, sizeof(FpfsShape));
+                    if (!fourth_order) {
+                        // dq*_dg* are already NaN through dgr; q itself
+                        // is dropped too, as an estimator without a
+                        // response.  m42c/s stay: they are measured and
+                        // carry dm20/dg.
+                        row.q1 = qnan;
+                        row.q2 = qnan;
+                    }
                     row.m00_err = std_m00;
                     row.flux = sh.m00 * factor;
                     row.dflux_dg1 = sh.dm00_dg1 * factor;
@@ -640,14 +676,18 @@ namespace anacal {
         };
 
     private:
-        // One source's 12 shapelet modes at (y, x): the same operations
-        // as the loop body of FpfsImage::measure_source.  ``fimg`` is a
-        // contiguous (nky, nkx, 12) deconvolved filter buffer.
+        // One source's ``ncol`` (9 or 12) shapelet modes at (y, x): the
+        // same operations as the loop body of FpfsImage::measure_source.
+        // ``fimg`` is a contiguous (nky, nkx, ncol) deconvolved filter
+        // buffer.  The modes fill the FIRST ncol fields of FpfsShapelets
+        // (the field order is that of the basis); with 9 modes the
+        // m60, m64c, m64s slots are zero.
         inline void
         measure_at(
             Image& img_obj,
             const py::array_t<pixel_t>& gal_array,
             const std::complex<double>* fimg,
+            int ncol,
             double y,
             double x,
             FpfsShapelets& modes
@@ -658,21 +698,23 @@ namespace anacal {
             const double dx = x - x_index;
             img_obj.set_r(gal_array, x_index, y_index, false);
             img_obj.fft();
+            modes = FpfsShapelets{};
             double* mm = reinterpret_cast<double*>(&modes);
-            img_obj.measure_into_raw(fimg, 12, dy, dx, mm);
-            for (int i = 0; i < 12; ++i) {
+            img_obj.measure_into_raw(fimg, ncol, dy, dx, mm);
+            for (int i = 0; i < ncol; ++i) {
                 mm[i] *= this->fft_ratio;
             }
         };
 
         // Option-2 noise moments of one source from ONE transform of the
         // pure-noise cutout: the added noise and the two assigned
-        // responses (36 modes), same operations as measure_at.
+        // responses (3 * ncol modes), same operations as measure_at.
         inline void
         measure_noise_spectral(
             Image& img_obj,
             const py::array_t<pixel_t>& noise_array,
             const std::complex<double>* add,
+            int ncol,
             double y,
             double x,
             FpfsShapelets& xw,
@@ -686,13 +728,17 @@ namespace anacal {
             img_obj.set_r(noise_array, x_index, y_index, false);
             img_obj.fft();
             double ma[36];
-            img_obj.measure_into_raw(add, 36, dy, dx, ma);
-            for (int i = 0; i < 36; ++i) {
+            img_obj.measure_into_raw(add, 3 * ncol, dy, dx, ma);
+            for (int i = 0; i < 3 * ncol; ++i) {
                 ma[i] *= this->fft_ratio;
             }
-            std::memcpy(&xw, ma, sizeof(FpfsShapelets));
-            std::memcpy(&xk1, ma + 12, sizeof(FpfsShapelets));
-            std::memcpy(&xk2, ma + 24, sizeof(FpfsShapelets));
+            const std::size_t nb = sizeof(double) * ncol;
+            xw = FpfsShapelets{};
+            xk1 = FpfsShapelets{};
+            xk2 = FpfsShapelets{};
+            std::memcpy(&xw, ma, nb);
+            std::memcpy(&xk1, ma + ncol, nb);
+            std::memcpy(&xk2, ma + 2 * ncol, nb);
             return;
         };
     };

@@ -46,11 +46,14 @@ def do_test(scale, seed, rcut, gcomp):
         scale, seed, rcut, gcomp, nrot
     )
 
+    # shape_order=4: measure_fpfs takes the 12-mode FpfsShapelets record
+    # and the 4th-order estimator q is checked below
     ftask = anacal.fpfs.FpfsTask(
         npix=64,
         pixel_scale=scale,
         sigma_shapelets=sigma_shapelets,
         psf_array=psf_array,
+        shape_order=4,
     )
 
     src = ftask.run(
