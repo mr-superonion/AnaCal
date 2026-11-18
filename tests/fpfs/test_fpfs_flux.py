@@ -229,8 +229,17 @@ def test_sigma_psf_errors():
 # ---------------------------------------------------------------------
 # The extra flux-only kernels (flux_gauss1/2) measured in the fpfs1 pass
 # ---------------------------------------------------------------------
-NOISE_FAMILY = ("flux_err", "s2n", "ds2n_dg1", "ds2n_dg2")
-FAMILY = ("flux", "dflux_dg1", "dflux_dg2") + NOISE_FAMILY
+# flux, its shear responses, flux_err, s2n and its responses.  The same
+# arithmetic as a fixed kernel of that size, but through a second
+# inlined copy of it: a build may fuse the multiply-adds differently
+# (1 ulp, seen at 5e-15 on the responses), and the noise family's
+# std_m00 is summed in a different order (m00_std_grid), so the family
+# is compared at rtol 1e-10 (the user's choice for this test).
+FAMILY = (
+    "flux", "dflux_dg1", "dflux_dg2", "flux_err",
+    "s2n", "ds2n_dg1", "ds2n_dg2",
+)
+FAMILY_RTOL = 1e-10
 
 
 def _cosmos_run(cfg, mode="rotate", with_noise=True, seed=1):
@@ -264,9 +273,8 @@ def _fam_col(kernel, name):
 def test_flux_gauss_kernels_match_fixed_kernels(mode, with_noise):
     """flux_gauss{i} is the flux family of a fixed kernel of size
     flux_gauss_sigmas[i] with sigma_psf = flux_gauss_sigma_psf: the
-    same transforms, deconvolution, noise treatment and conversion, so
-    flux and its responses are bit-identical; the noise family differs
-    only by the summation order of its std_m00 (m00_std_grid)."""
+    same transforms, deconvolution, noise treatment and conversion
+    (FAMILY_RTOL)."""
     cfg = anacal.fpfs.FpfsConfig(sigma_shapelets1=0.53)
     assert cfg.flux_gauss_sigmas == (0.52, 0.65)
     assert cfg.flux_gauss_sigma_psf == 0.4
@@ -281,10 +289,7 @@ def test_flux_gauss_kernels_match_fixed_kernels(mode, with_noise):
         for name in FAMILY:
             a = cat[_fam_col(f"gauss{i + 1}", name)]
             b = ref[_fam_col("fpfs1", name)]
-            if name in NOISE_FAMILY:
-                np.testing.assert_allclose(a, b, rtol=1e-12, err_msg=name)
-            else:
-                np.testing.assert_array_equal(a, b, err_msg=name)
+            np.testing.assert_allclose(a, b, rtol=FAMILY_RTOL, err_msg=name)
     # the host kernel's own columns are untouched by the extras
     off = _cosmos_run(
         anacal.fpfs.FpfsConfig(sigma_shapelets1=0.53, flux_gauss_sigmas=()),
