@@ -11,6 +11,7 @@ from ._anacal.fpfs import (
 )
 from ._anacal.fpfs import adaptive_catalog_columns as _adaptive_columns
 from ._anacal.fpfs import catalog_columns as _catalog_columns
+from ._anacal.fpfs import flux_family_columns as _flux_family_columns
 from ._anacal.fpfs import gauss_kernel_rfft as _gauss_kernel_rfft
 from ._anacal.fpfs import get_kmax as _get_kmax
 from ._anacal.fpfs import m00_to_flux as _m00_to_flux
@@ -71,6 +72,10 @@ ADAPTIVE_KERNEL = "afpfs1"
 # >= ADAPTIVE_RATIO_MIN: sigma^2 = floor^2 + ratio^2 T / 2
 ADAPTIVE_KERNEL2 = "afpfs2"
 ADAPTIVE_RATIO_MIN = 1.1
+#: Token of the extra flux-only kernels measured with fpfs1
+#: (``FpfsConfig.flux_gauss_sigmas``): columns ``flux_gauss1``,
+#: ``dflux_gauss1_dg1``, ..., ``s2n_gauss2``, ``ds2n_gauss2_dg2``.
+FLUX_GAUSS_KERNEL = "gauss"
 # detection-catalog columns the adaptive kernel size is built from (the
 # intrinsic covariance of the Gaussian fit, arcsec^2, with its shear
 # response; see table.h galRow)
@@ -299,8 +304,18 @@ def get_kmax(
 def m00_to_flux(
     m00: float | NDArray,
     sigma_shapelets: float,
+    sigma_psf: float = -1.0,
 ):
     """Convert the ``m00`` shapelet coefficient to flux.
+
+    ``m00`` is the PSF-deconvolved image smoothed with a unit Gaussian of
+    width ``sigma_shapelets``, read at the source centre.  Seen as a
+    reconvolution with a Gaussian PSF of width ``sigma_psf`` followed by
+    a Gaussian-aperture flux in the window ``exp(-r^2 / 2 sigma_w^2)``
+    with ``sigma_w^2 = sigma_shapelets^2 - sigma_psf^2``, normalised as
+    the former Gaussian-aperture fluxes ``flux_gauss0/2`` were
+    (``sum(w d) 2 pi sigma_w^2 / sum(w^2)``), the flux is
+    ``m00 * 4 * pi * sigma_w^2``.
 
     Parameters
     ----------
@@ -308,16 +323,20 @@ def m00_to_flux(
         Scalar or array of monopole shapelet coefficients.
     sigma_shapelets
         sigma of Gaussian kernel for shapelets, in arcseconds.
+    sigma_psf
+        Width of the reconvolution PSF in arcseconds; must be smaller
+        than ``sigma_shapelets``.  ``<= 0`` (default) is the symmetric
+        split ``sigma_psf = sigma_w = sigma_shapelets / sqrt(2)``, for
+        which the flux is ``m00 * 2 * pi * sigma_shapelets**2`` (the
+        total flux of a point source).
 
     Returns
     -------
     float | NDArray
         Flux values corresponding to the provided ``m00`` coefficients.
-        Equal to ``m00 * 2 * pi * sigma_shapelets**2`` (the original
-        ``pixel_scale`` factor cancels and is no longer needed).
     """
 
-    return _m00_to_flux(m00, sigma_shapelets)
+    return _m00_to_flux(m00, sigma_shapelets, sigma_psf)
 
 
 # Flux-family columns carry the kernel token
@@ -337,7 +356,10 @@ _FLUX_PHOTOZ_TEMPLATE = {
 
 @lru_cache(maxsize=64)
 def _catalog_dtype(
-    kernel: str, base_column_name: str | None, adaptive: bool = False
+    kernel: str,
+    base_column_name: str | None,
+    adaptive: bool = False,
+    flux_kernels: tuple = (),
 ):
     """FINAL output dtype for one kernel's forced catalog.
 
@@ -346,12 +368,21 @@ def _catalog_dtype(
     adaptive kernel: the same fields plus sigma, dsigma_dg1,
     dsigma_dg2), with the kernel token and band prefix already applied
     -- ForceTask writes straight into it, so the catalog is born with
-    the right column names.
+    the right column names.  ``flux_kernels`` names the extra
+    flux-only kernels measured in the same pass: per name the seven
+    ``flux_family_columns`` follow, in the photoz token order
+    (``flux_gauss1``, ``dflux_gauss1_dg1``, ...).
     """
     columns = _adaptive_columns if adaptive else _catalog_columns
     mapping = _kernel_rename_map(columns, kernel)
     prefix = base_column_name or ""
-    return np.dtype([(prefix + mapping[name], "<f8") for name in columns])
+    fields = [(prefix + mapping[name], "<f8") for name in columns]
+    for fk in flux_kernels:
+        fmap = _kernel_rename_map(_flux_family_columns, fk)
+        fields += [
+            (prefix + fmap[name], "<f8") for name in _flux_family_columns
+        ]
+    return np.dtype(fields)
 
 
 _POSITION_DTYPE = np.dtype([("y", np.float64), ("x", np.float64)])
@@ -394,6 +425,7 @@ def _measure_kernel_catalog(
     noise_rotated=True,
     adaptive=False,
     adaptive_ratio=1.0,
+    flux_kernels=None,
 ):
     """One kernel's finished forced catalog via the C++ ``ForceTask``.
 
@@ -409,6 +441,14 @@ def _measure_kernel_catalog(
     :func:`adaptive_sigma`): the basis is tabulated on a size grid, the
     mode-noise scalar is tabulated at the same nodes, and ``detection``
     must carry the fit columns ``ADAPTIVE_FIT_COLUMNS``.
+
+    ``flux_kernels`` (fixed kernel only) is a list of ``(name, sigma)``
+    for extra flux-only kernels measured in the same C++ pass -- the
+    same transforms of the cutouts, one more basis each -- of which
+    only the flux family is kept, converted with
+    :func:`m00_to_flux` at ``(sigma, fpfs_config.flux_gauss_sigma_psf)``.
+    Their mode-noise scalars come from :meth:`FpfsTask.m00_std_grid`
+    over the same total noise spectrum as the kernel's own.
     """
     ftask = FpfsTask(
         npix=fpfs_config.npix,
@@ -484,6 +524,7 @@ def _measure_kernel_catalog(
         sigma_shapelets,
         klim,
         fpfs_c0,
+        fpfs_config.sigma_psf,
     )
     if adaptive:
         missing = [
@@ -537,11 +578,35 @@ def _measure_kernel_catalog(
         None if n_mask_base is None
         else np.ascontiguousarray(n_mask_base, dtype=np.float32)
     )
+    flux_names, flux_filters, flux_sigmas, flux_std = (), [], [], []
+    if flux_kernels:
+        if adaptive:
+            raise ValueError("flux kernels go with a fixed kernel")
+        flux_names = tuple(str(n) for n, _ in flux_kernels)
+        flux_sigmas = [float(sg) for _, sg in flux_kernels]
+        bases = [
+            _fpfs_bases(
+                ftask.norder, fpfs_config.npix,
+                float(pixel_scale / sg), float(ftask.kmax),
+            )
+            for sg in flux_sigmas
+        ]
+        flux_filters = [b[1] for b in bases]
+        flux_std = [
+            float(v) for v in ftask.m00_std_grid(
+                tuple(b[0][0] for b in bases),
+                variance=noise_variance,
+                renoise_kernels=None if klim > 1e9 else kernels,
+                with_noise_image=noise_array is not None,
+            )
+        ]
     common = dict(
         gal_array=gal_array,
         psf_array=psf_use,
         det=_positions(detection),
-        out_dtype=_catalog_dtype(kernel, base_column_name, adaptive),
+        out_dtype=_catalog_dtype(
+            kernel, base_column_name, adaptive, flux_names
+        ),
         noise_array=noise_array,
         noise2_array=(
             None if renoise is None else np.asarray(
@@ -568,6 +633,10 @@ def _measure_kernel_catalog(
     return force.process_image(
         filter_image=ftask.bfunc_use,
         std_m00=float(ftask.std_m00),
+        flux_filters=flux_filters,
+        flux_std_m00=flux_std,
+        flux_sigmas=flux_sigmas,
+        flux_sigma_psf=float(fpfs_config.flux_gauss_sigma_psf),
         **common,
     )
 
@@ -1166,9 +1235,35 @@ class FpfsConfig:
     """Smoothing scale of the second shapelet kernel (optional; <= 0
     disables it)."""
 
+    sigma_psf: float = -1
+    """Reconvolution PSF width [arcsec] of the m00 -> flux conversion
+    (:func:`m00_to_flux`): every kernel's flux is the Gaussian-aperture
+    flux of the deconvolved image reconvolved with this Gaussian, in
+    the window sqrt(sigma_kernel^2 - sigma_psf^2), normalised as the
+    former ``flux_gauss`` columns were, ``flux = m00 * 4 pi
+    sigma_w^2``.  Must be smaller than every kernel size in use
+    (sigma_shapelets1/2, the adaptive floor).  <= 0 is the symmetric
+    split sigma_psf = sigma_kernel / sqrt(2) with ``flux = m00 * 2 pi
+    sigma_kernel^2``, the total flux of a point source."""
+
     c0: float = 30.0
     """Weighting parameter for m00 for ellipticity definition (flux scale,
     at THRESHOLD_REF_MAG_ZERO)."""
+
+    flux_gauss_sigmas: tuple = (0.52, 0.65)
+    """Kernel sizes [arcsec] of the extra flux-only kernels measured in
+    the fpfs1 pass: the i-th gives the family ``flux_gauss{i+1}``,
+    ``dflux_gauss{i+1}_dg{1,2}``, ``flux_gauss{i+1}_err``,
+    ``s2n_gauss{i+1}``, ``ds2n_gauss{i+1}_dg{1,2}`` -- the flux family a
+    fixed kernel of that size would give with
+    ``sigma_psf = flux_gauss_sigma_psf``, i.e. the Gaussian-aperture
+    flux in the window sqrt(sigma^2 - sigma_psf^2) of the image
+    reconvolved with sigma_psf (``m00_to_flux``).  Empty disables
+    them."""
+
+    flux_gauss_sigma_psf: float = 0.4
+    """Reconvolution PSF width [arcsec] of the ``flux_gauss`` flux
+    conversion; must be smaller than every ``flux_gauss_sigmas``."""
 
     adaptive_sigma: bool = False
     """Also measure the adaptive kernel ``afpfs1``: every source with its
@@ -1391,8 +1486,41 @@ def process_image(
             "kernel required for shear estimation."
         )
     shapelet_norder(fpfs_config.shape_order)
+    if fpfs_config.sigma_psf > 0:
+        kernel_sizes = [fpfs_config.sigma_shapelets1]
+        if fpfs_config.sigma_shapelets2 > 0:
+            kernel_sizes.append(fpfs_config.sigma_shapelets2)
+        if fpfs_config.adaptive_sigma and fpfs_config.adaptive_sigma_floor > 0:
+            kernel_sizes.append(fpfs_config.adaptive_sigma_floor)
+        if not fpfs_config.sigma_psf < min(kernel_sizes):
+            raise ValueError(
+                f"sigma_psf ({fpfs_config.sigma_psf}) must be smaller than "
+                f"every kernel size in use ({kernel_sizes}): the flux "
+                "window is sqrt(sigma_kernel^2 - sigma_psf^2)"
+            )
 
-    def measure(sigma_shapelets, kernel, adaptive=False, ratio=1.0):
+    flux_kernels = [
+        (f"{FLUX_GAUSS_KERNEL}{i + 1}", float(sg))
+        for i, sg in enumerate(fpfs_config.flux_gauss_sigmas)
+    ]
+    if flux_kernels:
+        if len(flux_kernels) > 4:
+            raise ValueError("at most four flux_gauss_sigmas")
+        for _, sg in flux_kernels:
+            if not 0 < sg < 3.0:
+                raise ValueError(
+                    f"flux_gauss_sigmas must lie in (0, 3) arcsec, got {sg}"
+                )
+            if not fpfs_config.flux_gauss_sigma_psf < sg:
+                raise ValueError(
+                    "flux_gauss_sigma_psf "
+                    f"({fpfs_config.flux_gauss_sigma_psf}) must be smaller "
+                    f"than every flux_gauss_sigmas ({sg})"
+                )
+
+    def measure(
+        sigma_shapelets, kernel, adaptive=False, ratio=1.0, flux=None
+    ):
         return _measure_kernel_catalog(
             fpfs_config=fpfs_config,
             pixel_scale=pixel_scale,
@@ -1418,13 +1546,17 @@ def process_image(
             noise_rotated=noise_rotated,
             adaptive=adaptive,
             adaptive_ratio=ratio,
+            flux_kernels=flux,
         )
 
     # One GIL-released C++ pass per kernel (fpfs.ForceTask, structured
     # like task.Task) writes finished rows straight into the final
     # column names -- the band prefix included -- so no numpy column
-    # surgery or renaming happens here.
-    out_list = [measure(fpfs_config.sigma_shapelets1, "fpfs1")]
+    # surgery or renaming happens here.  The flux_gauss kernels ride
+    # along in the fpfs1 pass.
+    out_list = [
+        measure(fpfs_config.sigma_shapelets1, "fpfs1", flux=flux_kernels)
+    ]
     if fpfs_config.sigma_shapelets2 > 0:
         out_list.append(measure(fpfs_config.sigma_shapelets2, "fpfs2"))
     ratio = fpfs_config.adaptive_fpfs_kernel_ratio

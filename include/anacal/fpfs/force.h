@@ -245,6 +245,31 @@ namespace anacal {
         "AfpfsCatRow must start with the FpfsCatRow fields"
     );
 
+    // Extra flux-only kernels ("flux_gauss") measured in the SAME pass
+    // as a fixed kernel: each is a full shapelet basis (nky, nkx, ncol)
+    // of its own size, applied to the same transforms of the
+    // deconvolved cutout (and of the noise stamps), of which only m00
+    // and its shear response are kept and converted with
+    // ``m00_to_flux`` at (sigma_k, flux_sigma_psf).  The row of the
+    // fixed kernel is then the FpfsCatRow fields followed by one
+    // FluxFamily per extra kernel.
+    struct FluxFamily {
+        double flux;
+        double dflux_dg1;
+        double dflux_dg2;
+        double flux_err;
+        double s2n;
+        double ds2n_dg1;
+        double ds2n_dg2;
+    };
+    static_assert(
+        std::is_standard_layout<FluxFamily>::value &&
+        sizeof(FluxFamily) == 7 * sizeof(double),
+        "FluxFamily must be a packed f8 record"
+    );
+    inline constexpr int flux_kernels_max = 4;
+    using FluxFilter = py::array_t<std::complex<double>, py::array::c_style>;
+
     // Per-source kernel sizes of the adaptive measurement, on a grid of
     // kernel sizes uniform in log sigma.  The shapelet basis is
     // tabulated at the nodes, ``table`` (n_nodes, nky, nkx, ncol); a
@@ -300,21 +325,27 @@ namespace anacal {
         double sigma_arcsec;
         double klim;
         double c0;
+        // Reconvolution PSF width of the m00 -> flux conversion
+        // (``m00_to_flux``); <= 0 is the symmetric split
+        // sigma_arcsec / sqrt(2).
+        double sigma_psf;
 
         ForceTask(
             int npix,
             double scale,
             double sigma_arcsec,
             double klim,
-            double c0
+            double c0,
+            double sigma_psf = -1.0
         ) : npix(npix), scale(scale), sigma_arcsec(sigma_arcsec),
-            klim(klim), c0(c0)
+            klim(klim), c0(c0), sigma_psf(sigma_psf)
         {
             if ((sigma_arcsec <= 0) || (sigma_arcsec > 5.0)) {
                 throw std::runtime_error(
                     "FPFS Error: invalid input sigma_arcsec"
                 );
             }
+            check_sigma_psf(sigma_arcsec, sigma_psf);
             this->fft_ratio = 1.0 / scale / scale;
         };
 
@@ -357,7 +388,17 @@ namespace anacal {
             // Spectral renoising (Option 2): one NoiseSpectrum on the
             // npix grid plus (c, delta).  Null: the rotated-noise
             // correction (Option 1) whenever noise_array is given.
-            const renoise::Setup* renoise=nullptr
+            const renoise::Setup* renoise=nullptr,
+            // Extra flux-only kernels (see FluxFamily): their bases
+            // (each (nky, nkx, ncol) like filter_image), mode-noise
+            // scalars, kernel sizes and the shared reconvolution PSF
+            // width of their flux conversion.  out_dtype must then
+            // carry 7 more f8 fields per kernel after the FpfsCatRow
+            // ones.
+            const std::vector<FluxFilter>& flux_filters = {},
+            const std::vector<double>& flux_std_m00 = {},
+            const std::vector<double>& flux_sigmas = {},
+            double flux_sigma_psf = -1.0
         ) {
             if (filter_image.ndim() != 3) {
                 throw std::runtime_error(
@@ -368,7 +409,8 @@ namespace anacal {
                 &filter_image, nullptr,
                 gal_array, psf_array, det, std_m00, out_dtype,
                 noise_array, noise2_array, n_mask_base, n_mask_base_max,
-                psf_model, psf_offset_x, psf_offset_y, renoise
+                psf_model, psf_offset_x, psf_offset_y, renoise,
+                flux_filters, flux_std_m00, flux_sigmas, flux_sigma_psf
             );
         };
 
@@ -458,7 +500,8 @@ namespace anacal {
                 &filter_table, &ad,
                 gal_array, psf_array, det, 0.0, out_dtype,
                 noise_array, noise2_array, n_mask_base, n_mask_base_max,
-                psf_model, psf_offset_x, psf_offset_y, renoise
+                psf_model, psf_offset_x, psf_offset_y, renoise,
+                {}, {}, {}, -1.0
             );
         };
 
@@ -484,9 +527,32 @@ namespace anacal {
             const std::shared_ptr<psfmodel::PerSourcePsf>& psf_model,
             double psf_offset_x,
             double psf_offset_y,
-            const renoise::Setup* renoise
+            const renoise::Setup* renoise,
+            const std::vector<FluxFilter>& flux_filters,
+            const std::vector<double>& flux_std_m00,
+            const std::vector<double>& flux_sigmas,
+            double flux_sigma_psf
         ) {
             const bool adaptive = (ad != nullptr);
+            const int n_flux = static_cast<int>(flux_filters.size());
+            if (n_flux > flux_kernels_max) {
+                throw std::runtime_error(
+                    "FPFS Error: at most " +
+                    std::to_string(flux_kernels_max) + " extra flux kernels."
+                );
+            }
+            if ((static_cast<int>(flux_std_m00.size()) != n_flux) ||
+                (static_cast<int>(flux_sigmas.size()) != n_flux)) {
+                throw std::runtime_error(
+                    "FPFS Error: flux_filters, flux_std_m00 and flux_sigmas "
+                    "must have one entry per extra flux kernel."
+                );
+            }
+            if (adaptive && (n_flux > 0)) {
+                throw std::runtime_error(
+                    "FPFS Error: extra flux kernels go with a fixed kernel."
+                );
+            }
             // nst stacks of ncol modes per source: the adaptive kernel
             // measures the four nodes around the source's size
             const int nst = adaptive ? adaptive_nst : 1;
@@ -502,6 +568,30 @@ namespace anacal {
             }
             // 4th-order estimator available only with m60, m64c, m64s
             const bool fourth_order = (ncol == 12);
+            const std::complex<double>* flux_filt_ptr[flux_kernels_max] = {
+                nullptr, nullptr, nullptr, nullptr
+            };
+            double flux_factor[flux_kernels_max] = {0.0, 0.0, 0.0, 0.0};
+            double flux_err_k[flux_kernels_max] = {0.0, 0.0, 0.0, 0.0};
+            for (int k = 0; k < n_flux; ++k) {
+                const FluxFilter& ff = flux_filters[k];
+                if ((ff.ndim() != 3) || (ff.shape(0) != nky) ||
+                    (ff.shape(1) != nkx) || (ff.shape(2) != ncol)) {
+                    throw std::runtime_error(
+                        "FPFS Error: every extra flux kernel basis must "
+                        "have the shape of filter_image."
+                    );
+                }
+                check_sigma_psf(flux_sigmas[k], flux_sigma_psf);
+                flux_filt_ptr[k] = ff.data();
+                flux_factor[k] = m00_to_flux(
+                    1.0, flux_sigmas[k], flux_sigma_psf
+                );
+                flux_err_k[k] = std::max(
+                    m00_to_flux(flux_std_m00[k], flux_sigmas[k], flux_sigma_psf),
+                    flux_err_min
+                );
+            }
             constexpr double qnan = std::numeric_limits<double>::quiet_NaN();
             const std::size_t nf = static_cast<std::size_t>(nky) * nkx;
             // one stack of ncol filter columns
@@ -544,9 +634,11 @@ namespace anacal {
             // The caller supplies the FINAL column names; only the packed
             // all-f8 layout of FpfsCatRow / AfpfsCatRow is fixed here.
             const py::dtype dt = py::dtype::from_args(out_dtype);
-            const ssize_t row_size = adaptive
+            const ssize_t base_size = adaptive
                 ? static_cast<ssize_t>(sizeof(AfpfsCatRow))
                 : static_cast<ssize_t>(sizeof(FpfsCatRow));
+            const ssize_t row_size = base_size
+                + static_cast<ssize_t>(n_flux) * sizeof(FluxFamily);
             if (dt.itemsize() != row_size) {
                 throw std::runtime_error(
                     "FPFS Error: out_dtype does not match the catalog row."
@@ -601,6 +693,11 @@ namespace anacal {
             // are rk_cell, fixed per call).
             std::vector<std::complex<double>> fimg_add[adaptive_nst];
             std::vector<std::complex<double>> fimg_rho[adaptive_nst];
+            // the same for every extra flux kernel
+            py::array_t<std::complex<double>> flux_fg[flux_kernels_max];
+            py::array_t<std::complex<double>> flux_fn[flux_kernels_max];
+            std::vector<std::complex<double>> flux_add[flux_kernels_max];
+            std::vector<std::complex<double>> flux_rho[flux_kernels_max];
 
             // Spectral kernels of the CELL, built ONCE per call: the raw
             // spectrum is symmetrized with the per-cell ``psf_array`` --
@@ -646,6 +743,11 @@ namespace anacal {
                 fimg_g = deconvolve_filter(
                     filter_image, parr, scale, klim
                 );
+                for (int k = 0; k < n_flux; ++k) {
+                    flux_fg[k] = deconvolve_filter(
+                        flux_filters[k], parr, scale, klim
+                    );
+                }
                 if (has_noise && !spectral) {
                     img_obj.rotate90_f();
                     const py::array_t<std::complex<double>> parr_n =
@@ -653,6 +755,11 @@ namespace anacal {
                     fimg_n = deconvolve_filter(
                         filter_image, parr_n, scale, klim
                     );
+                    for (int k = 0; k < n_flux; ++k) {
+                        flux_fn[k] = deconvolve_filter(
+                            flux_filters[k], parr_n, scale, klim
+                        );
+                    }
                 }
                 if (spectral) {
                     // the filler filter rho * fg acts on the eps'' stamp
@@ -660,6 +767,12 @@ namespace anacal {
                         fimg_g.data(), nky, nkx, ncol, rk_cell,
                         fimg_add[0], fimg_rho[0]
                     );
+                    for (int k = 0; k < n_flux; ++k) {
+                        spectral_noise_filters(
+                            flux_fg[k].data(), nky, nkx, ncol, rk_cell,
+                            flux_add[k], flux_rho[k]
+                        );
+                    }
                 }
             } else if (!native_psf && adaptive) {
                 // every node's stack deconvolved once per call
@@ -709,9 +822,12 @@ namespace anacal {
             // Same arithmetic as the Python assembly: flux and its
             // responses use the vectorized m00_to_flux (multiply by the
             // unit-flux factor), flux_err the scalar overload.
-            const double factor0 = m00_to_flux(1.0, this->sigma_arcsec);
+            const double factor0 = m00_to_flux(
+                1.0, this->sigma_arcsec, this->sigma_psf
+            );
             const double flux_err0 = std::max(
-                m00_to_flux(std_m00, this->sigma_arcsec), flux_err_min
+                m00_to_flux(std_m00, this->sigma_arcsec, this->sigma_psf),
+                flux_err_min
             );
 
             // Everything above allocates numpy arrays and so needs the
@@ -737,6 +853,14 @@ namespace anacal {
                     ? static_cast<float>(*n_mask_base_max) : 0.0f;
                 std::vector<std::complex<double>> scratch_g[adaptive_nst];
                 std::vector<std::complex<double>> scratch_n[adaptive_nst];
+                std::vector<std::complex<double>> flux_scratch_g[flux_kernels_max];
+                std::vector<std::complex<double>> flux_scratch_n[flux_kernels_max];
+                // raw modes of the extra flux kernels: galaxy, rotated
+                // noise, filler, and [added noise, tau1, tau2]
+                double eg[12 * flux_kernels_max];
+                double en[12 * flux_kernels_max];
+                double erho[12 * flux_kernels_max];
+                double ea[36 * flux_kernels_max];
                 std::vector<double> psf_scratch;
                 if (native_psf) {
                     psf_scratch.resize(
@@ -810,6 +934,26 @@ namespace anacal {
                     const std::complex<double>* fsrc[adaptive_nst] = {
                         filt_ptr, nullptr, nullptr, nullptr
                     };
+                    const std::complex<double>* ffg[flux_kernels_max] = {
+                        nullptr, nullptr, nullptr, nullptr
+                    };
+                    const std::complex<double>* ffn[flux_kernels_max] = {
+                        nullptr, nullptr, nullptr, nullptr
+                    };
+                    const std::complex<double>* ffadd[flux_kernels_max] = {
+                        nullptr, nullptr, nullptr, nullptr
+                    };
+                    const std::complex<double>* ffrho[flux_kernels_max] = {
+                        nullptr, nullptr, nullptr, nullptr
+                    };
+                    if (!native_psf) {
+                        for (int k = 0; k < n_flux; ++k) {
+                            ffg[k] = flux_fg[k].data();
+                            if (has_noise && !spectral) {
+                                ffn[k] = flux_fn[k].data();
+                            }
+                        }
+                    }
                     if (adaptive) {
                         for (int k = 0; k < nst; ++k) {
                             const std::size_t node =
@@ -872,6 +1016,13 @@ namespace anacal {
                             );
                             fg[k] = scratch_g[k].data();
                         }
+                        for (int k = 0; k < n_flux; ++k) {
+                            deconvolve_filter_into(
+                                flux_filt_ptr[k], parr, scale, klim,
+                                nky, nkx, ncol, flux_scratch_g[k]
+                            );
+                            ffg[k] = flux_scratch_g[k].data();
+                        }
                         if (has_noise && !spectral) {
                             // same transform as above, rotated in place
                             img_obj.rotate90_f();
@@ -883,6 +1034,13 @@ namespace anacal {
                                     nky, nkx, ncol, scratch_n[k]
                                 );
                                 fn[k] = scratch_n[k].data();
+                            }
+                            for (int k = 0; k < n_flux; ++k) {
+                                deconvolve_filter_into(
+                                    flux_filt_ptr[k], parr_n, scale, klim,
+                                    nky, nkx, ncol, flux_scratch_n[k]
+                                );
+                                ffn[k] = flux_scratch_n[k].data();
                             }
                         }
                     }
@@ -907,15 +1065,25 @@ namespace anacal {
                                     fimg_add[k], fimg_rho[k]
                                 );
                             }
+                            for (int k = 0; k < n_flux; ++k) {
+                                spectral_noise_filters(
+                                    ffg[k], nky, nkx, ncol, rk_cell,
+                                    flux_add[k], flux_rho[k]
+                                );
+                            }
                         }
                         for (int k = 0; k < nst; ++k) {
                             fadd[k] = fimg_add[k].data();
                             frho[k] = fimg_rho[k].data();
                         }
+                        for (int k = 0; k < n_flux; ++k) {
+                            ffadd[k] = flux_add[k].data();
+                            ffrho[k] = flux_rho[k].data();
+                        }
                     }
                     const ModesDs xg = this->measure_at(
                         img_obj, gal_array, fg, ncol, nst, t, dscale,
-                        det_r(j).y, det_r(j).x
+                        det_r(j).y, det_r(j).x, ffg, n_flux, eg
                     );
                     FpfsShapelets x = xg.v;
                     FpfsShapelets dxds = xg.ds;
@@ -927,7 +1095,7 @@ namespace anacal {
                         const ModesDs xphi = this->measure_at(
                             img_obj, *noise2_array, frho,
                             ncol, nst, t, dscale,
-                            det_r(j).y, det_r(j).x
+                            det_r(j).y, det_r(j).x, ffrho, n_flux, erho
                         );
                         // value: image + filler + added noise; response:
                         // the analytic response of image + filler plus
@@ -936,7 +1104,8 @@ namespace anacal {
                         this->measure_noise_spectral(
                             img_obj, *noise_array, fadd,
                             ncol, nst, t, dscale,
-                            det_r(j).y, det_r(j).x, xw, xk1, xk2
+                            det_r(j).y, det_r(j).x, xw, xk1, xk2,
+                            ffadd, n_flux, ea
                         );
                         const FpfsShapelets xs = xg.v + xphi.v;
                         x = xs + xw.v;
@@ -949,7 +1118,7 @@ namespace anacal {
                             const ModesDs xn = this->measure_at(
                                 img_obj, *noise_array, fn,
                                 ncol, nst, t, dscale,
-                                det_r(j).y, det_r(j).x
+                                det_r(j).y, det_r(j).x, ffn, n_flux, en
                             );
                             x = xg.v + xn.v;
                             dxds = xg.ds + xn.ds;
@@ -1007,11 +1176,15 @@ namespace anacal {
                         row.ds2n_dg1 = row.dflux_dg1 / flux_err0;
                         row.ds2n_dg2 = row.dflux_dg2 / flux_err0;
                     } else {
-                        // the flux factor 2 pi sigma^2 and the mode
+                        // the flux factor (m00_to_flux) and the mode
                         // noise follow the source's kernel size, so both
                         // carry a dsigma/dg term
-                        const double factor = m00_to_flux(1.0, sig_j);
-                        const double dfactor = 4.0 * M_PI * sig_j;
+                        const double factor = m00_to_flux(
+                            1.0, sig_j, this->sigma_psf
+                        );
+                        const double dfactor = m00_flux_dfactor(
+                            sig_j, this->sigma_psf
+                        );
                         const double* sg = ad->std_grid + (k0 - 1);
                         double cw[adaptive_nst], cdw[adaptive_nst];
                         catmull_rom(t, cw, cdw);
@@ -1021,7 +1194,9 @@ namespace anacal {
                             dstd_ds += cdw[k] * sg[k];
                         }
                         dstd_ds *= dscale;
-                        const double ferr_raw = m00_to_flux(std_j, sig_j);
+                        const double ferr_raw = m00_to_flux(
+                            std_j, sig_j, this->sigma_psf
+                        );
                         const bool floored = !(ferr_raw > flux_err_min);
                         const double ferr = floored ? flux_err_min : ferr_raw;
                         const double dferr_ds = floored
@@ -1043,6 +1218,58 @@ namespace anacal {
                         arow.sigma = sig_j;
                         arow.dsigma_dg1 = dsig1;
                         arow.dsigma_dg2 = dsig2;
+                    }
+                    // The extra flux kernels: the same value / response
+                    // assembly as the fixed kernel above, of which only
+                    // m00 and dm00/dg are converted (the same arithmetic
+                    // as a fixed kernel of that size, so the family is
+                    // identical to that kernel's).
+                    for (int k = 0; k < n_flux; ++k) {
+                        FpfsShapelets xk = combine_stacks(
+                            eg + k * ncol, ncol, ncol, 1, 0.0, 0.0
+                        ).v;
+                        FpfsShapeletsResponse dgk;
+                        if (spectral) {
+                            const FpfsShapelets xphi_k = combine_stacks(
+                                erho + k * ncol, ncol, ncol, 1, 0.0, 0.0
+                            ).v;
+                            const double* a = ea + k * 3 * ncol;
+                            const FpfsShapelets xw_k = combine_stacks(
+                                a, ncol, ncol, 1, 0.0, 0.0
+                            ).v;
+                            const FpfsShapelets xk1_k = combine_stacks(
+                                a + ncol, ncol, ncol, 1, 0.0, 0.0
+                            ).v;
+                            const FpfsShapelets xk2_k = combine_stacks(
+                                a + 2 * ncol, ncol, ncol, 1, 0.0, 0.0
+                            ).v;
+                            const FpfsShapelets xs_k = xk + xphi_k;
+                            xk = xs_k + xw_k;
+                            dgk = measure_shapelets_dg(xs_k);
+                            add_assigned_response(dgk, xk1_k, xk2_k);
+                        } else {
+                            std::optional<FpfsShapelets> yn_k = std::nullopt;
+                            if (has_noise) {
+                                const FpfsShapelets xn_k = combine_stacks(
+                                    en + k * ncol, ncol, ncol, 1, 0.0, 0.0
+                                ).v;
+                                xk = xk + xn_k;
+                                yn_k = xn_k;
+                            }
+                            dgk = measure_shapelets_dg(xk, yn_k);
+                        }
+                        FluxFamily& ff = *reinterpret_cast<FluxFamily*>(
+                            row_ptr + base_size + k * sizeof(FluxFamily)
+                        );
+                        const double fac = flux_factor[k];
+                        const double fe = flux_err_k[k];
+                        ff.flux = xk.m00 * fac;
+                        ff.dflux_dg1 = dgk.dm00_dg1 * fac;
+                        ff.dflux_dg2 = dgk.dm00_dg2 * fac;
+                        ff.flux_err = fe;
+                        ff.s2n = ff.flux / fe;
+                        ff.ds2n_dg1 = ff.dflux_dg1 / fe;
+                        ff.ds2n_dg2 = ff.dflux_dg2 / fe;
                     }
                 }
             }
@@ -1102,7 +1329,12 @@ namespace anacal {
             double t,
             double dscale,
             double y,
-            double x
+            double x,
+            // extra fixed stacks measured on the same transform (the
+            // flux kernels): raw modes, scaled, into extra_out
+            const std::complex<double>* const* extra = nullptr,
+            int n_extra = 0,
+            double* extra_out = nullptr
         ) const {
             const int y_index = static_cast<int>(std::round(y));
             const int x_index = static_cast<int>(std::round(x));
@@ -1116,6 +1348,13 @@ namespace anacal {
             }
             for (int i = 0; i < ncol * nst; ++i) {
                 mm[i] *= this->fft_ratio;
+            }
+            for (int e = 0; e < n_extra; ++e) {
+                double* o = extra_out + e * ncol;
+                img_obj.measure_into_raw(extra[e], ncol, dy, dx, o);
+                for (int i = 0; i < ncol; ++i) {
+                    o[i] *= this->fft_ratio;
+                }
             }
             return combine_stacks(mm, ncol, ncol, nst, t, dscale);
         };
@@ -1137,7 +1376,10 @@ namespace anacal {
             double x,
             ModesDs& xw,
             ModesDs& xk1,
-            ModesDs& xk2
+            ModesDs& xk2,
+            const std::complex<double>* const* extra = nullptr,
+            int n_extra = 0,
+            double* extra_out = nullptr
         ) const {
             const int y_index = static_cast<int>(std::round(y));
             const int x_index = static_cast<int>(std::round(x));
@@ -1152,6 +1394,13 @@ namespace anacal {
             }
             for (int i = 0; i < n3 * nst; ++i) {
                 ma[i] *= this->fft_ratio;
+            }
+            for (int e = 0; e < n_extra; ++e) {
+                double* o = extra_out + e * n3;
+                img_obj.measure_into_raw(extra[e], n3, dy, dx, o);
+                for (int i = 0; i < n3; ++i) {
+                    o[i] *= this->fft_ratio;
+                }
             }
             xw = combine_stacks(ma, n3, ncol, nst, t, dscale);
             xk1 = combine_stacks(ma + ncol, n3, ncol, nst, t, dscale);

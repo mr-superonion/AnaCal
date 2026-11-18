@@ -240,24 +240,63 @@ inline py::object gauss_kernel_rfft(
     return py::make_tuple(kernel, py::make_tuple(ygrid, xgrid));
 }
 
+// m00 is the PSF-deconvolved image smoothed with a unit Gaussian of
+// width sigma_shapelets, read at the source centre.  Split that
+// Gaussian into a reconvolution PSF of width sigma_psf and a
+// measurement window of width sigma_w (sigma_w^2 = sigma_shapelets^2
+// - sigma_psf^2): the Gaussian-aperture flux of the reconvolved image
+// in the window exp(-r^2 / 2 sigma_w^2), normalised as the removed
+// GaussFit::measure_flux did (sum(w d) 2 pi sigma_w^2 / sum(w^2)), is
+//   flux = m00 * 4 * pi * sigma_w^2 .
+// sigma_psf <= 0 means the symmetric split sigma_psf = sigma_w =
+// sigma_shapelets / sqrt(2), for which this is
+//   m00 * 2 * pi * sigma_shapelets^2
+// (the historical formula m00 * pixel_scale^2 * 4 pi sigma_pix^2 with
+// sigma_pix = sigma_shapelets / sqrt(2) / pixel_scale), kept in that
+// exact expression so the default output is unchanged bit for bit.
+inline void check_sigma_psf(double sigma_shapelets, double sigma_psf) {
+    if ((sigma_psf > 0.0) && !(sigma_psf < sigma_shapelets)) {
+        throw std::invalid_argument(
+            "FPFS Error: sigma_psf must be smaller than the kernel size "
+            "sigma_shapelets (the measurement window is "
+            "sqrt(sigma_shapelets^2 - sigma_psf^2))"
+        );
+    }
+}
+
 inline double m00_to_flux(
     double m00,
-    double sigma_shapelets
+    double sigma_shapelets,
+    double sigma_psf = -1.0
 ) {
-    // Derivation: with sigma_use = sigma_shapelets / sqrt(2) and
-    // sigma_pix = sigma_use / pixel_scale, the original formula
-    //   m00 * pixel_scale^2 * 4 * pi * sigma_pix^2
-    // cancels pixel_scale exactly and reduces to
-    //   m00 * 2 * pi * sigma_shapelets^2.
-    return m00 * 2.0 * M_PI * sigma_shapelets * sigma_shapelets;
+    if (sigma_psf <= 0.0) {
+        return m00 * 2.0 * M_PI * sigma_shapelets * sigma_shapelets;
+    }
+    check_sigma_psf(sigma_shapelets, sigma_psf);
+    return m00 * 4.0 * M_PI * (
+        sigma_shapelets * sigma_shapelets - sigma_psf * sigma_psf
+    );
+}
+
+// d(flux factor) / d(sigma_shapelets): the adaptive kernel's size
+// changes with shear, so the factor's own derivative enters the flux
+// response.  For the symmetric split the window follows the kernel
+// (factor 2 pi sigma^2 -> 4 pi sigma), for a fixed sigma_psf only the
+// window grows (factor 4 pi (sigma^2 - sigma_psf^2) -> 8 pi sigma).
+inline double m00_flux_dfactor(double sigma_shapelets, double sigma_psf) {
+    if (sigma_psf <= 0.0) {
+        return 4.0 * M_PI * sigma_shapelets;
+    }
+    return 8.0 * M_PI * sigma_shapelets;
 }
 
 inline py::array_t<double>
 m00_to_flux(
     const py::array_t<double>& m00,
-    double sigma_shapelets
+    double sigma_shapelets,
+    double sigma_psf = -1.0
 ) {
-    const double factor = m00_to_flux(1.0, sigma_shapelets);
+    const double factor = m00_to_flux(1.0, sigma_shapelets, sigma_psf);
 
     int nn = m00.shape(0);
     auto in_r = m00.unchecked<1>();

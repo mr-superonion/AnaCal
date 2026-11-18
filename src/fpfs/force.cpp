@@ -26,6 +26,12 @@ pyExportFpfsForce(py::module_& fpfs) {
         "flux_err", "s2n", "ds2n_dg1", "ds2n_dg2"
     );
 
+    // FluxFamily: the block appended per extra flux kernel.
+    fpfs.attr("flux_family_columns") = py::make_tuple(
+        "flux", "dflux_dg1", "dflux_dg2", "flux_err",
+        "s2n", "ds2n_dg1", "ds2n_dg2"
+    );
+
     // AfpfsCatRow: the FpfsCatRow fields, then the per-source kernel
     // size of the adaptive measurement and its shear response.
     fpfs.attr("adaptive_catalog_columns") = py::make_tuple(
@@ -46,7 +52,7 @@ pyExportFpfsForce(py::module_& fpfs) {
     );
 
     py::class_<ForceTask>(fpfs, "ForceTask")
-        .def(py::init<int, double, double, double, double>(),
+        .def(py::init<int, double, double, double, double, double>(),
             "Forced FPFS measurement for one shapelet kernel; the whole "
             "per-source loop (modes, noise subtraction, shear responses, "
             "flux family) runs with the GIL released and returns the "
@@ -55,7 +61,8 @@ pyExportFpfsForce(py::module_& fpfs) {
             py::arg("scale"),
             py::arg("sigma_arcsec"),
             py::arg("klim"),
-            py::arg("c0")
+            py::arg("c0"),
+            py::arg("sigma_psf") = -1.0
         )
         .def("process_image", &ForceTask::process_image,
             "Measure the finished per-kernel catalog at the given "
@@ -65,7 +72,10 @@ pyExportFpfsForce(py::module_& fpfs) {
             "NaN) or 12 modes (through m64: 4th-order estimator too); "
             "std_m00 is the mode-noise scalar from "
             "FpfsTask.prepare_covariance; out_dtype carries the final "
-            "column names (see catalog_columns for the field order).",
+            "column names (see catalog_columns for the field order).  "
+            "flux_filters / flux_std_m00 / flux_sigmas / flux_sigma_psf "
+            "add flux-only kernels measured in the same pass: per kernel "
+            "the 7 flux_family_columns follow the catalog_columns.",
             py::arg("gal_array"),
             py::arg("psf_array"),
             py::arg("filter_image"),
@@ -79,7 +89,11 @@ pyExportFpfsForce(py::module_& fpfs) {
             py::arg("psf_model")=py::none(),
             py::arg("psf_offset_x")=0.0,
             py::arg("psf_offset_y")=0.0,
-            py::arg("renoise")=py::none()
+            py::arg("renoise")=py::none(),
+            py::arg("flux_filters")=std::vector<FluxFilter>(),
+            py::arg("flux_std_m00")=std::vector<double>(),
+            py::arg("flux_sigmas")=std::vector<double>(),
+            py::arg("flux_sigma_psf")=-1.0
         )
         .def("process_image_adaptive", &ForceTask::process_image_adaptive,
             "Adaptive-kernel ('afpfs') measurement: every source uses "
