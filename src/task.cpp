@@ -18,7 +18,8 @@ pyExportTask(py::module_& m) {
             bool, bool, double,
             double,
             double, double, double, double, double, double, double,
-            double, double
+            double, double,
+            const std::optional<std::vector<double>>&
             >(),
             py::arg("scale"),
             py::arg("sigma_arcsec"),
@@ -41,7 +42,8 @@ pyExportTask(py::module_& m) {
             py::arg("trust_center")=0.1,
             py::arg("misfit_damping")=1.0,
             py::arg("conv_tol")=0.0,
-            py::arg("gate_ratio")=10.0
+            py::arg("gate_ratio")=10.0,
+            py::arg("sigma_arcsec_bands")=py::none()
         )
         .def("process_image", &Task::process_image,
             "Detect and measure sources.\n\n"

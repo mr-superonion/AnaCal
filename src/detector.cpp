@@ -30,14 +30,21 @@ pyExportDetector(py::module_& m) {
         py::arg("weights")=py::none(),
         py::arg("multiband_coadd_variance")=py::none()
     );
-    detector.def("band_weights", &band_weights,
+    detector.def("band_weights",
+        static_cast<std::vector<double>(*)(
+            double, double, const py::array_t<double>&,
+            const std::vector<double>&)>(&band_weights),
         "Normalised inverse-variance weights per band at a smoothing scale",
         py::arg("scale"),
         py::arg("sigma_arcsec"),
         py::arg("psf_array"),
         py::arg("variance")
     );
-    detector.def("coadd_smoothed_variance", &coadd_smoothed_variance,
+    detector.def("coadd_smoothed_variance",
+        static_cast<double(*)(
+            double, double, const py::array_t<double>&,
+            const std::vector<double>&, const std::vector<double>&)>(
+                &coadd_smoothed_variance),
         "Variance of the band-averaged smoothed image for fixed weights",
         py::arg("scale"),
         py::arg("sigma_arcsec"),

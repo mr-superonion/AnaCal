@@ -133,6 +133,11 @@ public:
     bool force_size, force_center;
     ngmix::GaussFit fitter;
     double sigma_arcsec_det;
+    // Detection smoothing scale of every band (detection_sigma of the
+    // per-band kernel widths given at construction).  Empty: the single
+    // ``sigma_arcsec_det`` for every band.  The MEASUREMENT always uses the
+    // single ``sigma_arcsec`` (the model fit needs one reconvolution kernel).
+    std::vector<double> sigma_det_bands;
 
     Task(
         double scale,
@@ -156,7 +161,10 @@ public:
         double trust_center=0.1,
         double misfit_damping=1.0,
         double conv_tol=0.0,
-        double gate_ratio=10.0
+        double gate_ratio=10.0,
+        // per-band kernel widths of the DETECTION (one per band of the
+        // stacks later given to process_image); none: sigma_arcsec for all
+        const std::optional<std::vector<double>>& sigma_arcsec_bands=std::nullopt
     ) : scale(scale), sigma_arcsec(sigma_arcsec), snr_peak_min(snr_peak_min),
         omega_f(omega_f), omega_v(omega_v),
         prior(prior ? *prior : ngmix::modelPrior()),
@@ -178,6 +186,16 @@ public:
             throw std::invalid_argument("sigma_arcsec must be positive");
         }
         this->sigma_arcsec_det = detection_sigma(sigma_arcsec);
+        if (sigma_arcsec_bands.has_value()) {
+            for (double sb : *sigma_arcsec_bands) {
+                if (!(sb > 0.0)) {
+                    throw std::invalid_argument(
+                        "sigma_arcsec_bands must be positive"
+                    );
+                }
+                this->sigma_det_bands.push_back(detection_sigma(sb));
+            }
+        }
 
         // Own the mag_zero-dependent THRESHOLD scaling here (previously duplicated
         // in every caller). omega_f/omega_v/fpfs_c0 are BASE thresholds
@@ -240,7 +258,8 @@ public:
             this->image_bound,
             weights,
             multiband_coadd_variance,
-            rks
+            rks,
+            this->sigma_det_bands
         );
         for (table::galNumber& src : catalog) {
             src.decentralize(cell);
@@ -364,11 +383,28 @@ public:
         // they are worked out per cell and handed to BOTH the detection and
         // the measurement.  Passing them explicitly is what guarantees the two
         // stages see the same coadd.
+        // detection smoothing scales, one per band (or the single one)
+        auto sigma_det_of = [&](std::size_t nband) {
+            if (this->sigma_det_bands.empty()) {
+                return std::vector<double>{this->sigma_arcsec_det};
+            }
+            if (this->sigma_det_bands.size() != nband) {
+                throw std::runtime_error(
+                    "anacal Error: Task has " +
+                    std::to_string(this->sigma_det_bands.size()) +
+                    " per-band detection scale(s) but the image has " +
+                    std::to_string(nband) + " band(s)"
+                );
+            }
+            return this->sigma_det_bands;
+        };
+
         auto cell_weights = [&](const py::array_t<double>& psf,
                                  const geometry::cell & cell,
                                  const std::vector<double>& variance_det) {
             return band_weights(
-                cell.scale, this->sigma_arcsec_det, psf, variance_det
+                cell.scale, sigma_det_of(variance_det.size()), psf,
+                variance_det
             );
         };
 
@@ -441,8 +477,11 @@ public:
                 // the detection and the measurement scale (the flux errors
                 // are summed over the spectrum directly, see above)
                 for (std::size_t b = 0; b < rks.size(); ++b) {
+                    // each band at ITS OWN detection scale: the variance
+                    // of that band's reconvolved, renoised image
                     variance_det[b] = variance_in[b] * renoise::variance_factor(
-                        rks[b], this->sigma_arcsec_det
+                        rks[b],
+                        sigma_of_band(sigma_det_of(rks.size()), b, rks.size())
                     );
                     variance_meas[b] = variance_in[b] * renoise::variance_factor(
                         rks[b], this->sigma_arcsec
@@ -471,7 +510,7 @@ public:
                     w,
                     coadd_smoothed_variance(
                         cell.scale,
-                        this->sigma_arcsec_det,
+                        sigma_det_of(variance_det.size()),
                         psf,
                         variance_det,
                         w

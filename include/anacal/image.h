@@ -973,6 +973,14 @@ inline double get_smoothed_variance(
 //     data(sigma)   = sum_b w_b * data_b(sigma)
 //     V_coadd(sigma) = sum_b w_b^2 * V_b(sigma)
 //
+// DETECTION uses one smoothing scale PER BAND (``sigma_bands``): each band is
+// reconvolved with a Gaussian matched to its own PSF, so no band is
+// reconvolved below its PSF, and V_b is the variance of that band's own
+// reconvolved image.  The bands of the detection coadd then carry different
+// (round, Gaussian) effective PSFs; the scalar overloads below are the
+// single-scale case, which the MEASUREMENT still uses (the model fit needs one
+// reconvolution kernel).
+//
 // The weights are chosen ONCE, at the detection smoothing scale, and the same
 // set is reused for the measurement.  Detection and measurement then see the
 // same coadd; re-deriving the weights per scale would weight the bands -- and
@@ -984,10 +992,24 @@ inline double get_smoothed_variance(
 // ---------------------------------------------------------------------------
 
 // Normalised inverse-variance weights at the given smoothing scale.
+// One smoothing scale per band, or a single entry shared by all bands.
+inline double
+sigma_of_band(const std::vector<double>& sigma_bands, std::size_t b,
+              std::size_t nband) {
+    if (sigma_bands.size() == 1) return sigma_bands[0];
+    if (sigma_bands.size() != nband) {
+        throw std::runtime_error(
+            "anacal Error: got " + std::to_string(sigma_bands.size()) +
+            " smoothing scale(s) for " + std::to_string(nband) + " band(s)"
+        );
+    }
+    return sigma_bands[b];
+}
+
 inline std::vector<double>
 band_weights(
     double scale,
-    double sigma_arcsec,
+    const std::vector<double>& sigma_bands,
     const py::array_t<double>& psf_stack,
     const std::vector<double>& variance
 ) {
@@ -1000,7 +1022,7 @@ band_weights(
     for (std::size_t b = 0; b < nband; ++b) {
         const double v = get_smoothed_variance(
             scale,
-            sigma_arcsec,
+            sigma_of_band(sigma_bands, b, nband),
             psf_stack,
             static_cast<ssize_t>(b),
             variance[b]
@@ -1021,11 +1043,23 @@ band_weights(
     return w;
 };
 
+inline std::vector<double>
+band_weights(
+    double scale,
+    double sigma_arcsec,
+    const py::array_t<double>& psf_stack,
+    const std::vector<double>& variance
+) {
+    return band_weights(
+        scale, std::vector<double>{sigma_arcsec}, psf_stack, variance
+    );
+};
+
 // Variance of the coadd at ``sigma_arcsec`` for a fixed set of weights.
 inline double
 coadd_smoothed_variance(
     double scale,
-    double sigma_arcsec,
+    const std::vector<double>& sigma_bands,
     const py::array_t<double>& psf_stack,
     const std::vector<double>& variance,
     const std::vector<double>& w
@@ -1034,13 +1068,26 @@ coadd_smoothed_variance(
     for (std::size_t b = 0; b < w.size(); ++b) {
         out = out + w[b] * w[b] * get_smoothed_variance(
             scale,
-            sigma_arcsec,
+            sigma_of_band(sigma_bands, b, w.size()),
             psf_stack,
             static_cast<ssize_t>(b),
             variance[b]
         );
     }
     return out;
+};
+
+inline double
+coadd_smoothed_variance(
+    double scale,
+    double sigma_arcsec,
+    const py::array_t<double>& psf_stack,
+    const std::vector<double>& variance,
+    const std::vector<double>& w
+) {
+    return coadd_smoothed_variance(
+        scale, std::vector<double>{sigma_arcsec}, psf_stack, variance, w
+    );
 };
 
 // The coadded qimage for one cell.  Bands are accumulated one at a time, so
@@ -1050,7 +1097,8 @@ inline std::vector<math::qnumber>
 prepare_data_cell_coadd(
     const py::array_t<pixel_t>& img_stack,
     const py::array_t<double>& psf_stack,
-    double sigma_arcsec,
+    // one smoothing scale per band (or a single one for all bands)
+    const std::vector<double>& sigma_bands,
     const geometry::cell & cell,
     const std::vector<double>& w,
     const std::optional<py::array_t<pixel_t>>& noise_stack=std::nullopt,
@@ -1071,7 +1119,7 @@ prepare_data_cell_coadd(
         std::vector<math::qnumber> data = prepare_data_cell(
             img_stack,
             psf_stack,
-            sigma_arcsec,
+            sigma_of_band(sigma_bands, b, nband),
             cell,
             noise_stack,
             noise2_stack,
@@ -1096,6 +1144,23 @@ prepare_data_cell_coadd(
         }
     }
     return out;
+};
+
+inline std::vector<math::qnumber>
+prepare_data_cell_coadd(
+    const py::array_t<pixel_t>& img_stack,
+    const py::array_t<double>& psf_stack,
+    double sigma_arcsec,
+    const geometry::cell & cell,
+    const std::vector<double>& w,
+    const std::optional<py::array_t<pixel_t>>& noise_stack=std::nullopt,
+    const std::optional<py::array_t<pixel_t>>& noise2_stack=std::nullopt,
+    const std::vector<renoise::RenoiseKernels>* rks=nullptr
+) {
+    return prepare_data_cell_coadd(
+        img_stack, psf_stack, std::vector<double>{sigma_arcsec}, cell, w,
+        noise_stack, noise2_stack, rks
+    );
 };
 
 

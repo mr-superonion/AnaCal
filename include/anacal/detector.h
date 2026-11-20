@@ -293,12 +293,17 @@ find_peaks_impl(
     const std::optional<std::vector<double>>& weights=std::nullopt,
     const std::optional<double>& multiband_coadd_variance=std::nullopt,
     // Option-2 renoising kernels, one per band (null: Option 1)
-    const std::vector<renoise::RenoiseKernels>* rks=nullptr
+    const std::vector<renoise::RenoiseKernels>* rks=nullptr,
+    // DETECTION smoothing scale of every band (already widened by
+    // detection_sigma); empty: detection_sigma(sigma_arcsec) for all bands
+    const std::vector<double>& sigma_det_bands_in={}
 ) {
     // PRECONDITION: the band stacks were validated by the caller
     // (find_peaks below, or Task::process_image) -- validating once per
     // public entry point instead of once per layer.
-    double sigma_arcsec_det = detection_sigma(sigma_arcsec);
+    const std::vector<double> sigma_arcsec_det = sigma_det_bands_in.empty()
+        ? std::vector<double>{detection_sigma(sigma_arcsec)}
+        : sigma_det_bands_in;
 
     std::vector<double> w;
     if (weights.has_value()) {
