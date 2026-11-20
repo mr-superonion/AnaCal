@@ -1250,7 +1250,7 @@ class FpfsConfig:
     """Weighting parameter for m00 for ellipticity definition (flux scale,
     at THRESHOLD_REF_MAG_ZERO)."""
 
-    flux_gauss_sigmas: tuple = (0.52, 0.65)
+    flux_gauss_sigmas: tuple = (0.55, 0.70)
     """Kernel sizes [arcsec] of the extra flux-only kernels measured in
     the fpfs1 pass: the i-th gives the family ``flux_gauss{i+1}``,
     ``dflux_gauss{i+1}_dg{1,2}``, ``flux_gauss{i+1}_err``,

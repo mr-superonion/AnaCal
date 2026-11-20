@@ -276,7 +276,7 @@ def test_flux_gauss_kernels_match_fixed_kernels(mode, with_noise):
     same transforms, deconvolution, noise treatment and conversion
     (FAMILY_RTOL)."""
     cfg = anacal.fpfs.FpfsConfig(sigma_shapelets1=0.53)
-    assert cfg.flux_gauss_sigmas == (0.52, 0.65)
+    assert cfg.flux_gauss_sigmas == (0.55, 0.70)
     assert cfg.flux_gauss_sigma_psf == 0.4
     cat = _cosmos_run(cfg, mode, with_noise)
     for i, sg in enumerate(cfg.flux_gauss_sigmas):
