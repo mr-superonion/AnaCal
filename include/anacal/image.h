@@ -238,66 +238,29 @@ public:
     Image& operator=(Image&& other) noexcept;
 
     ~Image();
-
-    // Restore the state a fresh Image(nx, ny, scale, ...) would have,
-    // WITHOUT reallocating the transform buffers.  Buffer contents are
-    // NOT touched: like a
-    // fresh image they are undefined until a setter runs, and every
-    // setter fully overwrites or re-zeroes before anything reads.  Only
-    // full mode-3 images are pooled.  Used by ImageLease below.
-    void reset_for_reuse(double scale_new) {
-        assert_mode(this->mode == 3);
-        this->scale = scale_new;
-        this->dkx = 2.0 * M_PI / nx / scale_new;
-        this->dky = 2.0 * M_PI / ny / scale_new;
-        return;
-    };
-
 };
 
 // ---------------------------------------------------------------------------
-// Thread-local workspace pools
+// Workspaces
 //
-// Constructing an Image costs two aligned allocations of up to a few
-// hundred KB, and the cell loops construct several per cell per band.  The
-// hot paths therefore LEASE a workspace from a per-thread pool: the lease
-// resets the scale-dependent state (reset_for_reuse), so a leased Image
-// behaves exactly like a freshly constructed one -- buffer contents are
-// undefined either way until a setter runs -- but its buffers are reused.
-// Thread-local storage means no locking, and the pool dies with its
-// thread.
+// The cell loops take an Image / ImageQ workspace through these small owning
+// wrappers.  They used to draw from per-thread pools; the pools are gone.
+// Measured on HSC patches (2026-11-19), building every workspace afresh costs
+// nothing in wall time or peak memory against pooling them, and it removes
+// the failure mode of the ImageQ pool, which was keyed on the smoothing
+// width: once the width follows the PSF every cell and band has its own, so
+// nothing was ever reused and every workspace was kept until the thread
+// ended.
 // ---------------------------------------------------------------------------
 class ImageLease {
 public:
     ImageLease(int nx, int ny, double scale, bool use_estimate=true)
-        : nx_(nx), ny_(ny), use_estimate_(use_estimate)
-    {
-        auto& slot = pool()[Key(nx, ny, use_estimate)];
-        if (slot.empty()) {
-            img_ = std::make_unique<Image>(nx, ny, scale, use_estimate);
-        } else {
-            img_ = std::move(slot.back());
-            slot.pop_back();
-            img_->reset_for_reuse(scale);
-        }
-    };
-    ~ImageLease() {
-        pool()[Key(nx_, ny_, use_estimate_)].push_back(std::move(img_));
-    };
+        : img_(std::make_unique<Image>(nx, ny, scale, use_estimate)) {};
     Image& get() { return *img_; };
     ImageLease(const ImageLease&) = delete;
     ImageLease& operator=(const ImageLease&) = delete;
 private:
-    using Key = std::tuple<int, int, bool>;
-    static std::map<Key, std::vector<std::unique_ptr<Image>>>& pool() {
-        static thread_local std::map<
-            Key, std::vector<std::unique_ptr<Image>>
-        > p;
-        return p;
-    };
     std::unique_ptr<Image> img_;
-    int nx_, ny_;
-    bool use_estimate_;
 };
 
 py::array_t<std::complex<double>>
@@ -621,18 +584,9 @@ public:
 
     ~ImageQ() = default;
 
-    // See Image::reset_for_reuse / ImageQLease.  Every other member is a
-    // pure function of the constructor arguments, which are the pool key,
-    // so only the workspace image needs resetting.
-    void reset_for_reuse() {
-        img_obj.reset_for_reuse(this->scale);
-        return;
-    };
 };
 
-// Lease of a fully-configured ImageQ; same idea as ImageLease, with the
-// constructor arguments as the pool key so the Gaussian filter models are
-// reused along with the FFTW workspace.
+// A fully-configured ImageQ workspace, built for one use.
 class ImageQLease {
 public:
     ImageQLease(
@@ -642,35 +596,14 @@ public:
         double sigma_arcsec,
         double klim,
         bool use_estimate=true
-    ) : key_(nx, ny, scale, sigma_arcsec, klim, use_estimate)
-    {
-        auto& slot = pool()[key_];
-        if (slot.empty()) {
-            obj_ = std::make_unique<ImageQ>(
-                nx, ny, scale, sigma_arcsec, klim, use_estimate
-            );
-        } else {
-            obj_ = std::move(slot.back());
-            slot.pop_back();
-            obj_->reset_for_reuse();
-        }
-    };
-    ~ImageQLease() {
-        pool()[key_].push_back(std::move(obj_));
-    };
+    ) : obj_(std::make_unique<ImageQ>(
+            nx, ny, scale, sigma_arcsec, klim, use_estimate
+        )) {};
     ImageQ& get() { return *obj_; };
     ImageQLease(const ImageQLease&) = delete;
     ImageQLease& operator=(const ImageQLease&) = delete;
 private:
-    using Key = std::tuple<int, int, double, double, double, bool>;
-    static std::map<Key, std::vector<std::unique_ptr<ImageQ>>>& pool() {
-        static thread_local std::map<
-            Key, std::vector<std::unique_ptr<ImageQ>>
-        > p;
-        return p;
-    };
     std::unique_ptr<ImageQ> obj_;
-    Key key_;
 };
 
 // ---------------------------------------------------------------------------
